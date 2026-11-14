@@ -24,6 +24,10 @@ releases may change file formats, settings and the public API.
   reported (a dry run returns the diagnostics, each tagged with the operation that caused it, and the resulting documents; nothing is written) or written
   all-or-none with one audit entry and one reload. New wire op `authoring.transaction`, gated on the new `codemode` capability; older editors are unaffected.
   `logic().edit` and `gui().edit` behave as before and now share a `stage` method with the transaction. See api.md section 3.3.1.
+- **A transaction's dry run (and the check before an apply) now validates references (#357, D6).** `ReferenceValidator` runs over the pack as the list leaves it and
+  the other packs as stored, so a delete that orphans a user, a mistyped id or template, and a reference into another pack are refused with `MTR-0009`
+  (unresolved reference) diagnostics tagged with the operation, while a document a later operation creates satisfies an earlier reference. Untouched resources are
+  charged only with the findings the list adds. The platform gate and the pack-wide allocation stay reload-only (api.md section 3.3.1).
 
 - **`custody.consume`: the atomic exit of items held in custody, and the trash slot as a composition (#248, D12).** A new logic action
   `custody.consume: {slot, await}` consumes the stack a `durable: required` input slot holds, atomically, through the crash-safe exit of

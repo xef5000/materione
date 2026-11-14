@@ -171,7 +171,7 @@ const kits = { starter: ["stone_sword", "bread"], daily: ["golden_apple", "exper
 const menu = p.guis.create("kits", { container: "chest_3", title: "Kits", open: { commands: ["kits"] } });
 menu.layers.addButton({ slot: 11, item: "minecraft:stone_sword", name: "Starter kit", rules: [{
   on: m.triggers.guiClick,
-  do: [ m.steps.require([ m.conditions.var(claimed, "==", false) ], { else: [ m.actions.message("<red>Already claimed.") ] }),
+  do: [ m.steps.if(m.conditions.var(claimed, "==", false), { else: [ m.actions.message("<red>Already claimed."), m.steps.stop() ] }),
         ...kits.starter.map(id => m.actions.giveItem({ item: `minecraft:${id}`, amount: 1 })),   // an authoring-time loop
         m.actions.setVar(claimed, { op: "set", value: true }) ],
 }]});
@@ -214,9 +214,9 @@ p.rules.create("quest_zombies", {                                      // a `rul
   on: m.triggers.entityKill({ type: "zombie" }),                       // `entity.kill`, filter `type: zombie`
   if: m.conditions.var(done, "==", false),
   do: [ m.actions.setVar(kills, { op: "add", value: 1 }),
-        m.steps.if(m.conditions.var(kills, ">=", 10), [                // a `var` condition: the shape the harness runs
+        m.steps.if(m.conditions.var(kills, ">=", 10), { then: [        // a `var` condition: the shape the harness runs
           m.actions.giveMoney({ amount: 100 }), m.actions.giveItem({ item: trophy, amount: 1 }),
-          m.actions.setVar(done, { op: "set", value: true }), m.actions.title("<gold>Quest complete") ]) ],
+          m.actions.setVar(done, { op: "set", value: true }), m.actions.title("<gold>Quest complete") ] }) ],
 });
 const menu = p.guis.create("quests", { container: "chest_3", title: "Quests", open: { commands: ["quests"] } });
 menu.layers.addText({ slot: 13, text: m.expr`"Zombies: " + min(${kills}, 10) + " / 10"` });
@@ -236,7 +236,7 @@ const menu = p.guis.create("daily", { container: "chest_3", title: "Daily reward
 menu.layers.addButton({ slot: 13, item: "minecraft:chest", name: "Claim", rules: [{
   on: m.triggers.guiClick,
   do: [ m.actions.setVar(m.local("today"), { op: "set", value: m.expr`floor(now() / 86400)` }),  // ✗ 'now'      [TIME]
-        m.steps.require([ m.expr`vars.today > ${last}` ], { else: [ m.actions.message("<red>Come back tomorrow.") ] }),
+        m.steps.if(m.expr`vars.today > ${last}`, { else: [ m.actions.message("<red>Come back tomorrow."), m.steps.stop() ] }),
         m.actions.setVar(streak, { op: "set", value: m.expr`vars.today == ${last} + 1 ? ${streak} + 1 : 1` }),
         m.actions.setVar(last, { op: "set", value: m.expr`vars.today` }),
         m.actions.giveMoney({ amount: m.expr`100 * min(${streak}, 7)` }), m.actions.guiRefresh() ],
@@ -254,9 +254,9 @@ stock.forEach((s, i) => shop.layers.addButton({
   slot: 10 + i * 2, item: `minecraft:${s.id}`, name: `Buy ${s.buy} / Sell ${s.sell}`,
   rules: [
     { on: m.triggers.guiClick({ click: ["left"] }),
-      do: [ m.steps.require([ m.conditions.hasItemSpace(1), m.actions.takeMoney({ amount: s.buy }) ],
-                            { else: [ m.actions.message("<red>Not enough coins or space.") ] }),
-            m.actions.giveItem({ item: `minecraft:${s.id}`, amount: 1 }) ] },
+      do: [ m.steps.if(m.conditions.hasItemSpace(1), { else: [ m.actions.message("<red>Your inventory is full."), m.steps.stop() ] }),
+            m.steps.require([ m.actions.takeMoney({ amount: s.buy }), m.actions.giveItem({ item: `minecraft:${s.id}`, amount: 1 }) ],
+                            { else: [ m.actions.message("<red>Not enough coins.") ] }) ] },
     { on: m.triggers.guiClick({ click: ["right"] }),
       do: [ m.steps.require([ m.actions.takeItem({ item: `minecraft:${s.id}`, amount: 1 }) ],
                             { else: [ m.actions.message("<red>You have none to sell.") ] }),
@@ -284,10 +284,10 @@ menu.layers.addButton({ slot: 16, item: "minecraft:ender_pearl", name: "Survival
 ```ts
 p.rules.create("welcome", {                                              // a `rule` document: rules/welcome.yml
   on: m.triggers.playerJoin,                                             // `player.join`, with `player.first_join` in context
-  do: [ m.steps.if(m.expr`player.first_join`,
-          [ m.actions.broadcast(m.expr`"<yellow>Welcome " + player.name + " to the server!"`),
-            m.actions.giveItem({ item: "minecraft:stone_sword", amount: 1 }) ],
-          [ m.actions.message(m.expr`"<gray>Welcome back, " + player.name`) ]) ],
+  do: [ m.steps.if(m.expr`player.first_join`, {
+          then: [ m.actions.broadcast(m.expr`"<yellow>Welcome " + player.name + " to the server!"`),
+                  m.actions.giveItem({ item: "minecraft:stone_sword", amount: 1 }) ],
+          else: [ m.actions.message(m.expr`"<gray>Welcome back, " + player.name`) ] }) ],
 });
 ```
 
@@ -431,7 +431,7 @@ p.huds.create("mana_bar", { layers: [ m.hud.bar({ value: m.expr`${mana} / 100`, 
 //^^^^ ✗ TS2339 'huds' does not exist on type 'PackWriter' (#7)                                                 [VIEW]
 const wand = p.items.create("fire_wand", { material: "blaze_rod", display_name: "<red>Fire Wand" });
 wand.rules.add({ on: m.triggers.click({ detail: "right" }), do: [
-  m.steps.require([ m.expr`${mana} >= 20` ], { else: [ m.actions.actionbar("<blue>Not enough mana") ] }),
+  m.steps.if(m.expr`${mana} >= 20`, { else: [ m.actions.actionbar("<blue>Not enough mana"), m.steps.stop() ] }),
   m.actions.setVar(mana, { op: "subtract", value: 20 }),
   m.actions.launch({ projectile: "small_fireball", speed: 1.5 }) ] });    // ✗ TS2339 'launch'                  [VERB]
 ```
@@ -535,8 +535,9 @@ const forge = p.guis.create("forge", { container: "chest_3", title: "Forge", ope
 forge.layers.addSlots({ id: "sword", slots: [11], input: true, durable: "required", accept: [ m.ref.item("sample:ruby_sword") ] });
 forge.layers.addSlots({ id: "rubies", slots: [13], input: true, durable: "required", accept: [ m.ref.item("sample:ruby") ] });
 forge.layers.addButton({ slot: 15, item: "minecraft:anvil", name: "Forge (200 coins)", rules: [{ on: m.triggers.guiClick, do: [
-  m.steps.require([ m.conditions.slotHas({ layer: "sword", amount: 1 }), m.conditions.slotHas({ layer: "rubies", amount: 3 }),
-                    m.actions.takeMoney({ amount: 200 }) ], { else: [ m.actions.message("<red>A ruby sword, 3 rubies and 200 coins.") ] }),
+  m.steps.if(m.conditions.all([ m.conditions.slotHas({ layer: "sword", amount: 1 }), m.conditions.slotHas({ layer: "rubies", amount: 3 }) ]),
+             { else: [ m.actions.message("<red>A ruby sword and 3 rubies."), m.steps.stop() ] }),
+  m.steps.require([ m.actions.takeMoney({ amount: 200 }) ], { else: [ m.actions.message("<red>You need 200 coins.") ] }),
   m.actions.custodyConsume({ layer: "sword", amount: 1, await: "saved" }), m.actions.custodyConsume({ layer: "rubies", amount: 3, await: "saved" }),
   m.actions.giveItem({ item: refined, amount: 1 }), m.actions.guiRefresh() ] }] });
 ```
@@ -653,6 +654,8 @@ Findings for the SDK's design (#337, #339), none of them a primitive:
 | S7 | A rule option that does not exist (`onCooldown`, T05) and an expression function that does not exist (`now`, T04) are reported by different phases: the first by TypeScript, the second at stage time or by the server. | Expression functions are a small closed set per server: generate them as a typed helper (`m.fn.now()`) so the gap is a type error like the rest. Folded into S1. |
 | S8 | #320 step 5 ("Test: a level-2 sword hit applies bleed") has no surface: there are no content tests and no simulator. | **Out of the first slice.** Filed as a decision (#350); the slice proves behavior with the dry run and the trace, not with simulated play. |
 | S9 | The tasks' programs are 3 to 25 lines. The 50-document cap and the one-pack rule (C12) were never reached. | No change. |
+| S10 | The benchmark's GUI calls (`layers.addButton({slot, item, rules})`, `addText`, `addSlots`) do not exist: a button is a `gui-component` layer with pixel geometry (`m.guiComponents.button({ id, x, y, width, height })`), and its rules are the GUI's own `gui.click` rules filtered by `layer`. #337 compiled T08 in that shape (`fixtures/codemode/corpus/t08-shop.ts`). | #339 decides whether a helper (a button at a slot with its click rule) earns its place in the core, or programs use the registry's shape. The programs of §3 keep the paper spelling for GUI layers; only their step shapes were corrected to the engine's. |
+| S11 | Four things a program needs are not in self-description: the step grammar (`if`, `require`, `choose`, `wait`, `stop`, `call`: `require` takes steps, `if` a condition and a branch), which parameters accept an expression, that a trigger filter accepts a list (T08's `click: ["left"]`), and `supersededBy` (S5). | The core hand-types them (`StepBuilders` in `core.d.ts`, temporary), and they move into self-description in #355, after which the generator emits them. |
 
 ---
 
@@ -699,7 +702,14 @@ and is tested by the harness as today; it appears in the SDK by itself when the 
 
 ## 8. Not verified
 
-- **Nothing was compiled.** The verdicts are a reading of the registries, not a checker's output. #349 replaces this section.
+- **Almost nothing was compiled.** The verdicts are a reading of the registries, not a checker's output. #349 replaces this section.
+  Since #337 six programs are compiled by the real TypeScript checker (`webui/test/codemode-compile.spec.ts`) against the recorded
+  registry of today's plugin (`fixtures/codemode/registry/plugin-current.json`, which includes the clock): T04 (its daily kit, with
+  `now()`), T08, T11 and T25 type-check cleanly, T27 fails with TS2339 on `commands`, and T05 fails with TS2322 because `on_cooldown`
+  is a `raw` rule option in self-description (a step list is not a JSON value to the type surface: #355). They are in the spellings
+  the generated surface really has (they differ from the paper ones: S10), kept in `fixtures/codemode/corpus/`. The other 23
+  programs are still on paper. The step shapes of §3 were corrected to the engine's
+  grammar (logic.md §2.2, `StepCompiler`): `require` takes steps, a condition guards with `if` and `stop`.
 - Parameter names in the programs (`amplifier`, `seconds`, `points`, `detail`) are illustrative; the real ones are the
   registries'. A verdict depends on a member *existing*, not on its spelling.
 - That a rule's `cooldown` is in memory and not persisted was read from logic.md §16, not from a restart test.
