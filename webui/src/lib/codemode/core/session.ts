@@ -646,7 +646,7 @@ export function createSession(config: SessionConfig): Session {
         const index = doc.rules;
         stage('rules.add', { kind: 'logicEdit', path: doc.path, ...start, edits: [{ op: 'addRule', index, rule }] }, [doc.path], 1);
         doc.rules += 1;
-        return tagged({ __rule: true }, { tag: 'rule' });
+        return tagged({ __rule: true }, { tag: 'ruleHandle' });
       },
       instantiate(recipe: unknown): unknown {
         const owner = `${doc.kind} "${doc.pack}:${doc.id}" rules.instantiate`;
@@ -664,7 +664,7 @@ export function createSession(config: SessionConfig): Session {
         const edits: JsonValue[] = rules.map((rule, offset) => ({ op: 'addRule', index: doc.rules + offset, rule: rule as JsonValue }));
         stage('rules.instantiate', { kind: 'logicEdit', path: doc.path, ...start, edits }, [doc.path], edits.length);
         doc.rules += rules.length;
-        return tagged({ __rule: true }, { tag: 'rule' });
+        return tagged({ __rule: true }, { tag: 'ruleHandle' });
       },
     });
   }

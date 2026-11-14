@@ -18,7 +18,7 @@ export type Tagged =
   | { tag: 'expr'; source: string }
   | { tag: 'context'; path: string }
   | { tag: 'ref'; id: string; kind: string }
-  | { tag: 'rule' };
+  | { tag: 'ruleHandle' };
 
 const registry = new WeakMap<object, Tagged>();
 
