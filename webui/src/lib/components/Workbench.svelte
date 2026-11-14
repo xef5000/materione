@@ -15,7 +15,10 @@
   import ActivityDock from '../dock/ActivityDock.svelte';
   import Icon from './Icon.svelte';
   import type { IconName } from './icons';
-  import { activityLog, diagnostics, ui } from '../state.svelte';
+  import ReviewPanel from '../codemode/review/ReviewPanel.svelte';
+  import { connectReview, disposeReview, review } from '../codemode/review/state.svelte';
+  import { activityLog, connection, diagnostics, session, ui } from '../state.svelte';
+  import { onDestroy, tick } from 'svelte';
 
   interface Props {
     onDisconnect: () => void;
@@ -24,7 +27,7 @@
   let { onDisconnect }: Props = $props();
 
   type RailView = 'start' | 'content' | 'assets' | 'advanced' | 'diagnostics' | 'server';
-  type RailTarget = RailView | 'activity';
+  type RailTarget = RailView | 'activity' | 'review';
   type RailEntry = { id: RailTarget; label: string; icon: IconName };
 
   const authoringViews: RailEntry[] = [
@@ -34,11 +37,22 @@
     { id: 'advanced', label: 'Files', icon: 'folder' },
   ];
 
-  const supportViews: RailEntry[] = [
+  const baseSupportViews: RailEntry[] = [
     { id: 'diagnostics', label: 'Problems', icon: 'triangle-alert' },
     { id: 'activity', label: 'Activity', icon: 'activity' },
     { id: 'server', label: 'Server', icon: 'server' },
   ];
+  // Review (code-mode proposals and the change log) exists only when the connected server advertises code mode.
+  const supportViews = $derived<RailEntry[]>(
+    review.ready ? [baseSupportViews[0]!, { id: 'review', label: 'Review', icon: 'file-diff' }, ...baseSupportViews.slice(1)] : baseSupportViews,
+  );
+
+  // One review session per connected channel; a different channel is a different session, and the old store ends.
+  $effect(() => {
+    void connection.connected;
+    connectReview(session.channel);
+  });
+  onDestroy(disposeReview);
 
   let initialized = $state<Record<RailView, boolean>>({
     start: false,
@@ -65,6 +79,11 @@
       ui.activityOpen = !ui.activityOpen;
       return;
     }
+    if (target === 'review') {
+      review.focusOnOpen = !review.open;
+      review.open = !review.open;
+      return;
+    }
     ui.returnTo = null;
     ui.view = target;
   }
@@ -79,14 +98,22 @@
     }
   }
 
+  function closeReview(): void {
+    review.open = false;
+    // focus returns to the control that opened the panel
+    void tick().then(() => document.getElementById('review-toggle')?.focus());
+  }
+
   function errorCount(entry: RailEntry): number {
     if (entry.id === 'diagnostics') return problems;
     if (entry.id === 'activity') return activityErrors;
+    if (entry.id === 'review') return review.waiting;
     return 0;
   }
 
   function accessibleLabel(entry: RailEntry): string {
     const count = errorCount(entry);
+    if (entry.id === 'review') return count > 0 ? `${entry.label}, ${count} waiting for approval` : entry.label;
     return count > 0 ? `${entry.label}, ${count} ${count === 1 ? 'error' : 'errors'}` : entry.label;
   }
 </script>
@@ -96,7 +123,7 @@
 <div class="workbench">
   <AppHeader />
 
-  <div class="main" class:rail-collapsed={ui.railCollapsed}>
+  <div class="main" class:rail-collapsed={ui.railCollapsed} class:with-review={review.ready && review.open}>
     <nav class="rail" class:collapsed={ui.railCollapsed} aria-label="Workspace navigation">
       <div class="nav-group" role="group" aria-label="Authoring">
         <h2 class="group-label">Authoring</h2>
@@ -121,13 +148,13 @@
           {@const count = errorCount(entry)}
           <button
             type="button"
-            class:active={entry.id === 'activity' ? ui.activityOpen : ui.view === entry.id}
+            class:active={entry.id === 'activity' ? ui.activityOpen : entry.id === 'review' ? review.open : ui.view === entry.id}
             title={accessibleLabel(entry)}
             aria-label={accessibleLabel(entry)}
-            aria-current={entry.id !== 'activity' && ui.view === entry.id ? 'page' : undefined}
-            aria-controls={entry.id === 'activity' && ui.activityOpen ? 'activity-dock' : undefined}
-            aria-expanded={entry.id === 'activity' ? ui.activityOpen : undefined}
-            id={entry.id === 'activity' ? 'activity-toggle' : undefined}
+            aria-current={entry.id !== 'activity' && entry.id !== 'review' && ui.view === entry.id ? 'page' : undefined}
+            aria-controls={entry.id === 'activity' && ui.activityOpen ? 'activity-dock' : entry.id === 'review' && review.open ? 'review-panel' : undefined}
+            aria-expanded={entry.id === 'activity' ? ui.activityOpen : entry.id === 'review' ? review.open : undefined}
+            id={entry.id === 'activity' ? 'activity-toggle' : entry.id === 'review' ? 'review-toggle' : undefined}
             onclick={() => activate(entry.id)}
           >
             <Icon name={entry.icon} size={19} />
@@ -221,6 +248,10 @@
         </section>
       {/if}
     </main>
+
+    {#if review.ready && review.open}
+      <ReviewPanel onClose={closeReview} />
+    {/if}
   </div>
 
   {#if ui.activityOpen}
@@ -249,6 +280,13 @@
   }
   .main.rail-collapsed {
     grid-template-columns: 48px minmax(0, 1fr);
+  }
+  /* The review panel is a third column; on a narrow window it covers the workspace instead of squeezing it. */
+  .main.with-review {
+    grid-template-columns: 188px minmax(0, 1fr) minmax(360px, 34vw);
+  }
+  .main.with-review.rail-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr) minmax(360px, 34vw);
   }
   .rail {
     min-height: 0;
@@ -404,6 +442,17 @@
     margin: 0 0 var(--space-3);
     font-size: var(--text-lg);
     font-weight: 600;
+  }
+  @media (max-width: 1000px) {
+    .main.with-review,
+    .main.with-review.rail-collapsed {
+      grid-template-columns: 48px minmax(0, 1fr);
+    }
+    .main.with-review :global(#review-panel) {
+      grid-column: 2;
+      grid-row: 1;
+      z-index: 2;
+    }
   }
   @media (max-width: 700px) {
     .main:not(.rail-collapsed) {

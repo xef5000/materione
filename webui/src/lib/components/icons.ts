@@ -104,6 +104,7 @@ import Magnet from '@lucide/svelte/icons/magnet';
 import Scan from '@lucide/svelte/icons/scan';
 import RectangleHorizontal from '@lucide/svelte/icons/rectangle-horizontal';
 import SquareDashed from '@lucide/svelte/icons/square-dashed';
+import FileDiff from '@lucide/svelte/icons/file-diff';
 
 export const icons = {
   'arrow-left': ArrowLeft,
@@ -123,6 +124,7 @@ export const icons = {
   crop: Crop,
   eraser: Eraser,
   file: File,
+  'file-diff': FileDiff,
   'file-braces': FileBraces,
   'file-code': FileCode,
   folder: Folder,

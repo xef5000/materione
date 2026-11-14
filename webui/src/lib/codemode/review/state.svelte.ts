@@ -31,6 +31,8 @@ class ReviewState {
   /** The server advertises code mode and a session is open: the rail shows the entry. */
   ready = $state(false);
   open = $state(false);
+  /** Set by the rail button (a user action) and spent by the panel: only then does opening move focus into it. */
+  focusOnOpen = $state(false);
   tab = $state<'proposals' | 'log'>('proposals');
   /** The store's snapshot (deeply frozen: held raw, never proxied). */
   snapshot = $state.raw<Snapshot>(EMPTY);
@@ -93,6 +95,7 @@ export function disposeReview(): void {
   seen.clear();
   review.ready = false;
   review.open = false;
+  review.focusOnOpen = false;
   review.snapshot = EMPTY;
   review.audit = [];
   review.auditStatus = 'idle';
