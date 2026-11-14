@@ -138,10 +138,14 @@ async function run(
     if (inSlice) cpuUsed += performance.now() - sliceStart;
     inSlice = false;
   };
+  // The CPU deadline covers the PROGRAM: guest setup (the core evaluated, the surface parsed; our code, not the program's) runs with no
+  // budget, bounded by the host's wall-clock backstop, and the accumulated engine time restarts at zero before the program's first statement,
+  // so a slow machine never spends the program's budget before it begins.
+  let cpuBudget = Number.POSITIVE_INFINITY;
   runtime.setMemoryLimit(limits.memoryBytes);
   runtime.setMaxStackSize(limits.stackBytes);
   runtime.setInterruptHandler(() => {
-    if (cpuUsed + (performance.now() - sliceStart) > limits.cpuMs) {
+    if (cpuUsed + (performance.now() - sliceStart) > cpuBudget) {
       flag('cpu-deadline');
       return true;
     }
@@ -236,13 +240,17 @@ async function run(
     const made = ctx.callFunction(setupFn, ctx.undefined, nRead, nResolve, surface, coreLimits, fixed, seed);
     if (made.error) return fail(made.error);
     const driver = keep(made.value);
+    setupMs = performance.now() - wall0;
+    end();
+    cpuUsed = 0;
+    cpuBudget = limits.cpuMs;
+    begin();
     const program = ctx.evalCode(message.js, PROGRAM_FILE);
     if (program.error) return fail(program.error);
     const programPromise = keep(program.value);
     const driven = ctx.callFunction(driver, ctx.undefined, programPromise);
     if (driven.error) return fail(driven.error);
     const final = keep(driven.value);
-    setupMs = performance.now() - wall0;
 
     for (;;) {
       if (!inSlice) begin();

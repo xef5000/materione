@@ -815,7 +815,7 @@ logs, value, stats, metrics }`: the core's `ProgramResult` with `sources` and ev
 
 | Limit | Default | Enforced by | Ends the run with |
 |---|---|---|---|
-| CPU time | 1000 ms of engine time (waiting on the editor is free) | interrupt handler in the engine | `SBX-0001` |
+| CPU time | 1000 ms of engine time **the program uses**: counted only while its code runs, from its first statement; waiting on the editor is free, and guest setup (core evaluated, surface parsed, about 13 ms here, more on a slow machine) is not charged to it; setup is bounded by the wall-clock backstop instead (it is our code, not the program's) | interrupt handler in the engine; the accumulated time restarts at zero after setup | `SBX-0001` |
 | Memory | 64 MiB `WebAssembly.Memory` maximum (QuickJS heap limit 75% of it) | the wasm memory; the engine | `SBX-0002` |
 | Stack | 256 KiB (an overflow the program does not catch is the program's own `SDK-0001`) | QuickJS | `SDK-0001` / `SBX-0003` |
 | Reads / read bytes | 100 / 2 MiB | the core (`SDK-0005`) and, independently, **the host's own count** | `SDK-0005` / `SBX-0004` |

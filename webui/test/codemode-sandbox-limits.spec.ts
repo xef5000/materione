@@ -84,14 +84,20 @@ describe('each limit ends the run with a diagnostic and no operations, and the n
     expect(performance.now() - started).toBeLessThan(3000);
   });
 
-  it('waiting on the host does not spend CPU time: a slow read under a tiny CPU deadline still finishes', async () => {
+  it('waiting on the host adds nothing to the CPU the program is charged, and guest setup is not charged to the program', async () => {
     const runner = await runnerOf();
     const slow = hostOf(WORLD);
-    const host: SandboxHost = { read: async (op, payload) => (await new Promise((resolve) => setTimeout(resolve, 200)), slow.read(op, payload)), resolve: (request) => slow.resolve(request) };
-    const result = await runner.run(checked('const p = await m.read.packs(); return p.length;'), surface, host, { cpuMs: 120, wallMs: 1000 });
+    const WAIT_MS = 400;
+    const host: SandboxHost = { read: async (op, payload) => (await new Promise((resolve) => setTimeout(resolve, WAIT_MS)), slow.read(op, payload)), resolve: (request) => slow.resolve(request) };
+    // a deadline generous for a loaded runner: the property is on the ACCOUNTED engine time, not on a race with a tiny budget
+    const result = await runner.run(checked('const p = await m.read.packs(); return p.length;'), surface, host, { cpuMs: 5000, wallMs: 5000 });
     expect(result.diagnostics).toEqual([]);
-    expect(result.ok).toBe(true);
     expect(result.value).toBe(1);
+    // the read's wait is wall time, not engine time
+    expect(result.metrics.totalMs).toBeGreaterThanOrEqual(WAIT_MS);
+    expect(result.metrics.cpuMs).toBeLessThan(WAIT_MS / 2);
+    // setup is charged to nobody's CPU deadline: the program's accounted time fits in the engine's wall time minus setup
+    expect(result.metrics.cpuMs).toBeLessThanOrEqual(result.metrics.engineWallMs - result.metrics.setupMs + 5);
   });
 
   it('the program\'s own diagnostics for the core\'s limits survive (reads, operations, logs, return value)', async () => {

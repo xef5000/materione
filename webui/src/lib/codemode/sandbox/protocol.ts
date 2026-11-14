@@ -12,7 +12,7 @@ import type { Limits as CoreLimits } from '../core/types';
 
 /** The limits of one run, all enforced by the host; the numbers are codemode.md section 4.2's, as built. */
 export interface SandboxLimits {
-  /** Milliseconds of ENGINE time (an interrupt handler), counted only while guest code runs: waiting on a host answer is free. */
+  /** Milliseconds of ENGINE time (an interrupt handler) the PROGRAM may use: counted only while its code runs (waiting on a host answer is free), from its first statement (guest setup is not charged). */
   cpuMs: number;
   /** Backstop, milliseconds the frame may take with no host answer outstanding; past it the host destroys the frame. */
   wallMs: number;
