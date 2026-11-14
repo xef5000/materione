@@ -144,8 +144,8 @@ describe('every kind of operation, and what it stages', () => {
       { kind: 'logicEdit', path: 'items/sword.yml', rev: 3, edits: [{ op: 'addRule', index: 2, rule: { on: 'click', do: ['cancel'] } }] },
     ]);
     expect(result.pack).toBe('bench');
-    // one catalog read to resolve the id, one read of the document: reads are cached inside the run
-    expect(calls.filter((c) => c.op === 'browse.get')).toHaveLength(1);
+    // staging reads nothing: the one call is the seal's batch, which asks for the id's path, revision and rule count
+    expect(calls.map((c) => c.op)).toEqual(['resolve']);
   });
 
   it('duplicate, delete, detachTemplate and saveAsTemplate map onto their operation kinds', async () => {
@@ -175,7 +175,7 @@ describe('every kind of operation, and what it stages', () => {
         { op: 'addRule', index: 1, rule: { on: 'gui.click', layer: 'y', do: ['cancel'] } },
       ] },
     ]);
-    expect(calls.find((c) => c.op === 'logic.instantiate')?.payload).toEqual({ recipe: 'cooldown_gate', params: { variable: 'bench:daily', seconds: 60, message: 'wait' } });
+    expect((calls.find((c) => c.op === 'resolve')?.payload as { instantiate: unknown[] }).instantiate).toEqual([{ recipe: 'cooldown_gate', params: { variable: 'bench:daily', seconds: 60, message: 'wait' } }]);
   });
 
   it('an unknown recipe is the server\'s refusal, structured', async () => {
@@ -243,10 +243,11 @@ describe('every kind of operation, and what it stages', () => {
 
   it('m.read reads the stored state: packs, a catalog page, one document, references and history', async () => {
     const { result } = await go(`
-      const packs = m.read.packs().map((p) => p.id + (p.builtin ? "*" : ""));
-      const rows = m.read.resources({ pack: "bench", type: "item" }).map((r) => r.id);
-      const view = m.read.get(m.ref.item("bench:sword"));
-      return { packs, rows, rev: view.revision, material: view.fields.material, refs: m.read.references(m.ref.item("bench:sword")).hits.length, complete: m.read.references(m.ref.item("bench:sword")).coverage.complete };`, {
+      const packs = (await m.read.packs()).map((p) => p.id + (p.builtin ? "*" : ""));
+      const rows = (await m.read.resources({ pack: "bench", type: "item" })).map((r) => r.id);
+      const view = await m.read.get(m.ref.item("bench:sword"));
+      const refs = await m.read.references(m.ref.item("bench:sword"));
+      return { packs, rows, rev: view.revision, material: view.fields.material, refs: refs.hits.length, complete: refs.coverage.complete };`, {
       ...world,
       references: { 'bench:sword': [{ pack: 'bench', type: 'guis', path: 'guis/menu.yml', id: 'menu', field: ['layers'], value: 'bench:sword' }] },
     });
@@ -288,16 +289,19 @@ describe('errors a program can cause are structured, never thrown strings', () =
     const context = vm.createContext({});
     vm.runInContext(await bundleCore(), context, { filename: 'core.js' });
     const port = fakePort(world);
-    (context as Record<string, unknown>).__port = { read: (op: string, payload: Record<string, unknown>) => port.read(op, JSON.parse(JSON.stringify(payload))) };
+    (context as Record<string, unknown>).__port = {
+      read: (op: string, payload: Record<string, unknown>) => Promise.resolve(port.read(op, JSON.parse(JSON.stringify(payload)))),
+      resolve: (request: never) => Promise.resolve(port.resolve(JSON.parse(JSON.stringify(request)))),
+    };
     (context as Record<string, unknown>).__surface = JSON.stringify(surface);
     vm.runInContext(`var s = MaterioneCore.createSession({ surface: JSON.parse(__surface), port: __port, programFile: 'program.js' }); var m = s.m;`, context);
     vm.runInContext(transpile('const p = m.pack("bench"); var h = p.items.create("early", {});'), context, { filename: 'program.js' });
-    const before = vm.runInContext('JSON.stringify(s.finish({}))', context) as string;
+    const before = (await vm.runInContext('s.finish({}).then(function (r) { return JSON.stringify(r); })', context)) as string;
     expect(JSON.parse(before).operations).toHaveLength(1);
     const thrown = vm.runInContext('(function () { try { h.set({ material: "STICK" }); return null; } catch (e) { return { name: e.name, code: e.diagnostic.code }; } })()', context);
     expect(thrown).toEqual({ name: 'SdkError', code: 'SDK-0003' });
     expect(JSON.parse(vm.runInContext('JSON.stringify(s.late())', context) as string)[0]).toMatchObject({ code: 'SDK-0003', severity: 'error' });
-    expect(vm.runInContext('JSON.stringify(s.finish({}))', context)).toBe(before);
+    expect(await vm.runInContext('s.finish({}).then(function (r) { return JSON.stringify(r); })', context)).toBe(before);
   });
 
   it('exceeding a cap ends the run: operations, edits in one operation, documents, reads', async () => {
@@ -310,7 +314,7 @@ describe('errors a program can cause are structured, never thrown strings', () =
     const docs = await go(`const p = m.pack("bench"); for (let i = 0; i < 5; i++) p.items.create("item_" + i, {});`, { documents: 2 });
     expect(errorsOf(docs.result)[0]).toMatchObject({ code: 'SDK-0005' });
     expect(errorsOf(docs.result)[0]?.message).toContain('2 documents');
-    const reads = await go(`for (let i = 0; i < 5; i++) m.read.resources({ pack: "bench", query: "q" + i });`, { reads: 2 });
+    const reads = await go(`for (let i = 0; i < 5; i++) await m.read.resources({ pack: "bench", query: "q" + i });`, { reads: 2 });
     expect(errorsOf(reads.result)[0]).toMatchObject({ code: 'SDK-0005' });
     expect(errorsOf(reads.result)[0]?.message).toContain('2 reads');
   });
@@ -378,7 +382,7 @@ describe('errors a program can cause are structured, never thrown strings', () =
   });
 
   it('logs, the summary and the return value are bounded', async () => {
-    const logged = await go(`for (let i = 0; i < 400; i++) m.log("x".repeat(100)); return m.read.packs().length;`);
+    const logged = await go(`for (let i = 0; i < 400; i++) m.log("x".repeat(100)); return (await m.read.packs()).length;`);
     expect(logged.result.ok).toBe(true);
     expect(logged.result.logs.length).toBeLessThan(400);
     expect(logged.result.logs[logged.result.logs.length - 1]).toContain('truncated');
@@ -466,5 +470,112 @@ describe('a jar without a capability has a smaller surface, at run time as in th
   it('a jar that predates the capability list is assumed to have everything', async () => {
     const { result } = await run({ surface: { ...surface, capabilities: null }, program: `return m.hasCapability("anything");`, world: { packs: ['bench'] } });
     expect(result.returned).toBe(true);
+  });
+});
+
+describe('staging makes no read: the list is sealed with one batched resolve (codemode.md section 3.9, issue 381)', () => {
+  const world: World = {
+    packs: ['bench'],
+    resources: {
+      bench: [
+        { type: 'items', path: 'items/sword.yml', id: 'sword' },
+        { type: 'items', path: 'items/swordfish.yml', id: 'swordfish' },
+        { type: 'guis', path: 'guis/menu.yml', id: 'menu' },
+      ],
+    },
+    documents: {
+      'bench/items/sword.yml': { rev: 3, parsed: { sword: { material: 'IRON_SWORD', behavior: [{ on: 'click', do: ['cancel'] }, { on: 'break', do: ['cancel'] }] } } },
+      'bench/items/swordfish.yml': { rev: 5, parsed: { swordfish: { material: 'COD' } } },
+      'bench/guis/menu.yml': { rev: 7, parsed: { menu: { container: 'chest_3' } } },
+    },
+    assets: { bench: ['assets/textures/item/ruby.png'] },
+    recipes: { cooldown_gate: { rules: [{ on: 'gui.click', layer: 'x', do: ['cancel'] }, { on: 'gui.click', layer: 'y', do: ['cancel'] }] } },
+  };
+  const go = (program: string, w: World = world) => run({ surface, program, world: w });
+
+  it('no staging call touches the port before the program returns; the seal is one resolve', async () => {
+    const vm = await import('node:vm');
+    const { bundleCore, fakePort, transpile } = await import('./helpers/sdk-runner');
+    const context = vm.createContext({});
+    vm.runInContext(await bundleCore(), context, { filename: 'core.js' });
+    const port = fakePort(world);
+    (context as Record<string, unknown>).__port = {
+      read: (op: string, payload: Record<string, unknown>) => Promise.resolve(port.read(op, JSON.parse(JSON.stringify(payload)))),
+      resolve: (request: never) => Promise.resolve(port.resolve(JSON.parse(JSON.stringify(request)))),
+    };
+    (context as Record<string, unknown>).__surface = JSON.stringify(surface);
+    vm.runInContext(`var s = MaterioneCore.createSession({ surface: JSON.parse(__surface), port: __port, programFile: 'program.js' }); var m = s.m;`, context);
+    vm.runInContext(transpile(`
+      const p = m.pack("bench");
+      const made = p.items.create("fresh", { material: "STICK", texture: m.ref.asset("textures/item/ruby.png") });
+      const sword = m.edit(m.ref.item("bench:sword"));
+      sword.set({ display_name: m.mm("S") });
+      sword.unset("lore");
+      sword.rules.add(m.triggers.click(), () => ({ do: [m.actions.cancel()] }));
+      m.edit(m.ref.gui("bench:menu")).rules.instantiate(m.recipes.cooldownGate({ variable: "bench:v", seconds: 1, message: "m" }));
+      sword.duplicate("sword_two");
+      sword.saveAsTemplate("swords", ["material"]);
+      sword.detachTemplate();
+      m.edit(m.ref.item("bench:swordfish")).delete();
+      made.rules.add(m.triggers.click(), () => ({ do: [] }));
+      m.ref.item("bench:sword");`), context, { filename: 'program.js' });
+    expect(port.calls, 'a program that only stages and names has made no call').toEqual([]);
+    const sealed = JSON.parse((await vm.runInContext('s.finish({}).then(function (r) { return JSON.stringify(r); })', context)) as string) as ProgramResult;
+    expect(sealed.ok, JSON.stringify(sealed.diagnostics)).toBe(true);
+    expect(port.calls.map((c) => c.op)).toEqual(['resolve']);
+    const request = port.calls[0]?.payload as { packs: string[]; refs: { id: string; needsDocument: boolean }[]; instantiate: unknown[]; assets: unknown[] };
+    expect(request.packs).toEqual(['bench']);
+    expect(request.refs.map((r) => `${r.id}:${r.needsDocument}`)).toEqual(['sword:true', 'menu:true', 'swordfish:true']);
+    expect(request.instantiate).toHaveLength(1);
+    expect(request.assets).toEqual([{ pack: 'bench', path: 'textures/item/ruby.png' }]);
+  });
+
+  it('a program that only reads makes no resolve, and one that stages nothing makes none either', async () => {
+    const reads = await go('return (await m.read.packs()).length;');
+    expect(reads.calls.map((c) => c.op)).toEqual(['browse.packs']);
+    const nothing = await go('m.summary("nothing to do");');
+    expect(nothing.calls).toEqual([]);
+  });
+
+  it('indexes are computed at seal over every interleaving: stored counts, earlier adds and recipe expansions', async () => {
+    const { result, calls } = await go(`
+      const sword = m.edit(m.ref.item("bench:sword"));
+      const menu = m.edit(m.ref.gui("bench:menu"));
+      const made = m.pack("bench").items.create("fresh", { material: "STICK" });
+      sword.rules.add(m.triggers.click(), () => ({ do: [m.actions.cancel()] }));
+      menu.rules.instantiate(m.recipes.cooldownGate({ variable: "bench:v", seconds: 1, message: "m" }));
+      made.rules.instantiate(m.recipes.cooldownGate({ variable: "bench:v", seconds: 2, message: "m" }));
+      sword.rules.add(m.triggers.click({ detail: "right" }), () => ({ do: [m.actions.cancel()] }));
+      menu.rules.add(m.triggers.guiClick({ layer: "z" }), () => ({ do: [m.actions.cancel()] }));
+      made.rules.add(m.triggers.click(), () => ({ do: [m.actions.cancel()] }));`);
+    expect(errorsOf(result)).toEqual([]);
+    const indexes = result.operations
+      .filter((operation) => operation.kind === 'logicEdit')
+      .map((operation) => `${String(operation.path)}:${(operation.edits as { index: number }[]).map((edit) => edit.index).join(',')}`);
+    // sword holds 2 rules; the menu holds none and takes the recipe's 2 before its own add; the created item starts at 0
+    expect(indexes).toEqual(['items/sword.yml:2', 'guis/menu.yml:0,1', 'items/fresh.yml:0,1', 'items/sword.yml:3', 'guis/menu.yml:2', 'items/fresh.yml:2']);
+    expect(calls.map((c) => c.op)).toEqual(['resolve']);
+  });
+
+  it('an unknown id is one diagnostic, SDK-0007, at the line that named it, and no list is sent on', async () => {
+    const { result, calls } = await go(`const p = m.pack("bench");
+p.items.create("fresh", { material: "STICK", template: m.ref.item("bench:nope") });
+m.edit(m.ref.item("bench:sord")).set({ material: "STICK" });
+m.edit(m.ref.item("bench:sord")).unset("lore");`);
+    expect(result.ok).toBe(false);
+    expect(result.operations).toEqual([]);
+    const found = errorsOf(result);
+    // one per id, not one per use, and none from anywhere else: the dry run never sees this list
+    expect(found.map((d) => d.code)).toEqual(['SDK-0007', 'SDK-0007']);
+    expect(found.map((d) => d.source?.line)).toEqual([2, 3]);
+    expect(found[1]?.hint).toContain('bench:sword');
+    expect(calls.map((c) => c.op)).toEqual(['resolve']);
+  });
+
+  it('the same program and the same answers seal to the same bytes', async () => {
+    const program = 'const sword = m.edit(m.ref.item("bench:sword")); sword.set({ material: "STICK" }); sword.rules.add(m.triggers.click(), () => ({ do: [] }));';
+    const first = await go(program);
+    const second = await go(program);
+    expect(JSON.stringify(second.result)).toBe(JSON.stringify(first.result));
   });
 });

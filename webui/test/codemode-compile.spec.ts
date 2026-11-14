@@ -222,16 +222,23 @@ describe('handles, editing and the read side are typed (issue 339)', () => {
     expect(codes('m.edit(m.ref.asset("textures/x.png"));').length).toBeGreaterThan(0);
   });
 
-  it('types the read side: a stored resource is a typed record, a catalog row carries its reference', () => {
-    expect(codes(`
-      const view = m.read.get(m.ref.item("rpg:sword"));
+  it('types the read side: every read is a promise, a stored resource a typed record, a catalog row carries its reference', () => {
+    // the program entry is async (the host wraps it), so the checker sees the body of an async function
+    const inAsync = (body: string): string => `(async () => {
+${body}
+})();`;
+    expect(codes(inAsync(`
+      const view = await m.read.get(m.ref.item("rpg:sword"));
       const material: string | undefined = view.fields.material;
-      const rows = m.read.resources({ pack: "rpg", type: "item", limit: 5 }).map((row) => row.ref);
+      const rows = (await m.read.resources({ pack: "rpg", type: "item", limit: 5 })).map((row) => row.ref);
       const found = m.docs.search("bleed").map((entry) => entry.member);
       const doc = m.docs.type("item").fields.length;
-      const hits = m.read.references(m.ref.item("rpg:sword")).hits.length;
-      const complete: boolean = m.read.references(m.ref.item("rpg:sword")).coverage.complete;`)).toEqual([]);
-    expect(codes('m.read.resources({ pack: "rpg", type: "nonsense" });').length).toBeGreaterThan(0);
-    expect(codes('m.read.get(m.ref.item("rpg:sword")).fields.nonsense;')).toContain(2339);
+      const hits = (await m.read.references(m.ref.item("rpg:sword"))).hits.length;
+      const complete: boolean = (await m.read.references(m.ref.item("rpg:sword"))).coverage.complete;`))).toEqual([]);
+    expect(codes(inAsync('await m.read.resources({ pack: "rpg", type: "nonsense" });')).length).toBeGreaterThan(0);
+    expect(codes(inAsync('(await m.read.get(m.ref.item("rpg:sword"))).fields.nonsense;'))).toContain(2339);
+    // forgetting the await is a type error, and staging needs none
+    expect(codes('m.read.get(m.ref.item("rpg:sword")).fields;')).toContain(2339);
+    expect(codes('const p = m.pack("t"); p.items.create("s", { material: "STICK" }).set({ material: "BONE" });')).toEqual([]);
   });
 });

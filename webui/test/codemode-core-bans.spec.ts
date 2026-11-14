@@ -194,10 +194,32 @@ describe('the SDK core reaches the server only through its table', () => {
     }
   });
 
-  it('the only things asked of the port are its four declared members', () => {
+  it('the only things asked of the port are its five declared members', () => {
     const used = new Set<string>();
     for (const file of all) for (const member of membersAccessedOn(file.text, 'port')) used.add(member);
-    expect([...used].sort()).toEqual(['done', 'log', 'read', 'stage']);
+    expect([...used].sort()).toEqual(['done', 'log', 'read', 'resolve', 'stage']);
+  });
+
+  it('staging makes no call: port.read is reached only from the read function and port.resolve only from the seal', () => {
+    const where = new Map<string, Set<string>>();
+    for (const file of all) {
+      const visit = (node: ts.Node, enclosing: string[]): void => {
+        let names = enclosing;
+        if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name !== undefined) names = [...enclosing, node.name.getText()];
+        if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'port') {
+          const set = where.get(node.name.text) ?? new Set<string>();
+          set.add(names[names.length - 1] ?? '(top level)');
+          where.set(node.name.text, set);
+        }
+        ts.forEachChild(node, (child) => visit(child, names));
+      };
+      visit(parse(file.text), []);
+    }
+    expect([...(where.get('read') ?? [])]).toEqual(['read']);
+    expect([...(where.get('resolve') ?? [])]).toEqual(['seal']);
+    // the observers are called by the seal and the finish, never by a staging member
+    expect([...(where.get('stage') ?? [])]).toEqual(['seal']);
+    expect([...(where.get('done') ?? [])]).toEqual(['complete']);
   });
 });
 
@@ -215,7 +237,7 @@ describe('the SDK core is DOM-free, dependency-free and deterministic', () => {
     const banned = [
       'document', 'window', 'localStorage', 'sessionStorage', 'indexedDB', 'fetch', 'XMLHttpRequest', 'WebSocket', 'navigator', 'postMessage',
       'globalThis', 'self', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'queueMicrotask', 'requestAnimationFrame',
-      'process', 'require', 'module', 'Buffer', 'TextEncoder', 'TextDecoder', 'console', 'Date', 'performance', 'eval', 'Function', 'Promise', 'Worker', 'importScripts',
+      'process', 'require', 'module', 'Buffer', 'TextEncoder', 'TextDecoder', 'console', 'Date', 'performance', 'eval', 'Function', 'Worker', 'importScripts',
     ];
     for (const file of all) {
       const used = identifiersOf(file.text);

@@ -295,14 +295,18 @@ interface ServerDiagnostic {
   readonly [key: string]: JsonValue;
 }
 
-/** Reads see the stored state, never the program's own staged edits (codemode.md section 3.2). Each call is budgeted. */
+/**
+ * Reads see the stored state, never the program's own staged edits (codemode.md section 3.2). Each call is budgeted, and
+ * each one **waits for the host**: it returns a promise, so a program `await`s it. Nothing else in the SDK waits for
+ * anything: staging is synchronous and makes no call (codemode.md section 3.9).
+ */
 interface ReadApi {
-  packs(): readonly PackInfo[];
-  resources(options: { readonly pack: string; readonly type?: ContentTypeName; readonly query?: string; readonly limit?: number }): readonly ResourceSummary[];
-  get<K extends keyof ContentTypeFields & string>(ref: Ref<K>): ResourceView<ContentTypeFields[K]>;
-  references(ref: Ref): ReferenceResult;
-  history(ref: Ref, limit?: number): readonly RevisionInfo[];
-  diagnostics(): readonly ServerDiagnostic[];
+  packs(): Promise<readonly PackInfo[]>;
+  resources(options: { readonly pack: string; readonly type?: ContentTypeName; readonly query?: string; readonly limit?: number }): Promise<readonly ResourceSummary[]>;
+  get<K extends keyof ContentTypeFields & string>(ref: Ref<K>): Promise<ResourceView<ContentTypeFields[K]>>;
+  references(ref: Ref): Promise<ReferenceResult>;
+  history(ref: Ref, limit?: number): Promise<readonly RevisionInfo[]>;
+  diagnostics(): Promise<readonly ServerDiagnostic[]>;
 }
 
 /** One parameter of a content type, as the registry describes it. */

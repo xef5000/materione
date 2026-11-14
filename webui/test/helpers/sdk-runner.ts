@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import ts from 'typescript';
 import type { SurfaceDocument } from '../../src/lib/codemode/generate/surface';
-import type { Limits, ProgramResult, ReadReply, SdkDiagnostic } from '../../src/lib/codemode/core';
+import type { Limits, ProgramResult, ReadReply, ResolveReply, ResolveRequest, SdkDiagnostic } from '../../src/lib/codemode/core';
+import { nearest } from '../../src/lib/codemode/core/values';
 
 const CORE_ENTRY = fileURLToPath(new URL('../../src/lib/codemode/core/index.ts', import.meta.url));
 
@@ -65,10 +66,21 @@ export interface Call {
 const ok = (data: unknown): ReadReply => ({ ok: true, data });
 const refuse = (message: string, code = 'MTR-0008'): ReadReply => ({ ok: false, error: { code, message } });
 
-/** Answers the allowlisted read ops from a world, and records every call. */
-export function fakePort(world: World, calls: Call[] = []): { read(op: string, payload: Record<string, unknown>): ReadReply; calls: Call[] } {
+/**
+ * Answers `m.read.*` ops and the seal's one batched resolve from a world, and records every call (a resolve is
+ * recorded as the op `resolve`). The reply to a read is synchronous here; the run wraps it in a promise, as a host would.
+ */
+export function fakePort(world: World, calls: Call[] = []): {
+  read(op: string, payload: Record<string, unknown>): ReadReply;
+  resolve(request: ResolveRequest): ResolveReply;
+  calls: Call[];
+} {
   return {
     calls,
+    resolve(request) {
+      calls.push({ op: 'resolve', payload: request });
+      return answerResolve(world, request);
+    },
     read(op, payload) {
       calls.push({ op, payload });
       switch (op) {
@@ -108,6 +120,40 @@ export function fakePort(world: World, calls: Call[] = []): { read(op: string, p
           return refuse(`the fake port does not answer ${op}`, 'MTR-9999');
       }
     },
+  };
+}
+
+/** The seal's batch answered from a world: what a host does with the read-only editor ops. */
+function answerResolve(world: World, request: ResolveRequest): ResolveReply {
+  const builtin = world.builtin ?? [];
+  return {
+    packs: request.packs.map((pack) => {
+      if (builtin.includes(pack)) return { state: 'builtin' as const };
+      if (world.packs.includes(pack)) return { state: 'ok' as const };
+      return { state: 'missing' as const, nearest: nearest(pack, world.packs) };
+    }),
+    refs: request.refs.map((ref) => {
+      const rows = (world.resources?.[ref.pack] ?? []).filter((row) => row.type.toLowerCase() === ref.directory.toLowerCase());
+      const row = rows.find((candidate) => candidate.id === ref.id);
+      if (row === undefined) return { found: false as const, nearest: nearest(`${ref.pack}:${ref.id}`, rows.map((candidate) => `${ref.pack}:${candidate.id}`)) };
+      if (!ref.needsDocument) return { found: true as const };
+      const document = world.documents?.[`${ref.pack}/${row.path}`];
+      if (document === undefined) return { found: true as const, path: row.path };
+      const tree = (document.parsed as Record<string, Record<string, unknown>> | undefined)?.[ref.id];
+      const held = ref.rulesKey === undefined ? undefined : tree?.[ref.rulesKey];
+      return { found: true as const, path: row.path, rev: document.rev, rules: Array.isArray(held) ? held.length : 0 };
+    }),
+    instantiate: request.instantiate.map((entry) => {
+      const expansion = world.recipes?.[entry.recipe];
+      if (expansion === undefined) return { error: { code: 'MTR-0008', message: `unknown recipe '${entry.recipe}': no recipe with that id is registered` } };
+      if ('error' in expansion) return { error: { code: 'MTR-0008', message: expansion.error } };
+      return { rules: expansion.rules as never, warnings: expansion.warnings ?? [] };
+    }),
+    assets: request.assets.map((asset) => {
+      const listed = world.assets?.[asset.pack] ?? [];
+      if (listed.includes(asset.path) || listed.includes(`assets/${asset.path}`)) return { found: true };
+      return { found: false, nearest: nearest(asset.path, listed) };
+    }),
   };
 }
 
@@ -204,7 +250,10 @@ export async function run(options: RunOptions): Promise<Run> {
   const context = await bareContext();
   const port = fakePort(options.world ?? { packs: ['bench'] });
   const holder = context as Record<string, unknown>;
-  holder.__port = { read: (op: string, payload: Record<string, unknown>) => port.read(op, JSON.parse(JSON.stringify(payload))) };
+  holder.__port = {
+    read: (op: string, payload: Record<string, unknown>) => Promise.resolve(port.read(op, JSON.parse(JSON.stringify(payload)))),
+    resolve: (request: ResolveRequest) => Promise.resolve(port.resolve(JSON.parse(JSON.stringify(request)))),
+  };
   holder.__surface = JSON.stringify(options.surface);
   holder.__limits = JSON.stringify(options.limits ?? {});
   vm.runInContext(
@@ -214,9 +263,9 @@ export async function run(options: RunOptions): Promise<Run> {
   );
   const { js, map } = transpileWithMap(options.program);
   // the program shares line 1 with the wrapper, so its generated lines are its own (its first line's columns shift by the prefix)
-  const prefix = '(function () { var outcome; try { outcome = { returned: (function () {';
-  const script = `${prefix}${js}\n})() }; } catch (error) { outcome = { threw: error }; } return JSON.stringify({ result: __session.finish(outcome), late: __session.late() }); })()`;
-  const text = vm.runInContext(script, context, { filename: 'program.js' }) as string;
+  const prefix = '(async function () { var outcome; try { outcome = { returned: await (async function () {';
+  const script = `${prefix}${js}\n})() }; } catch (error) { outcome = { threw: error }; } var finished = await __session.finish(outcome); return JSON.stringify({ result: finished, late: __session.late() }); })()`;
+  const text = (await vm.runInContext(script, context, { filename: 'program.js' })) as string;
   const parsed = JSON.parse(text) as { result: ProgramResult; late: SdkDiagnostic[] };
   // the host maps positions in the transpiled program back to the program the agent wrote
   const decoded = decodeMappings(map.mappings);

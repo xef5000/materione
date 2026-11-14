@@ -33,6 +33,9 @@ import {
   type Limits,
   type Outcome,
   type ProgramResult,
+  type ResolveRef,
+  type ResolveReply,
+  type ResolveRequest,
   type SdkDiagnostic,
   type Session,
   type SessionConfig,
@@ -49,7 +52,9 @@ const SUMMARY_PAGE = 200;
 
 interface Doc {
   pack: string;
-  path: string;
+  /** The document's path: known for a created document, filled at seal for a stored one. */
+  path?: string;
+  /** The directory the content type's documents live under. */
   directory: string;
   /** The content type name. */
   kind: string;
@@ -57,11 +62,33 @@ interface Doc {
   id: string;
   created: boolean;
   deleted: boolean;
-  /** The stored revision, once read (existing documents). */
-  rev?: number;
-  /** Rules the document holds: those it had, and those this program adds. */
-  rules: number;
-  loaded: boolean;
+  /** A stored document: where the program first named it, for the diagnostic if it does not exist. */
+  source?: SourcePosition;
+  /** A stored document: whether an operation needs its path and revision (a reference used only as a value does not). */
+  needsDocument: boolean;
+}
+
+/** What building a staged operation needs from the host's answers; every member is filled at seal. */
+interface SealView {
+  /** The path of the document: the created one's own, or the stored one's as resolved. */
+  path(doc: Doc): string;
+  /** `{ rev }` for a stored document, nothing for a created one. */
+  rev(doc: Doc): { rev?: number };
+  /** The index of the next rule of the document, taking `count` rules: the stored count plus what earlier operations added. */
+  take(doc: Doc, count: number): number;
+  /** The rules a recipe expanded to. */
+  expansion(entry: Pending): JsonValue[];
+}
+
+/** One staged operation, not yet built: the closure turns it into its wire shape at seal. */
+interface Pending {
+  sdk: string;
+  kind: string;
+  source: SourcePosition | null;
+  doc: Doc | undefined;
+  /** A recipe the host expands at seal. */
+  recipe: { id: string; params: JsonValue } | undefined;
+  build(view: SealView, entry: Pending): StagedOperation;
 }
 
 type Dict = Record<string, unknown>;
@@ -83,22 +110,23 @@ export function createSession(config: SessionConfig): Session {
 
   const diagnostics: SdkDiagnostic[] = [];
   const late: SdkDiagnostic[] = [];
-  const operations: StagedOperation[] = [];
-  const sources: (SourcePosition | null)[] = [];
+  const pending: Pending[] = [];
   const documents = new Set<string>();
   const logs: string[] = [];
   const assetRefs: { path: string; source: SourcePosition | undefined }[] = [];
   const created = new Map<string, Handle>();
-  const existing = new Map<string, Doc>();
-  const readCache = new Map<string, unknown>();
+  const stored = new Map<string, Doc>();
+  const readCache = new Map<string, Promise<Dict>>();
   let logged = 0;
   let logTruncated = false;
   let reads = 0;
   let readBytes = 0;
   let summaryText: string | null = null;
   let sessionPack: string | undefined;
+  let sessionPackSource: SourcePosition | undefined;
   let packs: Parsed | undefined;
   let closed = false;
+  let finishing: Promise<ProgramResult> | undefined;
   let result: ProgramResult | undefined;
 
   type Handle = Record<string, unknown>;
@@ -131,7 +159,8 @@ export function createSession(config: SessionConfig): Session {
   function diagnostic(code: SdkCode, message: string, extra?: { hint?: string; serverCode?: string; source?: SourcePosition }): SdkDiagnostic {
     const found: SdkDiagnostic = { code, severity: SDK_CODES[code].severity, message };
     if (extra?.hint !== undefined) found.hint = extra.hint;
-    const source = extra?.source ?? locate();
+    // an explicit `source` (even undefined) is the caller's word: a seal diagnostic must not borrow the stack of the host that called finish
+    const source = extra !== undefined && 'source' in extra ? extra.source : locate();
     if (source !== undefined) found.source = source;
     if (extra?.serverCode !== undefined) found.serverCode = extra.serverCode;
     return found;
@@ -164,35 +193,41 @@ export function createSession(config: SessionConfig): Session {
     }
   }
 
-  /** One allowlisted read through the port, counted against the budget, cached for the run. */
-  function read(sdk: string, payload: Dict): Dict {
+  /**
+   * One allowlisted read through the port, counted against the budget, cached for the run. Only `m.read.*` and
+   * the lookups behind it come here: the program awaits the answer. Staging never does.
+   */
+  async function read(sdk: string, payload: Dict): Promise<Dict> {
     open();
     const entry = readEntry(sdk);
     exposed(entry, sdk);
     const key = `${entry.op}\u0000${stable(payload)}`;
     const cached = readCache.get(key);
-    if (cached !== undefined) return cached as Dict;
+    if (cached !== undefined) return cached;
     if (reads >= limits.reads) fail('SDK-0005', `the program made more than ${limits.reads} reads`, { hint: 'read a list once and filter it in the program' });
     reads += 1;
-    const reply = port.read(entry.op, payload);
-    if (!reply.ok) {
-      fail('SDK-0010', `${entry.op}: ${reply.error.message}`, reply.error.code === undefined ? undefined : { serverCode: reply.error.code });
-    }
-    const text = stable(reply.data);
-    readBytes += byteLength(text);
-    if (readBytes > limits.readBytes) fail('SDK-0005', `the reads returned more than ${limits.readBytes} bytes`, { hint: 'ask for fewer resources: filter by type or query' });
-    const data = (typeof reply.data === 'object' && reply.data !== null ? JSON.parse(text) : {}) as Dict;
-    readCache.set(key, data);
-    return data;
+    // the cache holds the promise, so two reads of the same thing in flight are one read
+    const inFlight = (async (): Promise<Dict> => {
+      const reply = await port.read(entry.op, payload);
+      if (!reply.ok) {
+        fail('SDK-0010', `${entry.op}: ${reply.error.message}`, reply.error.code === undefined ? undefined : { serverCode: reply.error.code });
+      }
+      const text = stable(reply.data);
+      readBytes += byteLength(text);
+      if (readBytes > limits.readBytes) fail('SDK-0005', `the reads returned more than ${limits.readBytes} bytes`, { hint: 'ask for fewer resources: filter by type or query' });
+      return (typeof reply.data === 'object' && reply.data !== null ? JSON.parse(text) : {}) as Dict;
+    })();
+    readCache.set(key, inFlight);
+    return inFlight;
   }
 
   function strings(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
   }
 
-  function loadPacks(sdk: string): Parsed {
+  async function loadPacks(sdk: string): Promise<Parsed> {
     if (packs === undefined) {
-      const data = read(sdk, {});
+      const data = await read(sdk, {});
       packs = { packs: strings(data.packs), builtin: strings(data.builtin) };
     }
     return packs;
@@ -526,37 +561,38 @@ export function createSession(config: SessionConfig): Session {
   const triggerById = new Map(surface.behavior.triggers.map((trigger) => [trigger.id, trigger]));
   const ruleOptionIds = new Set(surface.behavior.ruleOptions.map((option) => option.id));
 
-  // ---- staging ------------------------------------------------------------------------------------
+  // ---- staging: records, never reads --------------------------------------------------------------
+  //
+  // Nothing below touches the port. A staged operation is a closure that builds the wire operation at seal,
+  // from what the host resolved (paths, revisions, rule counts, recipe expansions); everything the program
+  // itself decides (the fields, the rule's tree) is captured now. See codemode.md section 3.9.
 
   function claimPack(pack: string): void {
     if (sessionPack === pack) return;
     if (sessionPack !== undefined) {
       fail('SDK-0004', `this program writes to pack "${sessionPack}" and now to "${pack}": a program is one transaction in one pack`, { hint: 'split the change into two programs, one per pack' });
     }
-    const known = loadPacks('m.pack');
-    if (known.builtin.includes(pack)) fail('SDK-0008', `pack "${pack}" is built in and read-only`, { hint: 'built-in content can be read and referenced, never written' });
-    if (!known.packs.includes(pack)) {
-      const close = nearest(pack, known.packs);
-      fail('SDK-0008', `no pack "${pack}"`, { hint: close.length > 0 ? `nearest packs: ${close.join(', ')}` : 'the server has no packs yet' });
-    }
     sessionPack = pack;
+    sessionPackSource = locate();
+  }
+
+  /** What identifies a document in the count of documents touched: its path, or, for a stored one, its identity. */
+  function docKey(doc: Doc): string {
+    return doc.created && doc.path !== undefined ? doc.path : `stored\u0000${doc.kind}\u0000${doc.pack}:${doc.id}`;
   }
 
   /** Records one operation. `touched` are the documents it changes; `edits` the entries it carries. */
-  function stage(sdk: string, op: StagedOperation, touched: readonly string[], edits: number): void {
+  function stage(sdk: string, kind: string, touched: readonly string[], edits: number, doc: Doc | undefined, build: Pending['build'], recipe?: { id: string; params: JsonValue }): void {
     open();
-    const entry = writeEntry(sdk, op.kind);
+    const entry = writeEntry(sdk, kind);
     exposed(entry, sdk);
-    if (operations.length >= limits.operations) fail('SDK-0005', `the program staged more than ${limits.operations} operations`, { hint: 'a transaction is at most that long; split the work into several programs' });
+    if (pending.length >= limits.operations) fail('SDK-0005', `the program staged more than ${limits.operations} operations`, { hint: 'a transaction is at most that long; split the work into several programs' });
     if (edits > limits.editsPerOperation) fail('SDK-0005', `one operation carries ${edits} edits; the most is ${limits.editsPerOperation}`);
     const next = new Set(documents);
-    for (const path of touched) next.add(path);
+    for (const key of touched) next.add(key);
     if (next.size > limits.documents) fail('SDK-0005', `the program touches more than ${limits.documents} documents`, { hint: 'a transaction is at most that wide; split the work into several programs' });
-    const source = locate();
-    operations.push(op);
-    sources.push(source ?? null);
-    for (const path of touched) documents.add(path);
-    port.stage?.(op, source ?? null, operations.length - 1);
+    for (const key of touched) documents.add(key);
+    pending.push({ sdk, kind, source: locate() ?? null, doc, recipe, build });
   }
 
   function fieldEdits(doc: Doc, fields: unknown, owner: string): JsonValue[] {
@@ -570,27 +606,12 @@ export function createSession(config: SessionConfig): Session {
     return edits;
   }
 
-  /** Reads an existing document once: its revision, and how many rules it holds. */
-  function load(doc: Doc): void {
-    if (doc.created || doc.loaded) return;
-    const data = read('m.edit', { pack: doc.pack, path: doc.path });
-    if (typeof data.rev !== 'number') fail('SDK-0010', `browse.get answered without a revision for ${doc.path}`);
-    doc.rev = data.rev as number;
-    const type = typeByName.get(doc.kind);
-    const key = type === undefined ? undefined : rulesKeyOf(type);
-    const parsed = isPlain(data.parsed) ? ((data.parsed as Dict)[doc.id] as Dict | undefined) : undefined;
-    const held = key !== undefined && parsed !== undefined && isPlain(parsed) ? (parsed as Dict)[key] : undefined;
-    doc.rules = Array.isArray(held) ? held.length : 0;
-    doc.loaded = true;
-  }
-
-  /** Where an operation on `doc` starts: the checks, then the `rev` of a stored document. */
-  function prepare(doc: Doc, owner: string): { rev?: number } {
+  /** The checks before an operation on `doc`; a stored document is marked as needing its path and revision at seal. */
+  function prepare(doc: Doc, owner: string): void {
     open();
-    if (doc.deleted) fail('SDK-0012', `${owner}: ${doc.path} is deleted by this program`);
+    if (doc.deleted) fail('SDK-0012', `${owner}: ${doc.kind} "${doc.pack}:${doc.id}" is deleted by this program`);
     claimPack(doc.pack);
-    load(doc);
-    return doc.created || doc.rev === undefined ? {} : { rev: doc.rev };
+    if (!doc.created) doc.needsDocument = true;
   }
 
   // ---- handles ------------------------------------------------------------------------------------
@@ -611,7 +632,7 @@ export function createSession(config: SessionConfig): Session {
       const doc = docs.get(other);
       if (doc !== undefined && doc.path === path && doc.pack === pack) fail('SDK-0013', `${path} is already staged by this program`);
     }
-    return { pack, path, directory, kind: type.name, id, created: true, deleted: false, rules: 0, loaded: true };
+    return { pack, path, directory, kind: type.name, id, created: true, deleted: false, needsDocument: false };
   }
 
   const docs = new WeakMap<object, Doc>();
@@ -642,10 +663,14 @@ export function createSession(config: SessionConfig): Session {
         }
         if (given[FLOW.condition] !== undefined) rule[FLOW.condition] = condition(given[FLOW.condition], `${owner} ${FLOW.condition}`);
         rule[FLOW.body] = steps(given[FLOW.body], `${owner} ${FLOW.body}`);
-        const start = prepare(doc, owner);
-        const index = doc.rules;
-        stage('rules.add', { kind: 'logicEdit', path: doc.path, ...start, edits: [{ op: 'addRule', index, rule }] }, [doc.path], 1);
-        doc.rules += 1;
+        prepare(doc, owner);
+        // the rule's index is the number of rules the document holds when this one lands: known at seal
+        stage('rules.add', 'logicEdit', [docKey(doc)], 1, doc, (view) => ({
+          kind: 'logicEdit',
+          path: view.path(doc),
+          ...view.rev(doc),
+          edits: [{ op: 'addRule', index: view.take(doc, 1), rule }],
+        }));
         return tagged({ __rule: true }, { tag: 'ruleHandle' });
       },
       instantiate(recipe: unknown): unknown {
@@ -653,17 +678,14 @@ export function createSession(config: SessionConfig): Session {
         open();
         const info = tagOf(recipe);
         if (info === undefined || info.tag !== 'recipeInstance') return fail('SDK-0012', `${owner}: the argument is a recipe built with m.recipes`);
-        const start = prepare(doc, owner);
-        const data = read('rules.instantiate', { recipe: info.id, params: info.params });
-        for (const item of Array.isArray(data.warnings) ? data.warnings : []) {
-          const text = isPlain(item) && typeof (item as Dict).message === 'string' ? ((item as Dict).message as string) : JSON.stringify(item);
-          warn('SDK-0017', `recipe ${info.id}: ${text}`);
-        }
-        const rules = Array.isArray(data.rules) ? data.rules : [];
-        if (rules.length === 0) fail('SDK-0010', `recipe ${info.id} expanded to no rules`);
-        const edits: JsonValue[] = rules.map((rule, offset) => ({ op: 'addRule', index: doc.rules + offset, rule: rule as JsonValue }));
-        stage('rules.instantiate', { kind: 'logicEdit', path: doc.path, ...start, edits }, [doc.path], edits.length);
-        doc.rules += rules.length;
+        prepare(doc, owner);
+        // the expansion is the server's, at seal; the rules it holds count towards every later index
+        stage('rules.instantiate', 'logicEdit', [docKey(doc)], 1, doc, (view, entry) => {
+          const rules = view.expansion(entry);
+          const start = view.take(doc, rules.length);
+          const edits: JsonValue[] = rules.map((rule, offset) => ({ op: 'addRule', index: start + offset, rule }));
+          return { kind: 'logicEdit', path: view.path(doc), ...view.rev(doc), edits };
+        }, { id: info.id, params: info.params });
         return tagged({ __rule: true }, { tag: 'ruleHandle' });
       },
     });
@@ -677,39 +699,41 @@ export function createSession(config: SessionConfig): Session {
       const owner = `${label} set`;
       const edits = fieldEdits(doc, fields, owner);
       if (edits.length === 0) fail('SDK-0012', `${owner}: no field to set`);
-      const start = prepare(doc, owner);
-      stage('handle.set', { kind: 'setFields', path: doc.path, ...start, edits }, [doc.path], edits.length);
+      prepare(doc, owner);
+      stage('handle.set', 'setFields', [docKey(doc)], edits.length, doc, (view) => ({ kind: 'setFields', path: view.path(doc), ...view.rev(doc), edits }));
     };
     handle.unset = (...keys: unknown[]): void => {
       const owner = `${label} unset`;
       if (keys.length === 0 || keys.some((key) => typeof key !== 'string')) fail('SDK-0012', `${owner}: name the fields to remove`);
-      const start = prepare(doc, owner);
+      prepare(doc, owner);
       const edits = (keys as string[]).map((key) => ({ field: [doc.id, key], remove: true }));
-      stage('handle.unset', { kind: 'setFields', path: doc.path, ...start, edits }, [doc.path], edits.length);
+      stage('handle.unset', 'setFields', [docKey(doc)], edits.length, doc, (view) => ({ kind: 'setFields', path: view.path(doc), ...view.rev(doc), edits }));
     };
     handle.duplicate = (newId: unknown, options?: unknown): unknown => {
       const owner = `${label} duplicate`;
       const given = options === undefined ? {} : isPlain(options) ? (options as Dict) : fail('SDK-0012', `${owner}: options must be a mapping`);
       const copy = newDocument(doc.pack, type, checkId(newId, owner), given.folder, owner);
       const edits = given.fields === undefined ? [] : fieldEdits(copy, given.fields, owner);
-      const start = prepare(doc, owner);
-      const op: StagedOperation = { kind: 'duplicate', fromPath: doc.path, ...start, id: copy.id };
-      if (typeof given.folder === 'string') op.folder = given.folder;
-      if (edits.length > 0) op.edits = edits;
-      stage('handle.duplicate', op, [copy.path], edits.length);
+      prepare(doc, owner);
+      stage('handle.duplicate', 'duplicate', [docKey(copy)], edits.length, doc, (view) => {
+        const op: StagedOperation = { kind: 'duplicate', fromPath: view.path(doc), ...view.rev(doc), id: copy.id };
+        if (typeof given.folder === 'string') op.folder = given.folder;
+        if (edits.length > 0) op.edits = edits;
+        return op;
+      });
       return register(copy, type);
     };
     handle.delete = (): void => {
       const owner = `${label} delete`;
       if (doc.created) fail('SDK-0012', `${owner}: this program creates it; do not create it instead`);
-      const start = prepare(doc, owner);
-      stage('handle.delete', { kind: 'delete', path: doc.path, ...start }, [doc.path], 0);
+      prepare(doc, owner);
+      stage('handle.delete', 'delete', [docKey(doc)], 0, doc, (view) => ({ kind: 'delete', path: view.path(doc), ...view.rev(doc) }));
       doc.deleted = true;
     };
     handle.detachTemplate = (): void => {
       const owner = `${label} detachTemplate`;
-      const start = prepare(doc, owner);
-      stage('handle.detachTemplate', { kind: 'detachTemplate', path: doc.path, ...start, resource: doc.id }, [doc.path], 0);
+      prepare(doc, owner);
+      stage('handle.detachTemplate', 'detachTemplate', [docKey(doc)], 0, doc, (view) => ({ kind: 'detachTemplate', path: view.path(doc), ...view.rev(doc), resource: doc.id }));
     };
     handle.saveAsTemplate = (templateId: unknown, fields: unknown): void => {
       const owner = `${label} saveAsTemplate`;
@@ -717,8 +741,15 @@ export function createSession(config: SessionConfig): Session {
       if (!Array.isArray(fields) || fields.length === 0 || fields.some((field) => typeof field !== 'string')) {
         fail('SDK-0012', `${owner}: choose at least one field to put in the template`);
       }
-      const start = prepare(doc, owner);
-      stage('handle.saveAsTemplate', { kind: 'saveAsTemplate', fromPath: doc.path, ...start, resource: doc.id, templateId: templateId as string, fields: fields as string[] }, [`templates/${templateId as string}.yml`], (fields as unknown[]).length);
+      prepare(doc, owner);
+      stage('handle.saveAsTemplate', 'saveAsTemplate', [`templates/${templateId as string}.yml`], (fields as unknown[]).length, doc, (view) => ({
+        kind: 'saveAsTemplate',
+        fromPath: view.path(doc),
+        ...view.rev(doc),
+        resource: doc.id,
+        templateId: templateId as string,
+        fields: fields as string[],
+      }));
     };
     if (withLogic && rulesKeyOf(type) !== undefined) handle.rules = ruleSetOf(doc);
     return tagged(handle, { tag: 'ref', id, kind: type.name });
@@ -731,7 +762,7 @@ export function createSession(config: SessionConfig): Session {
     return handle;
   }
 
-  // ---- resolving references to stored resources ---------------------------------------------------
+  // ---- stored resources: named without a read, resolved at seal -----------------------------------
 
   function splitRef(id: unknown, owner: string): { pack: string; local: string } {
     if (typeof id !== 'string') return fail('SDK-0012', `${owner}: a reference is the text "pack:id"`);
@@ -740,36 +771,48 @@ export function createSession(config: SessionConfig): Session {
     return { pack: id.slice(0, at), local: id.slice(at + 1) };
   }
 
+  /** A stored resource the program names: recorded with where it was first named, resolved by the host at seal. */
+  function storedDoc(type: SurfaceContentType, pack: string, local: string): Doc {
+    const key = `${type.name}\u0000${pack}:${local}`;
+    let doc = stored.get(key);
+    if (doc === undefined) {
+      doc = { pack, directory: directoryOf(type), kind: type.name, id: local, created: false, deleted: false, needsDocument: false, source: locate() };
+      stored.set(key, doc);
+    }
+    return doc;
+  }
+
   function summaryDoc(row: unknown, type: SurfaceContentType | undefined, pack: string): Doc | undefined {
     if (!isPlain(row)) return undefined;
     const r = row as Dict;
     if (typeof r.id !== 'string' || typeof r.path !== 'string' || typeof r.type !== 'string') return undefined;
     const known = typeByDirectory.get(r.type);
     const kind = type?.name ?? known?.name ?? r.type;
-    return { pack: typeof r.pack === 'string' ? r.pack : pack, path: r.path, directory: r.type, kind, id: r.id, created: false, deleted: false, rules: 0, loaded: false };
+    return { pack: typeof r.pack === 'string' ? r.pack : pack, path: r.path, directory: r.type, kind, id: r.id, created: false, deleted: false, needsDocument: false };
   }
 
-  /** The stored resource `pack:id` of `type`, or SDK-0007 naming the nearest ids. */
-  function resolve(type: SurfaceContentType, id: unknown, owner: string): Doc {
+  /**
+   * The stored resource `pack:id` of `type` for a READ (the program waits for the answer anyway): its path, or
+   * SDK-0007 naming the nearest ids. Staging never comes through here; it is resolved at seal.
+   */
+  async function lookupStored(type: SurfaceContentType, id: unknown, owner: string): Promise<Doc> {
     const { pack, local } = splitRef(id, owner);
-    const refId = `${pack}:${local}`;
-    const known = existing.get(`${type.name}\u0000${refId}`);
-    if (known !== undefined) return known;
     const directory = directoryOf(type);
-    const exact = read('m.ref', { pack, type: directory, query: local, limit: SUMMARY_PAGE });
+    const exact = await read('m.ref', { pack, type: directory, query: local, limit: SUMMARY_PAGE });
     for (const row of Array.isArray(exact.resources) ? exact.resources : []) {
       const doc = summaryDoc(row, type, pack);
-      if (doc !== undefined && doc.id === local) {
-        existing.set(`${type.name}\u0000${refId}`, doc);
-        return doc;
-      }
+      if (doc !== undefined && doc.id === local) return doc;
     }
-    const everything = read('m.ref', { pack, type: directory, limit: SUMMARY_PAGE });
+    const everything = await read('m.ref', { pack, type: directory, limit: SUMMARY_PAGE });
     const ids = (Array.isArray(everything.resources) ? everything.resources : [])
       .map((row) => (isPlain(row) && typeof (row as Dict).id === 'string' ? `${pack}:${(row as Dict).id as string}` : ''))
       .filter((candidate) => candidate !== '');
-    const close = nearest(refId, ids);
-    return fail('SDK-0007', `no ${type.name} "${refId}"`, { hint: close.length > 0 ? `nearest ${type.name} ids: ${close.join(', ')}` : `pack "${pack}" has no ${type.name} yet` });
+    return fail('SDK-0007', `no ${type.name} "${pack}:${local}"`, { hint: nearestHint(type.name, `${pack}:${local}`, ids, pack) });
+  }
+
+  function nearestHint(kind: string, wanted: string, ids: readonly string[], pack: string): string {
+    const close = nearest(wanted, ids);
+    return close.length > 0 ? `nearest ${kind} ids: ${close.join(', ')}` : `pack "${pack}" has no ${kind} yet`;
   }
 
   function refValue(kind: string, id: string): unknown {
@@ -782,14 +825,17 @@ export function createSession(config: SessionConfig): Session {
     for (const type of types) {
       const member = names.get(type.name) ?? camel(type.name);
       factory[member] = (id: unknown): unknown => {
+        open();
         const owner = `m.ref.${member}`;
         const { pack, local } = splitRef(id, owner);
         const staged = created.get(`${type.name}\u0000${pack}:${local}`);
         if (staged !== undefined) return staged;
-        return refValue(type.name, resolve(type, id, owner).pack + ':' + local);
+        storedDoc(type, pack, local);
+        return refValue(type.name, `${pack}:${local}`);
       };
     }
     factory.asset = (path: unknown): unknown => {
+      open();
       if (typeof path !== 'string' || path === '') fail('SDK-0012', 'm.ref.asset: an asset is the path the owner uploaded it to');
       assetRefs.push({ path: path as string, source: locate() });
       return refValue('asset', path as string);
@@ -814,10 +860,12 @@ export function createSession(config: SessionConfig): Session {
           const doc = newDocument(pack, type, checked, given.folder, owner);
           const edits = fieldEdits(doc, fields === undefined ? {} : fields, owner);
           claimPack(pack);
-          const op: StagedOperation = { kind: 'create', type: doc.directory, id: checked };
-          if (typeof given.folder === 'string') op.folder = given.folder;
-          if (edits.length > 0) op.edits = edits;
-          stage('collection.create', op, [doc.path], edits.length);
+          stage('collection.create', 'create', [docKey(doc)], edits.length, undefined, () => {
+            const op: StagedOperation = { kind: 'create', type: doc.directory, id: checked };
+            if (typeof given.folder === 'string') op.folder = given.folder;
+            if (edits.length > 0) op.edits = edits;
+            return op;
+          });
           return register(doc, type);
         },
       });
@@ -836,7 +884,7 @@ export function createSession(config: SessionConfig): Session {
       const doc = docs.get(staged);
       return doc === undefined ? undefined : { doc, type };
     }
-    return { doc: resolve(type, info.id, 'm.edit'), type };
+    return { doc: storedDoc(type, pack, local), type };
   };
 
   const edited = new Map<Doc, Handle>();
@@ -855,20 +903,30 @@ export function createSession(config: SessionConfig): Session {
     return handle;
   }
 
-  // ---- the read side ------------------------------------------------------------------------------
+  // ---- the read side: the only members that wait for the host --------------------------------------
 
-  function summaryRef(doc: Doc): unknown {
-    existing.set(`${doc.kind}\u0000${doc.pack}:${doc.id}`, doc);
-    return refValue(doc.kind, `${doc.pack}:${doc.id}`);
+  /** The stored resource a read names (reads see stored state only), with its path. */
+  async function readTarget(ref: unknown, owner: string): Promise<{ doc: Doc; path: string }> {
+    const info = tagOf(ref);
+    const type = info !== undefined && info.tag === 'ref' ? typeByName.get(info.kind) : undefined;
+    if (info === undefined || info.tag !== 'ref' || type === undefined) {
+      return fail('SDK-0012', `${owner} takes a reference to a resource: m.ref.<type>("pack:id")`);
+    }
+    const { pack, local } = splitRef(info.id, owner);
+    if (created.has(`${type.name}\u0000${pack}:${local}`)) {
+      return fail('SDK-0012', `${owner}: "${pack}:${local}" is staged by this program; reads see the stored state only`);
+    }
+    const doc = await lookupStored(type, info.id, owner);
+    return { doc, path: doc.path as string };
   }
 
   function readApi(): Dict {
     return Object.freeze({
-      packs(): unknown {
-        const known = loadPacks('m.read.packs');
+      async packs(): Promise<unknown> {
+        const known = await loadPacks('m.read.packs');
         return [...known.packs.map((id) => ({ id, builtin: false })), ...known.builtin.map((id) => ({ id, builtin: true }))];
       },
-      resources(options: unknown): unknown {
+      async resources(options: unknown): Promise<unknown> {
         const owner = 'm.read.resources';
         if (!isPlain(options) || typeof (options as Dict).pack !== 'string') return fail('SDK-0012', `${owner}: pass { pack }`);
         const o = options as Dict;
@@ -888,14 +946,14 @@ export function createSession(config: SessionConfig): Session {
           if (typeof o.query === 'string') payload.query = o.query;
           if (offset > 0) payload.offset = offset;
           payload.limit = page;
-          const data = read('m.read.resources', payload);
+          const data = await read('m.read.resources', payload);
           const got = Array.isArray(data.resources) ? data.resources : [];
           for (const row of got) {
             const doc = summaryDoc(row, undefined, o.pack as string);
             if (doc === undefined) continue;
             const r = row as Dict;
             const entry: Dict = {
-              ref: summaryRef(doc),
+              ref: refValue(doc.kind, `${doc.pack}:${doc.id}`),
               pack: doc.pack,
               type: doc.directory,
               path: doc.path,
@@ -911,18 +969,15 @@ export function createSession(config: SessionConfig): Session {
         }
         return rows.slice(0, want);
       },
-      get(ref: unknown): unknown {
-        const found = handleOf(ref);
-        if (found === undefined) return fail('SDK-0012', 'm.read.get takes a reference to a resource: m.ref.<type>("pack:id")');
-        if (found.doc.created) return fail('SDK-0012', `m.read.get: "${found.doc.pack}:${found.doc.id}" is staged by this program; reads see the stored state only`);
-        const data = read('m.read.get', { pack: found.doc.pack, path: found.doc.path });
+      async get(ref: unknown): Promise<unknown> {
+        const found = await readTarget(ref, 'm.read.get');
+        const data = await read('m.read.get', { pack: found.doc.pack, path: found.path });
         const parsed = isPlain(data.parsed) ? ((data.parsed as Dict)[found.doc.id] ?? {}) : {};
-        return { ref, path: found.doc.path, revision: data.rev, fields: parsed, computed: data.computed ?? {} };
+        return { ref, path: found.path, revision: data.rev, fields: parsed, computed: data.computed ?? {} };
       },
-      references(ref: unknown): unknown {
-        const found = handleOf(ref);
-        if (found === undefined) return fail('SDK-0012', 'm.read.references takes a reference to a resource: m.ref.<type>("pack:id")');
-        const data = read('m.read.references', { pack: found.doc.pack, kind: 'resource', target: found.doc.id });
+      async references(ref: unknown): Promise<unknown> {
+        const found = await readTarget(ref, 'm.read.references');
+        const data = await read('m.read.references', { pack: found.doc.pack, kind: 'resource', target: found.doc.id });
         const coverage = isPlain(data.coverage) ? (data.coverage as Dict) : {};
         return {
           hits: Array.isArray(data.hits) ? data.hits : [],
@@ -933,16 +988,15 @@ export function createSession(config: SessionConfig): Session {
           },
         };
       },
-      history(ref: unknown, limit?: unknown): unknown {
-        const found = handleOf(ref);
-        if (found === undefined) return fail('SDK-0012', 'm.read.history takes a reference to a resource: m.ref.<type>("pack:id")');
-        const payload: Dict = { pack: found.doc.pack, path: found.doc.path };
+      async history(ref: unknown, limit?: unknown): Promise<unknown> {
+        const found = await readTarget(ref, 'm.read.history');
+        const payload: Dict = { pack: found.doc.pack, path: found.path };
         if (typeof limit === 'number') payload.limit = limit;
-        const data = read('m.read.history', payload);
+        const data = await read('m.read.history', payload);
         return Array.isArray(data.revisions) ? data.revisions : [];
       },
-      diagnostics(): unknown {
-        const data = read('m.read.diagnostics', {});
+      async diagnostics(): Promise<unknown> {
+        const data = await read('m.read.diagnostics', {});
         return Array.isArray(data.diagnostics) ? data.diagnostics : [];
       },
     });
@@ -1124,70 +1178,185 @@ export function createSession(config: SessionConfig): Session {
     log,
   });
 
-  // ---- the end of the run -------------------------------------------------------------------------
+  // ---- the end of the run: seal, then the result --------------------------------------------------
 
-  function checkAssets(): void {
-    if (assetRefs.length === 0 || sessionPack === undefined) return;
-    const data = read('m.ref.asset', { pack: sessionPack });
-    const listed = (Array.isArray(data.assets) ? data.assets : [])
-      .map((row) => (isPlain(row) && typeof (row as Dict).path === 'string' ? ((row as Dict).path as string) : ''))
-      .filter((path) => path !== '');
-    const have = new Set(listed);
-    const seen = new Set<string>();
-    for (const asset of assetRefs) {
-      if (seen.has(asset.path)) continue;
-      seen.add(asset.path);
-      if (have.has(asset.path) || have.has(`assets/${asset.path}`)) continue;
-      const close = nearest(asset.path, listed);
-      diagnostics.push(diagnostic('SDK-0011', `no asset "${asset.path}" in pack "${sessionPack}"`, {
-        hint: close.length > 0 ? `nearest assets: ${close.join(', ')}; the owner uploads assets, a program cannot` : 'the pack has no assets; ask the owner to upload it',
-        source: asset.source,
-      }));
-    }
+  function hasError(): boolean {
+    return diagnostics.some((entry) => entry.severity === 'error');
   }
 
-  function finish(outcome: Outcome = {}): ProgramResult {
-    if (result !== undefined) return result;
-    let returned: JsonValue | null = null;
+  function listOf(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  /**
+   * Seals the list: ONE batched `resolve` for everything staging could not know (the pack, each stored resource's
+   * path, revision and rule count, each recipe's expansion, each asset), then the operations are built in the order
+   * the program staged them. An id the program named that does not exist is SDK-0007 here, at the line that named
+   * it, and the run ends with no operations: such a list never reaches the dry run, so the dry run's references
+   * stage (which checks the ids written inside field values, that the core cannot see) never reports it twice.
+   */
+  async function seal(): Promise<{ operations: StagedOperation[]; sources: (SourcePosition | null)[] } | undefined> {
+    const storedList = [...stored.values()];
+    const instantiations = pending.filter((entry) => entry.recipe !== undefined);
+    const assetPaths: string[] = [];
+    for (const asset of assetRefs) if (!assetPaths.includes(asset.path)) assetPaths.push(asset.path);
+    const pack = sessionPack;
+    if (pending.length === 0 && storedList.length === 0 && assetPaths.length === 0) return { operations: [], sources: [] };
+
+    const request: ResolveRequest = {
+      packs: pack === undefined ? [] : [pack],
+      refs: storedList.map((doc) => {
+        const type = typeByName.get(doc.kind);
+        const rulesKey = type === undefined ? undefined : rulesKeyOf(type);
+        const ref: ResolveRef = { kind: doc.kind, directory: doc.directory, pack: doc.pack, id: doc.id, needsDocument: doc.needsDocument };
+        if (rulesKey !== undefined) ref.rulesKey = rulesKey;
+        return ref;
+      }),
+      instantiate: instantiations.map((entry) => ({ recipe: (entry.recipe as { id: string }).id, params: (entry.recipe as { params: JsonValue }).params })),
+      assets: pack === undefined ? [] : assetPaths.map((path) => ({ pack, path })),
+    };
+    let reply: ResolveReply;
     try {
-      if ('threw' in outcome && outcome.threw !== undefined && !isSdkError(outcome.threw)) {
-        const where = typeof outcome.threw === 'object' && outcome.threw !== null ? positionIn((outcome.threw as { stack?: string }).stack, programFile) : undefined;
-        diagnostics.push(diagnostic('SDK-0001', thrownMessage(outcome.threw), { source: where }));
+      reply = await port.resolve(request);
+    } catch (error) {
+      diagnostics.push(diagnostic('SDK-0010', `resolve: ${thrownMessage(error)}`, { source: undefined }));
+      return undefined;
+    }
+
+    const sourceOf = (position: SourcePosition | null | undefined): { source: SourcePosition | undefined } => ({ source: position ?? undefined });
+    listOf(reply.packs).forEach((entry, index) => {
+      const state = isPlain(entry) ? (entry as Dict).state : undefined;
+      const name = request.packs[index] ?? '';
+      if (state === 'builtin') {
+        diagnostics.push(diagnostic('SDK-0008', `pack "${name}" is built in and read-only`, { hint: 'built-in content can be read and referenced, never written', ...sourceOf(sessionPackSource) }));
+      } else if (state === 'missing') {
+        const close = isPlain(entry) ? listOf((entry as Dict).nearest).filter((candidate): candidate is string => typeof candidate === 'string') : [];
+        diagnostics.push(diagnostic('SDK-0008', `no pack "${name}"`, { hint: close.length > 0 ? `nearest packs: ${close.join(', ')}` : 'the server has no packs yet', ...sourceOf(sessionPackSource) }));
       }
+    });
+
+    const resolved = new Map<Doc, { path: string; rev: number; rules: number }>();
+    storedList.forEach((doc, index) => {
+      const entry = listOf(reply.refs)[index];
+      const row = isPlain(entry) ? (entry as Dict) : {};
+      if (row.found !== true) {
+        const ids = listOf(row.nearest).filter((candidate): candidate is string => typeof candidate === 'string');
+        const wanted = `${doc.pack}:${doc.id}`;
+        diagnostics.push(diagnostic('SDK-0007', `no ${doc.kind} "${wanted}"`, {
+          hint: ids.length > 0 ? `nearest ${doc.kind} ids: ${ids.join(', ')}` : `pack "${doc.pack}" has no ${doc.kind} yet`,
+          ...sourceOf(doc.source),
+        }));
+        return;
+      }
+      if (!doc.needsDocument) return;
+      if (typeof row.path !== 'string' || typeof row.rev !== 'number') {
+        diagnostics.push(diagnostic('SDK-0010', `resolve answered without a path and revision for ${doc.kind} "${doc.pack}:${doc.id}"`, { ...sourceOf(doc.source) }));
+        return;
+      }
+      resolved.set(doc, { path: row.path, rev: row.rev, rules: typeof row.rules === 'number' ? row.rules : 0 });
+    });
+
+    const expansions = new Map<Pending, JsonValue[]>();
+    instantiations.forEach((entry, index) => {
+      const answer = listOf(reply.instantiate)[index];
+      const row = isPlain(answer) ? (answer as Dict) : {};
+      const recipe = (entry.recipe as { id: string }).id;
+      if (isPlain(row.error)) {
+        const error = row.error as Dict;
+        diagnostics.push(diagnostic('SDK-0010', `logic.instantiate: ${typeof error.message === 'string' ? error.message : `recipe ${recipe} was refused`}`, {
+          ...(typeof error.code === 'string' ? { serverCode: error.code } : {}),
+          ...sourceOf(entry.source),
+        }));
+        return;
+      }
+      for (const item of listOf(row.warnings)) {
+        const text = isPlain(item) && typeof (item as Dict).message === 'string' ? ((item as Dict).message as string) : JSON.stringify(item);
+        diagnostics.push(diagnostic('SDK-0017', `recipe ${recipe}: ${text}`, { ...sourceOf(entry.source) }));
+      }
+      const rules = listOf(row.rules) as JsonValue[];
+      if (rules.length === 0) {
+        diagnostics.push(diagnostic('SDK-0010', `recipe ${recipe} expanded to no rules`, { ...sourceOf(entry.source) }));
+        return;
+      }
+      expansions.set(entry, rules);
+    });
+
+    assetPaths.forEach((path, index) => {
+      const entry = listOf(reply.assets)[index];
+      const row = isPlain(entry) ? (entry as Dict) : {};
+      if (row.found === true) return;
+      const close = listOf(row.nearest).filter((candidate): candidate is string => typeof candidate === 'string');
+      diagnostics.push(diagnostic('SDK-0011', `no asset "${path}" in pack "${pack}"`, {
+        hint: close.length > 0 ? `nearest assets: ${close.join(', ')}; the owner uploads assets, a program cannot` : 'the pack has no assets; ask the owner to upload it',
+        ...sourceOf(assetRefs.find((asset) => asset.path === path)?.source),
+      }));
+    });
+
+    if (hasError()) return undefined;
+
+    const counters = new Map<Doc, number>();
+    const view: SealView = {
+      path: (doc) => (doc.created ? (doc.path as string) : (resolved.get(doc)?.path as string)),
+      rev: (doc) => (doc.created ? {} : { rev: resolved.get(doc)?.rev as number }),
+      take: (doc, count) => {
+        const start = counters.get(doc) ?? (doc.created ? 0 : (resolved.get(doc)?.rules ?? 0));
+        counters.set(doc, start + count);
+        return start;
+      },
+      expansion: (entry) => expansions.get(entry) ?? [],
+    };
+    const operations: StagedOperation[] = [];
+    const sources: (SourcePosition | null)[] = [];
+    for (const entry of pending) {
+      const operation = entry.build(view, entry);
+      operations.push(operation);
+      sources.push(entry.source);
+      port.stage?.(operation, entry.source, operations.length - 1);
+    }
+    return { operations, sources };
+  }
+
+  function finish(outcome: Outcome = {}): Promise<ProgramResult> {
+    if (finishing === undefined) finishing = complete(outcome);
+    return finishing;
+  }
+
+  async function complete(outcome: Outcome): Promise<ProgramResult> {
+    let returned: JsonValue | null = null;
+    if ('threw' in outcome && outcome.threw !== undefined && !isSdkError(outcome.threw)) {
+      const where = typeof outcome.threw === 'object' && outcome.threw !== null ? positionIn((outcome.threw as { stack?: string }).stack, programFile) : undefined;
+      diagnostics.push(diagnostic('SDK-0001', thrownMessage(outcome.threw), { source: where }));
+    }
+    if (outcome.returned !== undefined && !hasError()) {
       try {
-        checkAssets();
+        returned = node(outcome.returned, 'the return value');
+        if (byteLength(JSON.stringify(returned)) > limits.returnBytes) {
+          returned = null;
+          diagnostics.push(diagnostic('SDK-0014', `the return value is larger than ${limits.returnBytes} bytes`, { hint: 'summarize in the program: return counts and ids, not documents', source: undefined }));
+        }
       } catch (error) {
         if (!isSdkError(error)) throw error;
+        returned = null;
+        const failed = diagnostics.pop();
+        diagnostics.push(diagnostic('SDK-0014', failed?.message ?? 'the return value cannot be returned', { source: failed?.source }));
       }
-      if (outcome.returned !== undefined && !diagnostics.some((entry) => entry.severity === 'error')) {
-        try {
-          returned = node(outcome.returned, 'the return value');
-          if (byteLength(JSON.stringify(returned)) > limits.returnBytes) {
-            returned = null;
-            diagnostics.push(diagnostic('SDK-0014', `the return value is larger than ${limits.returnBytes} bytes`, { hint: 'summarize in the program: return counts and ids, not documents' }));
-          }
-        } catch (error) {
-          if (!isSdkError(error)) throw error;
-          returned = null;
-          const failed = diagnostics.pop();
-          diagnostics.push(diagnostic('SDK-0014', failed?.message ?? 'the return value cannot be returned'));
-        }
-      }
-    } finally {
-      closed = true;
     }
-    const ok = !diagnostics.some((entry) => entry.severity === 'error');
+    // from here nothing can be staged: a call that outlives the program is SDK-0003 and reported by `late`
+    closed = true;
+    let sealed: { operations: StagedOperation[]; sources: (SourcePosition | null)[] } | undefined;
+    if (!hasError()) sealed = await seal();
+    const ok = !hasError() && sealed !== undefined;
     result = JSON.parse(JSON.stringify({
       ok,
       sdkVersion: SDK_VERSION,
-      pack: operations.length > 0 ? sessionPack ?? null : null,
-      operations: ok ? operations : [],
-      sources: ok ? sources : [],
+      pack: pending.length > 0 ? sessionPack ?? null : null,
+      operations: ok && sealed !== undefined ? sealed.operations : [],
+      sources: ok && sealed !== undefined ? sealed.sources : [],
       diagnostics,
       summary: summaryText,
       logs,
       returned: ok ? returned : null,
-      stats: { reads, readBytes, staged: operations.length, documents: documents.size },
+      stats: { reads, readBytes, staged: pending.length, documents: documents.size },
     })) as ProgramResult;
     port.done?.(result);
     return result;

@@ -156,8 +156,8 @@
   ],
   "diagnostics": [],
   "stats": {
-    "reads": 2,
-    "readBytes": 94,
+    "reads": 0,
+    "readBytes": 0,
     "staged": 3,
     "documents": 2
   }
