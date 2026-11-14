@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { searchForWorkspaceRoot } from 'vite';
+import { workerBuild } from './vite.worker';
 
 // Dev-server proxy: the SPA runs on Vite's port while the plugin listener
 // keeps serving /s/* (session blobs) and /editor/ws (the channel) on its own
@@ -29,6 +30,8 @@ export default defineConfig({
       '/editor/ws': { target: origin, ws: true },
     },
   },
+  // The code-mode type-check Worker: its own chunk, fetched on the first agent use (see vite.worker.ts).
+  worker: workerBuild,
   build: {
     // Under Gradle's build directory so the plugin module can consume it as
     // a conventional output (and **/build/ already covers it in .gitignore).

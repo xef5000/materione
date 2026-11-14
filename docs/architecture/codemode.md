@@ -290,7 +290,7 @@ the rest. How large the index may be and what lives in a system prompt versus a 
 ### 3.8 As built: the generator (#337)
 
 *As built (#337, M6.5 track A1).* The generator of §3.1 exists, with its recorded registries and goldens. It is the first piece of
-SDK code; the core is built too (#339, §3.9); the type-check Worker and the sandbox are not (the server's transaction is, #341, §10).
+SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are built too; the sandbox is not (the server's transaction is, #341, §10).
 
 | Piece | Where | What it is |
 |---|---|---|
@@ -368,7 +368,7 @@ made.
 *As built (#339, M6.5 track A2).* The fixed half of §3.1 exists: `webui/src/lib/codemode/core/`, the runtime that the generated
 types of §3.8 are types *of*. It is plain ES2020, DOM-free and dependency-free, and it is tested **bundled** (esbuild, one
 script) in a bare `vm` context that holds the language's intrinsics and nothing else, with a fake port, so what is proven is what
-the sandbox (#343, not built) will load. The sandbox itself, the type-check Worker (#342), the chat tool and the review UI are
+the sandbox (#343, not built) will load. The sandbox itself, the chat tool and the review UI are
 not part of it.
 
 | Piece | Where | What it is |
@@ -459,6 +459,78 @@ capability list. `codemode-core-bans.spec.ts`: the core holds no registry id as 
 names no content type, reaches no op outside the table, has no write op but the transaction and never reads it, asks the port
 for four things only, and touches no DOM, storage, network, timer, Node or clock global. The compat gate fails when the table
 names an op a supported release lacks (`editor-compat.test.mjs`).
+
+### 3.10 As built: the type-check Worker (#342)
+
+*As built (#342, M6.5 track A2).* §5.1's check exists: `webui/src/lib/codemode/typecheck/`. It is a **browser module Worker of the
+editor's own origin** (not a Cloudflare Worker: no endpoint, no invocation, cost model "no change"), holding the TypeScript
+compiler (Apache-2.0, `NOTICE`), and it only parses, checks and transpiles.
+
+| Piece | Where | What it is |
+|---|---|---|
+| **Client** | `typecheck/client.ts`, `index.ts` | `check(program, surface) -> Promise<CheckResult>` (the shared client) and `createTypecheckClient({ limits?, spawn? })` (`check`, `dispose`, `stats`). `surface` is the `SurfaceDocument` (the client calls `generateSdk`, once per object) or declarations already generated. The Worker is spawned on the **first** check. One check runs at a time; later calls queue. |
+| **Worker** | `typecheck/worker.ts` | Closed vocabulary (`ready`, `check`, `result`, `failed`); imports `generate/core.d.ts` as text and `libs.ts`. Vite emits it as `assets/worker-<hash>.js`, a static file beside the SPA. |
+| **Checker** | `typecheck/checker.ts` | `createChecker({ libs, core })`: pure and DOM-free, so vitest runs the exact code the Worker runs. Declaration files stay parsed between checks; a changed surface text (a registry change, §7) is a changed file, so the program is rebuilt over it. |
+| **Wrapper** | `typecheck/wrap.ts` | The one wrapper, shared with `test/helpers/typecheck.ts`: the program is checked as the body of `(async () => {` ... `})();` (reads are promises and a program awaits them, so top-level `await` and `return` check, and the sandbox runs the same shape). The prefix is one line, so lines are the program's own; line 1's columns are shifted back by the prefix length; a position past the program (an unclosed brace) is clamped to its end. The **transpiled JavaScript and its source map are of the program as written**, not of the wrapper: the host wraps for the run. |
+| **Libraries** | `typecheck/libs.ts` | ES5 to ES2022 and `decorators`, read from the pinned `typescript` package at build time. No DOM, no webworker, no Node, no `@types`; `noResolve` and `types: []`, so no import, `/// <reference>` or type package reaches a file the host did not hand over. |
+
+**Result** (`typecheck/types.ts`): `{ ok, diagnostics, truncated, js?, map? }`; a diagnostic is `{ code, severity, message, line, column,
+hint?, missingPrimitive? }` with 1-based positions in the program as written. `js` and `map` (ES2020, the emitter's own source
+map) exist only when `ok`: a failing program is never handed back as runnable text. Output is deterministic (sorted by position,
+no timings in it; timings are `client.stats`).
+
+**Gap classification.** A `TS2339` or `TS2353` whose type is one the generated surface declares or extends (`PackWriter`,
+`ItemFields`, the function catalog) carries `missingPrimitive: { member, catalog, nearest }` and a hint that says to report it.
+The same error on a type of the fixed core only (`m.nonsense`) is a plain diagnostic; a near miss is TS2551 with TypeScript's
+"Did you mean" as the hint, and is not a gap.
+
+**What is refused whatever the types say** (`CHK-0001`, plugin.md section 5): `@ts-nocheck`, `@ts-ignore`, `@ts-expect-error`
+(a textual, conservative scan), `declare`, `namespace`/`declare global`, `import`/`export`, and a program that closes its own
+body to write at the wrapper's top level. Without these a program could silence the check or conjure `fetch` with
+`declare const fetch: any`. The check is quality gating, not the security boundary: the sandbox (§4) is, and it has no `fetch`.
+
+**Limits** (the numbers §4.2 lacked for the checker; proposed here, fixed by the tests):
+
+| Limit | Value | Why |
+|---|---|---|
+| Program size | 65,536 characters (`CHK-0002`) | the transaction takes at most 200 operations; a real program is a few KB |
+| Generated declarations | 1 MiB (`CHK-0002`) | the current surface is 195 KB |
+| Diagnostics returned | 50, then `truncated` | what reaches the model (§4.2) |
+| Check deadline | 5 s once the Worker is up, then the Worker is **terminated** (`CHK-0003`) and the next check boots a fresh one | measured: 4.5 to 30 ms warm; the deadline bounds a runaway, it does not ration a program |
+| Boot deadline | 20 s for the asset to load and parse (`CHK-0004`) | 1.07 MB gzip, once |
+
+A stack overflow inside the compiler (a 30,000-deep literal) is caught in the Worker and returned as `CHK-0004`, and the Worker
+keeps serving.
+
+**Measured** (Chromium, Vite dev server; the production file is the same compiler): Worker asset 4,087,907 B raw / 1,085,065 B
+gzip (the spike's 1,075,236 B); boot about 290 ms, first check about 460 ms round trip (compiler 172 ms, 195 KB surface), warm
+about 10 ms. In Node, first check about 50 to 140 ms, warm 10 to 30 ms. A runaway quadratic type is cut at its 1.5 s test deadline
+with the page's main thread never stalled for more than 250 ms.
+
+**Lazy, proven by build** (`codemode-typecheck-bundle.spec.ts`): the editor's production output holds no compiler and no worker
+asset; a page that imports the client eagerly adds 21.5 KB raw (7.7 KB gzip) of JavaScript and the compiler stays its own file,
+fetched on the first check. The editor's own bundle is unchanged by this work: nothing imports the client yet.
+
+**A build finding.** With Rollup's default tree-shaking the production Worker builds and then fails at its first check (`Cannot read
+properties of undefined (reading 'get')` inside the compiler: the CommonJS `typescript` package relies on side effects Rollup drops),
+while the dev server and Node pass. The Worker is therefore built with `treeshake: false` (`webui/vite.worker.ts`, shared with the specs),
+and the production artifact has its own Playwright spec.
+
+**Hosting and CSP.** Same static files, no new header or endpoint. Neither host sets a Content-Security-Policy today
+(`EditorListener.serveStatic` sends only `Content-Type`; the relay's `public/_headers` sets caching and the cloud marker; `index.html`
+has no meta CSP), so a same-origin module Worker is allowed. The plugin serves `.js` as `text/javascript` and accepts the file
+names Vite emits (`[A-Za-z0-9_./-]+`); the relay's Workers static assets serve `/assets/*` as files. If a CSP is ever added it needs
+`worker-src 'self'` (or `default-src 'self'`) and `script-src 'self'`; the spec runs under exactly that. One failure to know:
+under the relay's single-page fallback a missing worker file answers `index.html` as text/html, which a module Worker refuses
+(the client reports `CHK-0004`).
+
+**How it is proven.** `codemode-typecheck.spec.ts` (Node): the corpus through the checker with the expected codes and the gap, the
+agreement with the compile spec's own TypeScript API run, the ambient names, the refusals, determinism, limits, the client's
+deadline, restart and queue against an in-process stand-in, a ban test on the checker's sources. `codemode-typecheck.pw.ts` and
+`codemode-typecheck-built.pw.ts` (Playwright): the same corpus through the real Worker, dev server and production build; laziness;
+no request while checking (the context offline); the deadline against a real runaway; the main thread's responsiveness. When the
+SDK's reads become promises (#381) the corpus programs that read are checked through the same wrapper, and the agreement test
+picks them up with no change here.
 
 ---
 
@@ -788,7 +860,7 @@ line:
 
 | Phase | Source | Code | Example | The agent's right move |
 |---|---|---|---|---|
-| **1. Type-check** | TypeScript | `TS####` | `Property 'commands' does not exist on type 'Materione'` | If a *primitive* is missing (§9.2), report the gap; otherwise fix the call |
+| **1. Type-check** | TypeScript | `TS####`, `CHK-####` (§3.10) | `Property 'commands' does not exist on type 'Materione'` | If a *primitive* is missing (§9.2), report the gap; otherwise fix the call |
 | **2. Sandbox** | the SDK core and the host | an SDK code, allocated at implementation | a thrown error with its source-mapped stack; a limit exceeded; `m.ref.item("rpg:nope")` with the nearest ids; staging into a second pack | Fix the program |
 | **3. Dry run** | the plugin's validation | stable `MTR-####` | a schema error on a staged field; a flow the compiler rejects, with a step path; a reference that does not resolve | Fix the program; the `target` names the field, and the operation's tag names the program line that staged it |
 | **4. Apply** | the store and pipeline | `MTR-####` | `MTR-0034` (stale revision); a pipeline load failure with a rollback | Re-run against the new state |

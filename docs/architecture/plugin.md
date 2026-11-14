@@ -614,6 +614,19 @@ warning does not.
 | `SDK-0016` | warning | The program used a registry entry the server reports as unavailable here (an economy action with no provider, a transfer with no proxy). The step is staged; it will not run until the server is configured. |
 | `SDK-0017` | warning | The server warned while expanding a recipe for `rules.instantiate`. The expansion is staged; the message is the server's. |
 
+**Checker diagnostic codes** ([`codemode.md`](codemode.md) §6 phase 1, §5.1, §3.10; #342). The type-check Worker answers a
+program's TypeScript diagnostics under their own codes (`TS####`, with the compiler's meaning, not documented here) and
+raises four of its own, `CHK-####`, under the same stable-API rule and shape (`{code, severity, message, hint, line,
+column}`, where `line` and `column` are positions in the program as written, 0 when there is none). They are errors:
+the program does not run. The editor's test compares the table in `webui/src/lib/codemode/typecheck/types.ts` with this one.
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `CHK-0001` | error | The program uses a construct the checker refuses whatever the types say: a `@ts-nocheck`, `@ts-ignore` or `@ts-expect-error` comment (it would switch the check off), an ambient `declare`, a `namespace` or `declare global` (it could conjure a global the surface does not have), an `import` or an `export` (a program is a script body, not a module). Fix the type error instead of silencing it; the program has one global, `m`. |
+| `CHK-0002` | error | The program (65,536 characters) or the generated declarations (1 MiB) is larger than the checker takes. Split the work into more than one program. |
+| `CHK-0003` | error | The check passed its wall-clock deadline (5 s once the checker is up) and its Worker was terminated. Simplify the program: deeply nested or recursive types and very large literals are what costs. The next check boots a fresh checker. |
+| `CHK-0004` | error | The checker could not run: its asset did not load within 20 s, or its Worker failed. Reload the editor; if it persists, the host is not serving the checker's static file. |
+
 ---
 
 ## 6. Platform isolation layer
