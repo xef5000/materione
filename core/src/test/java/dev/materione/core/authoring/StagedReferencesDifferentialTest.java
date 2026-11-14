@@ -49,7 +49,21 @@ class StagedReferencesDifferentialTest {
     private static final List<String> TARGETS = List.of(
             "alpha", "beta", "gamma", "base", "base2", "demo:alpha", "demo:beta", "demo:base", "other:thing",
             "other:stew", "minecraft:stone", "ghost", "gem", "rock", "shield_block", "chair", "twin", "g1", "s1",
-            "demo:shield_block", "demo:chair", "painting/p1", "demo:gem");
+            "demo:shield_block", "demo:chair", "painting/p1", "demo:gem", "hub", "menu", "demo:hub", "other:board");
+
+    /** The logic vocabulary of the fixture: give_item and has_item name items, gui.open names a GUI (#363). */
+    private static final dev.materione.core.pipeline.validate.StaticReferences STATIC =
+            new dev.materione.core.pipeline.validate.StaticReferenceWalker(key -> switch (key) {
+                case "give_item" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
+                        true, Map.of("item", "item"), "item"));
+                case "has_item" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
+                        false, Map.of("item", "item"), "item"));
+                case "gui.open" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
+                        true, Map.of("gui", "gui"), "gui"));
+                case "all", "not" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
+                        false, Map.of(), null));
+                default -> java.util.Optional.empty();
+            });
 
     @TempDir
     Path temp;
@@ -90,6 +104,21 @@ class StagedReferencesDifferentialTest {
         fixture.put("glyphs/g2.yml", (r, s) -> "%s:\n  frames:\n    - %s\n".formatted(key(r, s, "g2"), pick(r, s, "gem")));
         fixture.put("sounds/s1.yml", (r, s) -> "%s:\n  sounds:\n    - %s\n  jukebox:\n    duration: 10\n"
                 .formatted(key(r, s, "s1"), pick(r, s, "rock")));
+        // a GUI's static slot item, and rules naming content by a static id in each form the walker reads: a scalar
+        // shorthand, a parameter mapping, a condition (alone, and nested in all/not), a branch, a named flow
+        fixture.put("guis/hub.yml", (r, s) -> ("%s:\n  container: chest_3\n  layers:\n"
+                + "    - type: materione:item\n      slot: 0\n      item: %s\n"
+                + "    - type: materione:item\n      slot: 1\n      item: '%s'\n"
+                + "  behavior:\n    - on: gui.click\n      if:\n        all:\n          - has_item: %s\n"
+                + "          - not:\n              has_item:\n                item: %s\n"
+                + "      do:\n        - give_item: %s\n        - gui.open:\n            gui: %s\n"
+                + "        - if: ${true}\n          then:\n            - give_item:\n                item: %s\n"
+                + "  flows:\n    pay:\n      - give_item: %s\n")
+                .formatted(key(r, s, "hub"), pick(r, s, "demo:alpha"), pick(r, s, "demo:beta"), pick(r, s, "alpha"),
+                        pick(r, s, "demo:alpha"), pick(r, s, "alpha"), pick(r, s, "menu"), pick(r, s, "demo:shield_block"),
+                        pick(r, s, "demo:beta")));
+        fixture.put("guis/menu.yml", (r, s) -> "%s:\n  container: chest_3\n  behavior:\n    - on: gui.open\n      do:\n        - gui.open: %s\n"
+                .formatted(key(r, s, "menu"), pick(r, s, "hub")));
         fixture.put("paintings/p1.yml", (r, s) -> "%s:\n  texture: %s\n  width: 1\n  height: 1\n"
                 .formatted(key(r, s, "p1"), pick(r, s, "painting/p1")));
 
@@ -116,6 +145,11 @@ class StagedReferencesDifferentialTest {
         other.add(resource("other", "gl", "glyph", "glyphs/gl.yml", "gl:\n  reference: demo:g2\n"));
         other.add(resource("other", "pt", "painting", "paintings/pt.yml", "pt:\n  texture: demo:painting/p1\n"));
         other.add(resource("other", "chain", "item", "items/chain.yml", "chain:\n  material: STICK\n  template: thing\n"));
+        other.add(resource("other", "board", "gui", "guis/board.yml",
+                "board:\n  container: chest_3\n  layers:\n    - type: materione:item\n      slot: 2\n      item: demo:alpha\n"
+                        + "  behavior:\n    - on: gui.click\n      do:\n        - give_item: demo:beta\n        - gui.open: demo:hub\n"));
+        other.add(resource("other", "pouch", "item", "items/pouch.yml",
+                "pouch:\n  material: STICK\n  behavior:\n    - on: click\n      do:\n        - give_item:\n            item: demo:alpha\n"));
         others = new ParsedContent(List.of(new ContentPack("other", temp, null, other)), Set.of(), Map.of());
     }
 
@@ -168,8 +202,8 @@ class StagedReferencesDifferentialTest {
             }
             List<StagedDocument> list = List.copyOf(staged.values());
 
-            var scoped = new StagedReferences(PACK, packDirectory, others, cache).check(list);
-            var oracle = new StagedReferences(PACK, packDirectory, others, cache).checkEverything(list);
+            var scoped = new StagedReferences(PACK, packDirectory, others, cache, STATIC).check(list);
+            var oracle = new StagedReferences(PACK, packDirectory, others, cache, STATIC).checkEverything(list);
 
             assertThat(keys(scoped.diagnostics())).as("round " + round + " " + list).isEqualTo(keys(oracle.diagnostics()));
             if (scoped.impacted() > 0) {
@@ -183,6 +217,25 @@ class StagedReferencesDifferentialTest {
                 + withFindings + " with findings");
         assertThat(withImpact).as("the test must exercise the impact path").isGreaterThan(ROUNDS / 4);
         assertThat(withFindings).isGreaterThan(ROUNDS / 4);
+    }
+
+    @Test
+    void deletingAnItemIsReportedForTheSlotsAndTheStepsThatNameIt() throws Exception {
+        String original = Files.readString(packDirectory.resolve("items/alpha.yml"));
+        List<StagedDocument> list = List.of(new StagedDocument("items/alpha.yml", original, null, true, 0));
+
+        var scoped = new StagedReferences(PACK, packDirectory, others, cache, STATIC).check(list);
+        var oracle = new StagedReferences(PACK, packDirectory, others, cache, STATIC).checkEverything(list);
+
+        assertThat(keys(scoped.diagnostics())).isEqualTo(keys(oracle.diagnostics()));
+        var found = scoped.diagnostics().stream().map(each -> each.diagnostic()).toList();
+        // the stored hub names alpha in a slot (MTR-0054), in a give_item shorthand, a mapping and a has_item (MTR-0105)
+        assertThat(found).anyMatch(d -> d.code().code().equals("MTR-0054") && d.resource().toString().equals("demo:hub"));
+        assertThat(found).filteredOn(d -> d.code().code().equals("MTR-0105")
+                && d.resource().toString().equals("demo:hub")).hasSizeGreaterThanOrEqualTo(2);
+        assertThat(found).anyMatch(d -> d.code().code().equals("MTR-0105") && d.resource().toString().equals("other:pouch"));
+        assertThat(found).anyMatch(d -> d.code().code().equals("MTR-0054") && d.resource().toString().equals("other:board"));
+        assertThat(scoped.diagnostics()).allMatch(each -> each.operation() == 0);
     }
 
     @Test

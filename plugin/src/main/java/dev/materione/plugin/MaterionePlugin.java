@@ -714,6 +714,9 @@ public final class MaterionePlugin extends JavaPlugin {
                 // the logic surface (logic.md §8): the same lookup the pipeline compiles rules with
                 base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(base, logicLookup));
         authoringApi.builtinPackIds(builtinPacks.ids());
+        // ... and finds the static references of rules the way the pipeline does (#363)
+        authoringApi.staticReferences(new dev.materione.core.pipeline.validate.StaticReferenceWalker(
+                new dev.materione.behavior.logic.RegistryLogicVocabulary(logicLookup)));
         // a transaction's dry run compiles each resource on the allocation table's non-persisting preview
         authoringApi.previewAllocations(() -> pipeline.allocation().preview());
         // ... and resolves references over the staged pack against the last parse of every other pack

@@ -1045,7 +1045,7 @@ what sits *behind* the existing protocol. Each needs its own design and issue be
 | Order and failure | Strictly in order; shape, limits and permissions are reported together first; then planning stops at the first operation that cannot apply, with its index. All-or-none write with checkpoints, rolled back (files, journals, created directories) on any failure. |
 | Permissions (item 2) | `materione.edit.<pack>` per operation and built-in packs read-only: one diagnostic per refused operation (`MTR-0055`, `MTR-0095`). |
 | Dry run | Same path under the store lock; writes nothing, queues no reload, returns diagnostics tagged with the operation index and the resulting documents with their would-be revisions. An apply writes exactly those documents, with one audit entry (it names the transaction id) and one pack reload. |
-| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:` (#378: a persistent variable, in a rule or a GUI, resolves against the pack as the list leaves it, the same view the references stage reads, so a variable an earlier operation declares is not `MTR-0063`; a created rule document also gets the "this trigger never fires for rule documents" warning, `MTR-0021`, as the shadow build raises it); the GUI compile; **references** (#357: `ReferenceValidator` over the staged pack and the other packs as stored, both directions, only the findings the list adds for untouched resources; see api.md §3.3.1). **Not run: the platform gate (D10), which needs the live server, and the pack-wide allocation (the build stage allocates the list's own resources on a copy of the real table; the final table is the reload's, so no further allocation preview is built).** What `ReferenceValidator` does not cover is not covered here either: it checks `template`, `model`, `texture`, recipe, drop, placement, evolution, glyph-alias, jukebox and asset-source references, and a GUI's references to items are not among them (the `gui` stage reports what the GUI compile reports; whether the pipeline should resolve them at level 3 is a separate question). The report lists each stage and whether it ran. |
+| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:` (#378: a persistent variable, in a rule or a GUI, resolves against the pack as the list leaves it, the same view the references stage reads, so a variable an earlier operation declares is not `MTR-0063`; a created rule document also gets the "this trigger never fires for rule documents" warning, `MTR-0021`, as the shadow build raises it); the GUI compile; **references** (#357: `ReferenceValidator` over the staged pack and the other packs as stored, both directions, only the findings the list adds for untouched resources; see api.md §3.3.1). **Not run: the platform gate (D10), which needs the live server, and the pack-wide allocation (the build stage allocates the list's own resources on a copy of the real table; the final table is the reload's, so no further allocation preview is built).** What `ReferenceValidator` does not cover is not covered here either: it checks `template`, `model`, `texture`, recipe, drop, placement, evolution, glyph-alias, jukebox and asset-source references, and since #363 a GUI slot's static item and the static ids of rules (see "static references in GUIs and logic" below); an id in an expression is run-time by nature. The report lists each stage and whether it ran. |
 | Wire and capability (item 7) | `authoring.transaction`, gated on the new session capability `codemode` (`editor-op-gates.json`, golden frames in `editor-codemode-v1.json`). Additive: an older editor never calls it. |
 
 **As built: items 3 and 4 (#344, track A2).** `AuthoringApi.revertTransaction(actor, transactionId, dryRun)` and the audit's
@@ -1061,6 +1061,52 @@ additive fields. The design, in brief:
 | Retention | Bounded three ways: a transaction whose record would exceed 4 MiB is applied but **not recorded** (the result says `revertible: false` and why); only the newest 100 records are kept; the kept records total at most 32 MiB, the oldest deleted first. Past the cap a revert of that transaction is `MTR-0104` and the apply's own result had already said whether it was revertible. A record that cannot be written never fails the transaction it describes (D6). The cost is one small write after the commit and a directory listing of at most 100 files, outside the store lock. |
 | Wire | `authoring.revertTransaction` `{transactionId, dryRun}` (`dryRun` mandatory, as for `authoring.transaction`), gated on `codemode`; the reply is the transaction's report plus `revertOf`. `authoring.transaction` gains the optional `origin`, `approval` and `program` and its reply `revertible` and `revertNote`; all additive, frames in `editor-codemode-v1.json`. |
 | Permissions | The existing per-operation check, unchanged. The editor session's actor still carries `node -> true`, so any session that can name a transaction id can revert it; that is the open owner decision on the session permission model (#358). Revert would need from that decision: whether a revert may be done by a session other than the one that applied (an id is unguessable but is not a capability), and whether reverting a transaction that touched what other sessions approved needs the owner's grant (§5.6). Nothing here widens or narrows what a session may do. |
+
+**As built: static references in GUIs and logic (#363).** The `references` stage used to be blind to what `ReferenceValidator`
+did not read, so deleting an item a GUI slot or a `give_item` named dry-ran clean and applied, and the slot or step failed when
+it ran. Both are now checked **at the pipeline's level 3** (master §5.4, D6), by the same validator, so a reload and a dry run
+report the same findings, the dry run against the operation that removed the content:
+
+| Reference | Where it is checked | Code |
+|---|---|---|
+| A GUI item layer's `item:` when it is a plain id (`ReferenceValidator`, raw layers: `type: item`) | level 3, pipeline and dry run. The shadow build no longer repeats a slot whose Materione id no pack declares; it still reports a declared item that is not live and a `minecraft:` id that is no material (the platform's to judge). | `MTR-0054` (WARN, text unchanged) |
+| An action's or condition's parameter that names content by a static id (`StaticReferenceWalker` over `behavior:` and `flows:`) | level 3, pipeline and dry run, for the kinds `ReferenceValidator` resolves: `item` (an item, or a block or furniture with a placement item) and `gui`. A bare item name is any pack's (as the runtime resolves it); a bare GUI name is any GUI of that name; `minecraft:` ids are the platform's. | `MTR-0105` (WARN, new) |
+
+**What is a reference comes from self-description, not from a list of names.** `RegistryLogicVocabulary` reads each registered
+action's and condition's parameters: one drawn with the `item` widget, or a `REFERENCE` that declares its `referenceKind`
+(`gui.open`'s `gui` now does), names content of that kind. A parameter that names content and declares neither is invisible to
+the check and listed below as a gap for #355.
+
+**Dynamic references stay run-time.** A value with a template (`${...}`) or a placeholder (`%...%`) is an expression; it is
+resolved when the rule runs and is not checked here. A step that fails at run time reports as it always did.
+
+**The audit** (every action or condition parameter in the build that names content by id; "gap" = names content but does not
+declare it, so the walker cannot see it):
+
+| Parameter | Names | Declared | At load | At level 3 (#363) | Otherwise |
+|---|---|---|---|---|---|
+| `give_item.item`, `take_item.item`, `has_item.item` | item | yes (`item` widget) | `minecraft:` form only | **yes** | rest at run time; templates are expressions |
+| `has_item_space.item`, `slot_has.item` | item | **gap** | none | no | run time |
+| `gui.open.gui` | GUI | yes (`REFERENCE`, kind `gui`, added in #363) | none | **yes** | run time (`no live GUI matches`) |
+| `in_gui.id` | GUI | **gap** | id format | no | run time |
+| `give_money.currency`, `take_money.currency`, `has_money.currency` | currency | **gap** | none | no | run time (`unknown currency`) |
+| `sound.sound`, `stop_sound.sound` | sound | yes (`sound` widget) | none | no: a key may name a resource-pack event no pack declares; not decided (see below) | run time |
+| `set_var.var`, `var.var`, `prompt.var` | variable | yes (`variable` widget) | **yes** (`MTR-0063`; the dry run resolves it against the staged pack, #378) | at load | run time for a templated name |
+| `page_gui.list` | list layer of the GUI | **gap** | none | no | run time |
+| `call` (a step) | flow of the same resource | n/a (a step, not a parameter) | **yes** (`MTR-0058`) | at load | none |
+| GUI item layer `item:` | item | n/a (a layer field) | none | **yes** (`MTR-0054`) | `MTR-0072` at render for a named source |
+| `materione:item` item source's `item`, a variable list source's `var` | item, variable | **gap** | none | no | run time (`MTR-0072`) |
+
+Self-description gaps for #355: `has_item_space.item`, `slot_has.item` (`item` widget missing), `in_gui.id` and
+`page_gui.list` (`REFERENCE` with a kind missing), the three `currency` parameters (no `currency` kind exists), the item
+source's `item` and the variable list source's `var`. `sound` is declared but not checked because the declaration cannot say
+whether a key outside any pack is legitimate.
+
+**Warnings and apply.** A warning does not block an apply: the document already says "errors block, warnings are shown" (§5.6)
+and api.md §3.3.1 "a warning is reported and never refuses". A dry run that deletes an item a slot or step names is therefore
+**accepted with `MTR-0054` or `MTR-0105` against the deleting operation**, and the editor shows it in review beside the diff.
+This is the existing rule, applied; whether a warning that *this list* introduces should ask for owner approval (as an error
+would) is a separate decision for the owner and is not made here.
 
 Still open in §10: item 5 (trace and variable reads, #345), item 6 (the preset view).
 Two limits worth knowing for the SDK: a transaction carries no binaries (a paint layer's PNG still goes through `gui().edit`),
