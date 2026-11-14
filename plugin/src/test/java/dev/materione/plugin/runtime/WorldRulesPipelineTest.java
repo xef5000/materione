@@ -71,7 +71,7 @@ class WorldRulesPipelineTest {
         WorldRules world = shadow.view(WorldRules.KEY);
         assertThat(world.documentCount()).isEqualTo(1);
         for (String trigger : List.of(EventTypes.ENTITY_KILL, EventTypes.ENTITY_HIT, EventTypes.PLAYER_JOIN,
-                EventTypes.PLAYER_QUIT, EventTypes.PLAYER_DEATH, EventTypes.PLAYER_RESPAWN, EventTypes.PLAYER_HURT)) {
+                EventTypes.PLAYER_QUIT, EventTypes.DEATH, EventTypes.PLAYER_RESPAWN, EventTypes.PLAYER_HURT)) {
             assertThat(world.subscribes(trigger)).as(trigger).isTrue();
         }
         assertThat(world.forTrigger(EventTypes.ENTITY_KILL)).extracting(Rule::id).containsExactly("count_zombie_kills");

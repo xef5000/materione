@@ -46,7 +46,9 @@ public final class BuiltinTriggers {
                 trigger(EventTypes.PICKUP, "Pick up", "The player picks the item up", NONE, ITEM, true),
                 trigger(EventTypes.CONSUME, "Consume", "The player eats or drinks the item", NONE, ITEM, true),
                 trigger(EventTypes.DAMAGE, "Damage", "The item takes durability damage", NONE, ITEM, true),
-                trigger(EventTypes.DEATH, "Death", "The player dies carrying the item", NONE, ITEM, false),
+                trigger(EventTypes.DEATH, "Death",
+                        "The player dies: for an item, once for each stack of it among the drops; in a rule document, once",
+                        NONE, List.of("item", "rule"), false),
                 reserved(EventTypes.INV_CLICK, "Inventory click"),
                 reserved(EventTypes.TICK, "Tick"),
                 reserved(EventTypes.MENU_CLICK, "Menu click"),
@@ -99,6 +101,9 @@ public final class BuiltinTriggers {
                 ContextVariable.of("furniture.id", ParameterType.STRING, "The furniture's id").providedBy("furniture"),
                 ContextVariable.of("server.online", ParameterType.INTEGER, "Players online").providedBy("item", "block"),
                 ContextVariable.of("server.max", ParameterType.INTEGER, "Player slots").providedBy("item", "block"),
+                ContextVariable.of("damage.cause", ParameterType.STRING,
+                        "What killed the player, as a damage cause such as fall or entity_attack (custom when unknown)")
+                        .providedBy("rule"),
                 ContextVariable.of("vars.*", ParameterType.RAW, "Variables written earlier in this run by set_var"));
     }
 

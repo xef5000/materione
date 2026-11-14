@@ -31,7 +31,7 @@ import org.bukkit.inventory.ItemStack;
 
 /**
  * The firing sites of the world-event triggers (logic.md §37): {@code entity.hit}, {@code entity.kill},
- * {@code player.hurt}, {@code player.join}, {@code player.quit}, {@code player.death} and
+ * {@code player.hurt}, {@code player.join}, {@code player.quit}, {@code death} and
  * {@code player.respawn}. Listeners are static wiring, registered once; rules come from the live shadow at
  * event entry, so a reload needs no listener churn.
  *
@@ -148,12 +148,12 @@ public final class WorldEventListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onDeath(PlayerDeathEvent event) {
-        if (!events.subscribes(EventTypes.PLAYER_DEATH)) {
+        if (!events.subscribes(EventTypes.DEATH)) {
             return;
         }
         Player player = event.getEntity();
         try {
-            events.fire(new Fire(EventTypes.PLAYER_DEATH, player, player::getLocation, Map.of(), () -> {
+            events.fire(new Fire(EventTypes.DEATH, player, player::getLocation, Map.of(), () -> {
                 EntityDamageEvent last = player.getLastDamageCause();
                 return Map.of("damage", Map.of("cause", EntityPalette.causeOf(last == null ? null : last.getCause())));
             }, null, null, false));

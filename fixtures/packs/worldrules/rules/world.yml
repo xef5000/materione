@@ -42,7 +42,7 @@ world:
       do:
         - run_command: "say MATERIONE-WORLDRULES-QUIT ${player.name}"
     - id: died
-      on: player.death
+      on: death
       do:
         - run_command: "say MATERIONE-WORLDRULES-DEATH ${player.name} cause=${damage.cause}"
     - id: back

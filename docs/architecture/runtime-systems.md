@@ -74,7 +74,7 @@ Action         = registry entry + params         // shared across all content ty
   `dialog.submit`, `custom` (addon-defined). A menu button click and an item right-click are
   the same `click` event carrying different context fields. *As built (#327, logic.md §37):*
   the **world events** `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`,
-  `player.respawn` and `player.death`, fired for the `rule` content type (rules with no
+  `player.respawn`, and the existing `death` (now also hosted by rule documents), fired for the `rule` content type (rules with no
   item, block, furniture or GUI to hold them) and, for the first three, for an item's rules
   (the item in the main hand; worn armor too for `player.hurt`). Their listeners are static
   wiring that cost one set lookup per event when no rule answers the trigger.

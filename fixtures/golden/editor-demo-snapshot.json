@@ -1871,11 +1871,12 @@
           "id": "damage"
         },
         {
-          "description": "The player dies carrying the item",
+          "description": "The player dies: for an item, once for each stack of it among the drops; in a rule document, once",
           "details": [],
           "displayName": "Death",
           "firedBy": [
-            "item"
+            "item",
+            "rule"
           ],
           "id": "death"
         },
@@ -2058,15 +2059,6 @@
             "rule"
           ],
           "id": "player.respawn"
-        },
-        {
-          "description": "A player dies",
-          "details": [],
-          "displayName": "Player death",
-          "firedBy": [
-            "rule"
-          ],
-          "id": "player.death"
         }
       ],
       "functions": [
@@ -6044,18 +6036,27 @@
               "type": "integer"
             },
             {
+              "description": "What killed the player, as a damage cause such as fall or entity_attack (custom when unknown)",
+              "hosts": [
+                "rule"
+              ],
+              "path": "damage.cause",
+              "type": "string"
+            },
+            {
               "description": "Variables written earlier in this run by set_var",
               "hosts": [],
               "path": "vars.*",
               "type": "raw"
             }
           ],
-          "description": "The player dies carrying the item",
+          "description": "The player dies: for an item, once for each stack of it among the drops; in a rule document, once",
           "details": [],
           "displayName": "Death",
           "filters": [],
           "firedBy": [
-            "item"
+            "item",
+            "rule"
           ],
           "id": "death",
           "parameters": [],
@@ -8366,142 +8367,6 @@
             "rule"
           ],
           "id": "player.respawn",
-          "parameters": [],
-          "registeredBy": "materione",
-          "sinceVersion": "0.1.0"
-        },
-        {
-          "cancellable": false,
-          "context": [
-            {
-              "description": "The player's name",
-              "hosts": [],
-              "path": "player.name",
-              "type": "string"
-            },
-            {
-              "description": "The player's UUID",
-              "hosts": [],
-              "path": "player.uuid",
-              "type": "string"
-            },
-            {
-              "description": "survival, creative, adventure or spectator",
-              "hosts": [],
-              "path": "player.gamemode",
-              "type": "string"
-            },
-            {
-              "description": "Whether the player is sneaking",
-              "hosts": [],
-              "path": "player.sneaking",
-              "type": "boolean"
-            },
-            {
-              "description": "Whether the player is an operator",
-              "hosts": [],
-              "path": "player.op",
-              "type": "boolean"
-            },
-            {
-              "description": "The player's health",
-              "hosts": [],
-              "path": "player.health",
-              "type": "decimal"
-            },
-            {
-              "description": "The player's experience level",
-              "hosts": [],
-              "path": "player.level",
-              "type": "integer"
-            },
-            {
-              "description": "The player's X coordinate",
-              "hosts": [],
-              "path": "player.x",
-              "type": "decimal"
-            },
-            {
-              "description": "The player's Y coordinate",
-              "hosts": [],
-              "path": "player.y",
-              "type": "decimal"
-            },
-            {
-              "description": "The player's Z coordinate",
-              "hosts": [],
-              "path": "player.z",
-              "type": "decimal"
-            },
-            {
-              "description": "X of the event: the entity that was hit or died, else the player",
-              "hosts": [],
-              "path": "location.x",
-              "type": "decimal"
-            },
-            {
-              "description": "Y of the event location",
-              "hosts": [],
-              "path": "location.y",
-              "type": "decimal"
-            },
-            {
-              "description": "Z of the event location",
-              "hosts": [],
-              "path": "location.z",
-              "type": "decimal"
-            },
-            {
-              "description": "World name of the event location",
-              "hosts": [],
-              "path": "location.world",
-              "type": "string"
-            },
-            {
-              "description": "World name",
-              "hosts": [],
-              "path": "world.name",
-              "type": "string"
-            },
-            {
-              "description": "World time in ticks",
-              "hosts": [],
-              "path": "world.time",
-              "type": "integer"
-            },
-            {
-              "description": "Players online",
-              "hosts": [],
-              "path": "server.online",
-              "type": "integer"
-            },
-            {
-              "description": "Player slots",
-              "hosts": [],
-              "path": "server.max",
-              "type": "integer"
-            },
-            {
-              "description": "Variables written earlier in this run by set_var",
-              "hosts": [],
-              "path": "vars.*",
-              "type": "raw"
-            },
-            {
-              "description": "What killed the player, as a damage cause such as fall or entity_attack (custom when unknown)",
-              "hosts": [],
-              "path": "damage.cause",
-              "type": "string"
-            }
-          ],
-          "description": "A player dies",
-          "details": [],
-          "displayName": "Player death",
-          "filters": [],
-          "firedBy": [
-            "rule"
-          ],
-          "id": "player.death",
           "parameters": [],
           "registeredBy": "materione",
           "sinceVersion": "0.1.0"

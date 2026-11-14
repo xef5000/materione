@@ -127,7 +127,7 @@ export default [
 
   test({
     id: 'worldrules.player-death-and-respawn',
-    title: 'dying fires player.death with the cause and respawning fires player.respawn: the server log prints "MATERIONE-WORLDRULES-DEATH Probe cause=kill" then "MATERIONE-WORLDRULES-RESPAWN Probe"',
+    title: 'dying fires death (the existing trigger, now also hosted by rule documents) with the cause and respawning fires player.respawn: the server log prints "MATERIONE-WORLDRULES-DEATH Probe cause=kill" then "MATERIONE-WORLDRULES-RESPAWN Probe"',
     mode: 'auto',
     covers: COVERS,
     dependsOn: ['commands.give-basic'],

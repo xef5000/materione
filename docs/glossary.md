@@ -77,5 +77,5 @@ here.
 | **Trusted workstation** | Opt-in flag where an editor persists its signing key (IndexedDB) and the plugin whitelists it, skipping repeated in-game trust prompts; revocable in-game. | web.md §5.2 |
 | **Trigger** | Anything that starts a pipeline run (startup, command, web save, watcher, import) — all funnel into the same entry. | master §6.5 |
 | **Validation levels 1–5** | Syntax → schema → semantic (references) → platform (version gates) → build (allocation feasibility). | master §5.4 |
-| **World trigger** | A logic trigger the world fires with no host: `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`, `player.death`. The first three are fired for an item's rules as well as for rule documents. Not to be confused with a pipeline **Trigger**. | logic.md §37 |
+| **World trigger** | A logic trigger the world fires with no host: `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`; the existing `death` is also hosted by rule documents. The first three are fired for an item's rules as well as for rule documents. Not to be confused with a pipeline **Trigger**. | logic.md §37 |
 | **Wrapping key** | Random 256-bit key encrypting the session blob; transported only in the URL fragment. | web.md §5.2 |

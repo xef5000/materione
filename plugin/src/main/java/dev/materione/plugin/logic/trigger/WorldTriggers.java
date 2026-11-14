@@ -30,7 +30,7 @@ public final class WorldTriggers {
     private WorldTriggers() {}
 
     /**
-     * The seven triggers, in the order the editor lists them.
+     * The six triggers, in the order the editor lists them.
      *
      * @param entityTypes the entity types the server knows, for the {@code type} filter; empty accepts any name
      * @param damageCauses the damage causes, for the {@code cause} filter
@@ -59,12 +59,7 @@ public final class WorldTriggers {
                         "A player leaves the server. Steps after a wait do not run: the player is gone",
                         RULE_ONLY, List.of(), false, List.of()),
                 trigger(EventTypes.PLAYER_RESPAWN, "Player respawn", "A player respawns after dying",
-                        RULE_ONLY, List.of(), false, List.of()),
-                trigger(EventTypes.PLAYER_DEATH, "Player death", "A player dies",
-                        RULE_ONLY, List.of(), false, List.of(
-                                ContextVariable.of("damage.cause", ParameterType.STRING,
-                                        "What killed the player, as a damage cause such as fall or entity_attack"
-                                                + " (custom when unknown)"))));
+                        RULE_ONLY, List.of(), false, List.of()));
     }
 
     private static List<ContextVariable> entityHit() {

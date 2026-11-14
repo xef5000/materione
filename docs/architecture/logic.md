@@ -331,7 +331,7 @@ table becomes the built-in trigger registrations. `describe()` declares:
 - the **context schema** (§2.6);
 - whether the trigger is **cancellable** (`gui.opening` is; `gui.close` is not).
 
-A trigger may name the hosts that fire it in `firedBy` (`item`, `block`, `furniture`, `gui`, and since #327 `rule`, a document that holds rules and no resource). The seven world triggers (§37) are the first to be fired by a world event with no host in the way.
+A trigger may name the hosts that fire it in `firedBy` (`item`, `block`, `furniture`, `gui`, and since #327 `rule`, a document that holds rules and no resource). The six world triggers (§37) are the first to be fired by a world event with no host in the way.
 
 ### 4.4 Item sources
 
@@ -3749,7 +3749,7 @@ blessing runs happen on main).
 #327 is the first issue of M6.5 ([`agent-benchmark.md`](agent-benchmark.md) §4.2, rank 1) and a primitive under D12
 ([`architecture.md`](../architecture.md) §3.1, [`primitives.md`](primitives.md) §4.1, §4.3, §5.5): until it, every rule lived in an item, block,
 furniture or GUI, `damage` was durability damage, and nothing fired on a hit, a kill, a join or a quit. It adds one content type and
-seven triggers, and nothing named for a use case. The code is in `content.rules` (`RuleType`, `RuleDefinition`), `plugin.logic.trigger`
+six new triggers (and a new host, `rule`, on the existing `death`), and nothing named for a use case. The code is in `content.rules` (`RuleType`, `RuleDefinition`), `plugin.logic.trigger`
 (`WorldTriggers`), `plugin.runtime.behavior` (`WorldEventListener`, `WorldEvents`, `WorldRules`, `RuleDocuments`) and
 `platform.entity` (`EntityPalette`); the fixtures are `fixtures/packs/worldrules/`, `fixtures/rules/` and the golden `editor-demo-snapshot.json`.
 Each decision is reversible by the owner.
@@ -3812,7 +3812,7 @@ health/level/x/y/z`, `location.x/y/z/world`, `world.name/time`, `server.online/m
 | `player.join` | a player joins | none | `player.first_join` | rule | no |
 | `player.quit` | a player leaves | none | none | rule | no |
 | `player.respawn` | a player respawns | none | none | rule | no |
-| `player.death` | a player dies | none | `damage.cause` | rule | no |
+| `death` | a player dies (existing trigger; an item fires it once per stack among the drops, a rule document once) | none | `damage.cause` (rule documents) | item, rule | no |
 
 7. **Filters.** `type` is an entity type key without namespace (`zombie`, `cave_spider`), `cause` a damage cause (`entity_attack`,
    `projectile`, `fall`); each takes a value or a list and is an enum filter, so an unknown value is `MTR-0021` at the key and skips the rule
@@ -3847,9 +3847,16 @@ health/level/x/y/z`, `location.x/y/z/world`, `world.name/time`, `server.online/m
 12. **The editor.** `logic.get` and `logic.edit` accept `rules/` documents (and `furnitures/`: the folder list said `furniture/`, which the pack
     layout does not use, so furniture logic had been unaddressable through this API); every `LogicEdit` applies to a rule document and an
     edit that adds the first rule creates `behavior:`. The studio's generic form edits a rule document through the `behavior-rules` widget, whose
-    event list is `firedBy` filtered to `rule`, so the seven triggers are offered and an item-only trigger is called out. The *graph* Logic tab is
+    event list is `firedBy` filtered to `rule`, so the six new triggers and `death` are offered and an item-only trigger is called out. The *graph* Logic tab is
     bound to the GUI studio's document state today (`LogicCanvasState` takes a `GuiStudioState`) and does not open a rule document: that is a
     follow-up, not built here (below).
+13. **One trigger for a player dying: `death`, not `player.death`.** The first draft added `player.death` (host `rule`) beside the existing
+    `death` ("the player dies carrying the item", host `item`): two names for one Bukkit event, split by host. D12 says the host is not part of
+    the name (`entity.hit` already names both), so `death` is now the one trigger: `firedBy` is `item` and `rule`, and it gains `damage.cause`,
+    provided to rule documents. Existing packs and fixtures that use `death` load unchanged and no file is rewritten; an item's `death` rule still
+    fires once per stack among the drops (`ItemBehaviorListener`, untouched) and a rule document's fires once per death
+    (`WorldEventListener`). An item-only `death` rule opens the gate, but the world bridge then finds no document rule and passes no item hosts,
+    so nothing fires twice.
 
 **The universality tests (master §3.1), for the content type and the triggers.**
 
@@ -3858,7 +3865,7 @@ health/level/x/y/z`, `location.x/y/z/world`, `world.name/time`, `server.online/m
 | U1 name | `rule` names what the document is (rules), `entity.kill` and `player.join` name what fires. None names a quest, a drop, a boss or a welcome: T06, T10 and T15 are compositions of them |
 | U2 generality | `entity.*` works for any entity type (the `type` filter is optional) and any player; a rule document is hosted by nothing, so it works for any pack; an item hosts the same triggers with the same context |
 | U3 composition | every action and condition composes with them, proved by `worldrules` (a variable counted by `set_var`, read by a `var` condition, `give_item`, `cancel`, `run_command`) with no Java; the benchmark tasks T06, T10 and T15 are YAML only |
-| U4 self-description | a content type and seven triggers in registries, with typed filters, context and hosts, in `logic.vocabulary` and `authoring.describe`; no hand-written schema anywhere else |
+| U4 self-description | a content type and six triggers plus a host on `death` in registries, with typed filters, context and hosts, in `logic.vocabulary` and `authoring.describe`; no hand-written schema anywhere else |
 | U5 safety | a rule document validates offline like any host's (`logic.validate`, a transaction's dry run), a bad rule is skipped with a code, the handlers never throw into the server (a bridge failure is a diagnostic and the event carries on), and the harness proves it on Paper |
 
 **Deviations from the issue's sketch, and what was decided.**
@@ -3866,7 +3873,7 @@ health/level/x/y/z`, `location.x/y/z/world`, `world.name/time`, `server.online/m
 | Sketch | As built | Why |
 |---|---|---|
 | `player.join` and `player.quit` share a row whose context is `player.first_join` | `player.first_join` on `player.join` only | The flag is only meaningful on a join (at a quit the player has always played before), so `player.quit` has no context of its own. The sketch's six rows are seven triggers, all built. |
-| `player.respawn` carries `damage.cause` | It does not; `player.death` does | The cause of a death is known when the player dies. Carrying it to the respawn needs per-player state kept across the death screen for a variable nobody needed; a rule that wants it on respawn writes it in a `player.death` rule with `set_var`. |
+| `player.respawn` carries `damage.cause` | It does not; `death` does | The cause of a death is known when the player dies. Carrying it to the respawn needs per-player state kept across the death screen for a variable nobody needed; a rule that wants it on respawn writes it in a `death` rule with `set_var`. |
 | Item hosts "worn or held" for `player.hurt`; held for `entity.hit` and `entity.kill` | As sketched | Held is the main hand only; the off hand fires nothing (as for `click`). |
 | A `chance` among a rule's keys | Not added | `chance` is an action option and composes with these triggers. A rule-level option would be a second way to say it. |
 | "the Logic tab opens it" | The generic Studio form opens it; the graph tab does not | See decision 12. |

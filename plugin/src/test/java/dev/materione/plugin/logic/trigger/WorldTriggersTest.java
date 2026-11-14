@@ -30,10 +30,10 @@ class WorldTriggersTest {
     }
 
     @Test
-    void theSevenTriggersAreNamedByTheConstantsTheFiringSitesUse() {
+    void theSixTriggersAreNamedByTheConstantsTheFiringSitesUse() {
         assertThat(byId.keySet()).containsExactly(
                 EventTypes.ENTITY_HIT, EventTypes.ENTITY_KILL, EventTypes.PLAYER_HURT, EventTypes.PLAYER_JOIN,
-                EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN, EventTypes.PLAYER_DEATH);
+                EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN);
     }
 
     @Test
@@ -41,10 +41,21 @@ class WorldTriggersTest {
         for (String id : List.of(EventTypes.ENTITY_HIT, EventTypes.ENTITY_KILL, EventTypes.PLAYER_HURT)) {
             assertThat(byId.get(id).describe().firedBy()).containsExactly("item", "rule");
         }
-        for (String id : List.of(EventTypes.PLAYER_JOIN, EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN,
-                EventTypes.PLAYER_DEATH)) {
+        for (String id : List.of(EventTypes.PLAYER_JOIN, EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN)) {
             assertThat(byId.get(id).describe().firedBy()).containsExactly("rule");
         }
+    }
+
+    /** A player dying is one trigger, not two: the existing `death` names both hosts (no `player.death`). */
+    @Test
+    void theDeathOfAPlayerIsTheExistingDeathTriggerHostedByItemsAndRuleDocuments() {
+        var death = dev.materione.behavior.logic.BuiltinTriggers.all().stream()
+                .filter(trigger -> trigger.id().equals(EventTypes.DEATH)).findFirst().orElseThrow().describe();
+
+        assertThat(death.firedBy()).containsExactly("item", "rule");
+        assertThat(death.context()).filteredOn(variable -> variable.path().equals("damage.cause"))
+                .singleElement().satisfies(variable -> assertThat(variable.hosts()).containsExactly("rule"));
+        assertThat(byId).doesNotContainKey("player.death");
     }
 
     @Test
@@ -77,7 +88,6 @@ class WorldTriggersTest {
                 "source.type", "item.id");
         assertThat(paths(EventTypes.PLAYER_JOIN)).contains("player.first_join", "player.name", "vars.*");
         assertThat(paths(EventTypes.PLAYER_QUIT)).doesNotContain("player.first_join");
-        assertThat(paths(EventTypes.PLAYER_DEATH)).contains("damage.cause");
         assertThat(paths(EventTypes.PLAYER_RESPAWN)).doesNotContain("damage.cause");
     }
 

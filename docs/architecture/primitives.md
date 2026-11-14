@@ -192,8 +192,8 @@ Item, block and furniture triggers (`behavior/logic/BuiltinTriggers`): 17 regist
 `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage`, `death`) and 6 reserved and unsupported (`inv_click`,
 `tick`, `menu_click`, `hud_threshold`, `dialog_submit`, `custom`). GUI triggers (`plugin/gui/trigger/GuiTriggers`): 9
 (`gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`,
-`gui.page`). **Since #327**, world triggers (`plugin/logic/trigger/WorldTriggers`): 7 (`entity.hit`, `entity.kill`, `player.hurt`,
-`player.join`, `player.quit`, `player.respawn`, `player.death`), fired for rule documents and, for the first three, for an item's
+`gui.page`). **Since #327**, world triggers (`plugin/logic/trigger/WorldTriggers`): 6 (`entity.hit`, `entity.kill`, `player.hurt`,
+`player.join`, `player.quit`, `player.respawn`, plus the existing `death` gaining the `rule` host), fired for rule documents and, for the first three, for an item's
 rules too (logic.md §37).
 
 | Finding | Class | Direction |
@@ -369,7 +369,7 @@ accepts a namespaced id in the syntax). This is also what unblocks #320's own ex
 **As built (#327, logic.md §37):** the standalone unit is a new `rule` content type (`rules/`), not a facility of the command type
 (the design choice the paragraph above left open: a rule document's keys are exactly a host's `behavior:` and `flows:`, so every
 tool that edits a host edits it). The shipped triggers are `entity.hit`, `entity.kill`, `player.hurt`, `player.join`,
-`player.quit`, `player.respawn` and `player.death`. **Still proposed, and no task of the benchmark needed them:** `custom` with
+`player.quit` and `player.respawn`, and the existing `death` is now also hosted by rule documents. **Still proposed, and no task of the benchmark needed them:** `custom` with
 `emit`, an expiry trigger, command run and chat sent, and cross-resource `call`. The timer is #332.
 
 ### 5.6 Target addressing
