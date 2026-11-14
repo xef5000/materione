@@ -1,0 +1,23 @@
+{
+  "task": "C02",
+  "registry": "plugin-current",
+  "ok": false,
+  "diagnostics": [
+    {
+      "code": "SDK-0007",
+      "severity": "error",
+      "message": "no item \"sample:ruby_sowrd\"",
+      "hint": "nearest item ids: sample:ruby_sword, sample:ruby_disc, sample:ruby",
+      "source": {
+        "line": 5,
+        "column": 14
+      }
+    }
+  ],
+  "stats": {
+    "reads": 1,
+    "readBytes": 597,
+    "staged": 1,
+    "documents": 1
+  }
+}

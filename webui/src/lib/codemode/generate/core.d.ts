@@ -237,9 +237,9 @@ interface PackInfo {
   readonly builtin: boolean;
 }
 
-/** One row of a pack's catalog. */
-interface ResourceSummary {
-  readonly ref: Ref;
+/** One row of a pack's catalog; `K` is the content type asked for, so `m.edit(row.ref)` is typed by it. */
+interface ResourceSummary<K extends string = string> {
+  readonly ref: Ref<K>;
   readonly pack: string;
   /** The directory the document lives under (`items`). */
   readonly type: string;
@@ -302,7 +302,7 @@ interface ServerDiagnostic {
  */
 interface ReadApi {
   packs(): Promise<readonly PackInfo[]>;
-  resources(options: { readonly pack: string; readonly type?: ContentTypeName; readonly query?: string; readonly limit?: number }): Promise<readonly ResourceSummary[]>;
+  resources<T extends ContentTypeName = ContentTypeName>(options: { readonly pack: string; readonly type?: T; readonly query?: string; readonly limit?: number }): Promise<readonly ResourceSummary<T>[]>;
   get<K extends keyof ContentTypeFields & string>(ref: Ref<K>): Promise<ResourceView<ContentTypeFields[K]>>;
   references(ref: Ref): Promise<ReferenceResult>;
   history(ref: Ref, limit?: number): Promise<readonly RevisionInfo[]>;

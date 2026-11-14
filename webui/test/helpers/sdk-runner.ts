@@ -165,6 +165,8 @@ export interface RunOptions {
   program: string;
   world?: World;
   limits?: Partial<Limits>;
+  /** How long the host takes to answer each read: a slow host, to prove the end of a run does not depend on the order of answers. */
+  readDelayMs?: number;
 }
 
 export interface Run {
@@ -251,7 +253,12 @@ export async function run(options: RunOptions): Promise<Run> {
   const port = fakePort(options.world ?? { packs: ['bench'] });
   const holder = context as Record<string, unknown>;
   holder.__port = {
-    read: (op: string, payload: Record<string, unknown>) => Promise.resolve(port.read(op, JSON.parse(JSON.stringify(payload)))),
+    read: (op: string, payload: Record<string, unknown>) =>
+      new Promise<ReadReply>((resolveReply) => {
+        const answer = port.read(op, JSON.parse(JSON.stringify(payload)));
+        if ((options.readDelayMs ?? 0) > 0) setTimeout(() => resolveReply(answer), options.readDelayMs);
+        else resolveReply(answer);
+      }),
     resolve: (request: ResolveRequest) => Promise.resolve(port.resolve(JSON.parse(JSON.stringify(request)))),
   };
   holder.__surface = JSON.stringify(options.surface);

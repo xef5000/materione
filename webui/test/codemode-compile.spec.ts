@@ -58,7 +58,10 @@ describe('the program corpus', () => {
 
   it.each(corpus.map((entry) => [entry.expect.task + ' ' + entry.expect.title, entry] as const))('%s', (_label, entry) => {
     const registry = entry.expect.registry === 'with-addon' ? withAddon : current;
-    const problems = checkProgram(entry.program, registry);
+    // the host runs a program as the body of an async function, so the checker sees it as one (top-level await is not allowed in a script)
+    const problems = checkProgram(`(async () => {
+${entry.program}
+})();`, registry);
     if (entry.expect.result === 'pass') {
       expect(show(problems)).toBe('');
       return;

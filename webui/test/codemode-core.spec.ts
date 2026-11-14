@@ -22,6 +22,8 @@ interface Expectation {
   title: string;
   registry: string;
   result: 'pass' | 'fail';
+  /** A program that type-checks and still fails at run time, pinned: the diagnostics it must end with. */
+  run?: { ok: boolean; diagnostics: { code: string; line: number }[]; note?: string };
 }
 
 const corpus = readdirSync(CORPUS_DIR)
@@ -38,12 +40,13 @@ const corpus = readdirSync(CORPUS_DIR)
     };
   });
 
-const passing = corpus.filter((entry) => entry.expect.result === 'pass');
+const passing = corpus.filter((entry) => entry.expect.result === 'pass' && entry.expect.run?.ok !== false);
+const failingRuns = corpus.filter((entry) => entry.expect.run?.ok === false);
 const surfaceOfRegistry = (name: string) => (name === 'with-addon' ? addonSurface : surface);
 
 describe('the corpus, executed (the operation lists are goldens: fixtures/golden/codemode/ops)', () => {
   it('runs every program that type-checks, and only those', () => {
-    expect(passing.map((entry) => entry.expect.task)).toEqual(expect.arrayContaining(['T04', 'T08', 'T11', 'T25']));
+    expect(passing.map((entry) => entry.expect.task)).toEqual(expect.arrayContaining(['T04', 'T08', 'T11', 'T25', 'C01']));
     expect(corpus.filter((entry) => entry.expect.result === 'fail').length).toBeGreaterThan(0);
   });
 
@@ -77,9 +80,22 @@ describe('the corpus, executed (the operation lists are goldens: fixtures/golden
     expect(JSON.stringify(second.result)).toBe(JSON.stringify(first.result));
   });
 
+  it.each(failingRuns.map((entry) => [`${entry.expect.task} ${entry.expect.title}`, entry] as const))('%s ends with its pinned run-time diagnostic, no operations, and a golden', async (_label, entry) => {
+    const found = await run({ surface: surfaceOfRegistry(entry.expect.registry), program: entry.program, world: entry.world });
+    expect(found.result.ok).toBe(false);
+    expect(found.result.operations).toEqual([]);
+    expect(errorsOf(found.result).map((d) => ({ code: d.code, line: d.source?.line }))).toEqual(entry.expect.run?.diagnostics);
+    const record = { task: entry.expect.task, registry: entry.expect.registry, ok: false, diagnostics: found.result.diagnostics, stats: found.result.stats };
+    const text = `${JSON.stringify(record, null, 2)}
+`;
+    expect(text).toBe(goldenText(join(GOLDEN_DIR, 'runs', `${entry.stem}.json`), text));
+  });
+
   it('records a golden for each passing program and no other', () => {
     const goldens = readdirSync(join(GOLDEN_DIR, 'ops')).filter((name) => name.endsWith('.json')).sort();
     expect(goldens).toEqual(passing.map((entry) => `${entry.stem}.json`).sort());
+    const runs = readdirSync(join(GOLDEN_DIR, 'runs')).filter((name) => name.endsWith('.json')).sort();
+    expect(runs).toEqual(failingRuns.map((entry) => `${entry.stem}.json`).sort());
   });
 });
 
@@ -577,5 +593,31 @@ m.edit(m.ref.item("bench:sord")).unset("lore");`);
     const first = await go(program);
     const second = await go(program);
     expect(JSON.stringify(second.result)).toBe(JSON.stringify(first.result));
+  });
+});
+
+describe('a read the program never awaits does not hang the run or make it depend on timing', () => {
+  const world: World = { packs: ['bench'], resources: { bench: [{ type: 'items', path: 'items/sword.yml', id: 'sword' }] }, documents: { 'bench/items/sword.yml': { rev: 1, parsed: { sword: {} } } } };
+  const go = (program: string, readDelayMs: number) => run({ surface, program, world, readDelayMs });
+
+  it('waits for it at the end: the same bytes whether the host answers at once or late, and its read is counted', async () => {
+    const program = 'm.read.packs();\nm.read.resources({ pack: "bench" });\nm.pack("bench").items.create("fresh", { material: "STICK" });';
+    const quick = await go(program, 0);
+    const slow = await go(program, 25);
+    expect(quick.result.ok).toBe(true);
+    expect(quick.result.stats.reads).toBe(2);
+    expect(quick.result.stats.readBytes).toBeGreaterThan(0);
+    expect(JSON.stringify(slow.result)).toBe(JSON.stringify(quick.result));
+    expect(quick.result.operations).toHaveLength(1);
+  });
+
+  it('a let-go read that fails is still reported, once, and is not left as an unhandled rejection', async () => {
+    const program = 'm.read.get(m.ref.item("bench:nope"));\nm.pack("bench").items.create("fresh", { material: "STICK" });';
+    const quick = await go(program, 0);
+    const slow = await go(program, 25);
+    expect(quick.result.ok).toBe(false);
+    expect(errorsOf(quick.result).map((d) => d.code)).toEqual(['SDK-0007']);
+    expect(quick.result.operations).toEqual([]);
+    expect(JSON.stringify(slow.result)).toBe(JSON.stringify(quick.result));
   });
 });

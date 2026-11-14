@@ -35,7 +35,6 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class CodemodeReplayTest {
 
-    private static final String PACK = "bench";
     /** A 1x1 PNG: enough for an asset the server only has to find. */
     private static final String PNG =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
@@ -65,7 +64,7 @@ class CodemodeReplayTest {
             String stem = golden.getFileName().toString().replaceFirst("\\.json$", "");
             JsonObject recorded =
                     JsonParser.parseString(Files.readString(golden, StandardCharsets.UTF_8)).getAsJsonObject();
-            JsonObject report = replay(recorded.getAsJsonArray("operations"), corpus.resolve(stem + ".world.json"));
+            JsonObject report = replay(recorded.get("pack").getAsString(), recorded.getAsJsonArray("operations"), corpus.resolve(stem + ".world.json"));
             String json = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
                     .toJson(outcome(stem, report)) + "\n";
             Path target = replayDir.resolve(stem + ".json");
@@ -99,23 +98,25 @@ class CodemodeReplayTest {
         }
     }
 
-    /** One dry run on a fresh server: the sample and world packs, the bench pack, the world file's assets. */
-    private JsonObject replay(JsonArray operations, Path worldFile) throws IOException {
+    /** One dry run on a fresh server: the sample and world packs, the golden's own pack if it is not one of them, the world file's assets. */
+    private JsonObject replay(String pack, JsonArray operations, Path worldFile) throws IOException {
         Path root = Files.createTempDirectory(temp, "server");
         StorageService.StorageState storage = new StorageService().init(root);
-        for (String pack : EditorDemoSnapshotTest.PACKS) {
-            EditorDemoSnapshotTest.copyTree(GoldenFiles.fixturesRoot().resolve("packs").resolve(pack),
-                    storage.contentPacksDir().resolve(pack));
+        for (String fixturePack : EditorDemoSnapshotTest.PACKS) {
+            EditorDemoSnapshotTest.copyTree(GoldenFiles.fixturesRoot().resolve("packs").resolve(fixturePack),
+                    storage.contentPacksDir().resolve(fixturePack));
         }
         RpcDispatcher dispatcher = EditorDemoSnapshotTest.realOps(root, storage, true);
-        call(dispatcher, "edit.createPack", object("pack", PACK));
+        if (!EditorDemoSnapshotTest.PACKS.contains(pack)) {
+            call(dispatcher, "edit.createPack", object("pack", pack));
+        }
         if (Files.exists(worldFile)) {
             JsonObject world =
                     JsonParser.parseString(Files.readString(worldFile, StandardCharsets.UTF_8)).getAsJsonObject();
             JsonObject assets = world.has("assets") ? world.getAsJsonObject("assets") : new JsonObject();
-            for (String pack : assets.keySet()) {
-                for (JsonElement path : assets.getAsJsonArray(pack)) {
-                    JsonObject put = object("pack", pack);
+            for (String assetPack : assets.keySet()) {
+                for (JsonElement path : assets.getAsJsonArray(assetPack)) {
+                    JsonObject put = object("pack", assetPack);
                     put.addProperty("path", path.getAsString());
                     put.addProperty("data", path.getAsString().endsWith(".json")
                             ? Base64.getEncoder().encodeToString("{}".getBytes(StandardCharsets.UTF_8)) : PNG);
@@ -123,7 +124,7 @@ class CodemodeReplayTest {
                 }
             }
         }
-        JsonObject request = object("pack", PACK);
+        JsonObject request = object("pack", pack);
         request.addProperty("dryRun", true);
         request.add("operations", operations);
         return call(dispatcher, "authoring.transaction", request);

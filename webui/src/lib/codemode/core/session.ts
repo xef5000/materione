@@ -117,6 +117,8 @@ export function createSession(config: SessionConfig): Session {
   const created = new Map<string, Handle>();
   const stored = new Map<string, Doc>();
   const readCache = new Map<string, Promise<Dict>>();
+  /** The `m.read.*` calls not yet settled: a program that never awaits one still ends deterministically (see `complete`). */
+  const unsettled = new Set<Promise<unknown>>();
   let logged = 0;
   let logTruncated = false;
   let reads = 0;
@@ -921,7 +923,7 @@ export function createSession(config: SessionConfig): Session {
   }
 
   function readApi(): Dict {
-    return Object.freeze({
+    const raw: Dict = {
       async packs(): Promise<unknown> {
         const known = await loadPacks('m.read.packs');
         return [...known.packs.map((id) => ({ id, builtin: false })), ...known.builtin.map((id) => ({ id, builtin: true }))];
@@ -999,7 +1001,21 @@ export function createSession(config: SessionConfig): Session {
         const data = await read('m.read.diagnostics', {});
         return Array.isArray(data.diagnostics) ? data.diagnostics : [];
       },
-    });
+    };
+    // every read is tracked, so the end of the run can wait for the ones the program let go of
+    const tracked: Dict = {};
+    for (const name of Object.keys(raw)) {
+      tracked[name] = (...args: unknown[]): Promise<unknown> => {
+        const call = (raw[name] as (...rest: unknown[]) => Promise<unknown>)(...args);
+        unsettled.add(call);
+        const done = (): void => {
+          unsettled.delete(call);
+        };
+        call.then(done, done);
+        return call;
+      };
+    }
+    return Object.freeze(tracked);
   }
 
   // ---- docs: the registry's own text, searched in the program -------------------------------------
@@ -1323,6 +1339,10 @@ export function createSession(config: SessionConfig): Session {
 
   async function complete(outcome: Outcome): Promise<ProgramResult> {
     let returned: JsonValue | null = null;
+    // A read the program started and never awaited still counts: wait for it to settle (the host's own deadline bounds a
+    // read that never answers), so its bytes are in the stats and its failure, if any, is in the diagnostics, whatever the
+    // order the host answers in. Settling also handles a rejection nobody awaits, so none is left unhandled.
+    await Promise.allSettled([...unsettled]);
     if ('threw' in outcome && outcome.threw !== undefined && !isSdkError(outcome.threw)) {
       const where = typeof outcome.threw === 'object' && outcome.threw !== null ? positionIn((outcome.threw as { stack?: string }).stack, programFile) : undefined;
       diagnostics.push(diagnostic('SDK-0001', thrownMessage(outcome.threw), { source: where }));

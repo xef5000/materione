@@ -1,0 +1,71 @@
+{
+  "packs": [
+    "sample"
+  ],
+  "resources": {
+    "sample": [
+      {
+        "type": "items",
+        "path": "items/obsidian_axe.yml",
+        "id": "obsidian_axe",
+        "name": "obsidian_axe"
+      },
+      {
+        "type": "items",
+        "path": "items/ruby.yml",
+        "id": "ruby",
+        "name": "ruby"
+      },
+      {
+        "type": "items",
+        "path": "items/ruby_disc.yml",
+        "id": "ruby_disc",
+        "name": "ruby_disc"
+      },
+      {
+        "type": "items",
+        "path": "items/ruby_sword.yml",
+        "id": "ruby_sword",
+        "name": "ruby_sword"
+      },
+      {
+        "type": "items",
+        "path": "items/templated_ruby.yml",
+        "id": "templated_ruby",
+        "name": "templated_ruby"
+      }
+    ]
+  },
+  "documents": {
+    "sample/items/obsidian_axe.yml": {
+      "rev": 0,
+      "parsed": {
+        "obsidian_axe": {}
+      }
+    },
+    "sample/items/ruby.yml": {
+      "rev": 0,
+      "parsed": {
+        "ruby": {}
+      }
+    },
+    "sample/items/ruby_disc.yml": {
+      "rev": 0,
+      "parsed": {
+        "ruby_disc": {}
+      }
+    },
+    "sample/items/ruby_sword.yml": {
+      "rev": 0,
+      "parsed": {
+        "ruby_sword": {}
+      }
+    },
+    "sample/items/templated_ruby.yml": {
+      "rev": 0,
+      "parsed": {
+        "templated_ruby": {}
+      }
+    }
+  }
+}
