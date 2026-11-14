@@ -1,0 +1,66 @@
+{
+  "golden": "t04-daily-kit",
+  "accepted": false,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": false
+    },
+    {
+      "id": "gui",
+      "ran": true
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "operation": 2,
+      "code": "MTR-0022",
+      "severity": "warn",
+      "message": "bench:kits rule 'bench:kits#0' at behavior.0.do.0.if: unexpected trailing input ':' in expression: now() - bench:kit_daily_at >= 86400"
+    },
+    {
+      "operation": 2,
+      "code": "MTR-0063",
+      "severity": "error",
+      "message": "bench:kits rule 'bench:kits#0' at behavior.0.do.3: action 'set_var' rejected: 'bench:kit_daily_at' is not a declared variable (declare it in a variables file of its pack)"
+    }
+  ],
+  "documents": [
+    {
+      "path": "variables/kit_daily_at.yml",
+      "kind": "created",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "guis/kits.yml",
+      "kind": "created",
+      "operations": [
+        1,
+        2
+      ]
+    }
+  ]
+}

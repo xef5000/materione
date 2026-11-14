@@ -1,0 +1,44 @@
+{
+  "golden": "t16-crate",
+  "accepted": false,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": false
+    },
+    {
+      "id": "schema",
+      "ran": false
+    },
+    {
+      "id": "build",
+      "ran": false
+    },
+    {
+      "id": "behavior",
+      "ran": false
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": false
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "operation": 2,
+      "code": "MTR-0008",
+      "severity": "error",
+      "message": "'furnitures/crate.yml' is not a document that holds logic (items/, blocks/, furniture/ or guis/)"
+    }
+  ],
+  "documents": []
+}

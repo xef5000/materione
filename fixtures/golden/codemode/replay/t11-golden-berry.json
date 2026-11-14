@@ -1,0 +1,53 @@
+{
+  "golden": "t11-golden-berry",
+  "accepted": false,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "operation": 1,
+      "code": "MTR-0009",
+      "severity": "error",
+      "message": "unresolved texture 'textures/item/golden_berry.png'"
+    }
+  ],
+  "documents": [
+    {
+      "path": "items/golden_berry.yml",
+      "kind": "created",
+      "operations": [
+        0,
+        1
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "packs": ["bench"],
+  "assets": { "bench": ["assets/models/crate.json"] }
+}
