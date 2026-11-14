@@ -290,7 +290,7 @@ the rest. How large the index may be and what lives in a system prompt versus a 
 ### 3.8 As built: the generator (#337)
 
 *As built (#337, M6.5 track A1).* The generator of §3.1 exists, with its recorded registries and goldens. It is the first piece of
-SDK code; the core is built too (#339, §3.9); the type-check Worker and the sandbox are not (the server's transaction is, #341, §10).
+SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are built too; the sandbox is not (the server's transaction is, #341, §10).
 
 | Piece | Where | What it is |
 |---|---|---|
@@ -368,7 +368,7 @@ made.
 *As built (#339, M6.5 track A2).* The fixed half of §3.1 exists: `webui/src/lib/codemode/core/`, the runtime that the generated
 types of §3.8 are types *of*. It is plain ES2020, DOM-free and dependency-free, and it is tested **bundled** (esbuild, one
 script) in a bare `vm` context that holds the language's intrinsics and nothing else, with a fake port, so what is proven is what
-the sandbox (#343, not built) will load. The sandbox itself, the type-check Worker (#342), the chat tool and the review UI are
+the sandbox (#343, built: §4.6) loads. The chat tool and the review UI are
 not part of it.
 
 | Piece | Where | What it is |
@@ -516,6 +516,78 @@ capability list. `codemode-core-bans.spec.ts`: the core holds no registry id as 
 names no content type, reaches no op outside the table, has no write op but the transaction and never reads it, asks the port
 for four things only, and touches no DOM, storage, network, timer, Node or clock global. The compat gate fails when the table
 names an op a supported release lacks (`editor-compat.test.mjs`).
+
+### 3.10 As built: the type-check Worker (#342)
+
+*As built (#342, M6.5 track A2).* §5.1's check exists: `webui/src/lib/codemode/typecheck/`. It is a **browser module Worker of the
+editor's own origin** (not a Cloudflare Worker: no endpoint, no invocation, cost model "no change"), holding the TypeScript
+compiler (Apache-2.0, `NOTICE`), and it only parses, checks and transpiles.
+
+| Piece | Where | What it is |
+|---|---|---|
+| **Client** | `typecheck/client.ts`, `index.ts` | `check(program, surface) -> Promise<CheckResult>` (the shared client) and `createTypecheckClient({ limits?, spawn? })` (`check`, `dispose`, `stats`). `surface` is the `SurfaceDocument` (the client calls `generateSdk`, once per object) or declarations already generated. The Worker is spawned on the **first** check. One check runs at a time; later calls queue. |
+| **Worker** | `typecheck/worker.ts` | Closed vocabulary (`ready`, `check`, `result`, `failed`); imports `generate/core.d.ts` as text and `libs.ts`. Vite emits it as `assets/worker-<hash>.js`, a static file beside the SPA. |
+| **Checker** | `typecheck/checker.ts` | `createChecker({ libs, core })`: pure and DOM-free, so vitest runs the exact code the Worker runs. Declaration files stay parsed between checks; a changed surface text (a registry change, §7) is a changed file, so the program is rebuilt over it. |
+| **Wrapper** | `typecheck/wrap.ts` | The one wrapper, shared with `test/helpers/typecheck.ts`: the program is checked as the body of `(async () => {` ... `})();` (reads are promises and a program awaits them, so top-level `await` and `return` check, and the sandbox runs the same shape). The prefix is one line, so lines are the program's own; line 1's columns are shifted back by the prefix length; a position past the program (an unclosed brace) is clamped to its end. The **transpiled JavaScript and its source map are of the program as written**, not of the wrapper: the host wraps for the run. |
+| **Libraries** | `typecheck/libs.ts` | ES5 to ES2022 and `decorators`, read from the pinned `typescript` package at build time. No DOM, no webworker, no Node, no `@types`; `noResolve` and `types: []`, so no import, `/// <reference>` or type package reaches a file the host did not hand over. |
+
+**Result** (`typecheck/types.ts`): `{ ok, diagnostics, truncated, js?, map? }`; a diagnostic is `{ code, severity, message, line, column,
+hint?, missingPrimitive? }` with 1-based positions in the program as written. `js` and `map` (ES2020, the emitter's own source
+map) exist only when `ok`: a failing program is never handed back as runnable text. Output is deterministic (sorted by position,
+no timings in it; timings are `client.stats`).
+
+**Gap classification.** A `TS2339` or `TS2353` whose type is one the generated surface declares or extends (`PackWriter`,
+`ItemFields`, the function catalog) carries `missingPrimitive: { member, catalog, nearest }` and a hint that says to report it.
+The same error on a type of the fixed core only (`m.nonsense`) is a plain diagnostic; a near miss is TS2551 with TypeScript's
+"Did you mean" as the hint, and is not a gap.
+
+**What is refused whatever the types say** (`CHK-0001`, plugin.md section 5): `@ts-nocheck`, `@ts-ignore`, `@ts-expect-error`
+(a textual, conservative scan), `declare`, `namespace`/`declare global`, `import`/`export`, and a program that closes its own
+body to write at the wrapper's top level. Without these a program could silence the check or conjure `fetch` with
+`declare const fetch: any`. The check is quality gating, not the security boundary: the sandbox (§4) is, and it has no `fetch`.
+
+**Limits** (the numbers §4.2 lacked for the checker; proposed here, fixed by the tests):
+
+| Limit | Value | Why |
+|---|---|---|
+| Program size | 65,536 characters (`CHK-0002`) | the transaction takes at most 200 operations; a real program is a few KB |
+| Generated declarations | 1 MiB (`CHK-0002`) | the current surface is 195 KB |
+| Diagnostics returned | 50, then `truncated` | what reaches the model (§4.2) |
+| Check deadline | 5 s once the Worker is up, then the Worker is **terminated** (`CHK-0003`) and the next check boots a fresh one | measured: 4.5 to 30 ms warm; the deadline bounds a runaway, it does not ration a program |
+| Boot deadline | 20 s for the asset to load and parse (`CHK-0004`) | 1.07 MB gzip, once |
+
+A stack overflow inside the compiler (a 30,000-deep literal) is caught in the Worker and returned as `CHK-0004`, and the Worker
+keeps serving.
+
+**Measured** (Chromium, Vite dev server; the production file is the same compiler): Worker asset 4,087,907 B raw / 1,085,065 B
+gzip (the spike's 1,075,236 B); boot about 290 ms, first check about 460 ms round trip (compiler 172 ms, 195 KB surface), warm
+about 10 ms. In Node, first check about 50 to 140 ms, warm 10 to 30 ms. A runaway quadratic type is cut at its 1.5 s test deadline
+with the page's main thread never stalled for more than 250 ms.
+
+**Lazy, proven by build** (`codemode-typecheck-bundle.spec.ts`): the editor's production output holds no compiler and no worker
+asset; a page that imports the client eagerly adds 21.5 KB raw (7.7 KB gzip) of JavaScript and the compiler stays its own file,
+fetched on the first check. The editor's own bundle is unchanged by this work: nothing imports the client yet.
+
+**A build finding.** With Rollup's default tree-shaking the production Worker builds and then fails at its first check (`Cannot read
+properties of undefined (reading 'get')` inside the compiler: the CommonJS `typescript` package relies on side effects Rollup drops),
+while the dev server and Node pass. The Worker is therefore built with `treeshake: false` (`webui/vite.worker.ts`, shared with the specs),
+and the production artifact has its own Playwright spec.
+
+**Hosting and CSP.** Same static files, no new header or endpoint. Neither host sets a Content-Security-Policy today
+(`EditorListener.serveStatic` sends only `Content-Type`; the relay's `public/_headers` sets caching and the cloud marker; `index.html`
+has no meta CSP), so a same-origin module Worker is allowed. The plugin serves `.js` as `text/javascript` and accepts the file
+names Vite emits (`[A-Za-z0-9_./-]+`); the relay's Workers static assets serve `/assets/*` as files. If a CSP is ever added it needs
+`worker-src 'self'` (or `default-src 'self'`) and `script-src 'self'`; the spec runs under exactly that. One failure to know:
+under the relay's single-page fallback a missing worker file answers `index.html` as text/html, which a module Worker refuses
+(the client reports `CHK-0004`).
+
+**How it is proven.** `codemode-typecheck.spec.ts` (Node): the corpus through the checker with the expected codes and the gap, the
+agreement with the compile spec's own TypeScript API run, the ambient names, the refusals, determinism, limits, the client's
+deadline, restart and queue against an in-process stand-in, a ban test on the checker's sources. `codemode-typecheck.pw.ts` and
+`codemode-typecheck-built.pw.ts` (Playwright): the same corpus through the real Worker, dev server and production build; laziness;
+no request while checking (the context offline); the deadline against a real runaway; the main thread's responsiveness. When the
+SDK's reads become promises (#381) the corpus programs that read are checked through the same wrapper, and the agreement test
+picks them up with no change here.
 
 ---
 
@@ -715,6 +787,88 @@ make**, so the sandbox cannot make the editor send an operation the SDK's table 
   reads* (an item lore that says "ignore your instructions"): reads are data, the program's effects are limited to staged
   operations, and **nothing applies without a human reviewing the diff** (§5.6).
 
+### 4.6 As built: the production sandbox (#343)
+
+*As built (#343, M6.5 track A2).* D13's sandbox exists: `webui/src/lib/codemode/sandbox/`, with the spike's six amendments applied. It builds
+on the type-check Worker (#342: it takes the program's `js` and `map` and the shared `wrapProgram`) and the core (§3.9: it is the guest, bundled).
+There is no UI: the chat tool (#348) and the proposal flow (#346) call `run` and wire the host.
+
+**API** (`sandbox/index.ts`): `run(checkedProgram, surface, host, limits?) -> RunResult`, and `createSandboxRunner({ spawn?, loadAssets? })`
+(`run`, `dispose`, `stats`) for a runner of one's own. `checkedProgram` is `{ js, map }`, what a passing `CheckResult` carries. `host` is a
+`SandboxHost { read(op, payload): Promise<ReadReply>; resolve(request): Promise<ResolveReply> }`, injected. `createOpHost(call)` builds one from a
+function that makes a read-only editor op (the sealed channel's `call`, reduced to its answer): its `read` refuses any op outside the table's
+reads, and its `resolve` answers the seal's batch with the table's `via: 'resolve'` ops (`browse.packs`, `authoring.summaries`,
+`browse.get`, `logic.instantiate`, `assets.list`). `RunResult` is `{ ok, sdkVersion, pack, operations, sources, diagnostics, late, summary,
+logs, value, stats, metrics }`: the core's `ProgramResult` with `sources` and every diagnostic position mapped to the program as written,
+`value` the return value, and `metrics` the host's timings (never part of a determinism comparison). A run never rejects; a failed run has
+`ok: false`, no operations, and a diagnostic. One run at a time; later calls queue.
+
+| Piece | Where | What it is |
+|---|---|---|
+| **Build step** | `webui/vite.sandbox.ts` (a Vite plugin in both configs) | Emits `sandbox/frame.html`, `engine.js`, `core.js`, `quickjs.wasm` into the SPA output (so both hosts serve them as plain files; the dev server serves the same URLs). The frame document holds ONE inline script and a meta CSP naming its sha256, **computed in the build from the exact text** (`frameDocument`); a spec re-hashes the production file. |
+| **Frame** | `sandbox/frame-boot.ts` | The inline script: one `init` from `window.parent` (wasm bytes, engine source, core source, transferred in: the frame never fetches), a blob Worker from the engine source, the private port handed on. |
+| **Engine** | `sandbox/engine.ts`, `worker-entry.ts` | QuickJS **sync** build in the Worker; a fresh runtime per run; interrupt handler for CPU (engine time only); `WebAssembly.Memory` `maximum`; stack 256 KiB. The guest is the core evaluated in a function body with a determinism prelude (`Date` fixed at 2026-01-01T00:00:00Z, `Math.random` seeded 12345); `m` is the one non-intrinsic global; the host functions are closed over, never globals. `m.read.*` are guest promises the host resolves (then jobs are pumped); staging makes no host call; the one `resolve` happens inside `finish`. |
+| **Host** | `sandbox/sandbox.ts`, `runner.ts`, `protocol.ts` | The iframe (`sandbox="allow-scripts"`, never `allow-same-origin`), the channel, the budgets, the backstops, and validation of every message and of the result. Any limit, refused message or aborted engine **destroys the frame**; the next run boots a fresh one. |
+| **Positions** | `sandbox/sourcemap.ts` | The engine's positions are in `wrapProgram(js)`; the emitter's map gives the program's own line and column, with line 1's columns shifted by `WRAP_PREFIX` (one wrapper). QuickJS reports a call at its `(` where V8 reports the callee name; the host moves the column back to the callee name so the goldens are engine-independent. |
+
+**Limits as enforced** (`DEFAULT_SANDBOX_LIMITS`, overridable per run; the sandbox's diagnostics are `SBX-####` in plugin.md section 5, the core's limits stay `SDK-0005`):
+
+| Limit | Default | Enforced by | Ends the run with |
+|---|---|---|---|
+| CPU time | 1000 ms of engine time **the program uses**: counted only while its code runs, from its first statement; waiting on the editor is free, and guest setup (core evaluated, surface parsed, about 13 ms here, more on a slow machine) is not charged to it; setup is bounded by the wall-clock backstop instead (it is our code, not the program's) | interrupt handler in the engine; the accumulated time restarts at zero after setup | `SBX-0001` |
+| Memory | 64 MiB `WebAssembly.Memory` maximum (QuickJS heap limit 75% of it) | the wasm memory; the engine | `SBX-0002` |
+| Stack | 256 KiB (an overflow the program does not catch is the program's own `SDK-0001`) | QuickJS | `SDK-0001` / `SBX-0003` |
+| Reads / read bytes | 100 / 2 MiB | the core (`SDK-0005`) and, independently, **the host's own count** | `SDK-0005` / `SBX-0004` |
+| One read, the seal | 5 s, 20 s unanswered | host timer | `SBX-0005` |
+| Wall-clock backstop | 10 s with no editor answer outstanding; 60 s in all | host timer; destroys the frame | `SBX-0006` |
+| Operations, documents, bytes of operations | 200, 50, 256 KiB | the core, and the host's recount of the result | `SDK-0005` / `SBX-0007` |
+| Logs, return value | 16 KiB, 64 KiB | the core, and the host's recount | `SDK-0014` / `SBX-0008` |
+| Never finishes | nothing pending, program not done | engine | `SBX-0009` |
+| A call's payload, a message, the result | 64 KiB; shape-checked; result at most operations + logs + return + 256 KiB | host validator | `SBX-0010` |
+
+The host never believes the frame: the allowlist is the host's (`READ_ALLOWLIST`, from the core's operation table; an op outside it ends the run), the
+reads and bytes are counted on the host, the seal may resolve once, and the result is rebuilt field by field from validated JSON, with operations dropped when any
+diagnostic is an error. A `__proto__` key in a result is data (`JSON.parse` makes an own property; the host never assigns by a guest key).
+
+**Isolation, proven on the production artifact** (`codemode-sandbox-built.pw.ts`; a static host that sends a Content-Type and no other header, with a server hit
+log). Native probes in a frame and in the blob Worker, under the production CSP (the build's own `frameDocument` around a different inline script: the probes cannot
+be injected into the emitted frame itself, whose own policy a spec asserts): `fetch` (also `no-cors`), XHR, WebSocket, `import()`, `importScripts`, nested Worker,
+storage, cookies, IndexedDB, `window.parent` and `top` access and navigation, `window.open`, `eval`, `new Function` all fail; a nested frame, `sendBeacon` and
+`BroadcastChannel` are fire-and-forget and the server's hit log and the editor's BroadcastChannel listener stay empty; the Worker's `self.origin` is `"null"`.
+Inner layer: the guest sees QuickJS intrinsics and `m` (a spec pins the list); `Function('return this')()` and constructor walks give the guest's own global; a guest `import()` is refused.
+
+**Determinism, proven in the real sandbox.** The corpus (T04, T08, T11, T16, T25, T29, C01, C02, with their world files; T05 and T27 do not type-check and are not run)
+goes through the type-check Worker and then the sandbox, the fake editor answering through `createOpHost`, and every record is byte for byte the existing goldens in
+`fixtures/golden/codemode/ops` and `runs`. None changed.
+
+**Lazy and static.** Nothing loads until the first run. The editor's production JavaScript is byte-identical with and without the sandbox (1,641,589 B both; the
+plugin only adds static files). The sandbox's files: `core.js` 49,149 B (14,431 gzip), `engine.js` 59,303 B (17,188), `quickjs.wasm` 503,134 B (234,043), `frame.html`
+1,576 B: about 266 KB gzip on the first run. `esbuild` and the QuickJS packages are devDependencies: they are bundled at build time, so nothing moves to
+`dependencies`. QuickJS and quickjs-emscripten are MIT (`NOTICE`); the project licence is not decided here.
+
+**Measured** (Chromium, Playwright 1.64.1, localhost, Windows 11, one machine): first run, boot 23 ms and 45 ms run; a warm run 15 ms, of which about 13 ms is guest setup (the core
+evaluated and the 200 KB surface parsed, per run); a CPU-bound guest under a 250 to 300 ms deadline stalls the editor's main thread for 11 to 12 ms.
+
+**Hosting.** Neither host needs anything new: the files sit under `sandbox/` in the SPA output. **Verified against the code only, not the live hosts:** the plugin's
+`EditorListener.serveStatic` accepts `sandbox/frame.html` (its path charset, classpath resources under `/webui/`) and maps `.html`, `.js` and `.wasm` to content types; the
+relay's Workers static assets serve the SPA output directory as files. Not verified: Workers static assets' default `html_handling` may answer
+`/sandbox/frame.html` with a redirect to `/sandbox/frame` (an iframe follows it); and under the single-page fallback a missing file answers HTML, which `loadSandboxAssets` turns
+into a clear `SBX-0011`. Neither was exercised on a deployed relay (deploys are the owner's).
+
+**How it is proven.** `codemode-sandbox.spec.ts` (Node, the real engine run in-process): the corpus against the goldens. `codemode-sandbox-limits.spec.ts`: each limit, determinism,
+guest globals, pollution, source positions, and a **lying core** (a stand-in for a guest that escaped the program) that tries a write op, a made-up op, too many reads, bytes, operations,
+logs, a second seal, malformed results and forged `__proto__` keys. `codemode-sandbox-build.spec.ts`: the production build's files, the CSP hash recomputed from the emitted frame, the editor's
+bundle byte-identical, the codes against plugin.md, the message validator. `codemode-sandbox.pw.ts` (dev server) and `codemode-sandbox-built.pw.ts` (production artifact): the corpus in the real frame,
+laziness, isolation of both layers, the wall-clock backstop destroying a frame, editor responsiveness, the memory cap, the read deadline.
+
+**Browsers.** Chromium only was run. `MATERIONE_PW_BROWSERS=firefox,webkit` adds those engines for the sandbox specs (`playwright.config.ts`), off by default and not in CI; the browsers
+were not installed here, so **there is no Firefox or WebKit result**: a `blob:` Worker from an opaque-origin frame, the wasm stack depth under 256 KiB, `WebAssembly.Memory` `maximum`
+and a transfer of an `ArrayBuffer` plus a `MessagePort` to a `'*'` target remain unverified there (§13). The supported-browser decision stays the owner's.
+
+**What this does not do.** No chat tool, grants, review UI or model call. The guest keeps `eval` and `Function` (they reach only the guest's own global; deleting them would not
+remove the constructor path). A program can forge its own result JSON (it controls `JSON.stringify` in its realm); that gains nothing beyond `m`: the host rebuilds and bounds it, and
+the server's dry run is the authority.
+
 ---
 
 ## 5. The execution model
@@ -835,6 +989,83 @@ what is applied (D6, master §6.4):
 The grant is the owner's protection, not the transaction's: every apply, granted or not, is transactional, audited and
 reversible as above.
 
+**As built (#346, track A3): the proposal lifecycle in the editor host.** `webui/src/lib/codemode/host/`. Session memory only
+(D1: nothing is persisted, there is no editor-only content state) and outside the sandbox. Per §12.2 the approval is enforced
+**in the editor page**: the page decides, the server records the `approval` value it is told and verifies nothing, and no wire op
+was added (the transport is `authoring.transaction` and `authoring.revertTransaction`, capability `codemode`).
+
+| Piece | File | What it is |
+|---|---|---|
+| Object identity | `objects.ts` | An object is one stored document: `<pack>:<path>`, exact string match (no case folding, no `..`, no wildcard). A name that is not canonical is not an object id and no grant can cover it. |
+| Classification | `classify.ts` | Pure. Inputs: the operation list, the dry run's document list, the objects this session created. **Nothing the model said** (summary, return value, logs, program text) is a parameter. |
+| Grants and policy | `grants.ts` | `GrantSet` (monotonic: no revoke), `ApprovalGesture`, `decide`. |
+| Store | `store.ts` | `ProposalStore`: proposals, plans, the change log, the one queue, the apply chokepoint. |
+| Wire | `transport.ts` | The two ops by literal name, a strict reader for `accepted`/`applied`, the capability check. |
+
+**Classification, per operation kind** (the wire kinds of `TransactionOps.operationOf`), after a clean dry run:
+
+| Operation | Creates | Touches an existing object |
+|---|---|---|
+| `create` | the new document | none |
+| `duplicate` | the copy | none (the source is only read) |
+| `saveAsTemplate` | the template | none (the source is untouched, api.md §3.3.1) |
+| `setFields`, `logicEdit`, `guiEdit`, `detachTemplate` | none | `path` |
+| `delete` | none | `path` |
+| `move` | `toPath` | `fromPath` (it is removed) |
+| any other kind, or a known kind with no canonical path | | **unknown: fail closed** |
+
+On top of the table the dry run is the authority for what *changes*: a document it reports as changed or deleted, or under a kind
+the editor does not know, is touched whether or not an operation names it. A path is **new**, not existing, when this session
+created it in an applied proposal, or an earlier operation of the same proposal created it (a created document or a move
+target, by the report's operation indexes, strictly earlier). An *unknown* operation, a non-canonical name and a path the dry
+run reports that is not canonical are **blockers**: no grant can cover them, and only the approval of that one proposal clears
+them (and it clears nothing for a later proposal). "Existing" is "not created by this session": a document a human adds
+mid-session counts as existing, which is the conservative side of §5.6's definition.
+
+**Grants.** Per object, per session, in host memory. They only grow: the class has no removal, a session's end is the end of the
+`ProposalStore` (`dispose()`, or a new store), and nothing persists them. The only call that adds one takes an
+`ApprovalGesture`, which `gestureFromEvent` makes only from an event the browser dispatched itself (`isTrusted`; a script's
+`dispatchEvent` or `click()` is not trusted) and which is **single use**. Three ways to approve, all from a gesture:
+`approve({ proposal })` (the proposal's existing objects, then applies it), `approve({ objects })`, and `approve({ plan })` (C11:
+one approval covers every existing object the plan **declared** through `declarePlan`, across its programs; a program that
+reaches another object stops and asks for that object only). Declaring a plan grants nothing: it is model-authored data. The
+chat tool gets `store.agent`, which has `propose`, `declarePlan` and reads and has no approve, grant, apply, reject or revert
+(a ban test reads the type and the object). The asserted `approval` is `granted` when the proposal touched an existing object (or
+was approved as a whole) and `not_needed` when it only created.
+
+**The path of a proposal.** `propose(result, { program })` refuses without a call a result with `ok: false`, an empty list, a
+missing or non-canonical pack, or a malformed operation. Otherwise: a **dry run, always**; a refused one (an error diagnostic that
+is not `preexisting`, or `accepted: false`) returns its diagnostics to the agent with the operation's program line from
+`sources`, and nothing is applied; a clean one is classified, and applies on its own when `decide` allows it, else it **waits**
+with `needs` (the ungranted existing objects) and `needsProposalApproval`. Apply sends the **same frozen operation list** that
+was dry-run, never the program, with `origin: code-mode`, the program text and the asserted approval; it is sent in exactly one
+place (`send`), which re-checks the policy against the current grants. Diagnostics carry `preexisting` when the server sends it
+(#372): such a finding is shown as a warning and never blocks. `autoApply: false` leaves a clean proposal waiting for `apply`.
+
+**Stale.** `MTR-0034` from the dry run or the apply marks the proposal `stale`: nothing was applied (the server's all-or-none),
+it is never forced or retried, and the problem says to re-run the program against the new state (§6, phase 4); the agent
+proposes again. After any apply the host also marks stale, without asking the server, each *waiting* proposal of the pack
+that touches or creates a document the apply wrote. A transport failure or an unreadable reply is `failed`: an unreadable
+reply is never taken for success (the reader is strict about `accepted`, `applied` and `dryRun`).
+
+**Stacked proposals (5.5).** One queue: each proposal's dry run and its apply are one slot, so stacked programs apply in the
+order proposed and never interleave. The programs of a plan are separate proposals; each reads the state the previous apply
+produced.
+
+**The change log and revert.** `log()` lists each applied proposal: summary, program text, asserted approval, documents,
+transaction id, whether it is revertible and why not, and the last refused revert's diagnostics. `revert(id, gesture)` runs
+`authoring.revertTransaction` dry run first, then the apply; a refusal (`MTR-0034`, `MTR-0104`, a restored state that does not
+validate) is shown and nothing is written. It needs a gesture and is not on the agent's port; any session with edit rights may
+revert (§12.2).
+
+**Proven by** `codemode-host-classify.spec.ts` (every kind, the fail-closed cases, the four rows of the table as `decide`, random
+lists), `codemode-host-store.spec.ts` (the lifecycle against a model of the transaction, a property test that an operation on an
+existing object without a grant is never sent, plan approval, stale at the dry run and between dry run and apply, the change log
+and revert), `codemode-host-transport.spec.ts` (the lifecycle replayed over `editor-codemode-v1.json`) and
+`codemode-host-bans.spec.ts` (the sandbox side cannot load or name approval, the agent port, one grant and one apply call site,
+no storage, literal op names for the compat gate). **Not built here**: the review and change-log UI and the chat tool (#347,
+#348), which call this API; the sandbox host (#343); a real-server test of the approval flow.
+
 ---
 
 ## 6. How errors reach the agent
@@ -845,7 +1076,7 @@ line:
 
 | Phase | Source | Code | Example | The agent's right move |
 |---|---|---|---|---|
-| **1. Type-check** | TypeScript | `TS####` | `Property 'commands' does not exist on type 'Materione'` | If a *primitive* is missing (§9.2), report the gap; otherwise fix the call |
+| **1. Type-check** | TypeScript | `TS####`, `CHK-####` (§3.10) | `Property 'commands' does not exist on type 'Materione'` | If a *primitive* is missing (§9.2), report the gap; otherwise fix the call |
 | **2. Sandbox** | the SDK core and the host | an SDK code, allocated at implementation | a thrown error with its source-mapped stack; a limit exceeded; `m.ref.item("rpg:nope")` with the nearest ids; staging into a second pack | Fix the program |
 | **3. Dry run** | the plugin's validation | stable `MTR-####` | a schema error on a staged field; a flow the compiler rejects, with a step path; a reference that does not resolve | Fix the program; the `target` names the field, and the operation's tag names the program line that staged it |
 | **4. Apply** | the store and pipeline | `MTR-####` | `MTR-0034` (stale revision); a pipeline load failure with a rollback | Re-run against the new state |
@@ -1217,6 +1448,18 @@ a payment processor, a balance ledger with exactly-once debits, refunds, tax and
 alone, under the hard cap above.
 
 **Still open.** The model allowlist and the routing rule (#385); the numbers for rates and the free allowance; everything in #386.
+
+
+### 12.2 Permissions, approval and old errors (decided 2026-11-14, #358, #372)
+
+| Question | Answer |
+|---|---|
+| What may the agent do? | **What its user may do.** The chatbot acts on behalf of the user; its rights are a subset of the session's, equal in M6.5. The actor can be narrowed later; no setting exists yet. |
+| What may a session do? | **Everything the editor can.** The editor is for server admins and a session is approved by one (master §9.2 as amended). The per-operation `materione.edit.<pack>` check in a transaction always passes for a session; it refuses only a built-in pack. It is not a protection and no text here relies on it. |
+| Who may revert? | Any session with edit rights, including a transaction another session applied. The audit records who. |
+| Where is the per-object approval (C10, C11) enforced? | **In the editor page.** It shows the diff and sends the transaction only after the user approves. The audit's `approval` field is what the page asserted; the server does not verify it and holds no grant. |
+| A touched document already has an error | Findings that existed before the transaction are **reported as warnings** and do not refuse it; only findings the transaction adds refuse it. Rare by construction (agents and the editor do not write faulty documents) but direct YAML editing makes it possible. Implementation: #372. |
+| A revert whose restored state fails validation | **Refused.** Reverts stay strict; there is no "restore anyway". |
 
 ## 13. Not verified
 
