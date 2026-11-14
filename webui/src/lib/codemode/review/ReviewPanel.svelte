@@ -48,8 +48,12 @@
     }
   });
 
+  // Escape closes the panel when focus is inside it, or nowhere (a button that was just used can vanish with its action).
   function onKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && !event.defaultPrevented) {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    const active = document.activeElement;
+    const inside = active !== null && document.getElementById('review-panel')?.contains(active) === true;
+    if (inside || active === null || active === document.body) {
       event.preventDefault();
       onClose();
     }
@@ -69,9 +73,9 @@
   }
 </script>
 
-<!-- Escape closes the panel from anywhere inside it -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<section id="review-panel" class="panel" aria-labelledby="review-title" onkeydown={onKey}>
+<svelte:window onkeydown={onKey} />
+
+<section id="review-panel" class="panel" aria-labelledby="review-title">
   <div class="head">
     <h2 id="review-title" tabindex="-1" bind:this={heading}>Review</h2>
     {#if review.waiting > 0}<Chip tone="warn">{review.waiting} to approve</Chip>{/if}

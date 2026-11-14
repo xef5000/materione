@@ -44,6 +44,14 @@
   const waiting = $derived(proposal.state === 'waiting');
   const needsOwner = $derived(waiting && (proposal.needs.length > 0 || proposal.needsProposalApproval));
   const planOpen = $derived(plan !== null && !plan.approved && plan.objects.length > 0);
+  // A proposal first listed while it was still being checked opens itself once it needs the owner.
+  let autoOpened = false;
+  $effect(() => {
+    if (needsOwner && !autoOpened) {
+      autoOpened = true;
+      open = true;
+    }
+  });
   const bodyId = $derived(`proposal-${proposal.id}-body`);
   const noteId = $derived(`proposal-${proposal.id}-grant`);
 
@@ -80,11 +88,10 @@
     <span class="meta">pack <code>{proposal.pack}</code>{proposal.plan ? ` · ${proposal.plan}` : ''}</span>
   </header>
   <p class="facts">{factLine(views)}</p>
+  <p class="state">{info.explanation}</p>
 
   <div id={bodyId} hidden={!open} class="body">
     {#if open}
-      <p class="state">{info.explanation}</p>
-
       {#if proposal.summary}
         <aside class="agent" aria-label="The agent's summary">
           <p class="agent-label">The agent&rsquo;s words, not checked by the editor</p>

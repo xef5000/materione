@@ -74,6 +74,14 @@ function text(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
+/**
+ * The wire severity is the lowercased name of the server's `Severity` enum: `info`, `warn`, `error`. Info and warn inform and never
+ * block, so both read as a warning here. An unknown or missing value fails closed: it is an error, so it blocks.
+ */
+function severityOf(value: unknown): 'error' | 'warning' {
+  return value === 'warn' || value === 'warning' || value === 'info' ? 'warning' : 'error';
+}
+
 /** Reads a reply's data strictly where a wrong reading could allow something (`accepted`, `applied`), leniently elsewhere. */
 export function parseReport(data: unknown): TransactionReport {
   const body = record(data, 'the reply');
@@ -100,7 +108,7 @@ export function parseReport(data: unknown): TransactionReport {
       const found = record(entry, 'a diagnostic');
       return {
         code: text(found.code) ?? undefined,
-        severity: found.severity === 'warning' ? 'warning' : 'error',
+        severity: severityOf(found.severity),
         message: text(found.message) ?? '',
         hint: text(found.hint) ?? undefined,
         operation: typeof found.operation === 'number' ? found.operation : undefined,

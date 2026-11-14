@@ -14,6 +14,13 @@ export interface FixtureAuditEntry {
   actor: string;
   op: string;
   target?: string;
+  /** The code-mode context the server's audit adds (codemode.md section 10). */
+  origin?: string;
+  approval?: string;
+  transaction?: string;
+  program?: string;
+  programLength?: number;
+  digest?: string;
 }
 
 export interface FixtureDocumentSnapshot {
@@ -42,12 +49,28 @@ export interface BrowserTestControls {
   /** Refuse the next live trace subscription, as a server at its cap does. */
   refuseNextTrace(): void;
   setAuditEntries(entries: readonly FixtureAuditEntry[]): void;
+  /** The `?codemode` fixture only: stage findings on, or make unrevertible, the next transaction. */
+  codemode?: import('./codemode-fixture').CodemodeFixture;
   /** Every document as the fixture holds it (saved YAML assertions). */
   documents(): readonly FixtureDocumentSnapshot[];
+}
+
+/**
+ * The `?codemode` harness only (never in the editor build): feeds a recorded corpus program in as a proposal, through the
+ * agent port of the review store, which has propose and declarePlan and no approval of any kind.
+ */
+export interface CodemodeHarness {
+  /** Proposes the recorded sealed result of a corpus program (`fixtures/golden/codemode/ops/<name>.json`), retargeted to the fixture pack. `slice` keeps only those operations. Resolves with the proposal id once it settled. */
+  propose(name: string, options?: { slice?: [number, number]; plan?: string; autoApply?: boolean }): Promise<string>;
+  /** Declares a plan (existing objects as `<pack>:<path>`); returns its id. */
+  declarePlan(objects: string[], title?: string): string;
+  /** The names of the corpus programs the harness can feed. */
+  programs(): string[];
 }
 
 declare global {
   interface Window {
     __materioneTestControls?: BrowserTestControls;
+    __materioneCodemode?: CodemodeHarness;
   }
 }

@@ -3,6 +3,7 @@ import { confirmDisconnect, connection, handlePush, loadWorkspace, markConnectio
 import Workbench from '../src/lib/components/Workbench.svelte';
 import '../src/app.css';
 import { DeterministicRpcAdapter } from './rpc-adapter';
+import { createCodemodeHarness } from './codemode-feed';
 
 async function startFixture(): Promise<void> {
   const target = document.querySelector<HTMLElement>('#app');
@@ -18,6 +19,7 @@ async function startFixture(): Promise<void> {
     modules: params.has('modules'),
     gui: params.has('gui'),
     logic: params.has('logic'),
+    codemode: params.has('codemode'),
     economy: params.has('economy'),
     noContainers: params.has('noContainers'),
     seed: params.get('seed') ?? '',
@@ -40,6 +42,8 @@ async function startFixture(): Promise<void> {
     },
   });
   window.__materioneTestControls = adapter;
+  // `?codemode`: the seam that feeds a recorded corpus program in as a proposal (the product has no producer until the chat exists)
+  if (params.has('codemode')) window.__materioneCodemode = createCodemodeHarness('fixture_pack');
   document.documentElement.dataset.fixtureReady = 'true';
 }
 

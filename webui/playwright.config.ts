@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+// MATERIONE_PW_PORT picks another port when 4173 is taken (another run, another checkout); CI leaves it unset.
+const port = Number(process.env.MATERIONE_PW_PORT) || 4173;
+
 export default defineConfig({
   testDir: './browser/specs',
   testMatch: '**/*.pw.ts',
@@ -9,7 +12,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'line',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: `http://127.0.0.1:${port}`,
     browserName: 'chromium',
     viewport: { width: 1365, height: 900 },
     // Every spec runs the reduced-motion path (app.css, "Motion"): transitions and loops
@@ -30,8 +33,8 @@ export default defineConfig({
       .map((name) => ({ name, testMatch: '**/codemode-sandbox*.pw.ts', use: { browserName: name } })),
   ],
   webServer: {
-    command: 'npm run dev:browser -- --host 127.0.0.1 --port 4173 --strictPort',
-    url: 'http://127.0.0.1:4173/browser/fixture.html',
+    command: `npm run dev:browser -- --host 127.0.0.1 --port ${port} --strictPort`,
+    url: `http://127.0.0.1:${port}/browser/fixture.html`,
     reuseExistingServer: false,
     timeout: 60_000,
     stdout: 'ignore',
