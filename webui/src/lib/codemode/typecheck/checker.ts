@@ -78,7 +78,7 @@ export function createChecker(options: CheckerOptions): Checker {
     const files = new Map<string, string>([[CORE, options.core], [SDK, sdk], [PROGRAM, program]]);
     const libName = (name: string): string | undefined => {
       const base = name.startsWith(LIB_ROOT) ? name.slice(LIB_ROOT.length) : name;
-      return Object.prototype.hasOwnProperty.call(options.libs, base) ? base : undefined;
+      return Object.hasOwn(options.libs, base) ? base : undefined;
     };
     const host: ts.CompilerHost = {
       getSourceFile: (name) => {
