@@ -80,9 +80,28 @@ function art(page: Page, x: number, y: number): Promise<number[]> {
     [...element.getContext('2d')!.getImageData(px! + 424, py! + 243, 1, 1).data], [x, y]);
 }
 
+/**
+ * The vanilla chest's box once the layout has stopped moving. Selecting a tool changes the toolbar's hint line, which
+ * resizes the stage, and the studio re-centres the view from a ResizeObserver a frame later: a box read in between is
+ * stale by many GUI pixels (issue 365). Two consecutive frames with the same box is the real "settled" signal.
+ */
+async function settledBox(page: Page): Promise<{ x: number; y: number; width: number }> {
+  return page.getByTestId('gui-underlay').evaluate((element) => new Promise<{ x: number; y: number; width: number }>((resolve) => {
+    let last = '';
+    const frame = (): void => {
+      const r = element.getBoundingClientRect();
+      const now = `${r.x},${r.y},${r.width}`;
+      if (now === last) return resolve({ x: r.x, y: r.y, width: r.width });
+      last = now;
+      requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }));
+}
+
 /** Screen position of a GUI pixel, on the screen or around it, from the vanilla chest's live box. */
 async function at(page: Page, x: number, y: number): Promise<[number, number]> {
-  const box = (await page.getByTestId('gui-underlay').boundingBox())!;
+  const box = await settledBox(page);
   const zoom = box.width / 176;
   return [box.x + x * zoom + zoom / 2, box.y + y * zoom + zoom / 2];
 }
