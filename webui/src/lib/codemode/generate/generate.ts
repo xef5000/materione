@@ -29,6 +29,11 @@ import type {
   SurfaceSource,
   SurfaceTrigger,
 } from './surface';
+import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from './capabilities';
+import { contextFor, contextTree, type ContextNode } from './context';
+import { camel, compare, memberNames, pascal, refMembers, sortedBy, writerMembers } from './names';
+
+export { camel, pascal };
 
 /** Enums with more members than this get a named alias instead of an inline union. */
 const INLINE_ENUM_LIMIT = 16;
@@ -55,36 +60,6 @@ const RESERVED = new Set(
 
 // ---- naming -----------------------------------------------------------------------------------------
 
-function compare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function sortedBy<T>(items: readonly T[], key: (item: T) => string): T[] {
-  return [...items].sort((a, b) => compare(key(a), key(b)));
-}
-
-function words(text: string): string[] {
-  return text.split(/[^A-Za-z0-9]+/).filter((word) => word.length > 0);
-}
-
-function capital(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-/** `run_command` and `gui.open` become `runCommand` and `guiOpen`. */
-export function camel(text: string): string {
-  const parts = words(text);
-  const name = parts.map((word, index) => (index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : capital(word))).join('');
-  if (name === '') return '_';
-  return /^[0-9]/.test(name) ? `_${name}` : name;
-}
-
-export function pascal(text: string): string {
-  const name = words(text).map(capital).join('');
-  if (name === '') return '_';
-  return /^[0-9]/.test(name) ? `_${name}` : name;
-}
-
 function isIdentifier(name: string): boolean {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name);
 }
@@ -106,35 +81,6 @@ function literal(value: string): string {
 
 function union(values: readonly string[]): string {
   return values.length === 0 ? 'never' : values.map(literal).join(' | ');
-}
-
-/**
- * The member name of every entry of one catalog: the camel-cased local part of its id. Two entries whose
- * local parts collide are told apart by their namespaces (`example:greet` and `other:greet` become
- * `exampleGreet` and `otherGreet`); an id without a namespace is never renamed. `reserved` names are taken
- * by the core and get a trailing underscore.
- */
-function memberNames(ids: readonly string[], reserved: ReadonlySet<string> = new Set()): Map<string, string> {
-  const parts = ids.map((id) => {
-    const at = id.indexOf(':');
-    return { id, namespace: at < 0 ? '' : id.slice(0, at), local: at < 0 ? id : id.slice(at + 1) };
-  });
-  const count = new Map<string, number>();
-  for (const part of parts) {
-    const base = camel(part.local);
-    count.set(base, (count.get(base) ?? 0) + 1);
-  }
-  const taken = new Set<string>();
-  const result = new Map<string, string>();
-  for (const part of sortedBy(parts, (p) => p.id)) {
-    const base = camel(part.local);
-    let name = (count.get(base) ?? 0) > 1 && part.namespace !== '' ? camel(`${part.namespace} ${part.local}`) : base;
-    if (reserved.has(name)) name = `${name}_`;
-    while (taken.has(name)) name = `${name}_`;
-    taken.add(name);
-    result.set(part.id, name);
-  }
-  return result;
 }
 
 // ---- documentation ----------------------------------------------------------------------------------
@@ -392,10 +338,13 @@ function hasRules(type: SurfaceDocument['contentTypes'][number]): boolean {
 function contentTypes(ctx: Context): string[] {
   const types = sortedBy(ctx.surface.contentTypes, (type) => type.name);
   const lines: string[] = [];
-  const writerNames = memberNames(types.map((type) => type.directory ?? type.name), new Set(['id']));
-  const refNames = memberNames(types.map((type) => type.name), new Set(['asset']));
+  const writerNames = writerMembers(types);
+  const refNames = refMembers(types);
   const writers: string[][] = [];
   const refs: string[][] = [];
+  // a jar without these capabilities has no such members, in the types and at run time alike (codemode.md section 7)
+  const writable = capabilityOn(ctx.surface.capabilities, CAPABILITY_TRANSACTION);
+  const withLogic = capabilityOn(ctx.surface.capabilities, CAPABILITY_LOGIC);
   for (const type of types) {
     const base = pascal(type.name);
     const fields = `${base}Fields`;
@@ -408,7 +357,7 @@ function contentTypes(ctx: Context): string[] {
       ...propertyLines(authored, fields, 1, ctx),
       '}',
     );
-    if (hasRules(type)) {
+    if (hasRules(type) && withLogic) {
       lines.push(
         '',
         ...doc([`The handle \`create\` returns for a \`${type.name}\`: a \`Ref<${literal(type.name)}>\` that also holds its rules.`], 0),
@@ -430,7 +379,27 @@ function contentTypes(ctx: Context): string[] {
       `  ${key(refNames.get(type.name) ?? type.name)}(id: string): Ref<${literal(type.name)}>;`,
     ]);
   }
-  if (types.length > 0) lines.push('', ...catalogInterface('PackWriter', writers), '', ...catalogInterface('RefFactory', refs));
+  if (types.length > 0) {
+    if (writable) lines.push('', ...catalogInterface('PackWriter', writers));
+    lines.push('', ...catalogInterface('RefFactory', refs));
+    // the maps `m.read.get` and `m.edit` type their results with: a content type name to its record and its handle
+    lines.push(
+      '',
+      ...doc(['The record type of each content type, by name: what `m.read.get` returns for a `Ref` of that kind.'], 0),
+      'interface ContentTypeFields {',
+      ...types.map((type) => `  ${key(type.name)}: ${pascal(type.name)}Fields;`),
+      '}',
+    );
+    if (writable) {
+      lines.push(
+        '',
+        ...doc(['The handle type of each content type, by name: what `m.edit` returns for a `Ref` of that kind.'], 0),
+        'interface ContentTypeHandles {',
+        ...types.map((type) => `  ${key(type.name)}: ${pascal(type.name)}Handle;`),
+        '}',
+      );
+    }
+  }
   return lines;
 }
 
@@ -527,34 +496,6 @@ function mechanics(ctx: Context): string[] {
 
 // ---- context schemas --------------------------------------------------------------------------------
 
-interface ContextNode {
-  leaf?: SurfaceContextVar;
-  wildcard?: SurfaceContextVar;
-  children: Map<string, ContextNode>;
-}
-
-function contextTree(vars: readonly SurfaceContextVar[]): ContextNode {
-  const root: ContextNode = { children: new Map() };
-  for (const variable of vars) {
-    let node = root;
-    const segments = variable.path.split('.').filter((segment) => segment !== '');
-    segments.forEach((segment, index) => {
-      if (segment === '*' && index === segments.length - 1) {
-        node.wildcard = variable;
-        return;
-      }
-      let child = node.children.get(segment);
-      if (child === undefined) {
-        child = { children: new Map() };
-        node.children.set(segment, child);
-      }
-      node = child;
-      if (index === segments.length - 1) node.leaf = variable;
-    });
-  }
-  return root;
-}
-
 function contextValueType(variable: SurfaceContextVar): string {
   return `ContextValue<${scalarType(variable.type)}>`;
 }
@@ -608,7 +549,7 @@ function triggers(ctx: Context): string[] {
     lines.push('', ...doc([`The detail and the filters of the \`${trigger.id}\` trigger.`], 0), ...paramsInterface(args, ctx));
     const hosts = [...trigger.firedBy].sort(compare);
     const hostLines = hosts.flatMap((host) => {
-      const vars = trigger.context.filter((variable) => variable.hosts.length === 0 || variable.hosts.includes(host));
+      const vars = contextFor(trigger.context, host);
       return [
         ...doc([`What a rule on the host \`${host}\` receives.`], 1),
         `  readonly ${key(host)}: {`,

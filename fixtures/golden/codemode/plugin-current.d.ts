@@ -688,6 +688,36 @@ interface RefFactory {
   variable(id: string): Ref<"variable">;
 }
 
+/** The record type of each content type, by name: what `m.read.get` returns for a `Ref` of that kind. */
+interface ContentTypeFields {
+  block: BlockFields;
+  currency: CurrencyFields;
+  effect: EffectFields;
+  furniture: FurnitureFields;
+  glyph: GlyphFields;
+  gui: GuiFields;
+  item: ItemFields;
+  painting: PaintingFields;
+  recipe: RecipeFields;
+  sound: SoundFields;
+  variable: VariableFields;
+}
+
+/** The handle type of each content type, by name: what `m.edit` returns for a `Ref` of that kind. */
+interface ContentTypeHandles {
+  block: BlockHandle;
+  currency: CurrencyHandle;
+  effect: EffectHandle;
+  furniture: FurnitureHandle;
+  glyph: GlyphHandle;
+  gui: GuiHandle;
+  item: ItemHandle;
+  painting: PaintingHandle;
+  recipe: RecipeHandle;
+  sound: SoundHandle;
+  variable: VariableHandle;
+}
+
 /** The detail and the filters of the `break` trigger. */
 interface BreakTriggerArgs {
 }

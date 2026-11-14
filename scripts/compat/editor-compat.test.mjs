@@ -147,3 +147,43 @@ test('the GUI builder ops are gated on the capability the editor checks', () => 
   }
   assert.ok(extractEditor().capabilityChecks.has('gui'), 'the editor must call hasCapability(…, \'gui\')');
 });
+
+test('the SDK operation table is scanned: its ops are the editors, its capabilities are checks', () => {
+  const files = {
+    'webui/src/lib/api.ts': "x = c.call('ping');",
+    'webui/src/lib/protocol/session.ts': 'export const SUPPORTED_PROTOCOL_VERSIONS = [1];',
+    'webui/src/lib/codemode/core/ops.ts': [
+      'export const READS = [',
+      "  { sdk: 'm.read.get', op: 'browse.get' },",
+      "  { sdk: 'rules.instantiate', op: 'logic.instantiate', capability: 'logic' },",
+      '];',
+    ].join('\n'),
+  };
+  const fake = { read: (path) => files[path], list: () => Object.keys(files) };
+  const read = extractEditor(fake);
+  assert.deepEqual(read.ops, ['browse.get', 'logic.instantiate', 'ping']);
+  assert.deepEqual([...read.capabilityChecks], ['logic']);
+});
+
+test('an op the SDK table names that a release lacks fails, unless it is gated on a capability the table names', () => {
+  const lacking = { ...release, ops: ['ping'] };
+  const ungated = findProblems({ editor: editor({ ops: ['ping', 'browse.get'] }), targets: [lacking] });
+  assert.match(ungated[0], /0\.1\.0: the editor calls op "browse\.get"/);
+  const gates = { 'logic.instantiate': { capability: 'logic' } };
+  const gated = findProblems({
+    editor: editor({ ops: ['ping', 'logic.instantiate'], capabilityChecks: new Set(['logic']) }),
+    targets: [lacking],
+    gates,
+  });
+  assert.deepEqual(gated, []);
+  const unnamed = findProblems({ editor: editor({ ops: ['ping', 'logic.instantiate'] }), targets: [lacking], gates });
+  assert.match(unnamed[0], /never calls hasCapability/);
+});
+
+test('the real SDK table is read from this tree and the gate accepts every op in it', () => {
+  const read = extractEditor();
+  for (const op of ['authoring.transaction', 'logic.instantiate', 'browse.get', 'authoring.summaries', 'assets.list']) {
+    assert.ok(read.ops.includes(op), `${op} is read from the SDK table`);
+  }
+  assert.ok(read.capabilityChecks.has('codemode') && read.capabilityChecks.has('logic'));
+});

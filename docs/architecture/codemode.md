@@ -10,7 +10,7 @@
 >
 > **Status.** **Design, docs only (#320).** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
 > (2026-11-12, §12). The model provider is the one question still open (§12, master §14.8). Lines still marked "recommended"
-> are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); **the SDK generator is built (#337, §3.8)**, with its recorded registries, goldens and the first program corpus; the rest of the SDK, the sandbox and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
+> are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); **the SDK generator is built (#337, §3.8)**, with its recorded registries, goldens and the first program corpus, and **the SDK core is built (#339, §3.9)**: handles, the read API, the stage recorder, the operation table; the sandbox, the type-check Worker and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
 > SDK is generated, so its real spelling comes from the registries it is generated from (§3.1). §3.8 has the real spellings.
 >
 > **Traceability.**
@@ -290,7 +290,7 @@ the rest. How large the index may be and what lives in a system prompt versus a 
 ### 3.8 As built: the generator (#337)
 
 *As built (#337, M6.5 track A1).* The generator of §3.1 exists, with its recorded registries and goldens. It is the first piece of
-SDK code; the core (#339), the type-check Worker and the sandbox are not built (the server's transaction is, #341, §10).
+SDK code; the core is built too (#339, §3.9); the type-check Worker and the sandbox are not (the server's transaction is, #341, §10).
 
 | Piece | Where | What it is |
 |---|---|---|
@@ -362,6 +362,103 @@ which action and condition parameters accept an `Expr` (every scalar is typed as
 hand because they are the flow model and not registry entries (`StepBuilders` follows logic.md §2.2 and the engine's step compiler: `require` takes steps, `if` takes a condition and a `then` or `else`; **this hand-typing is temporary until #355** puts the step grammar in self-description, after which the generator emits it); and the GUI layer rules (a layer's behavior is the GUI's own
 `gui.click` rules filtered by `layer`, so that is how a shop button is written). None of this needed a server change, and none was
 made.
+
+### 3.9 As built: the core (#339)
+
+*As built (#339, M6.5 track A2).* The fixed half of §3.1 exists: `webui/src/lib/codemode/core/`, the runtime that the generated
+types of §3.8 are types *of*. It is plain ES2020, DOM-free and dependency-free, and it is tested **bundled** (esbuild, one
+script) in a bare `vm` context that holds the language's intrinsics and nothing else, with a fake port, so what is proven is what
+the sandbox (#343, not built) will load. The sandbox itself, the type-check Worker (#342), the chat tool and the review UI are
+not part of it.
+
+| Piece | Where | What it is |
+|---|---|---|
+| **Entry** | `core/index.ts`, `core/session.ts` | `createSession({ surface, port, limits?, programFile? })` returns `{ m, finish(outcome), late() }`. `m` is the program's one global; `finish` ends the run and returns a `ProgramResult`. |
+| **The port** | `core/types.ts` | `HostPort { read(op, payload): ReadReply; stage?; log?; done? }`. `read` is the only way out: the core asks for an op of its table and the host answers (and holds the allowlist too). It is synchronous from the program's side, so the sandbox must suspend the program while the host answers (an asyncified embedding, or a read the host pre-fetched); `stage`, `log` and `done` are observers. |
+| **Operation table** | `core/ops.ts` | The one place that names editor ops: `READS` and `WRITES`, one row per SDK member and, for a write, per operation kind, with the capability that gates it. `scripts/compat/editor-compat.mjs` scans it as it scans the editor's `.call(...)` sites and fails when a supported release lacks an op named there, unless it is gated in `editor-op-gates.json` on a capability the row names (the core checks it before it exposes the member). |
+| **Step grammar** | `core/steps.ts` | `m.steps.*` and the two rule keys that are flow vocabulary (`if`, `do`). The only file that names engine vocabulary, temporary until #355 (§3.8, "Where the generated surface stops"); a ban test confines it. |
+| **Naming, context, capabilities** | `generate/names.ts`, `generate/context.ts`, `generate/capabilities.ts` | One implementation each, **imported by both the generator and the core**: how an id becomes a member name, how a trigger's context schema becomes a tree, and when a capability takes members away. The generator and the core cannot spell a member differently because there is one spelling. |
+| **Diagnostics** | `core/diagnostics.ts`; plugin.md §5 | `SDK-0001` to `SDK-0017`, stable API, documented with the `MTR` codes. |
+
+**The mapping, as built** (SDK call to transaction operation; everything is `authoring.transaction`, capability `codemode`, and the
+list the program stages *is* the request's `operations`, untouched):
+
+| SDK call | Stages | Reads first |
+|---|---|---|
+| `p.<collection>.create(id, fields, { folder? })` | `create { type: <the type's directory>, id, folder?, edits }`, one `{ field: [id, key], value }` per field in the program's order | `browse.packs`, once per run (the pack exists and is not built in) |
+| `handle.set(patch)` | `setFields { path, rev?, edits }` | `browse.get` once per stored document (its revision), none for a created one |
+| `handle.unset(...keys)` | `setFields { path, rev?, edits: [{ field, remove: true }] }` | as `set` |
+| `handle.duplicate(id, { folder?, fields? })` | `duplicate { fromPath, rev?, id, folder?, edits? }`; returns the copy's handle | as `set`, for the source |
+| `handle.delete()` | `delete { path, rev? }`; a resource this program creates is refused (SDK-0012) | as `set` |
+| `handle.detachTemplate()` | `detachTemplate { path, rev?, resource }` | as `set` |
+| `handle.saveAsTemplate(templateId, fields)` | `saveAsTemplate { fromPath, rev?, resource, templateId, fields }` (at least one field, as the server requires) | as `set` |
+| `handle.rules.add(trigger, build)` | `logicEdit { path, rev?, edits: [{ op: "addRule", index, rule }] }`; `rule` is `{ on: "id[:detail]", <filters>, <options>, if?, do }` | as `set`; the document's rule count (for `index`) from the same read |
+| `handle.rules.instantiate(recipe)` | one `logicEdit` with an `addRule` per rule the server expanded | `logic.instantiate` (capability `logic`) |
+| `m.edit(ref)` | no operation: the handle of a stored resource, whose later calls stage the rows above | `authoring.summaries` to resolve the id, then as `set` |
+
+`rev` is the stored revision, sent on every operation that names a stored document (the transaction needs it the first time and
+accepts the same number again) and never for a document the program creates (S3). A stored document's rules continue its
+count: `index` is the number it had when read plus what the program has added.
+
+Not staged by the SDK yet, and not hidden: **`move`** (the moved document's own key would also have to be re-keyed, which the
+server's `Move` does not do), **`guiEdit`** (a GUI is authored through its `layers` field and `gui.click` rules, S10; the
+`GuiEdit` vocabulary has no SDK helper), rule and step patches, moves and removals, and named flows as edits (a `flows` field
+is a field). Each is a row to add in `ops.ts` and a member to add to `core.d.ts` when a task asks for it; none changes the
+mapping above.
+
+**The read side**, over ops that exist (§3.2): `m.read.packs()` (`browse.packs`), `resources({ pack, type?, query?, limit? })`
+(`authoring.summaries`, paged), `get(ref)` (`browse.get`: the resource's tree typed by its content type, its revision, its
+computed metadata), `references(ref)` (`authoring.references`, with its coverage so "no hits" is not read as "unused"),
+`history(ref)` (`browse.history`), `diagnostics()` (`admin.diagnostics.recent`, the server's recent list), and `m.ref.<type>("pack:id")`
+(resolved with `authoring.summaries`, the nearest ids named when it fails). `m.docs.type(name)` and `m.docs.search(words)` are
+pure functions of the surface document, with no read. Reads see the stored state (§3.2 rule 2): a handle `create` returned is
+addressed by itself, and `m.read.get` of one is refused. A read is cached for the run by its op and payload, so a loop that asks
+twice asks once. What has no op yet (traces, runtime variables, the graph, a source excerpt) is not exposed (benchmark S16).
+
+**Values.** A step, condition, mechanic entry, GUI layer, source, expression, context value, trigger and reference is a frozen
+object the core builds and records in a private `WeakMap`; the program cannot forge one, and anything it writes by hand is plain
+data. A reference serializes as its `pack:id`, an expression as `${...}`, a context value as its path (interpolated into an
+expression); an action is `{ id: params }` (or the bare id) with the registry's action options (`chance`, `delay`) beside it, a
+mechanic is `{ id: params }`, a layer is `{ type: id, ...params }`. Parameters are checked against the registry entry's own
+parameter ids (the types already refuse a stray key; the core refuses it for a program that was not type-checked), a function's
+arity is checked against `minArguments` and `variadic`, and a value a document cannot hold (a function, a non-finite number,
+`undefined` in a list) is SDK-0009 with its field path. Two spellings the registry cannot yet settle are benchmark S12 (a
+variable inside an expression) and S14 (an asset in a field).
+
+**The run.** `finish` returns the `ProgramResult` of §5.2: `ok`, `operations`, `sources` (the program line and column of each
+operation, from the stack frame of the call, parallel to `operations`), `diagnostics`, `summary`, `logs`, the bounded `returned`,
+and counters. A run with an error diagnostic has **no operations**, and an error is recorded before it is thrown, so a program
+that catches it still fails. Anything the program throws that is not the core's is one SDK-0001 with the program's line. After
+`finish` every call on `m` or a handle fails with SDK-0003 and is reported by `late()`; the result is not changed. `sources` are
+positions in the *transpiled* program: the host (the editor, #343) maps them through the source map of its own transpile, which
+the test harness does with the `typescript` package, so the goldens carry the lines the agent wrote.
+
+| Limit (SDK-0005) | Default | Why |
+|---|---|---|
+| Staged operations | 200 | the transaction's cap (§10) |
+| Edits in one operation | 256 | the transaction's cap |
+| Distinct documents touched | 50 | the transaction's cap, decision C12 |
+| Reads that reach the host | 200 | relay quotas (§4.2); a repeated identical read is free |
+| Bytes of read replies | 4 MiB | as above |
+| Rows of `m.read.resources` | 1000 | |
+| Log bytes, return-value bytes, summary characters | 16 KiB, 16 KiB, 500 | what reaches the model (§4.2) |
+
+**Determinism** (§4.2) holds by construction and by test: no clock, no `Math.random`, member order from sorted ids, so a program
+and a set of reads give the same list byte for byte. **What changed in the types** to match the transaction (§3.8): `CreateOptions`
+is `{ folder? }` (the transaction has no file parameter, benchmark S13); `ResourceHandle` gained `set`, `unset`, `duplicate`,
+`delete`, `detachTemplate` and `saveAsTemplate`; `Materione` gained `edit`, `read`, `docs`, `sdk` and `log`; the generator emits the
+`ContentTypeFields` and `ContentTypeHandles` maps those are typed from, and leaves `PackWriter` and `rules` out of a surface whose
+jar lacks the `codemode` or `logic` capability (§7), which the core leaves off at run time by the same function.
+
+**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check are executed and their lists recorded as
+goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a `<task>.world.json` beside it that the fake port answers from, T11's asset list today), each checked against the wire shape read from the plugin's own parser
+(`TransactionOps.operationOf`), every kind of operation, every error. `codemode-core-drift.spec.ts`: the declarations and the
+bundled core are walked with the TypeScript checker and compared member by member (`m`, each catalog, the pack writer, each
+collection, each handle, each rule set) over both recorded registries, a jar without each capability, and a jar that predates the
+capability list. `codemode-core-bans.spec.ts`: the core holds no registry id as a literal (the generator's ban, applied here),
+names no content type, reaches no op outside the table, has no write op but the transaction and never reads it, asks the port
+for four things only, and touches no DOM, storage, network, timer, Node or clock global. The compat gate fails when the table
+names an op a supported release lacks (`editor-compat.test.mjs`).
 
 ---
 
@@ -588,7 +685,7 @@ Three things move on their own schedules (web.md §6, *Versioning*): the plugin 
 | Concern | Rule |
 |---|---|
 | **The generated surface is a function of the connected jar** | It is generated per session from that plugin's self-description and capability list (§3.1). A newer editor with an older jar generates a smaller surface. A member whose operation the jar does not advertise is not generated, so the failure is a **type error** ("no such member"), never a runtime error mid-apply. |
-| **The core's operation table is checked by the compatibility gate** | The map from SDK writes and reads to editor operations (`webui/src/lib/codemode/`) is scanned by `scripts/compat/editor-compat.mjs` the way it scans the editor's calls today: it fails when the core calls an operation a supported release does not register, unless the operation is gated on a capability in `fixtures/protocol/editor-op-gates.json` that the SDK checks (`hasCapability`). Extending the script to this table is part of the implementation. |
+| **The core's operation table is checked by the compatibility gate** | The map from SDK writes and reads to editor operations (`webui/src/lib/codemode/`) is scanned by `scripts/compat/editor-compat.mjs` the way it scans the editor's calls today: it fails when the core calls an operation a supported release does not register, unless the operation is gated on a capability in `fixtures/protocol/editor-op-gates.json` that the SDK checks (`hasCapability`). Extending the script to this table is part of the implementation. *Built (#339, §3.9): the script reads `core/ops.ts`.* |
 | **New capabilities** | Code mode's server operations (the transaction with a dry run, §10) are introduced behind a capability the editor checks. No capability, no code mode for that jar: the chatbot says so. It does not fall back to raw writes (§8). |
 | **Core semver** | The core has its own version, exposed to the program (`m.sdk.version`) and recorded in the proposal. Because programs are one-shot and stored nowhere, **a breaking change to the SDK breaks no stored artifact**; only the agent's prompt and examples must follow. This is the cost D1 and C2 buy. |
 | **Content schema versions** (master §5.5) | The SDK writes the current schema of the connected plugin, generated from it. Migrations are the plugin's. |

@@ -1,0 +1,408 @@
+{
+  "task": "T08",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a shop GUI with three products: left click buys, right click sells.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "shop",
+      "edits": [
+        {
+          "field": [
+            "shop",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "shop",
+            "title"
+          ],
+          "value": "Shop"
+        },
+        {
+          "field": [
+            "shop",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "shop"
+            ]
+          }
+        },
+        {
+          "field": [
+            "shop",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:button",
+              "id": "buy_diamond",
+              "x": 8,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            },
+            {
+              "type": "materione:button",
+              "id": "buy_iron_ingot",
+              "x": 44,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            },
+            {
+              "type": "materione:button",
+              "id": "buy_bread",
+              "x": 80,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/shop.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "buy_diamond",
+            "click": "left",
+            "do": [
+              {
+                "if": {
+                  "has_item_space": 1
+                },
+                "else": [
+                  {
+                    "message": "<red>Your inventory is full."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "require": [
+                  {
+                    "take_money": 250
+                  },
+                  {
+                    "give_item": {
+                      "item": "minecraft:diamond",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>Not enough coins."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/shop.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 1,
+          "rule": {
+            "on": "gui.click",
+            "layer": "buy_diamond",
+            "click": "right",
+            "do": [
+              {
+                "require": [
+                  {
+                    "take_item": {
+                      "item": "minecraft:diamond",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>You have none to sell."
+                  }
+                ]
+              },
+              {
+                "give_money": 100
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/shop.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 2,
+          "rule": {
+            "on": "gui.click",
+            "layer": "buy_iron_ingot",
+            "click": "left",
+            "do": [
+              {
+                "if": {
+                  "has_item_space": 1
+                },
+                "else": [
+                  {
+                    "message": "<red>Your inventory is full."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "require": [
+                  {
+                    "take_money": 40
+                  },
+                  {
+                    "give_item": {
+                      "item": "minecraft:iron_ingot",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>Not enough coins."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/shop.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 3,
+          "rule": {
+            "on": "gui.click",
+            "layer": "buy_iron_ingot",
+            "click": "right",
+            "do": [
+              {
+                "require": [
+                  {
+                    "take_item": {
+                      "item": "minecraft:iron_ingot",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>You have none to sell."
+                  }
+                ]
+              },
+              {
+                "give_money": 15
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/shop.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 4,
+          "rule": {
+            "on": "gui.click",
+            "layer": "buy_bread",
+            "click": "left",
+            "do": [
+              {
+                "if": {
+                  "has_item_space": 1
+                },
+                "else": [
+                  {
+                    "message": "<red>Your inventory is full."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "require": [
+                  {
+                    "take_money": 5
+                  },
+                  {
+                    "give_item": {
+                      "item": "minecraft:bread",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>Not enough coins."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/shop.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 5,
+          "rule": {
+            "on": "gui.click",
+            "layer": "buy_bread",
+            "click": "right",
+            "do": [
+              {
+                "require": [
+                  {
+                    "take_item": {
+                      "item": "minecraft:bread",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>You have none to sell."
+                  }
+                ]
+              },
+              {
+                "give_money": 1
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 10,
+      "column": 21
+    },
+    {
+      "line": 18,
+      "column": 14
+    },
+    {
+      "line": 30,
+      "column": 14
+    },
+    {
+      "line": 18,
+      "column": 14
+    },
+    {
+      "line": 30,
+      "column": 14
+    },
+    {
+      "line": 18,
+      "column": 14
+    },
+    {
+      "line": 30,
+      "column": 14
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 34
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 35,
+        "column": 17
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 34
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 35,
+        "column": 17
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 34
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 35,
+        "column": 17
+      }
+    }
+  ],
+  "stats": {
+    "reads": 1,
+    "readBytes": 19,
+    "staged": 7,
+    "documents": 1
+  }
+}
