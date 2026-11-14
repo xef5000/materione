@@ -153,6 +153,14 @@ final class StagedReferences {
     }
 
     /**
+     * What the check marks as pre-existing (#372, an edit; a revert passes false and stays strict): a finding on a
+     * resource the list wrote that the same resource already had as stored, before the list. The key is the one the
+     * findings are deduplicated by (resource, code, message, target), so a finding the list moves or rewords counts
+     * as new.
+     */
+    private static final boolean BASELINE = true;
+
+    /**
      * The oracle for the scope claim: every untouched resource of every pack is validated before and after, with no
      * index deciding which ones matter. {@code StagedReferencesDifferentialTest} holds {@link #check} equal to it.
      */
@@ -169,7 +177,10 @@ final class StagedReferences {
         private final List<ContentResource> result = new ArrayList<>();
         private final Map<ContentResource, Integer> touchedOperation = new IdentityHashMap<>();
         private final Set<ContentResource> touchedResources = Collections.newSetFromMap(new IdentityHashMap<>());
+        private final Map<ContentResource, String> touchedOriginal = new IdentityHashMap<>();
+        private final Map<ContentResource, String> touchedPath = new IdentityHashMap<>();
         private Map<String, ContentResource> declarations;
+        private Map<String, ContentResource> storedDeclarations;
     }
 
     View view(List<StagedDocument> staged) throws IOException {
@@ -186,6 +197,10 @@ final class StagedReferences {
                 if (document.touched()) {
                     view.touchedResources.add(resource);
                     view.touchedOperation.put(resource, document.operation());
+                    if (document.original() != null) {
+                        view.touchedOriginal.put(resource, document.original());
+                    }
+                    view.touchedPath.put(resource, document.path());
                 }
             }
         }
@@ -198,6 +213,27 @@ final class StagedReferences {
      * checks that resolve declared content one at a time (the logic check's variables).
      */
     Optional<ContentResource> declared(View view, String contentType, NamespacedId id) {
+        return declared(view, contentType, id, false);
+    }
+
+    /** As above; {@code stored} reads this pack as it is on disk, before the list (the baseline of a before/after check). */
+    Optional<ContentResource> declared(View view, String contentType, NamespacedId id, boolean stored) {
+        if (stored) {
+            if (view.storedDeclarations == null) {
+                Map<String, ContentResource> index = new HashMap<>();
+                if (parsed != null) {
+                    for (ContentPack other : parsed.packs()) {
+                        if (!other.id().equals(pack)) {
+                            other.resources().forEach(resource ->
+                                    index.putIfAbsent(resource.contentType() + "|" + resource.id(), resource));
+                        }
+                    }
+                }
+                view.stored.forEach(resource -> index.put(resource.contentType() + "|" + resource.id(), resource));
+                view.storedDeclarations = index;
+            }
+            return Optional.ofNullable(view.storedDeclarations.get(contentType + "|" + id));
+        }
         if (view.declarations == null) {
             Map<String, ContentResource> index = new HashMap<>();
             if (parsed != null) {
@@ -214,14 +250,20 @@ final class StagedReferences {
     }
 
     Outcome check(View staging, List<StagedDocument> staged) throws IOException {
-        return check(staging, staged, false);
+        return check(staging, staged, false, BASELINE);
+    }
+
+    /** @param baseline false for a revert: every finding on a restored resource refuses it, whatever it had before */
+    Outcome check(View staging, List<StagedDocument> staged, boolean baseline) throws IOException {
+        return check(staging, staged, false, baseline);
     }
 
     private Outcome check(List<StagedDocument> staged, boolean everything) throws IOException {
-        return check(view(staged), staged, everything);
+        return check(view(staged), staged, everything, BASELINE);
     }
 
-    private Outcome check(View staging, List<StagedDocument> staged, boolean everything) throws IOException {
+    private Outcome check(View staging, List<StagedDocument> staged, boolean everything, boolean baseline)
+            throws IOException {
         List<ContentResource> stored = staging.stored;
         List<ContentResource> result = staging.result;
         Map<ContentResource, Integer> touchedOperation = staging.touchedOperation;
@@ -244,14 +286,36 @@ final class StagedReferences {
         List<OperationDiagnostic> found = new ArrayList<>();
         Set<String> seen = new HashSet<>();
 
-        // 1. the resources the list wrote
+        // 1. the resources the list wrote. A finding the same resource already had as stored is pre-existing: a
+        // warning that does not refuse the list. The baseline is measured only for a resource that has a finding.
         int validated = 0;
+        ValidationEnvironment storedEnvironment = null;
         for (ContentResource resource : result) {
             if (touchedResources.contains(resource)) {
                 validated++;
                 int operation = touchedOperation.get(resource);
-                for (Diagnostic diagnostic : validator.validate(resource, after)) {
-                    add(found, seen, operation, diagnostic, resource);
+                List<Diagnostic> own = validator.validate(resource, after);
+                Set<String> old = Set.of();
+                String original = baseline && !own.isEmpty() ? staging.touchedOriginal.get(resource) : null;
+                if (original != null) {
+                    if (storedEnvironment == null) {
+                        storedEnvironment = environment(view, manifestSource, stored, assets, sizes);
+                    }
+                    old = new HashSet<>();
+                    for (ContentResource before : resourcesOf(staging.touchedPath.get(resource), original)) {
+                        if (before.id().equals(resource.id()) && before.contentType().equals(resource.contentType())) {
+                            for (Diagnostic diagnostic : validator.validate(before, storedEnvironment)) {
+                                old.add(key(resource, diagnostic));
+                            }
+                        }
+                    }
+                }
+                for (Diagnostic diagnostic : own) {
+                    if (old.contains(key(resource, diagnostic))) {
+                        addPreexisting(found, seen, operation, diagnostic, resource);
+                    } else {
+                        add(found, seen, operation, diagnostic, resource);
+                    }
                 }
             }
         }
@@ -274,7 +338,10 @@ final class StagedReferences {
                 ? untouched(view, result, touchedResources, pack)
                 : impacted(view, result, touchedResources, pack, changedBy.keySet());
         if (!impacted.isEmpty()) {
-            ValidationEnvironment before = environment(view, manifestSource, stored, assets, sizes);
+            if (storedEnvironment == null) {
+                storedEnvironment = environment(view, manifestSource, stored, assets, sizes);
+            }
+            ValidationEnvironment before = storedEnvironment;
             Set<String> existing = new HashSet<>();
             for (ContentResource resource : impacted) {
                 for (Diagnostic diagnostic : validator.validate(resource, before)) {
@@ -395,6 +462,16 @@ final class StagedReferences {
             ContentResource resource) {
         if (seen.add(key(resource, diagnostic))) {
             found.add(new OperationDiagnostic(operation, diagnostic));
+        }
+    }
+
+    private static void addPreexisting(
+            List<OperationDiagnostic> found, Set<String> seen, int operation, Diagnostic diagnostic,
+            ContentResource resource) {
+        if (seen.add(key(resource, diagnostic))) {
+            found.add(new OperationDiagnostic(operation, new Diagnostic(
+                    diagnostic.code(), dev.materione.api.diagnostics.Severity.WARN, diagnostic.message(),
+                    diagnostic.resource(), diagnostic.location(), diagnostic.hint(), diagnostic.target()), true));
         }
     }
 

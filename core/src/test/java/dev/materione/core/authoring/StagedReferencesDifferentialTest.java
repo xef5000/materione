@@ -86,6 +86,9 @@ class StagedReferencesDifferentialTest {
                 .formatted(key(r, s, "alpha"), pick(r, s, "gem"), pick(r, s, "rock"), pick(r, s, "base"), pick(r, s, "s1")));
         fixture.put("items/beta.yml", (r, s) -> "%s:\n  material: STICK\n  template: %s\n"
                 .formatted(key(r, s, "beta"), pick(r, s, "alpha")));
+        // a document that already has a finding as stored (a hand edit): an edit that keeps it reports it as pre-existing
+        fixture.put("items/standing.yml", (r, s) -> "%s:\n  material: STICK\n  template: %s\n"
+                .formatted(key(r, s, "standing"), s ? "ghost" : pick(r, false, "ghost")));
         fixture.put("templates/base.yml", (r, s) -> "%s:\n  material: PAPER\n".formatted(key(r, s, "base")));
         fixture.put("templates/base2.yml", (r, s) -> "%s:\n  template: %s\n".formatted(key(r, s, "base2"), pick(r, s, "base")));
         fixture.put("recipes/r1.yml", (r, s) -> "%s:\n  type: shaped\n  result: %s\n  input: %s\n  ingredients:\n    A: %s\n    B: %s\n"
@@ -168,7 +171,7 @@ class StagedReferencesDifferentialTest {
         Set<String> out = new TreeSet<>();
         for (OperationDiagnostic each : found) {
             var diagnostic = each.diagnostic();
-            out.add(diagnostic.resource() + "|" + diagnostic.code().code() + "|" + diagnostic.message() + "|"
+            out.add(each.preexisting() + "|" + diagnostic.severity() + "|" + diagnostic.resource() + "|" + diagnostic.code().code() + "|" + diagnostic.message() + "|"
                     + diagnostic.target());
         }
         return out;
@@ -180,6 +183,7 @@ class StagedReferencesDifferentialTest {
         List<String> paths = new ArrayList<>(fixture.keySet());
         int withImpact = 0;
         int withFindings = 0;
+        int withPreexisting = 0;
         for (int round = 0; round < ROUNDS; round++) {
             Map<String, StagedDocument> staged = new LinkedHashMap<>();
             int count = 1 + random.nextInt(4);
@@ -209,6 +213,9 @@ class StagedReferencesDifferentialTest {
             if (scoped.impacted() > 0) {
                 withImpact++;
             }
+            if (scoped.diagnostics().stream().anyMatch(OperationDiagnostic::preexisting)) {
+                withPreexisting++;
+            }
             if (!scoped.diagnostics().isEmpty()) {
                 withFindings++;
             }
@@ -217,6 +224,7 @@ class StagedReferencesDifferentialTest {
                 + withFindings + " with findings");
         assertThat(withImpact).as("the test must exercise the impact path").isGreaterThan(ROUNDS / 4);
         assertThat(withFindings).isGreaterThan(ROUNDS / 4);
+        assertThat(withPreexisting).as("the baseline path (#372) must be exercised").isGreaterThan(10);
     }
 
     @Test

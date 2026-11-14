@@ -764,6 +764,14 @@ reference; #357), a flow the compiler rejects, a note-block state that cannot be
 (read-only, master §7.3), an operation the actor's permissions do not allow (the dry run checks each operation's node:
 `materione.edit.<pack>`, master §9.2).
 
+**Documents that were already broken (#372, decided by the owner).** Agents and the editor should not produce documents with
+errors, but a hand edit can. In a document a program touches, a finding the document **already had before the list** is shown
+as a warning marked *pre-existing* and does not refuse the list; only a finding the list **adds** refuses it (the rule §5.3
+already applies to untouched resources, extended to touched ones, in every stage that can refuse). The review shows the
+pre-existing ones apart from the new ones (#347). A **revert** stays strict: restoring a state that fails validation is
+refused, with no way to restore anyway. A document that does not parse cannot be patched, so a program can only delete or
+move it.
+
 ### 5.4 One program, one transaction
 
 The atomic unit today is `authoring.bulk` (api.md §3.3): all-or-none, revision-checked, up to 50 documents **of one pack**. The
@@ -1107,6 +1115,12 @@ and api.md §3.3.1 "a warning is reported and never refuses". A dry run that del
 **accepted with `MTR-0054` or `MTR-0105` against the deleting operation**, and the editor shows it in review beside the diff.
 This is the existing rule, applied; whether a warning that *this list* introduces should ask for owner approval (as an error
 would) is a separate decision for the owner and is not made here.
+
+**As built: pre-existing findings (#372).** `OperationDiagnostic` gains `preexisting` and the wire diagnostic `"preexisting"`
+(additive; `editor-codemode-v1.json` regenerated; the compat gate is green). The edit path compares each touched document with
+its stored self (§5.3; api.md §3.3.1 has the mechanics); the revert path does not, and a test pins that a revert whose
+restored document carries a finding the edit had tolerated is refused. `StagedReferencesDifferentialTest` holds the scoped
+check equal to the oracle including the marker, over a fixture with a document that already has a finding.
 
 Still open in §10: item 5 (trace and variable reads, #345), item 6 (the preset view).
 Two limits worth knowing for the SDK: a transaction carries no binaries (a paint layer's PNG still goes through `gui().edit`),
