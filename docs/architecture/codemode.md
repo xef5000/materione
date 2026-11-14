@@ -9,7 +9,7 @@
 > the owner's answers to its questions (§12).
 >
 > **Status.** **Design, docs only (#320).** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
-> (2026-11-12, §12). The model provider is the one question still open (§12, master §14.8). Lines still marked "recommended"
+> (2026-11-12, §12). The model's host and billing are decided (§12.1, master §14.8, #351); which model is the one question still open. Lines still marked "recommended"
 > are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); **the SDK generator is built (#337, §3.8)**, with its recorded registries, goldens and the first program corpus, and **the SDK core is built (#339, §3.9)**: handles, the read API, the stage recorder, the operation table; the sandbox, the type-check Worker and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
 > SDK is generated, so its real spelling comes from the registries it is generated from (§3.1). §3.8 has the real spellings.
 >
@@ -1098,12 +1098,12 @@ Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`)
 ## 12. The owner's answers (2026-11-12)
 
 The owner answered the nine questions of the first draft on PR #326. They are recorded in §1 (C7 to C14) and applied in the
-sections cited. One question stays open.
+sections cited. Question 2 was answered later (§12.1); which model stays open.
 
 | # | Question | Answer | Lands in |
 |---|---|---|---|
 | 1 | Sandbox technology | **A**: QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe; B (a Worker in a sandboxed iframe) is the fallback. | C7, §4.3 |
-| 2 | Model provider and billing | **Still open.** The specific model is to be decided. Every answer stays bound by the cost guardrails and by the end-to-end boundary (a model call is where content leaves the page, master §14.8). | master §14.8 |
+| 2 | Model provider and billing | **Decided 2026-11-14 (#351): Cloudflare AI Gateway with unified billing**, through a model proxy Worker, under a hard spend cap; users buy Materione AI credits (not bring-your-own-key). Frontier-priced models are excluded. **Which model stays open**, to be measured (#385). | §12.1, master §14.8 |
 | 3 | Publishing the SDK for local or external agents | **Not a priority; not published for now.** The core stays DOM-free so the door is not closed, but no package boundary, trust model or handshake for an outside agent is designed or built. | C8, §8 |
 | 4 | Where the type-check runs | **In the editor page, in a Worker**, with the TypeScript checker as a static asset. | C9, §5.1 |
 | 5 | Autonomy | **The agent is trusted for the most part.** Creating new content needs no approval. Changing or deleting existing content needs the owner's approval **once per object**: after the first approval, later changes to that object in the session apply without asking again. | C10, §5.6 |
@@ -1113,6 +1113,64 @@ sections cited. One question stays open.
 | 9 | D13 or an amendment to D12 | **D13**, a decision of its own. | C14, master §3.2 |
 
 ---
+
+
+### 12.1 The model call (decided 2026-11-14, #351)
+
+**Decision.** The chatbot's model calls go to **Cloudflare AI Gateway with unified billing**: the project has one bill, prepaid.
+They are made by a **model proxy**, a Worker separate from the relay. **Users pay the project, not a provider:** they buy
+Materione AI credits and spend them in the chatbot; a small free daily allowance is possible. It is not bring-your-own-key. The
+owner excluded frontier-priced models; the choice between a mid-tier and a cheap model is not made here.
+
+**Why a proxy and not the browser.** The gateway credential cannot be in the page, and a balance has to be checked where the user
+cannot edit it. The proxy is the one new endpoint (master §14.8 as amended). It is not the relay: the relay keeps seeing
+ciphertext only.
+
+**Conditions (binding; `CLAUDE.md` cost guardrails as amended).**
+
+| Condition | Rule |
+|---|---|
+| Money out | Prepaid gateway credits bought by the owner in the dashboard. **Auto top-up off.** An agent never buys credits or changes billing. |
+| Hard cap | A **gateway spend limit** (a dollar budget that blocks) set by the owner, below the credit balance. When it is hit the chatbot says inference is unavailable; nothing else in the editor is affected. |
+| Spend never exceeds income | A call is made only against a positive balance (bought credits or the day's free allowance), and the balance is debited by the tokens the gateway reports. The free allowance in total is capped per day across all accounts, so it cannot be farmed into an unbounded bill. |
+| Rate limits | Gateway rate limiting, and in the proxy a per-account rate and a per-request token ceiling. Numbers are set in the proxy's PR with its cost model. |
+| Who may call | An authenticated account with a balance. How an account is tied to an editor session without the proxy learning the session's keys is designed in #386. An unauthenticated call is refused before any model is reached. |
+| Models | A fixed allowlist in the proxy's code. A request cannot name another model. Frontier-priced models are not on it. |
+| What is sent | The conversation, the SDK slice in context (master §3.2 point 4), type-check and dry-run diagnostics, and what a program returns (bounded, §4.2). The editor states this before the first message. |
+| Deploy | The proxy's deploy, the gateway's configuration and every limit are the owner's actions. |
+
+**Cost shape (the owner's dashboard figures, 2026-11-14; estimates until measured).** A mid-tier model is listed at $2.00 input,
+$0.10 cached input, $2.50 cache write and $10.00 output per million tokens; a cheap model at $0.10, $0.01, $0.125 and $0.50 for
+short context (five times that for long context). Input is cached, so the SDK slice costs a twentieth (mid) or a tenth (cheap) of
+its list price on every turn after the first. The whole generated surface is about 210 KB (roughly 50 to 60 thousand tokens); the
+design sends a slice of it. Taking the whole surface as the worst case, with a 2,000-token program per turn:
+
+| | Cold turn (cache write) | Warm turn | A task of four turns, one cold |
+|---|---|---|---|
+| Mid-tier | about $0.16 | about $0.03 | about $0.24 |
+| Cheap, short-context prices | about $0.008 | about $0.002 | about $0.013 |
+| Cheap, long-context prices | about $0.04 | about $0.008 | about $0.065 |
+
+A cold turn recurs whenever the provider's cache expires between messages. A free allowance of $0.05 a day is therefore several
+tasks on the cheap model and less than one on the mid-tier model. None of this is measured.
+
+**Which model: measured, not chosen from public leaderboards.** The harness exists: the benchmark tasks (agent-benchmark.md), the
+type-check Worker (§3.10) and the server dry-run replay (§3.9). For each candidate model the run records the fraction of tasks
+that reach an accepted dry run within a fixed number of repair turns, the turns used, and the dollars per accepted task. A second
+set of deliberately vague requests is scored on whether the plan covers the sub-features and whether the model asks instead of
+guessing. Issue #385.
+
+**Routing (recommended, not decided).** The proxy picks the model from signals it already has, not from a second model call: start
+on the cheap model; move to the mid-tier model for the rest of the request after two failed type-checks or one refused dry run.
+The gateway's own routing is used only for provider failure (fallback), so the escalation rule stays in one place and is testable.
+Whether this beats "always mid-tier" is one of the things #385 measures.
+
+**Accounts, payments and the ledger are a subsystem of their own (#386), not designed here.** Buying credits means accounts,
+a payment processor, a balance ledger with exactly-once debits, refunds, tax and terms. The ledger is state, but not content
+(D1 is unaffected). It is designed and costed before it is built; the vertical slice can be proven first on the free allowance
+alone, under the hard cap above.
+
+**Still open.** The model allowlist and the routing rule (#385); the numbers for rates and the free allowance; everything in #386.
 
 ## 13. Not verified
 
