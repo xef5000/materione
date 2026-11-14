@@ -104,14 +104,14 @@ These are the load-bearing decisions. Everything else in this document follows f
 | **D10** | **Modern-Paper-only floor (1.21.4+), multi-client via pack output.** We anchor on ItemModels (1.21.4+), data components (1.20.5+), display entities (1.19.4+), and `equippable` (1.21.2+) as the *baseline*, per the parity doc's "be more modern than Nexo" guidance. | Supporting legacy server versions would tax every subsystem with compatibility branches; the component surface churns per release and must be isolated anyway (§8.2). | We deliberately abandon pre-1.21.4 servers. Lower *clients* are served via versioned pack output + ViaVersion, not by lowering the floor. |
 | **D11** | **Outbound-only editor connectivity (the LuckPerms pattern).** The server never accepts inbound connections for authoring. The editor is a stateless SPA (centrally hosted, self-hostable); server and browser meet through one open relay — a payload store for bulk data plus a signed **long-poll frame mailbox** for interactive traffic, plain HTTPS in both roles, dialed *out* to. *(Amended M5, 2026-10: the mailbox replaces the originally sketched WebSocket channel — no WebSocket, no Durable Objects, no long-lived cloud state; see web.md §3.2. The principle — outbound-only, zero port-forwarding — is unchanged.)* A direct mode (embedded HTTP server) speaks the same API for LAN/air-gapped setups (§9.1). | The T1/T2 personas (§2) often cannot open ports. "Zero port-forwarding" is the difference between *every* server owner being able to use the editor and only VPS admins. LuckPerms proved the pattern at massive scale; the HTTP-mailbox variant additionally keeps the cloud stateless, so the free tier's hard stops — not billing — are the only ceiling. | The project must operate (and open-source) relay infrastructure, and treat it as untrusted — content payloads are end-to-end encrypted (§9.2). |
 | **D12** | **Primitives, not features; presets for the first experience.** The engine ships *universal primitives* — typed, composable capabilities that name what they do, work for any key, holder, viewer or host, and describe themselves through the registries (D5) — and no feature-shaped surface. A feature (a backpack, a trade command, a shop) is **content**: a pack, built-in or the owner's. The first experience of a T1–T2 author is a layer of **presets** ("this item is a backpack") that expand onto primitives and built-in content; a preset is **declared by reference** in ordinary content on disk (D1, parameters only), its logic is loaded from its definition when the one pipeline builds the runtime (D6), and it does nothing a person could not write by hand. Full statement: §3.1. *(Added M6, 2026-11, owner direction on #320.)* | An agent (the MCP consumer, api.md §1) can only *compose* what is universal; a feature-shaped piece of engine surface ("input slots", "GUI sessions", a "trade system") solves one case and the next case needs another, which is how the incumbents grew. Universal primitives make each new feature a pack, not a release. But a first-time author must not have to learn primitives, so the first experience is a separate layer that hides them without removing them. | Every piece of engine surface must pass the universality tests (§3.1) or stay out; shipped feature-shaped surface is folded down over time, never deleted from under existing files (primitives.md). Primitives cost more design up front than a feature would. Presets are a second layer to keep and version. |
-| **D13** | **Code mode: an agent authors by writing TypeScript against a typed SDK, and content stays files.** All agent changes are a **program** in TypeScript, written against an SDK **generated from the registries** (D5) and run in a **sandbox in the cloud editor's page**. The program's only effect is **authoring operations**: the same validated edits the editor sends, through the one pipeline (D6), with type-check, server dry-run, human review of the diff and transactional apply. The program is **one-shot** and never stored as content (D1) or run as logic on the server. The SDK is also the preferred way for an agent to *read* content and state. Java stays for addons, which add primitives (D12). Full statement: §3.2 and [`architecture/codemode.md`](architecture/codemode.md). *(Added M6, 2026-11, owner direction on #320.)* | An agent that composes many dependent edits, needs precise feedback and must leave something reviewable is served by typed code better than by raw YAML under a skill (a second, drifting schema, late untyped feedback, no structural editing) or by one tool per operation (a large per-server catalog in context, one model round trip per step, no atomic unit). Code that only *stages edits* keeps D1, D4 and D6 intact, where code that runs on the server would not. The research on code as an action format supports efficiency and feedback-driven self-correction, not safety (codemode.md §2.4). | The SDK and sandbox are new components in the editor build; the server needs a transaction operation with a dry-run (codemode.md §10); the sandbox must have no ambient authority; a missing primitive surfaces as a *type error*, which is D12's benchmark running by itself; the sandbox (QuickJS in WASM), the in-page type-check, the approval model and SDK non-publication are the owner's answers (§14.10); the model's host and billing stay open (§14.8). |
+| **D13** | **Code mode: an agent authors by writing TypeScript against a typed SDK, and content stays files.** All agent changes are a **program** in TypeScript, written against an SDK **generated from the registries** (D5) and run in a **sandbox in the cloud editor's page**. The program's only effect is **authoring operations**: the same validated edits the editor sends, through the one pipeline (D6), with type-check, server dry-run, human review of the diff and transactional apply. The program is **one-shot** and never stored as content (D1) or run as logic on the server. The SDK is also the preferred way for an agent to *read* content and state. Java stays for addons, which add primitives (D12). Full statement: §3.2 and [`architecture/codemode.md`](architecture/codemode.md). *(Added M6, 2026-11, owner direction on #320.)* | An agent that composes many dependent edits, needs precise feedback and must leave something reviewable is served by typed code better than by raw YAML under a skill (a second, drifting schema, late untyped feedback, no structural editing) or by one tool per operation (a large per-server catalog in context, one model round trip per step, no atomic unit). Code that only *stages edits* keeps D1, D4 and D6 intact, where code that runs on the server would not. The research on code as an action format supports efficiency and feedback-driven self-correction, not safety (codemode.md §2.4). | The SDK and sandbox are new components in the editor build; the server needs a transaction operation with a dry-run (codemode.md §10); the sandbox must have no ambient authority; a missing primitive surfaces as a *type error*, which is D12's benchmark running by itself; the sandbox (QuickJS in WASM), the in-page type-check, the approval model and SDK non-publication are the owner's answers (§14.10); the model's host and billing are decided in §14.8 (#351); which model stays open. |
 
 ### 3.1 D12 in full
 
 > **Status.** Decided as a direction by the owner on #320 (2026-11). The owner answered the three open questions of the first draft
 > on PR #322 (2026-11): presets are declared by reference and resolved at runtime (§14.7), the agent surface is a chatbot in the
 > cloud editor over the existing protocol (§14.8), and its milestone sits between M6 and M7 (§14.9). **Still open:** the preset
-> reference's spelling and versioning (§14.7), and who runs and pays for the model behind the chatbot (§14.8).
+> reference's spelling and versioning (§14.7), and which model sits behind the chatbot (§14.8; host and billing decided, #351).
 > Companion: [`architecture/primitives.md`](architecture/primitives.md), the audit of today's surface against this decision.
 
 **Context.** Minecraft's content tooling is fragmented: each plugin generalizes one area (resource packs, GUIs, mobs) and the
@@ -228,7 +228,7 @@ spelling of the reference and the versioning of a preset's behavior across plugi
 
 > **Status.** The six points of the decision are the owner's (#320, 2026-11), recorded as decided. The owner also confirmed on PR
 > #326 (2026-11-12) that it is a **new decision**, not an amendment to D12, and answered the design's questions (§14.10,
-> codemode.md §1 C7 to C14). **Still open:** from §14.8, who runs and pays for the model, and which model. Design:
+> codemode.md §1 C7 to C14). **Still open:** from §14.8, which model (host and billing are decided: Cloudflare AI Gateway, #351). Design:
 > [`architecture/codemode.md`](architecture/codemode.md).
 
 **The decision, in six points.**
@@ -272,8 +272,8 @@ layer in D12 (PR #326, codemode.md C14).
 3. **The type error is the signal for a missing primitive.** A benchmark task that fails on a gap fails visibly; the count of those
    failures measures D12's debt.
 4. **Agent context carries a slice of the SDK, not the catalog**; the checker holds the whole surface and teaches the rest.
-5. **The model call is outside this decision** and stays an owner question (§14.8, §14.10): a call that leaves the browser leaves
-   the end-to-end boundary of §9.2 and is bound by the Cloudflare cost guardrails.
+5. **The model call is outside this decision** and is decided in §14.8 (#351): it goes through a model proxy to Cloudflare AI
+   Gateway, it is the one place content leaves the end-to-end boundary of §9.2, and it is bound by the Cloudflare cost guardrails.
 
 #### Traceability
 
@@ -1081,7 +1081,7 @@ primary method (display entities only; legacy paths only if a converter needs th
    Java registry entries like the logic `Recipe` SPI; **(iii)** pinning and versioning, so that a plugin update that improves a
    built-in preset cannot silently change existing content; **(iv)** a read-only expanded view of what a declaration resolves to, for
    debugging and for the agent. Tracked in #320 and #304.
-8. **MCP transport and auth (#320) — decided (owner, PR #322); the model's host and billing open.** The owner's answer: *the MCP
+8. **MCP transport and auth (#320) — decided (owner, PR #322); the model's host and billing decided (#351), the model itself open.** The owner's answer: *the MCP
    would get deployed at the level of the cloud editor only. The cloud editor (editor.materione.com) has an extra fixed layer on the
    page that opens a chatbot. The chatbot has full access to content authoring, through tool calls. We do not create a new endpoint;
    relays remain untrusted.* Recorded as:
@@ -1094,10 +1094,21 @@ primary method (display entities only; legacy paths only if a converter needs th
    | Endpoints | None new. The relay stays untrusted and sees ciphertext only; no D11 change. |
    | Scope | The cloud editor. A standalone MCP server for external agents is not part of this decision. |
 
-   **Still open, and not decided here:** who runs the model behind the chatbot and who pays. Any LLM API call or billing from the
-   cloud side is bound by the Cloudflare cost guardrails in `CLAUDE.md` (Workers AI is off-limits; no plan purchases; no public endpoint
-   without rate limits), and a model call that leaves the browser is a place where content leaves the end-to-end boundary of §9.2.
-   The owner decides where inference runs (for example the user's own key from the browser) before any code.
+   **Who runs the model and who pays: decided (owner, #351, 2026-11-14).** Inference is bought by the project through
+   **Cloudflare AI Gateway with unified billing**, so the project has one bill. Users pay the project: they buy **Materione AI
+   credits** and spend them in the chatbot, with a possible small free daily allowance. It is **not** bring-your-own-key.
+   Frontier-priced models are excluded. This **amends two lines above**, and only these:
+
+   | | Amended to |
+   |---|---|
+   | Endpoints | **One new endpoint: the model proxy.** A Worker separate from the relay holds the gateway credential, checks the caller's credit balance and forwards model calls. The relay itself is unchanged: it stays untrusted and sees ciphertext only (D11 holds). |
+   | What leaves the end-to-end boundary (§9.2) | The model call, and only it: the conversation, the slice of the SDK surface in context, and what a program returns to the model (bounded, codemode.md §4.2). Cloudflare and the model provider see that text. The editor says so before the first message of a session. Pack content is still read in the browser and is not sent wholesale (codemode.md §3.3 point 3). |
+
+   The cost guardrails in `CLAUDE.md` are amended in the same change to allow exactly this, under a hard cap (prepaid credits,
+   no auto top-up, a gateway spend limit, rate limits, a per-account quota). Design and the conditions: codemode.md §12.1.
+   A **credit ledger** is new state, but it is not content: D1 is about content, and the ledger holds balances and usage only.
+   **Still open:** which model or models (measured on the benchmark, #385), and the whole of accounts, payments and the ledger
+   (#386), which is a subsystem of its own and is designed before any of it is built.
 9. **Milestone placement of D12's work — decided (owner, PR #322); name TBD.** The agent vertical slice (the chatbot and its tools,
    plus the fold-down of primitives.md §5 it needs) is a **milestone between M6 and M7**, name to be decided (written "M6.5 / TBD" in
    [`roadmap.md`](roadmap.md); existing milestones are not renumbered). The goal is a nice vertical slice before expanding
