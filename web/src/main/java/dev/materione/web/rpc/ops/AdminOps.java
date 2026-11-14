@@ -70,6 +70,21 @@ public final class AdminOps {
                 if (entry.target() != null) {
                     item.addProperty("target", entry.target());
                 }
+                // additive (codemode.md section 10): where the change came from, and what produced it
+                item.addProperty("origin", entry.origin());
+                if (entry.approval() != null) {
+                    item.addProperty("approval", entry.approval());
+                }
+                if (entry.transaction() != null) {
+                    item.addProperty("transaction", entry.transaction());
+                }
+                if (entry.program() != null) {
+                    item.addProperty("program", entry.program());
+                    item.addProperty("programLength", entry.programLength());
+                }
+                if (entry.digest() != null) {
+                    item.addProperty("digest", entry.digest());
+                }
                 array.add(item);
             }
             payload.add("entries", array);

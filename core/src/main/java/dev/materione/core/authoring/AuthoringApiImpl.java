@@ -76,6 +76,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private volatile Supplier<dev.materione.core.pipeline.ParsedContent> parsedContent;
     private final StagedReferences.DocumentCache referenceCache = new StagedReferences.DocumentCache();
     private volatile DocumentStore.WriteObserver commitObserver = (index, write) -> { };
+    private volatile TransactionJournal transactionJournal;
     private final AuthoringTransactions transactions;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
 
@@ -281,10 +282,27 @@ public final class AuthoringApiImpl implements AuthoringApi {
         return packsRoot.resolve(pack);
     }
 
-    /** One audit entry for an applied transaction; the transaction id is how it is found again. */
-    void auditTransaction(String actorId, String pack, int documentCount, String transactionId) {
-        audit.record(actorId, "authoring.transaction",
-                pack + " (" + documentCount + " documents, " + transactionId + ")");
+    /**
+     * Keeps a record (the before-images) of every applied transaction under {@code directory}, which is what lets
+     * {@link #revertTransaction} undo it. Bounded: see {@link TransactionJournal} for the retention rule. Without
+     * it a transaction still applies, and reports that it cannot be reverted. Set once at boot.
+     */
+    public void transactionJournal(Path directory) {
+        this.transactionJournal = directory == null ? null : new TransactionJournal(directory);
+    }
+
+    /** A test seam: a journal with its own caps. */
+    void transactionJournal(TransactionJournal journal) {
+        this.transactionJournal = journal;
+    }
+
+    TransactionJournal transactionJournal() {
+        return transactionJournal;
+    }
+
+    /** One audit entry for an applied transaction or revert; the transaction id is how it is found again. */
+    void auditTransaction(String operation, String actorId, String target, AuditLog.Details details) {
+        audit.record(actorId, operation, target, details);
     }
 
     /** The one reload an applied transaction queues: the whole pack, as a model transaction or a folder move does. */
@@ -295,6 +313,11 @@ public final class AuthoringApiImpl implements AuthoringApi {
     @Override
     public ApiResult<TransactionResult> transaction(ActorContext actor, TransactionRequest request) {
         return transactions.run(actor, request);
+    }
+
+    @Override
+    public ApiResult<TransactionResult> revertTransaction(ActorContext actor, String transactionId, boolean dryRun) {
+        return transactions.revert(actor, transactionId, dryRun);
     }
 
     /** Declares the built-in packs (master section 7.3) so the editor can show them read-only. Set once at boot. */

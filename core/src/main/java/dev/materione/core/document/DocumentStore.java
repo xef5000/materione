@@ -78,7 +78,17 @@ public final class DocumentStore {
 
     public record Document(String pack, String path, String raw, int revision, String sha256) {}
 
-    public record Revision(int rev, long timestampMs, String actor, String action, String sha256) {}
+    /**
+     * One journal entry. {@code transaction} is the authoring transaction that wrote it (null for every other
+     * write, and for entries from before the field existed), so the documents of one transaction can be found again.
+     */
+    public record Revision(
+            int rev, long timestampMs, String actor, String action, String sha256, String transaction) {
+
+        public Revision(int rev, long timestampMs, String actor, String action, String sha256) {
+            this(rev, timestampMs, actor, action, sha256, null);
+        }
+    }
 
     /** Exact owner-file and journal bytes captured for a composite transaction rollback. */
     public record Checkpoint(
@@ -884,15 +894,28 @@ public final class DocumentStore {
         /** Replaces an existing document at {@code expectedRevision}. */
         SET,
         /** Deletes an existing document at {@code expectedRevision}; the journal keeps the history. */
-        DELETE
+        DELETE,
+        /**
+         * Writes a document that does not exist now but has a journal (it was deleted): the entry is the next
+         * revision after the delete, not revision 1, so a revert restores a deleted document as a new revision.
+         */
+        RESTORE
     }
 
     /**
      * One document of a {@link #commit}. {@code text} is the final text ({@code null} for a
      * {@link WriteKind#DELETE}); {@code movedFrom}, for a {@code CREATE}, names the document this one was
      * moved from, so the journal opens with the same {@code move-from:} lineage {@link #move} records.
+     * {@code action} names the journal entry (null: {@code create}, {@code set-scalar} or {@code delete} by kind);
+     * a revert writes {@code revert}.
      */
-    public record PlannedWrite(String path, WriteKind kind, int expectedRevision, String text, String movedFrom) {}
+    public record PlannedWrite(
+            String path, WriteKind kind, int expectedRevision, String text, String movedFrom, String action) {
+
+        public PlannedWrite(String path, WriteKind kind, int expectedRevision, String text, String movedFrom) {
+            this(path, kind, expectedRevision, text, movedFrom, null);
+        }
+    }
 
     /** What {@link #commit} wrote: the revision the document has now and the hash of its text (null for a delete). */
     public record CommitOutcome(String path, WriteKind kind, int revision, String sha256) {}
@@ -920,6 +943,16 @@ public final class DocumentStore {
      */
     public List<CommitOutcome> commit(
             String pack, List<PlannedWrite> writes, String actor, WriteObserver observer) throws IOException {
+        return commit(pack, writes, actor, null, observer);
+    }
+
+    /**
+     * {@link #commit(String, List, String, WriteObserver)} that stamps every journal entry it writes with
+     * {@code transactionId}, so the documents of one transaction can be found again (codemode.md section 10).
+     */
+    public List<CommitOutcome> commit(
+            String pack, List<PlannedWrite> writes, String actor, String transactionId, WriteObserver observer)
+            throws IOException {
         if (writes.isEmpty()) {
             throw new IllegalArgumentException("no documents to write");
         }
@@ -931,7 +964,7 @@ public final class DocumentStore {
                 }
                 paths.add(write.path());
                 Path file = resolve(pack, write.path());
-                if (write.kind() == WriteKind.CREATE) {
+                if (write.kind() == WriteKind.CREATE || write.kind() == WriteKind.RESTORE) {
                     if (Files.exists(file)) {
                         throw new IllegalStateException("document already exists: " + write.path());
                     }
@@ -975,7 +1008,9 @@ public final class DocumentStore {
                             Files.write(file, bytes);
                             String hash = Documents.sha256(bytes);
                             appendRevision(pack, write.path(), new Revision(1, now, actor,
-                                    write.movedFrom() != null ? "move-from:" + write.movedFrom() : "create", hash));
+                                    write.action() != null ? write.action()
+                                            : write.movedFrom() != null ? "move-from:" + write.movedFrom() : "create",
+                                    hash, transactionId));
                             trimJournal(pack, write.path());
                             outcomes.add(new CommitOutcome(write.path(), write.kind(), 1, hash));
                         }
@@ -984,15 +1019,27 @@ public final class DocumentStore {
                             Files.write(file, bytes);
                             String hash = Documents.sha256(bytes);
                             int revision = currentRevision(pack, write.path()) + 1;
-                            appendRevision(pack, write.path(),
-                                    new Revision(revision, now, actor, "set-scalar", hash));
+                            appendRevision(pack, write.path(), new Revision(revision, now, actor,
+                                    write.action() != null ? write.action() : "set-scalar", hash, transactionId));
+                            trimJournal(pack, write.path());
+                            outcomes.add(new CommitOutcome(write.path(), write.kind(), revision, hash));
+                        }
+                        case RESTORE -> {
+                            byte[] bytes = write.text().getBytes(StandardCharsets.UTF_8);
+                            Files.createDirectories(file.getParent());
+                            Files.write(file, bytes);
+                            String hash = Documents.sha256(bytes);
+                            int revision = currentRevision(pack, write.path()) + 1;
+                            appendRevision(pack, write.path(), new Revision(revision, now, actor,
+                                    write.action() != null ? write.action() : "create", hash, transactionId));
                             trimJournal(pack, write.path());
                             outcomes.add(new CommitOutcome(write.path(), write.kind(), revision, hash));
                         }
                         case DELETE -> {
                             Files.deleteIfExists(file);
                             int revision = currentRevision(pack, write.path()) + 1;
-                            appendRevision(pack, write.path(), new Revision(revision, now, actor, "delete", null));
+                            appendRevision(pack, write.path(),
+                                    new Revision(revision, now, actor, "delete", null, transactionId));
                             outcomes.add(new CommitOutcome(write.path(), write.kind(), revision, null));
                         }
                     }
@@ -1465,7 +1512,8 @@ public final class DocumentStore {
                     Long.parseLong(map.get("ts")),
                     unquote(map.get("actor")),
                     unquote(map.get("action")),
-                    "null".equals(map.get("sha")) ? null : unquote(map.get("sha"))));
+                    "null".equals(map.get("sha")) ? null : unquote(map.get("sha")),
+                    map.get("tx") == null ? null : unquote(map.get("tx"))));
         } catch (RuntimeException e) {
             return Optional.empty();
         }

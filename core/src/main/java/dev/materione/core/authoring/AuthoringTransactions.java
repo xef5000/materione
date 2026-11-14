@@ -17,7 +17,9 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.LogicAuthoringApi.LogicDraft;
+import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentConflictException;
+import dev.materione.core.document.Documents;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.pipeline.ResourceCompiler;
@@ -70,24 +72,77 @@ final class AuthoringTransactions {
             if (!early.isEmpty()) {
                 return refused(dryRun, List.of(), early, stages(false));
             }
-            Planned planned = documents.underLock(() -> planAndCommit(actor, request));
-            if (planned.applied()) {
-                // after the lock: the audit entry and the one reload, as every other authoring write
-                String actorId = AuthoringApiImpl.actorId(actor);
-                api.auditTransaction(actorId, request.pack(), planned.writes().size(), planned.transactionId());
-                api.reloadPack(actor, request.pack());
-            }
-            return planned.toResult(dryRun);
+            String transactionId = dryRun ? null : newTransactionId();
+            Planned planned = documents.underLock(() -> planAndCommit(actor, request, transactionId));
+            return finish(actor, request.pack(), planned, dryRun, null, "authoring.transaction",
+                    "", auditDetails(request, transactionId));
         } catch (DocumentConflictException conflict) {
             return refused(dryRun, List.of(), List.of(new OperationDiagnostic(-1, conflict(conflict.getMessage()))),
                     stages(false));
         } catch (IOException | RuntimeException failure) {
-            return refused(dryRun, List.of(), List.of(new OperationDiagnostic(-1, Diagnostic.error(
-                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
-                    "the transaction failed and nothing was written: "
-                            + (failure.getMessage() != null ? failure.getMessage() : failure.toString())))),
-                    stages(false));
+            return failed(dryRun, failure);
         }
+    }
+
+    private static ApiResult<TransactionResult> failed(boolean dryRun, Exception failure) {
+        return refused(dryRun, List.of(), List.of(new OperationDiagnostic(-1, Diagnostic.error(
+                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                "the transaction failed and nothing was written: "
+                        + (failure.getMessage() != null ? failure.getMessage() : failure.toString())))),
+                stages(false));
+    }
+
+    private static String newTransactionId() {
+        return "tx-" + UUID.randomUUID();
+    }
+
+    /**
+     * What happens after the lock is released for an applied transaction: the audit entry, the record that makes it
+     * revertible, and the one reload, as every other authoring write. A dry run and a refusal only report.
+     */
+    private ApiResult<TransactionResult> finish(
+            ActorContext actor, String pack, Planned planned, boolean dryRun, String revertOf, String operation,
+            String targetNote, AuditLog.Details details) {
+        boolean revertible = false;
+        String revertNote = null;
+        if (planned.applied()) {
+            String actorId = AuthoringApiImpl.actorId(actor);
+            api.auditTransaction(operation, actorId,
+                    pack + " (" + planned.writes().size() + " documents, " + planned.transactionId() + targetNote + ")",
+                    details);
+            TransactionJournal journal = api.transactionJournal();
+            if (journal == null) {
+                revertNote = "this server keeps no transaction journal, so the transaction cannot be reverted";
+            } else {
+                TransactionJournal.Stored stored = journal.store(new TransactionJournal.Entry(
+                        planned.transactionId(), pack, actorId, details.origin(), System.currentTimeMillis(),
+                        revertOf, planned.journal()));
+                revertible = stored.kept();
+                revertNote = stored.note();
+            }
+            api.reloadPack(actor, pack);
+        }
+        TransactionResult result = new TransactionResult(
+                planned.accepted(), planned.applied(), dryRun, planned.transactionId(), planned.documents(),
+                planned.diagnostics(), planned.stages(), revertible, revertNote, revertOf);
+        return new ApiResult<>(planned.accepted(), result,
+                planned.diagnostics().stream().map(OperationDiagnostic::diagnostic).toList());
+    }
+
+    /** The audit context of an applied list: origin and approval (defaulted), the program bounded, and its digest. */
+    private static AuditLog.Details auditDetails(TransactionRequest request, String transactionId) {
+        String origin = request.origin() == null ? TransactionRequest.ORIGIN_EDITOR : request.origin();
+        String approval = request.approval() == null ? TransactionRequest.APPROVAL_NOT_NEEDED : request.approval();
+        String program = request.program();
+        if (program == null || program.isEmpty()) {
+            return new AuditLog.Details(origin, approval, transactionId, null, null, null);
+        }
+        int keep = Math.min(program.length(), TransactionRequest.MAX_PROGRAM_CHARS);
+        if (keep < program.length() && Character.isHighSurrogate(program.charAt(keep - 1))) {
+            keep--; // never cut a character in half
+        }
+        return new AuditLog.Details(origin, approval, transactionId, program.substring(0, keep),
+                "sha256:" + Documents.sha256(program), program.length());
     }
 
     /** The checks that need no document: the request's shape, the pack, and each operation's permission. */
@@ -96,6 +151,14 @@ final class AuthoringTransactions {
         if (request == null || request.pack() == null || !request.pack().matches("[a-z0-9_-]{2,64}")) {
             found.add(bad(-1, "a transaction needs one pack id"));
             return found;
+        }
+        if (request.origin() != null && !TransactionRequest.ORIGIN_EDITOR.equals(request.origin())
+                && !TransactionRequest.ORIGIN_CODE_MODE.equals(request.origin())) {
+            found.add(bad(-1, "'origin' must be 'editor' or 'code-mode'"));
+        }
+        if (request.approval() != null && !TransactionRequest.APPROVAL_NOT_NEEDED.equals(request.approval())
+                && !TransactionRequest.APPROVAL_GRANTED.equals(request.approval())) {
+            found.add(bad(-1, "'approval' must be 'not_needed' or 'granted'"));
         }
         List<TransactionOperation> operations = request.operations();
         if (operations.isEmpty()) {
@@ -115,12 +178,19 @@ final class AuthoringTransactions {
         if (!found.isEmpty()) {
             return found;
         }
-        // one pack, so one pack's permission and one pack's read-only check, reported against every operation
-        String pack = request.pack();
+        return access(actor, request.pack(), operations.size());
+    }
+
+    /**
+     * The per-operation permission check, as it has always been: one pack, so one node and one read-only check,
+     * reported against every operation ({@code count} of them; a revert counts its documents). Also that the pack exists.
+     */
+    private List<OperationDiagnostic> access(ActorContext actor, String pack, int count) throws IOException {
+        List<OperationDiagnostic> found = new ArrayList<>();
         String node = "materione.edit." + pack;
         boolean builtin = api.builtinPackIds().contains(pack);
         boolean allowed = actor != null && actor.hasPermission(node);
-        for (int i = 0; i < operations.size(); i++) {
+        for (int i = 0; i < count; i++) {
             if (builtin) {
                 found.add(new OperationDiagnostic(i, new Diagnostic(
                         DiagnosticCodes.BUILTIN_PACK_ID_RESERVED, Severity.ERROR,
@@ -140,6 +210,66 @@ final class AuthoringTransactions {
         return found;
     }
 
+    // ------------------------------------------------------------------
+    // revert (#344)
+
+    /**
+     * Reverts transaction {@code transactionId} by writing each document it touched back to its before-image, as one
+     * transaction through the same stages and the same commit as any other (a dry run included). Everything is
+     * checked before anything is written; a document that is no longer as the transaction left it refuses the
+     * whole revert, and every such document is reported.
+     */
+    ApiResult<TransactionResult> revert(ActorContext actor, String transactionId, boolean dryRun) {
+        try {
+            TransactionJournal journal = api.transactionJournal();
+            if (journal == null) {
+                return refused(dryRun, List.of(), List.of(new OperationDiagnostic(-1, unavailable(
+                        "this server keeps no transaction journal, so no transaction can be reverted"))), stages(false));
+            }
+            TransactionJournal.Loaded loaded = journal.load(transactionId);
+            if (loaded.entry() == null) {
+                return refused(dryRun, List.of(),
+                        List.of(new OperationDiagnostic(-1, unavailable(loaded.problem()))), stages(false));
+            }
+            TransactionJournal.Entry entry = loaded.entry();
+            List<OperationDiagnostic> early = access(actor, entry.pack(), entry.documents().size());
+            if (!early.isEmpty()) {
+                return refused(dryRun, List.of(), early, stages(false));
+            }
+            String revertId = dryRun ? null : newTransactionId();
+            Planned planned = documents.underLock(() -> planRevert(actor, entry, dryRun, revertId));
+            return finish(actor, entry.pack(), planned, dryRun, entry.id(), "authoring.revertTransaction",
+                    ", reverts " + entry.id(),
+                    AuditLog.Details.of(TransactionRequest.ORIGIN_EDITOR, TransactionRequest.APPROVAL_NOT_NEEDED,
+                            revertId));
+        } catch (DocumentConflictException conflict) {
+            return refused(dryRun, List.of(), List.of(new OperationDiagnostic(-1, conflict(conflict.getMessage()))),
+                    stages(false));
+        } catch (IOException | RuntimeException failure) {
+            return failed(dryRun, failure);
+        }
+    }
+
+    private static Diagnostic unavailable(String message) {
+        return new Diagnostic(DiagnosticCodes.TRANSACTION_REVERT_UNAVAILABLE, Severity.ERROR, message, null, null,
+                "a transaction can be reverted only while its before-images are kept (codemode.md section 10); "
+                        + "make the change again by hand");
+    }
+
+    /** Under the store lock: check every document is as the transaction left it, plan the restore, validate, write. */
+    private Planned planRevert(ActorContext actor, TransactionJournal.Entry entry, boolean dryRun, String revertId)
+            throws IOException {
+        Plan plan = new Plan(entry.pack());
+        List<OperationDiagnostic> diagnostics = new ArrayList<>();
+        for (int i = 0; i < entry.documents().size(); i++) {
+            plan.restore(i, entry, entry.documents().get(i), diagnostics);
+        }
+        if (!diagnostics.isEmpty()) {
+            return new Planned(false, false, null, List.of(), diagnostics, stages(false), List.of(), List.of());
+        }
+        return validateAndCommit(actor, entry.pack(), plan, diagnostics, dryRun, revertId);
+    }
+
     private static int editCount(TransactionOperation operation) {
         return switch (operation) {
             case TransactionOperation.Create create -> create.edits().size();
@@ -157,7 +287,8 @@ final class AuthoringTransactions {
     // ------------------------------------------------------------------
     // plan, validate, write: one hold of the store lock
 
-    private Planned planAndCommit(ActorContext actor, TransactionRequest request) throws IOException {
+    private Planned planAndCommit(ActorContext actor, TransactionRequest request, String transactionId)
+            throws IOException {
         Plan plan = new Plan(request.pack());
         List<OperationDiagnostic> diagnostics = new ArrayList<>();
         List<TransactionOperation> operations = request.operations();
@@ -174,8 +305,18 @@ final class AuthoringTransactions {
             }
         }
         if (refused) {
-            return new Planned(false, false, null, List.of(), diagnostics, stages(false), List.of());
+            return new Planned(false, false, null, List.of(), diagnostics, stages(false), List.of(), List.of());
         }
+        return validateAndCommit(actor, request.pack(), plan, diagnostics, request.dryRun(), transactionId);
+    }
+
+    /**
+     * The tail the transaction and its revert share: the documents the plan changes, the validation stages over the
+     * result, and, for an accepted apply, the all-or-none commit stamped with {@code transactionId}.
+     */
+    private Planned validateAndCommit(
+            ActorContext actor, String pack, Plan plan, List<OperationDiagnostic> diagnostics, boolean dryRun,
+            String transactionId) throws IOException {
         List<TransactionDocument> shown = new ArrayList<>();
         List<DocumentStore.PlannedWrite> writes = new ArrayList<>();
         for (Work work : plan.docs.values()) {
@@ -191,11 +332,11 @@ final class AuthoringTransactions {
         Validation validation = new Validation(plan).run();
         diagnostics.addAll(validation.diagnostics());
         boolean accepted = diagnostics.stream().noneMatch(found -> found.diagnostic().severity() == Severity.ERROR);
-        if (request.dryRun() || !accepted || writes.isEmpty()) {
-            return new Planned(accepted, false, null, shown, diagnostics, validation.stages(), List.of());
+        if (dryRun || !accepted || writes.isEmpty()) {
+            return new Planned(accepted, false, null, shown, diagnostics, validation.stages(), List.of(), List.of());
         }
-        List<DocumentStore.CommitOutcome> outcomes =
-                documents.commit(request.pack(), writes, AuthoringApiImpl.actorId(actor), api.commitObserver());
+        List<DocumentStore.CommitOutcome> outcomes = documents.commit(
+                pack, writes, AuthoringApiImpl.actorId(actor), transactionId, api.commitObserver());
         Map<String, DocumentStore.CommitOutcome> byPath = new LinkedHashMap<>();
         outcomes.forEach(outcome -> byPath.put(outcome.path(), outcome));
         List<TransactionDocument> written = new ArrayList<>();
@@ -205,8 +346,17 @@ final class AuthoringTransactions {
                     document.path(), document.kind(), document.previousRevision(), outcome.revision(),
                     document.text(), document.movedFrom(), document.operations()));
         }
-        return new Planned(true, true, "tx-" + UUID.randomUUID(), written, diagnostics, validation.stages(),
-                writes);
+        // what a revert needs: for each written document, its state before and the state this transaction left
+        List<TransactionJournal.Doc> recorded = new ArrayList<>();
+        for (Work work : plan.docs.values()) {
+            DocumentStore.CommitOutcome outcome = byPath.get(work.path);
+            if (work.isNoop() || !work.mutated || outcome == null) {
+                continue;
+            }
+            recorded.add(new TransactionJournal.Doc(work.path, work.kind(), work.previousRevision(),
+                    outcome.revision(), outcome.sha256(), work.movedFrom, work.original));
+        }
+        return new Planned(true, true, transactionId, written, diagnostics, validation.stages(), writes, recorded);
     }
 
     /** What planning, validating and (for an apply) writing produced. */
@@ -217,14 +367,8 @@ final class AuthoringTransactions {
             List<TransactionDocument> documents,
             List<OperationDiagnostic> diagnostics,
             List<Stage> stages,
-            List<DocumentStore.PlannedWrite> writes) {
-
-        ApiResult<TransactionResult> toResult(boolean dryRun) {
-            TransactionResult result = new TransactionResult(
-                    accepted, applied, dryRun, transactionId, documents, diagnostics, stages);
-            return new ApiResult<>(accepted, result, diagnostics.stream().map(OperationDiagnostic::diagnostic).toList());
-        }
-    }
+            List<DocumentStore.PlannedWrite> writes,
+            List<TransactionJournal.Doc> journal) {}
 
     private static ApiResult<TransactionResult> refused(
             boolean dryRun, List<TransactionDocument> documents, List<OperationDiagnostic> diagnostics,
@@ -242,6 +386,13 @@ final class AuthoringTransactions {
         /** The stored text; null when the document does not exist (or is created by this list). */
         final String original;
         final int baseRevision;
+        /**
+         * A revert restoring a deleted document sets this to the revision of the delete entry: the document is
+         * written back as the next revision after it, not as revision 1. Negative otherwise.
+         */
+        int restoreBase = -1;
+        /** The journal action a revert writes ({@code revert}); null for an ordinary transaction. */
+        String action;
         /** The text now; null when the document is absent (never existed, deleted, or moved away). */
         String text;
         String movedFrom;
@@ -267,6 +418,11 @@ final class AuthoringTransactions {
             return original == null && text == null;
         }
 
+        /** The revision the document had before the transaction, or the delete a restore follows; null when none. */
+        Integer previousRevision() {
+            return stored() ? Integer.valueOf(baseRevision) : (restoreBase >= 0 ? Integer.valueOf(restoreBase) : null);
+        }
+
         Kind kind() {
             if (original == null) {
                 return movedFrom != null ? Kind.MOVED : Kind.CREATED;
@@ -284,20 +440,23 @@ final class AuthoringTransactions {
         TransactionDocument shown() {
             Kind kind = kind();
             Integer revision = switch (kind) {
-                case CREATED, MOVED -> 1;
+                case CREATED, MOVED -> restoreBase >= 0 ? restoreBase + 1 : 1;
                 case CHANGED, DELETED -> baseRevision + 1;
                 case UNCHANGED -> baseRevision;
             };
             return new TransactionDocument(
-                    path, kind, stored() ? baseRevision : null, revision, text, movedFrom, operations);
+                    path, kind, previousRevision(), revision, text, movedFrom, operations);
         }
 
         DocumentStore.PlannedWrite plannedWrite() {
             return switch (kind()) {
-                case CREATED, MOVED -> new DocumentStore.PlannedWrite(
-                        path, DocumentStore.WriteKind.CREATE, 0, text, movedFrom);
+                case CREATED, MOVED -> restoreBase >= 0
+                        ? new DocumentStore.PlannedWrite(
+                                path, DocumentStore.WriteKind.RESTORE, 0, text, null, action)
+                        : new DocumentStore.PlannedWrite(
+                                path, DocumentStore.WriteKind.CREATE, 0, text, movedFrom);
                 case CHANGED -> new DocumentStore.PlannedWrite(
-                        path, DocumentStore.WriteKind.SET, baseRevision, text, null);
+                        path, DocumentStore.WriteKind.SET, baseRevision, text, null, action);
                 case DELETED -> new DocumentStore.PlannedWrite(
                         path, DocumentStore.WriteKind.DELETE, baseRevision, null, null);
                 case UNCHANGED -> null;
@@ -477,6 +636,64 @@ final class AuthoringTransactions {
                 }
             }
             return null;
+        }
+
+        // -- revert
+
+        /**
+         * One document of a revert: checks it is exactly as the reverted transaction left it (the revision and the
+         * hash the commit recorded; a hand edit since is read as an {@code external} revision, so it fails the check),
+         * and plans the inverse. A document that moved on is reported in {@code conflicts} and nothing is planned for
+         * it; the caller refuses the whole revert when there is any.
+         */
+        void restore(int index, TransactionJournal.Entry entry, TransactionJournal.Doc recorded,
+                List<OperationDiagnostic> conflicts) throws IOException {
+            String path = recorded.path();
+            Optional<DocumentStore.Document> current = documents.readIfPresent(pack, path);
+            boolean leftPresent = recorded.kind() != Kind.DELETED;
+            String problem = null;
+            if (leftPresent) {
+                if (current.isEmpty()) {
+                    problem = "was deleted after " + entry.id();
+                } else if (current.get().revision() != recorded.postRevision()
+                        || !current.get().sha256().equals(recorded.postSha256())) {
+                    problem = "changed after " + entry.id() + ": it was left at rev " + recorded.postRevision()
+                            + ", it is at rev " + current.get().revision();
+                }
+            } else if (current.isPresent()) {
+                problem = "exists again after " + entry.id() + " deleted it (rev " + current.get().revision() + ")";
+            } else {
+                var last = documents.history(pack, path, 1);
+                if (!last.isEmpty() && last.get(last.size() - 1).rev() != recorded.postRevision()) {
+                    problem = "was written after " + entry.id() + " deleted it";
+                }
+            }
+            if (problem == null && recorded.kind() != Kind.CREATED && recorded.kind() != Kind.MOVED
+                    && recorded.before() == null) {
+                problem = "has no before-image in the record of " + entry.id();
+            }
+            if (problem != null) {
+                conflicts.add(new OperationDiagnostic(index, conflict(
+                        path + ": document " + problem + "; the transaction cannot be reverted over it")));
+                return;
+            }
+            Work work = docs.get(path);
+            if (work != null) {
+                conflicts.add(new OperationDiagnostic(index, conflict(path + ": appears twice in the record")));
+                return;
+            }
+            if (current.isPresent()) {
+                work = new Work(path, current.get().raw(), current.get().revision());
+                work.guarded = true;
+            } else {
+                work = new Work(path, null, 0);
+                work.restoreBase = recorded.postRevision();
+            }
+            work.action = "revert";
+            // created and moved-to documents are removed; changed and deleted ones return to their before-image
+            work.text = (recorded.kind() == Kind.CREATED || recorded.kind() == Kind.MOVED) ? null : recorded.before();
+            docs.put(path, work);
+            touched(index, work);
         }
 
         // -- operations

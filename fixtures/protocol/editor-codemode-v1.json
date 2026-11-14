@@ -142,6 +142,7 @@
           }
         ],
         "dryRun": false,
+        "revertible": true,
         "stages": [
           {
             "id": "syntax",
@@ -329,6 +330,7 @@
           }
         ],
         "dryRun": true,
+        "revertible": false,
         "stages": [
           {
             "id": "syntax",
@@ -421,6 +423,7 @@
         ],
         "documents": [],
         "dryRun": true,
+        "revertible": false,
         "stages": [
           {
             "id": "syntax",
@@ -464,6 +467,338 @@
       "op": "authoring.transaction"
     }
   },
+  "revert": {
+    "request": {
+      "id": "r-2",
+      "op": "authoring.revertTransaction",
+      "payload": {
+        "dryRun": false,
+        "transactionId": "tx-fixture"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": true,
+        "applied": true,
+        "diagnostics": [],
+        "documents": [
+          {
+            "kind": "deleted",
+            "operations": [
+              0
+            ],
+            "path": "items/ruby_blade.yml",
+            "previousRevision": 1,
+            "rev": 2
+          },
+          {
+            "kind": "deleted",
+            "operations": [
+              1
+            ],
+            "path": "guis/shop.yml",
+            "previousRevision": 1,
+            "rev": 2
+          },
+          {
+            "kind": "changed",
+            "operations": [
+              2
+            ],
+            "path": "items/sword.yml",
+            "previousRevision": 2,
+            "rev": 3,
+            "text": "# the shop's best seller\nsword:\n  display_name: Sword\n  material: IRON_SWORD # base\n"
+          }
+        ],
+        "dryRun": false,
+        "revertOf": "tx-fixture",
+        "revertible": true,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "every resulting document parses as lossless YAML (an edit that would break it is refused)",
+            "ran": true
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "the flow compiler over every rule and flow of the resulting resources",
+            "ran": true
+          },
+          {
+            "id": "gui",
+            "note": "not run: no GUI compiler is wired, or no GUI is in the result",
+            "ran": false
+          },
+          {
+            "id": "references",
+            "note": "not run: no parsed pack set is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) needs the live server, and the pack-wide allocation runs in the reload after an apply (the build stage above checks each resource against a preview)",
+            "ran": false
+          }
+        ],
+        "transactionId": "tx-fixture-revert"
+      },
+      "id": "r-2",
+      "ok": true,
+      "op": "authoring.revertTransaction"
+    }
+  },
+  "revertDryRun": {
+    "request": {
+      "id": "r-1",
+      "op": "authoring.revertTransaction",
+      "payload": {
+        "dryRun": true,
+        "transactionId": "tx-fixture"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": true,
+        "applied": false,
+        "diagnostics": [],
+        "documents": [
+          {
+            "kind": "deleted",
+            "operations": [
+              0
+            ],
+            "path": "items/ruby_blade.yml",
+            "previousRevision": 1,
+            "rev": 2
+          },
+          {
+            "kind": "deleted",
+            "operations": [
+              1
+            ],
+            "path": "guis/shop.yml",
+            "previousRevision": 1,
+            "rev": 2
+          },
+          {
+            "kind": "changed",
+            "operations": [
+              2
+            ],
+            "path": "items/sword.yml",
+            "previousRevision": 2,
+            "rev": 3,
+            "text": "# the shop's best seller\nsword:\n  display_name: Sword\n  material: IRON_SWORD # base\n"
+          }
+        ],
+        "dryRun": true,
+        "revertOf": "tx-fixture",
+        "revertible": false,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "every resulting document parses as lossless YAML (an edit that would break it is refused)",
+            "ran": true
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "the flow compiler over every rule and flow of the resulting resources",
+            "ran": true
+          },
+          {
+            "id": "gui",
+            "note": "not run: no GUI compiler is wired, or no GUI is in the result",
+            "ran": false
+          },
+          {
+            "id": "references",
+            "note": "not run: no parsed pack set is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) needs the live server, and the pack-wide allocation runs in the reload after an apply (the build stage above checks each resource against a preview)",
+            "ran": false
+          }
+        ]
+      },
+      "id": "r-1",
+      "ok": true,
+      "op": "authoring.revertTransaction"
+    }
+  },
+  "revertStale": {
+    "request": {
+      "id": "r-3",
+      "op": "authoring.revertTransaction",
+      "payload": {
+        "dryRun": false,
+        "transactionId": "tx-fixture"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": false,
+        "applied": false,
+        "diagnostics": [
+          {
+            "code": "MTR-0034",
+            "hint": "reload the affected documents and write the list again against the new state",
+            "message": "items/ruby_blade.yml: document was deleted after tx-fixture; the transaction cannot be reverted over it",
+            "operation": 0,
+            "severity": "error"
+          },
+          {
+            "code": "MTR-0034",
+            "hint": "reload the affected documents and write the list again against the new state",
+            "message": "guis/shop.yml: document was deleted after tx-fixture; the transaction cannot be reverted over it",
+            "operation": 1,
+            "severity": "error"
+          },
+          {
+            "code": "MTR-0034",
+            "hint": "reload the affected documents and write the list again against the new state",
+            "message": "items/sword.yml: document changed after tx-fixture: it was left at rev 2, it is at rev 3; the transaction cannot be reverted over it",
+            "operation": 2,
+            "severity": "error"
+          }
+        ],
+        "documents": [],
+        "dryRun": false,
+        "revertOf": "tx-fixture",
+        "revertible": false,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "the list was refused before any document was planned",
+            "ran": false
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "not run: no behavior engine is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "gui",
+            "note": "not run: no GUI compiler is wired, or no GUI is in the result",
+            "ran": false
+          },
+          {
+            "id": "references",
+            "note": "not run: no parsed pack set is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) needs the live server, and the pack-wide allocation runs in the reload after an apply (the build stage above checks each resource against a preview)",
+            "ran": false
+          }
+        ]
+      },
+      "id": "r-3",
+      "ok": true,
+      "op": "authoring.revertTransaction"
+    }
+  },
+  "revertUnknown": {
+    "request": {
+      "id": "r-4",
+      "op": "authoring.revertTransaction",
+      "payload": {
+        "dryRun": false,
+        "transactionId": "tx-00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": false,
+        "applied": false,
+        "diagnostics": [
+          {
+            "code": "MTR-0104",
+            "hint": "a transaction can be reverted only while its before-images are kept (codemode.md section 10); make the change again by hand",
+            "message": "there is no record of tx-00000000-0000-0000-0000-000000000000: it was not applied by this server, or it is past the retention limit (the last 100 transactions are kept, at most 32 MiB in all and 4 MiB for one)",
+            "operation": -1,
+            "severity": "error"
+          }
+        ],
+        "documents": [],
+        "dryRun": false,
+        "revertible": false,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "the list was refused before any document was planned",
+            "ran": false
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "not run: no behavior engine is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "gui",
+            "note": "not run: no GUI compiler is wired, or no GUI is in the result",
+            "ran": false
+          },
+          {
+            "id": "references",
+            "note": "not run: no parsed pack set is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) needs the live server, and the pack-wide allocation runs in the reload after an apply (the build stage above checks each resource against a preview)",
+            "ran": false
+          }
+        ]
+      },
+      "id": "r-4",
+      "ok": true,
+      "op": "authoring.revertTransaction"
+    }
+  },
   "stale": {
     "request": {
       "id": "t-3",
@@ -504,6 +839,7 @@
         ],
         "documents": [],
         "dryRun": true,
+        "revertible": false,
         "stages": [
           {
             "id": "syntax",

@@ -213,6 +213,33 @@ public interface AuthoringApi {
     }
 
     /**
+     * Reverts an applied transaction by its id ({@code authoring.revertTransaction}, codemode.md section 10): each
+     * document the transaction touched goes back to the text it had before, <em>as a new revision</em> (a created
+     * document is deleted, a deleted one restored, a moved one moved back), as one transaction through the same
+     * stages as {@link #transaction}, so a dry run reports what it would restore and an apply writes all-or-none
+     * with one audit entry and one reload.
+     *
+     * <p>The revert is refused, with nothing written, when a document is no longer in the state the transaction
+     * left it in (a later edit by anyone, a human included: {@code MTR-0034} per document, reported together),
+     * when the id is unknown or its before-images are no longer kept ({@code MTR-0104}), when the restored state
+     * does not validate (a later change now depends on it), or when the actor may not edit the pack. The report is
+     * the {@link TransactionResult} of the revert; an operation index in it is the position of the document in the
+     * reverted transaction's result. The default implementation reports the operation as unavailable.
+     *
+     * @param transactionId the id {@link TransactionResult#transactionId()} returned
+     * @param dryRun true to plan and validate only
+     */
+    default ApiResult<TransactionResult> revertTransaction(ActorContext actor, String transactionId, boolean dryRun) {
+        return ApiResult.fail(Diagnostic.error(DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                "reverting a transaction is not available in this build"));
+    }
+
+    /** {@link #revertTransaction(ActorContext, String, boolean)} as an apply. */
+    default ApiResult<TransactionResult> revertTransaction(ActorContext actor, String transactionId) {
+        return revertTransaction(actor, transactionId, false);
+    }
+
+    /**
      * Document change feed — external edits (file watcher) and API saves
      * alike. Returns an {@link AutoCloseable} subscription handle.
      */

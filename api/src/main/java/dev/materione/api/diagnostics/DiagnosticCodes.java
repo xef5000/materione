@@ -597,6 +597,14 @@ public final class DiagnosticCodes {
                     "Recovery left stacks owed to a player because their inventory is full");
 
     /**
+     * A transaction cannot be reverted (codemode.md section 10, #344): its id is unknown, or its before-images are no
+     * longer kept (the retention cap), or the server keeps no transaction journal. Nothing was written. A revert
+     * refused because a document changed since is {@code MTR-0034} per document, not this code.
+     */
+    public static final DiagnosticCode TRANSACTION_REVERT_UNAVAILABLE =
+            new DiagnosticCode("MTR-0104", Severity.ERROR, "Transaction cannot be reverted");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -731,7 +739,8 @@ public final class DiagnosticCodes {
             ESCROW_STATE_UNREADABLE,
             ESCROW_TRANSFER_REFUSED,
             ESCROW_UNSUPPORTED,
-            ESCROW_RECOVERY_OWED);
+            ESCROW_RECOVERY_OWED,
+            TRANSACTION_REVERT_UNAVAILABLE);
 
     private DiagnosticCodes() {}
 

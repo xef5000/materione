@@ -24,6 +24,14 @@ releases may change file formats, settings and the public API.
   reported (a dry run returns the diagnostics, each tagged with the operation that caused it, and the resulting documents; nothing is written) or written
   all-or-none with one audit entry and one reload. New wire op `authoring.transaction`, gated on the new `codemode` capability; older editors are unaffected.
   `logic().edit` and `gui().edit` behave as before and now share a `stage` method with the transaction. See api.md section 3.3.1.
+- **Revert a transaction by its id, and the audit's origin, approval and program text (#344, D13).** `AuthoringApi.revertTransaction(actor, id, dryRun)` puts
+  every document an applied transaction touched back to its before-image as a new revision (created documents are deleted, deleted ones restored), as one
+  transaction through the same permission check, validation stages, all-or-none commit, audit and reload, with a dry run; it refuses, writing nothing, when a
+  document changed since (`MTR-0034` per document), and answers `MTR-0104` for an unknown or pruned id. Before-images are kept under `storage/transactions/`,
+  bounded to the newest 100 transactions, 32 MiB in all and 4 MiB for one (a larger transaction applies and says it cannot be reverted). Journal entries a
+  transaction writes now carry its id, and `authoring.transaction` audit entries carry `origin` (`editor` or `code-mode`), `approval`, `transaction` and the
+  size-bounded `program` with its `digest`; `admin.audit.recent` returns them and older entries read as before. New wire op `authoring.revertTransaction`, gated
+  on `codemode`; `authoring.transaction` accepts `origin`, `approval` and `program` and answers `revertible`. See codemode.md section 10.
 - **A transaction's dry run (and the check before an apply) now validates references (#357, D6).** `ReferenceValidator` runs over the pack as the list leaves it and
   the other packs as stored, so a delete that orphans a user, a mistyped id or template, and a reference into another pack are refused with `MTR-0009`
   (unresolved reference) diagnostics tagged with the operation, while a document a later operation creates satisfies an earlier reference. Untouched resources are
