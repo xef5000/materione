@@ -102,6 +102,18 @@ test('a same-origin module Worker runs under a strict CSP (what a host that adds
   expect(result.ok).toBe(true);
 });
 
+test('a read without its await is a plain TS2339 through the Worker; the awaited read checks', async ({ page }) => {
+  await open(page);
+  const missing = await check(page, 'const view = m.read.get(m.ref.item("rpg:sword"));\nview.fields;');
+  expect(missing.ok).toBe(false);
+  const found = missing.diagnostics.find((d) => d.code === 'TS2339');
+  expect(found).toMatchObject({ line: 2, column: 6 });
+  expect(found!.missingPrimitive).toBeUndefined();
+  const awaited = await check(page, 'const view = await m.read.get(m.ref.item("rpg:sword"));\nview.fields;');
+  expect(awaited.ok).toBe(true);
+  expect(awaited.js).toContain('await m.read.get');
+});
+
 test('a registry change is a new surface: the same program checks differently against it', async ({ page }) => {
   await open(page);
   const program = 'const p = m.pack("a"); p.quests.create("q", { title: "t" });';

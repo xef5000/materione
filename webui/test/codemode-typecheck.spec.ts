@@ -94,6 +94,13 @@ describe('a gap is reported as a missing primitive (codemode.md section 6, 9.2)'
     expect(found?.hint).toBe("Did you mean 'items'?");
   });
 
+  it('a read without its await is a plain TS2339 (reads are promises), the awaited read checks', () => {
+    const missing = check('const view = m.read.get(m.ref.item("rpg:sword"));\nview.fields;').diagnostics.find((d) => d.code === 'TS2339');
+    expect(missing).toMatchObject({ line: 2, column: 6 });
+    expect(missing?.missingPrimitive).toBeUndefined();
+    expect(check('const view = await m.read.get(m.ref.item("rpg:sword"));\nview.fields;').diagnostics).toEqual([]);
+  });
+
   it('is not a gap on a type of the fixed core only', () => {
     const found = check('m.nonsense;').diagnostics[0];
     expect(found?.code).toBe('TS2339');
