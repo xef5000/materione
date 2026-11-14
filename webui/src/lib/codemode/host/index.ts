@@ -4,6 +4,7 @@
  * tool reach only `store.agent`.
  */
 export { classify, type Blocker, type Classification, type ClassifyInput, type Effect, type OperationClass, type ReportDocument } from './classify';
+export { ReviewActions, type ActionResult } from './actions';
 export { decide, gestureFromEvent, GestureError, GrantSet, type ApprovalGesture, type Decision, type GrantView } from './grants';
 export { isObjectId, objectId, type ObjectId } from './objects';
 export {
