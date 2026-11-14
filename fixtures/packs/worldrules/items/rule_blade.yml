@@ -8,3 +8,7 @@ rule_blade:
       do:
         - run_command: "say MATERIONE-WORLDRULES-BLADE ${item.id} hit ${target.type}"
         - chat: "CHECK blade ${item.id} hit ${target.type}"
+    # the same trigger a rule document answers (`death`): fires once per stack of this item among a dying player's drops
+    - on: death
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-ITEMDEATH ${item.id}"

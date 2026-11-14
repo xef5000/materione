@@ -78,10 +78,14 @@ public final class WorldEventsRunner {
             problems.add("a cancelled hit still hurt the husk: " + health);
         }
 
-        // the player is hurt, dies and respawns; a player who has just joined is invulnerable for three seconds, so wait
+        // the player is hurt (fall), dies (the death reports the last damage: fall) and respawns; a player who has just joined is invulnerable for three seconds, so wait
         Thread.sleep(4_000);
         expect(rig, problems, "hurt", "damage Alice 1 minecraft:fall", M + "HURT Alice cause=fall");
-        expect(rig, problems, "death", "dprobe die Alice", M + "DEATH Alice");
+        expect(rig, problems, "death", "dprobe die Alice", M + "DEATH Alice cause=fall");
+        expect(rig, problems, "item death", null, M + "ITEMDEATH worldrules:rule_blade");
+        Thread.sleep(1_500);
+        countOnce(rig, problems, M + "DEATH Alice cause=fall", "a rule document death");
+        countOnce(rig, problems, M + "ITEMDEATH worldrules:rule_blade", "an item death (one carried stack)");
         expect(rig, problems, "respawn", "dprobe respawn Alice", M + "RESPAWN Alice");
 
         // leaving runs the quit rule before the player's parked runs end
@@ -101,6 +105,15 @@ public final class WorldEventsRunner {
             }
         } catch (IllegalStateException missing) {
             problems.add(what + ": " + missing.getMessage().lines().findFirst().orElse(""));
+        }
+    }
+
+    /** The marker appears exactly once in the log: a pack with a rule document and an item on one trigger fires each once. */
+    private static void countOnce(CrashRig rig, List<String> problems, String marker, String what) {
+        String log = rig.log().readAll();
+        long count = log == null ? 0 : log.lines().filter(line -> line.contains(marker) && line.contains("[Server]")).count();
+        if (count != 1) {
+            problems.add(what + " fired " + count + " times, not once: " + marker);
         }
     }
 
