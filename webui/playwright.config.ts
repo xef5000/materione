@@ -19,6 +19,16 @@ export default defineConfig({
     screenshot: 'off',
     video: 'off',
   },
+  // Chromium runs everything. MATERIONE_PW_BROWSERS=firefox,webkit adds those engines for the code-mode sandbox specs only (a blob
+  // Worker spawned from an opaque-origin frame is the portability risk); they need `playwright install firefox webkit` first and
+  // are not part of CI.
+  projects: [
+    { name: 'chromium' },
+    ...(process.env.MATERIONE_PW_BROWSERS ?? '')
+      .split(',')
+      .filter((name): name is 'firefox' | 'webkit' => name === 'firefox' || name === 'webkit')
+      .map((name) => ({ name, testMatch: '**/codemode-sandbox*.pw.ts', use: { browserName: name } })),
+  ],
   webServer: {
     command: 'npm run dev:browser -- --host 127.0.0.1 --port 4173 --strictPort',
     url: 'http://127.0.0.1:4173/browser/fixture.html',

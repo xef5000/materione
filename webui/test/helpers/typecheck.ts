@@ -2,6 +2,7 @@
 // (codemode.md section 5.1): the real `typescript` package, no DOM, no node types, the ES2022 library only.
 import ts from 'typescript';
 import { readFileSync } from 'node:fs';
+import { wrapProgram } from '../../src/lib/codemode/typecheck/wrap';
 import { CORE_DTS } from './codemode';
 
 export interface Problem {
@@ -60,9 +61,9 @@ function problems(diagnostics: readonly ts.Diagnostic[], only: string | undefine
     });
 }
 
-/** The diagnostics of `program` against the core and `sdk`. */
+/** The diagnostics of `program` against the core and `sdk`, the program wrapped as the type-check Worker wraps it (the body of an async function). */
 export function checkProgram(program: string, sdk: string): Problem[] {
-  const files = new Map<string, string>([[CORE, readFileSync(CORE_DTS, 'utf8')], [SDK, sdk], [PROGRAM, program]]);
+  const files = new Map<string, string>([[CORE, readFileSync(CORE_DTS, 'utf8')], [SDK, sdk], [PROGRAM, wrapProgram(program)]]);
   const built = build(files, true);
   return problems(ts.getPreEmitDiagnostics(built), PROGRAM);
 }

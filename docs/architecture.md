@@ -809,13 +809,22 @@ Because relay infrastructure is operated by the project (or a third party), it i
   stores ciphertext, always. (This goes one step beyond LuckPerms, whose payloads are
   compressed but readable by bytebin; our editor edits whole content packs, which are more
   sensitive than permission lists.)
-- **Permissions stay in Minecraft.** Once a browser session is bound to an in-game identity,
-  it acts with that player's **existing permission nodes** — no parallel auth system to drift.
-  Rate limiting and session expiry apply. Full audit log of who changed what, when (teams,
-  T2–T3). The permission taxonomy is small and declared once (web doc §4.2 groups map onto it):
-  `materione.editor` (open editor sessions), `materione.edit.<pack>` (write a pack's content),
-  `materione.pipeline` (trigger reloads/apply), `materione.admin` (settings, delivery, delete).
-  Reads require `materione.editor` alone; every write path checks the matching node.
+- **Permissions stay in Minecraft.** A browser session is bound to an in-game identity by an approval a server
+  admin gives in game (`materione.admin` sees the prompt), and there is no parallel auth system to drift.
+  Rate limiting and session expiry apply. Full audit log of who changed what, when.
+  **An approved editor session has full editor rights** (owner decision, #358, 2026-11-14): the editor is a tool
+  for server admins, so a session is not narrowed by per-node checks today. The permission taxonomy stays declared
+  once (web doc §4.2 groups map onto it): `materione.editor` (open editor sessions), `materione.edit.<pack>`
+  (write a pack's content), `materione.pipeline` (trigger reloads/apply), `materione.admin` (settings, delivery,
+  delete). In-game commands check these nodes. On the editor's write paths the checks are **present but always
+  pass for a session**; they refuse only what no session may do (writing a built-in pack). They become real
+  when team roles are built (teams, T2 to T3), and that is the point at which a session carries its player's own
+  nodes. Nothing may claim before then that a per-pack node protects content from an approved session.
+- **An agent acts as its user** (owner decision, #358): the chatbot's rights are a subset of the session's, and
+  in M6.5 they are equal. The agent's actor is derived from the session's and can never be wider. Any session
+  with edit rights may revert a transaction another session applied; the audit records who. The per-object
+  approval of D13 is enforced in the editor page, which shows the diff and sends the transaction only after the
+  user approves; the server records the approval it was told about and does not verify it (codemode.md §5.6).
 - **Mode separation.** The pack self-host server (public, read-only file serving) and the
   editor API (authenticated everything) are separate listeners with separate trust levels.
 

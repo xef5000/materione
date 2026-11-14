@@ -4,6 +4,6 @@
   "registry": "plugin-current",
   "result": "fail",
   "diagnostics": [
-    { "code": 2339, "messageContains": ["commands", "PackWriter"] }
+    { "code": 2339, "messageContains": ["commands", "PackWriter"], "missingPrimitive": { "member": "commands", "catalog": "PackWriter" } }
   ]
 }
