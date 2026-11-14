@@ -11,7 +11,7 @@ import type { ReportDocument } from './classify';
 
 export const CODEMODE_CAPABILITY = 'codemode';
 
-/** A diagnostic of a report. `preexisting` is what the server will send for a finding that predates the transaction (#372). */
+/** A diagnostic of a report. `preexisting` is what the server will send for a finding that predates the transaction (issue 372). */
 export interface ReportDiagnostic {
   code?: string;
   severity: 'error' | 'warning';

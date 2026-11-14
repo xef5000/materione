@@ -5,9 +5,9 @@
  *
  * Two faces, one store:
  *
- *  - `agent` (`AgentPort`): what the chat tool (#348) may reach. `propose`, `declarePlan`, reads and `subscribe`. It has
+ *  - `agent` (`AgentPort`): what the chat tool (issue 348) may reach. `propose`, `declarePlan`, reads and `subscribe`. It has
  *    no approve, no grant, no apply, no revert, and a test walks the object to prove it.
- *  - the store itself: what the review UI (#347) calls from a click. `approve` and `revert` need an `ApprovalGesture`.
+ *  - the store itself: what the review UI (issue 347) calls from a click. `approve` and `revert` need an `ApprovalGesture`.
  *
  * What is sent is decided in exactly one place, `send`, which re-evaluates the policy over the stored classification and
  * the current grants on every call. A proposal in any other state is never sent, and a stale one is never forced.
@@ -53,7 +53,7 @@ export interface Problem {
   operation?: number;
   source?: SourcePosition;
   resource?: string;
-  /** A finding that predates the transaction: reported as a warning, never blocking (#372). */
+  /** A finding that predates the transaction: reported as a warning, never blocking (issue 372). */
   preexisting?: boolean;
 }
 
@@ -196,7 +196,7 @@ export class ProposalStore {
 
   private readonly transport: TransactionTransport;
   private readonly now: () => number;
-  private readonly grants = new GrantSet();
+  private grants = new GrantSet();
   private readonly sessionCreated = new Set<string>();
   private readonly entries: Entry[] = [];
   private readonly plans = new Map<string, { id: string; title: string | null; objects: ObjectId[]; approved: boolean }>();
@@ -261,7 +261,7 @@ export class ProposalStore {
     const entry = this.intake(result, options);
     this.changed();
     if (entry.state !== 'checking') return Promise.resolve(this.view(entry));
-    return this.enqueue(() => this.check(entry)).then(() => this.view(entry));
+    return this.enqueue(() => this.guarded(entry, 'dry-run', () => this.check(entry))).then(() => this.view(entry));
   }
 
   /**
@@ -311,7 +311,7 @@ export class ProposalStore {
     }
     entry.proposalApproved = true;
     this.changed();
-    await this.enqueue(() => this.send(entry));
+    await this.enqueue(() => this.guarded(entry, 'apply', () => this.send(entry)));
     return { granted, proposal: this.view(entry) };
   }
 
@@ -319,7 +319,7 @@ export class ProposalStore {
   async apply(id: string): Promise<Proposal | undefined> {
     const entry = this.entries.find((candidate) => candidate.id === id);
     if (entry === undefined) return undefined;
-    if (entry.state === 'waiting') await this.enqueue(() => this.send(entry));
+    if (entry.state === 'waiting') await this.enqueue(() => this.guarded(entry, 'apply', () => this.send(entry)));
     return this.view(entry);
   }
 
@@ -344,7 +344,7 @@ export class ProposalStore {
     if (!spendGesture(gesture)) throw new GestureError('a revert needs a live user gesture');
     const entry = this.entries.find((candidate) => candidate.id === id);
     if (entry === undefined) return undefined;
-    await this.enqueue(() => this.revertNow(entry));
+    await this.enqueue(() => this.revertNow(entry)).catch(() => undefined);
     return this.view(entry);
   }
 
@@ -354,6 +354,7 @@ export class ProposalStore {
     this.entries.length = 0;
     this.plans.clear();
     this.sessionCreated.clear();
+    this.grants = new GrantSet();
     this.listeners.clear();
   }
 
@@ -430,6 +431,15 @@ export class ProposalStore {
     entry.operations = deepFreeze(clone(operations as StagedOperation[]));
     entry.sources = deepFreeze(clone(sources as (SourcePosition | null)[]));
     return entry;
+  }
+
+  /** Anything unexpected in a step ends that proposal as failed; it never escapes as a rejection or leaves a state half-set. */
+  private async guarded(entry: Entry, phase: ProblemPhase, task: () => Promise<void>): Promise<void> {
+    try {
+      await task();
+    } catch (error) {
+      if (entry.state === 'checking' || entry.state === 'applying') this.failed(entry, phase, error);
+    }
   }
 
   /** Dry run, classify, and (policy allowing) apply: one slot of the queue, so stacked proposals interleave with nothing. */

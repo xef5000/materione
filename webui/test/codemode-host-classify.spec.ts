@@ -109,7 +109,7 @@ describe('new content created earlier', () => {
   it('what this session created in an earlier applied proposal is new', () => {
     const created = new Set<string>([id('items/ruby.yml')]);
     const result = run([op('setFields', { path: 'items/ruby.yml' })], [doc('items/ruby.yml', 'changed', [0])], created);
-    expect(result.operations[0].effect).toBe('new');
+    expect(result.operations[0]!.effect).toBe('new');
     expect(result.existing).toEqual([]);
     const deleted = run([op('delete', { path: 'items/ruby.yml' })], [doc('items/ruby.yml', 'deleted', [0])], created);
     expect(deleted.existing).toEqual([]);
@@ -129,7 +129,7 @@ describe('fail closed', () => {
   it('an unknown operation kind is a blocker, whatever it carries', () => {
     for (const kind of ['frobnicate', '', '__proto__', 'constructor', 'toString']) {
       const result = run([op(kind, { path: 'items/sword.yml' })]);
-      expect(result.operations[0].effect, kind).toBe('unknown');
+      expect(result.operations[0]!.effect, kind).toBe('unknown');
       expect(result.blockers, kind).toHaveLength(1);
       expect(decide(result, new GrantSet(), false).allowed, kind).toBe(false);
     }
@@ -138,7 +138,7 @@ describe('fail closed', () => {
   it('a known kind without a usable path is a blocker, not "new"', () => {
     for (const path of [undefined, null, 7, '', '../x.yml', 'a//b.yml']) {
       const result = run([op('setFields', { path })]);
-      expect(result.operations[0].effect, String(path)).toBe('unknown');
+      expect(result.operations[0]!.effect, String(path)).toBe('unknown');
       expect(result.blockers.length).toBeGreaterThan(0);
     }
   });
@@ -230,7 +230,7 @@ describe('properties over random operation lists', () => {
   it('an existing object is never classified new, a create never needs a grant, an unknown kind always blocks', () => {
     for (let seed = 1; seed <= 400; seed++) {
       const next = rng(seed);
-      const pick = <T>(list: readonly T[]): T => list[Math.floor(next() * list.length)];
+      const pick = <T>(list: readonly T[]): T => list[Math.floor(next() * list.length)] as T;
       const created = new Set<string>();
       for (const path of PATHS) if (next() < 0.3) created.add(id(path));
       const operations: StagedOperation[] = [];
@@ -243,7 +243,7 @@ describe('properties over random operation lists', () => {
       }
       const result = run(operations, documents, created);
       result.operations.forEach((entry, index) => {
-        const operation = operations[index];
+        const operation = operations[index]!;
         if (entry.kind === 'mystery') {
           expect(entry.effect, `seed ${seed}`).toBe('unknown');
         } else if (entry.kind === 'create') {
