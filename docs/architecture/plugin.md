@@ -626,6 +626,18 @@ the program does not run. The editor's test compares the table in `webui/src/lib
 | `CHK-0002` | error | The program (65,536 characters) or the generated declarations (1 MiB) is larger than the checker takes. Split the work into more than one program. |
 | `CHK-0003` | error | The check passed its wall-clock deadline (5 s once the checker is up) and its Worker was terminated. Simplify the program: deeply nested or recursive types and very large literals are what costs. The next check boots a fresh checker. |
 | `CHK-0004` | error | The checker could not run: its asset did not load within 20 s, or its Worker failed. Reload the editor; if it persists, the host is not serving the checker's static file. |
+| `SBX-0001` | error | The program used more than 1000 ms of engine CPU time (waiting on the editor does not count). The run ended, nothing was staged, and the sandbox was discarded. Avoid unbounded loops; stage the work directly. |
+| `SBX-0002` | error | The program used more memory than a run may (64 MiB cap on the engine memory). Work on a page of the data at a time. |
+| `SBX-0003` | error | The engine lost its stack to recursion (QuickJS stack 256 KiB). Ordinary deep recursion is the program's own SDK-0001; this is the engine-level case. Use a loop. |
+| `SBX-0004` | error | The program made more reads than a run may (100) or the answers were larger than 2 MiB, as the host counted. Read a list once and filter it in the program. |
+| `SBX-0005` | error | A read was not answered within 5 s, or the seal within 20 s. Try again and read less. |
+| `SBX-0006` | error | The sandbox held the run past its wall-clock backstop (10 s with no editor answer outstanding, 60 s in all) and was destroyed. Simplify the program. |
+| `SBX-0007` | error | The staged operations are more than 200, touch more than 50 documents, or are larger than 256 KiB, as the host counted them. Split the work into more than one program. |
+| `SBX-0008` | error | The logs (16 KiB) or the return value (64 KiB) are larger than a run may produce. Log and return summaries, not documents. |
+| `SBX-0009` | error | The program never finished: it awaits something that cannot settle. Await only the SDK reads. |
+| `SBX-0010` | error | The sandbox sent a message, an op or a result the host refuses (a malformed message, an op outside the SDK reads, a second seal, an oversize payload). The sandbox was discarded; run the program again. |
+| `SBX-0011` | error | The sandbox could not start: its static files did not load or its engine did not become ready within 10 s. Reload the editor; if it persists, the host is not serving the sandbox's files under sandbox/. |
+| `SBX-0012` | error | The program could not be run (it was not a checked program, or the engine failed). Run it again. |
 
 ---
 

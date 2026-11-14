@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { searchForWorkspaceRoot } from 'vite';
 import { workerBuild } from './vite.worker';
+import { sandboxAssets } from './vite.sandbox';
 
 // Dev-server proxy: the SPA runs on Vite's port while the plugin listener
 // keeps serving /s/* (session blobs) and /editor/ws (the channel) on its own
@@ -11,7 +12,8 @@ import { workerBuild } from './vite.worker';
 const origin = process.env.EDITOR_ORIGIN ?? 'http://127.0.0.1:8089';
 
 export default defineConfig({
-  plugins: [svelte()],
+  // sandboxAssets: the code-mode sandbox (frame, engine, core, wasm) as static files under sandbox/, fetched on the first agent use
+  plugins: [svelte(), sandboxAssets()],
   server: {
     // The demo imports its recorded server snapshot from the shared fixture corpus; the GUI studio reads the
     // smallcaps glyph file and the vanilla default-font widths the Java compiler reads (their single sources),
