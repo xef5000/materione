@@ -100,8 +100,11 @@ final class StagedReferences {
     private final Path packDirectory;
     private final ParsedContent parsed;
     private final DocumentCache cache;
+    private final dev.materione.core.pipeline.validate.StaticReferences staticReferences;
 
-    StagedReferences(String pack, Path packDirectory, ParsedContent parsed, DocumentCache cache) {
+    StagedReferences(String pack, Path packDirectory, ParsedContent parsed, DocumentCache cache,
+            dev.materione.core.pipeline.validate.StaticReferences staticReferences) {
+        this.staticReferences = staticReferences;
         this.pack = pack;
         this.packDirectory = packDirectory;
         this.parsed = parsed;
@@ -303,7 +306,7 @@ final class StagedReferences {
         }
         packs.add(new ContentPack(pack, packDirectory,
                 manifestSource == null ? null : manifestSource.manifest(), own));
-        return new ValidationEnvironment(packs, assets, sizes);
+        return new ValidationEnvironment(packs, assets, sizes, staticReferences);
     }
 
     /** The untouched resources that name an id the list changed, directly or through another such resource. */

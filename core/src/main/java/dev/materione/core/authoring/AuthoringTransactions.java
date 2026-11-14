@@ -1068,7 +1068,7 @@ final class AuthoringTransactions {
             }
             try {
                 references = new StagedReferences(
-                        plan.pack, api.packDirectory(plan.pack), parsed.get(), api.referenceCache());
+                        plan.pack, api.packDirectory(plan.pack), parsed.get(), api.referenceCache(), api.staticReferences());
                 staging = references.view(stagedDocuments);
             } catch (IOException | RuntimeException failure) {
                 // the pack could not be read: neither the references stage nor the staged lookups run

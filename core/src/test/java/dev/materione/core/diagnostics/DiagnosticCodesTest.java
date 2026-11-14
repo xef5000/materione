@@ -53,7 +53,8 @@ class DiagnosticCodesTest {
         // MTR-0100 the platform lacks checkpoint support, MTR-0101 a player's escrow state is unreadable,
         // MTR-0102 a strict input transfer could not be recorded, MTR-0103 recovery left stacks owed:
         // gui-input-durability.md section 5.9, #309 and #310;
-        // MTR-0104 a transaction cannot be reverted: codemode.md section 10, #344)
-        assertThat(DiagnosticCodes.all()).hasSize(103);
+        // MTR-0104 a transaction cannot be reverted: codemode.md section 10, #344;
+        // MTR-0105 a rule step names content no pack declares: codemode.md section 10, #363)
+        assertThat(DiagnosticCodes.all()).hasSize(104);
     }
 }

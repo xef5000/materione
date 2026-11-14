@@ -17,19 +17,28 @@ public record ValidationEnvironment(
         List<ContentPack> packs,
         Set<NamespacedId> knownAssets,
         Map<NamespacedId, int[]> paintingSizes,
-        Map<String, Map<String, Object>> templatePool) {
+        Map<String, Map<String, Object>> templatePool,
+        StaticReferences staticReferences) {
 
     public ValidationEnvironment {
         packs = List.copyOf(packs);
         knownAssets = Set.copyOf(knownAssets);
         paintingSizes = Map.copyOf(paintingSizes);
         templatePool = Map.copyOf(templatePool);
+        staticReferences = staticReferences == null ? StaticReferences.NONE : staticReferences;
     }
 
     /** The pool is derived from the packs: validation resolves chains exactly as the compile will. */
     public ValidationEnvironment(
             List<ContentPack> packs, Set<NamespacedId> knownAssets, Map<NamespacedId, int[]> paintingSizes) {
-        this(packs, knownAssets, paintingSizes, TemplatePools.of(packs));
+        this(packs, knownAssets, paintingSizes, TemplatePools.of(packs), StaticReferences.NONE);
+    }
+
+    /** As above, with the static references of the host's logic vocabulary checked too. */
+    public ValidationEnvironment(
+            List<ContentPack> packs, Set<NamespacedId> knownAssets, Map<NamespacedId, int[]> paintingSizes,
+            StaticReferences staticReferences) {
+        this(packs, knownAssets, paintingSizes, TemplatePools.of(packs), staticReferences);
     }
 
     /** Two-component arity kept for tests: no painting sizes recorded. */

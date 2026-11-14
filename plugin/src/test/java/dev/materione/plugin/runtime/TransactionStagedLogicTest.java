@@ -155,6 +155,46 @@ class TransactionStagedLogicTest {
         assertThat(report.get("accepted").getAsBoolean()).isTrue();
     }
 
+    /** Applies a list (not a dry run). */
+    private JsonObject apply(RpcDispatcher dispatcher, String... operations) {
+        JsonObject request = JsonParser.parseString(
+                "{\"pack\":\"" + PACK + "\",\"dryRun\":false,\"operations\":[" + String.join(",", operations) + "]}")
+                .getAsJsonObject();
+        return call(dispatcher, "authoring.transaction", request);
+    }
+
+    @Test
+    void deletingAnItemAGuiSlotAndAStaticStepNameIsReportedAgainstTheDeletingOperation() throws IOException {
+        RpcDispatcher server = server();
+        String token = """
+                {"kind":"create","type":"items","id":"token","edits":[
+                  {"field":["token","material"],"value":"PAPER"}]}""";
+        String hub = """
+                {"kind":"create","type":"guis","id":"hub","edits":[
+                  {"field":["hub","container"],"value":"chest_3"},
+                  {"field":["hub","title"],"value":"Hub"},
+                  {"field":["hub","layers"],"value":[
+                    {"type":"materione:item","id":"slot","slot":4,"item":"bench:token"},
+                    {"type":"materione:button","id":"go","x":70,"y":30,"width":36,"height":20}]},
+                  {"field":["hub","behavior"],"value":[
+                    {"on":"gui.click","layer":"go","do":[
+                      {"give_item":"bench:token"},
+                      {"gui.open":{"gui":"bench:hub"}},
+                      {"give_item":"%player_name%"}]}]}]}""";
+        JsonObject applied = apply(server, token, hub);
+        assertThat(applied.get("accepted").getAsBoolean()).as(String.valueOf(applied)).isTrue();
+        assertThat(findings(applied)).as("a pack that names only what it declares is clean").isEmpty();
+        int revision = 1;
+
+        String delete = "{\"kind\":\"delete\",\"path\":\"items/token.yml\",\"rev\":" + revision + "}";
+        JsonObject report = dryRun(server, delete);
+
+        assertThat(report.get("accepted").getAsBoolean()).as("warnings never refuse").isTrue();
+        assertThat(findings(report)).contains("0 MTR-0054 warn", "0 MTR-0105 warn");
+        assertThat(findings(report)).as("a templated id is an expression, not checked")
+                .filteredOn(finding -> finding.contains("MTR-0105")).hasSize(1);
+    }
+
     @Test
     void aTriggerTheRuleHostFiresIsNotWarned() throws IOException {
         String rule = """

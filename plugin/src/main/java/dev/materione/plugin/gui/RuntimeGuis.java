@@ -90,6 +90,24 @@ public final class RuntimeGuis {
             Function<NamespacedId, Optional<Material>> vanilla,
             Consumer<Diagnostic> diagnostics,
             LogicLookup logic) {
+        return build(compiled, items, vanilla, diagnostics, logic, id -> true);
+    }
+
+    /**
+     * As above. {@code declared} says whether some pack declares an item, block or furniture of that id. A slot whose
+     * Materione id nobody declares was already reported at reference resolution (level 3, the same {@code MTR-0054}),
+     * so it is not reported again here; a declared item that is not live (quarantined, or a vanilla material that
+     * does not exist) is the runtime's to report, as the validator cannot tell.
+     *
+     * @param declared which Materione ids a pack declares; {@code id -> true} keeps every report
+     */
+    public static RuntimeGuis build(
+            Map<NamespacedId, CompiledGui> compiled,
+            Function<NamespacedId, Optional<RuntimeItem>> items,
+            Function<NamespacedId, Optional<Material>> vanilla,
+            Consumer<Diagnostic> diagnostics,
+            LogicLookup logic,
+            java.util.function.Predicate<NamespacedId> declared) {
         var out = new LinkedHashMap<NamespacedId, Live>();
         for (CompiledGui gui : compiled.values()) {
             InputSlots inputs = InputSlots.compile(gui.inputs(), gui.id(), logic,
@@ -103,7 +121,9 @@ public final class RuntimeGuis {
                 }
                 Item item = resolve(entry.item(), items, vanilla);
                 if (item == null) {
-                    diagnostics.accept(unresolved(gui, entry));
+                    if (entry.item().isReservedNamespace() || declared.test(entry.item())) {
+                        diagnostics.accept(unresolved(gui, entry));
+                    }
                 } else {
                     slots.add(new Slot(entry.slot(), item, entry.amount()));
                 }
