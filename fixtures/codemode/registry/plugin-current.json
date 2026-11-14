@@ -419,6 +419,7 @@
               "id": "gui",
               "label": "Gui",
               "order": 0,
+              "referenceKind": "gui",
               "required": true,
               "section": "general",
               "type": "reference",

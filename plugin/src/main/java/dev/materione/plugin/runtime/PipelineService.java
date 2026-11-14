@@ -112,6 +112,10 @@ public final class PipelineService {
         this.scheduling = scheduling;
         this.descriptor = descriptor;
         this.runner = new PipelineRunner(diagnostics, quarantine);
+        // the static references of rules (an item a give_item names, a GUI a gui.open names), from self-description (#363)
+        this.runner.staticReferences(new dev.materione.core.pipeline.validate.StaticReferenceWalker(
+                new dev.materione.behavior.logic.RegistryLogicVocabulary(
+                        new dev.materione.behavior.logic.RegistryLogicLookup(registries))));
         // The server's self-reported format beats the table (a server newer
         // than this build still names its own format); -1 = detection failed.
         var detected = dev.materione.platform.probe.ServerPackFormat.detect().orElse(null);
@@ -638,8 +642,22 @@ public final class PipelineService {
         // the content tree a browser walks, over the items that are live in this same shadow
         builder.view(dev.materione.core.runtime.RuntimeContentIndex.KEY, contentIndex(packs, builder::findItem));
         // GUI slots resolve against every item of this apply, placement items included (gui.md §5)
+        // an item no pack declares was reported by the validate stage already (MTR-0054, level 3): not twice
+        var declaredItems = new java.util.HashSet<NamespacedId>();
+        for (ContentPack declaring : packs) {
+            if (declaring.manifest() == null) {
+                continue;
+            }
+            for (ContentResource resource : declaring.resources()) {
+                if (resource.contentType().equals("item") || resource.contentType().equals("block")
+                        || resource.contentType().equals("furniture")) {
+                    declaredItems.add(resource.id());
+                }
+            }
+        }
         builder.view(RuntimeGuis.KEY, RuntimeGuis.build(
-                guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish, logicLookup()));
+                guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish, logicLookup(),
+                declaredItems::contains));
         return builder.build();
     }
 

@@ -75,6 +75,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private volatile Supplier<Allocations> previewAllocations;
     private volatile Supplier<dev.materione.core.pipeline.ParsedContent> parsedContent;
     private final StagedReferences.DocumentCache referenceCache = new StagedReferences.DocumentCache();
+    private volatile dev.materione.core.pipeline.validate.StaticReferences staticReferences =
+            dev.materione.core.pipeline.validate.StaticReferences.NONE;
     private volatile DocumentStore.WriteObserver commitObserver = (index, write) -> { };
     private volatile TransactionJournal transactionJournal;
     private final AuthoringTransactions transactions;
@@ -259,6 +261,20 @@ public final class AuthoringApiImpl implements AuthoringApi {
 
     Supplier<dev.materione.core.pipeline.ParsedContent> parsedContent() {
         return parsedContent;
+    }
+
+    /**
+     * The static references of rules (an item a {@code give_item} names, a GUI a {@code gui.open} names), found from
+     * the logic vocabulary the host registers: the reference stage of a transaction checks them with the pipeline's
+     * own validator. Without it only the references the validator reads from the documents themselves are checked.
+     */
+    public void staticReferences(dev.materione.core.pipeline.validate.StaticReferences references) {
+        this.staticReferences = references == null
+                ? dev.materione.core.pipeline.validate.StaticReferences.NONE : references;
+    }
+
+    dev.materione.core.pipeline.validate.StaticReferences staticReferences() {
+        return staticReferences;
     }
 
     StagedReferences.DocumentCache referenceCache() {
