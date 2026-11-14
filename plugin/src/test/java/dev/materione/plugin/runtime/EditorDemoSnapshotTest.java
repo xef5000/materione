@@ -68,6 +68,11 @@ class EditorDemoSnapshotTest {
 
     @org.junit.jupiter.api.AfterEach
     void close() {
+        closeAll();
+    }
+
+    /** Stops what {@link #realOps} started (shared with the code-mode replay test). */
+    static void closeAll() {
         CLOSE.forEach(Runnable::run);
         CLOSE.clear();
     }
@@ -138,7 +143,17 @@ class EditorDemoSnapshotTest {
     }
 
     /** The plugin's own wiring (MaterionePlugin#wireApi), headless. */
-    private static RpcDispatcher realOps(Path root, StorageService.StorageState storage) throws IOException {
+    static RpcDispatcher realOps(Path root, StorageService.StorageState storage) throws IOException {
+        return realOps(root, storage, false);
+    }
+
+    /**
+     * @param productionAuthoring also wires what the plugin's authoring API has beyond the demo's: the logic surface,
+     *        the GUI rule checker and material palette, the allocation preview and the parsed content a transaction's
+     *        dry run validates against (the code-mode replay test needs a dry run as real as a server's)
+     */
+    static RpcDispatcher realOps(Path root, StorageService.StorageState storage, boolean productionAuthoring)
+            throws IOException {
         var diagnostics = new DiagnosticsBusService(256);
         var quarantine = new QuarantineTracker();
         var registries = new RegistryService();
@@ -181,7 +196,16 @@ class EditorDemoSnapshotTest {
                                 dev.materione.api.gui.GuiComponent.class),
                         packsRoot,
                         () -> pipeline.allocation().preview(),
-                        List.of()));
+                        productionAuthoring ? itemMaterials() : List.of(),
+                        productionAuthoring ? pipeline.guiRuleChecker() : dev.materione.content.gui.logic.GuiRuleChecker.NONE),
+                productionAuthoring
+                        ? base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(
+                                base, new dev.materione.behavior.logic.RegistryLogicLookup(registries))
+                        : null);
+        if (productionAuthoring) {
+            authoring.previewAllocations(() -> pipeline.allocation().preview());
+            authoring.parsedContent(() -> pipeline.runner().lastParsed());
+        }
         var assets = new dev.materione.core.assets.AssetApiImpl(assetStore, packsRoot, (actor, pack, changed) -> { });
         EditorTransportService[] transport = new EditorTransportService[1];
         var admin = new AdminApiImpl(() -> null, registries, diagnostics, quarantine,
@@ -358,7 +382,7 @@ class EditorDemoSnapshotTest {
         return path.toAbsolutePath().toString().replace("\\", "\\\\");
     }
 
-    private static void copyTree(Path from, Path to) throws IOException {
+    static void copyTree(Path from, Path to) throws IOException {
         List<Path> files = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(from)) {
             walk.filter(Files::isRegularFile).forEach(files::add);

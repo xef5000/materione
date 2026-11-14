@@ -88,8 +88,8 @@
   ],
   "diagnostics": [],
   "stats": {
-    "reads": 2,
-    "readBytes": 107,
+    "reads": 0,
+    "readBytes": 0,
     "staged": 2,
     "documents": 1
   }

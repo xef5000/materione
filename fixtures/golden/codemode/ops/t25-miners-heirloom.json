@@ -51,8 +51,8 @@
   ],
   "diagnostics": [],
   "stats": {
-    "reads": 1,
-    "readBytes": 19,
+    "reads": 0,
+    "readBytes": 0,
     "staged": 1,
     "documents": 1
   }

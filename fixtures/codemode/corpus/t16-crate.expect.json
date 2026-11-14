@@ -1,0 +1,9 @@
+{
+  "task": "T16",
+  "title": "Crate",
+  "registry": "plugin-current",
+  "result": "pass",
+  "replay": {
+    "note": "The dry run reports MTR-0009 for the model (the asset path spelling, benchmark S14, #355) and for texture 'block/crate', a default the furniture scaffold writes beside a model that resolves to nothing in the pack (benchmark S18). The list is otherwise accepted: the rule on furnitures/crate.yml, the key item and the choose all compile (the behavior stage ran)."
+  }
+}

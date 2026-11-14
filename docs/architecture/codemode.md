@@ -374,7 +374,7 @@ not part of it.
 | Piece | Where | What it is |
 |---|---|---|
 | **Entry** | `core/index.ts`, `core/session.ts` | `createSession({ surface, port, limits?, programFile? })` returns `{ m, finish(outcome), late() }`. `m` is the program's one global; `finish` ends the run and returns a `ProgramResult`. |
-| **The port** | `core/types.ts` | `HostPort { read(op, payload): ReadReply; stage?; log?; done? }`. `read` is the only way out: the core asks for an op of its table and the host answers (and holds the allowlist too). It is synchronous from the program's side, so the sandbox must suspend the program while the host answers (an asyncified embedding, or a read the host pre-fetched); `stage`, `log` and `done` are observers. |
+| **The port** | `core/types.ts` | `HostPort { read(op, payload): Promise<ReadReply>; resolve(request): Promise<ResolveReply>; stage?; log?; done? }`. Staging makes no call; `m.read.*` awaits `read`; the seal makes one `resolve`. The contract is below. |
 | **Operation table** | `core/ops.ts` | The one place that names editor ops: `READS` and `WRITES`, one row per SDK member and, for a write, per operation kind, with the capability that gates it. `scripts/compat/editor-compat.mjs` scans it as it scans the editor's `.call(...)` sites and fails when a supported release lacks an op named there, unless it is gated in `editor-op-gates.json` on a capability the row names (the core checks it before it exposes the member). |
 | **Step grammar** | `core/steps.ts` | `m.steps.*` and the two rule keys that are flow vocabulary (`if`, `do`). The only file that names engine vocabulary, temporary until #355 (§3.8, "Where the generated surface stops"); a ban test confines it. |
 | **Naming, context, capabilities** | `generate/names.ts`, `generate/context.ts`, `generate/capabilities.ts` | One implementation each, **imported by both the generator and the core**: how an id becomes a member name, how a trigger's context schema becomes a tree, and when a capability takes members away. The generator and the core cannot spell a member differently because there is one spelling. |
@@ -383,18 +383,18 @@ not part of it.
 **The mapping, as built** (SDK call to transaction operation; everything is `authoring.transaction`, capability `codemode`, and the
 list the program stages *is* the request's `operations`, untouched):
 
-| SDK call | Stages | Reads first |
+| SDK call | Stages | Filled at seal from |
 |---|---|---|
-| `p.<collection>.create(id, fields, { folder? })` | `create { type: <the type's directory>, id, folder?, edits }`, one `{ field: [id, key], value }` per field in the program's order | `browse.packs`, once per run (the pack exists and is not built in) |
-| `handle.set(patch)` | `setFields { path, rev?, edits }` | `browse.get` once per stored document (its revision), none for a created one |
+| `p.<collection>.create(id, fields, { folder? })` | `create { type: <the type's directory>, id, folder?, edits }`, one `{ field: [id, key], value }` per field in the program's order | `packs` (the pack exists and is not built in) |
+| `handle.set(patch)` | `setFields { path, rev?, edits }` | `refs` with `needsDocument`: path and `rev`; nothing for a created one |
 | `handle.unset(...keys)` | `setFields { path, rev?, edits: [{ field, remove: true }] }` | as `set` |
 | `handle.duplicate(id, { folder?, fields? })` | `duplicate { fromPath, rev?, id, folder?, edits? }`; returns the copy's handle | as `set`, for the source |
 | `handle.delete()` | `delete { path, rev? }`; a resource this program creates is refused (SDK-0012) | as `set` |
 | `handle.detachTemplate()` | `detachTemplate { path, rev?, resource }` | as `set` |
 | `handle.saveAsTemplate(templateId, fields)` | `saveAsTemplate { fromPath, rev?, resource, templateId, fields }` (at least one field, as the server requires) | as `set` |
-| `handle.rules.add(trigger, build)` | `logicEdit { path, rev?, edits: [{ op: "addRule", index, rule }] }`; `rule` is `{ on: "id[:detail]", <filters>, <options>, if?, do }` | as `set`; the document's rule count (for `index`) from the same read |
-| `handle.rules.instantiate(recipe)` | one `logicEdit` with an `addRule` per rule the server expanded | `logic.instantiate` (capability `logic`) |
-| `m.edit(ref)` | no operation: the handle of a stored resource, whose later calls stage the rows above | `authoring.summaries` to resolve the id, then as `set` |
+| `handle.rules.add(trigger, build)` | `logicEdit { path, rev?, edits: [{ op: "addRule", index, rule }] }`; `rule` is `{ on: "id[:detail]", <filters>, <options>, if?, do }` | as `set`, plus the stored rule count for `index` |
+| `handle.rules.instantiate(recipe)` | one `logicEdit` with an `addRule` per rule the server expanded | `instantiate`: the expansion; the rule count as for `add` |
+| `m.edit(ref)` | no operation: the handle of a stored resource, whose later calls stage the rows above | no operation; `refs` resolves the id |
 
 `rev` is the stored revision, sent on every operation that names a stored document (the transaction needs it the first time and
 accepts the same number again) and never for a document the program creates (S3). A stored document's rules continue its
@@ -406,7 +406,7 @@ server's `Move` does not do), **`guiEdit`** (a GUI is authored through its `laye
 is a field). Each is a row to add in `ops.ts` and a member to add to `core.d.ts` when a task asks for it; none changes the
 mapping above.
 
-**The read side**, over ops that exist (§3.2): `m.read.packs()` (`browse.packs`), `resources({ pack, type?, query?, limit? })`
+**The read side** (asynchronous: every member returns a promise the program awaits), over ops that exist (§3.2): `m.read.packs()` (`browse.packs`), `resources({ pack, type?, query?, limit? })`
 (`authoring.summaries`, paged), `get(ref)` (`browse.get`: the resource's tree typed by its content type, its revision, its
 computed metadata), `references(ref)` (`authoring.references`, with its coverage so "no hits" is not read as "unused"),
 `history(ref)` (`browse.history`), `diagnostics()` (`admin.diagnostics.recent`, the server's recent list), and `m.ref.<type>("pack:id")`
@@ -414,6 +414,57 @@ computed metadata), `references(ref)` (`authoring.references`, with its coverage
 pure functions of the surface document, with no read. Reads see the stored state (§3.2 rule 2): a handle `create` returned is
 addressed by itself, and `m.read.get` of one is refused. A read is cached for the run by its op and payload, so a loop that asks
 twice asks once. What has no op yet (traces, runtime variables, the graph, a source excerpt) is not exposed (benchmark S16).
+
+**Staging reads nothing; the list is sealed** (owner decision on #343, built in #381; the spike, #340, measured async host calls on the
+plain sync QuickJS build, 503 KB, so the sandbox needs no asyncify, 1.03 MB). A staging member (`create`, `set`, `rules.add`, `m.edit`,
+`m.ref.<type>`, `m.ref.asset`, ...) **makes no call to the host**. It checks what it can check alone (a valid id, a known trigger,
+a parameter the registry entry has, the caps), records the operation as a closure, and returns. What it could not know (a stored
+resource's path and revision, how many rules a document already holds, what a recipe expands to, whether a pack, an id or an
+asset exists) is asked for **once**, in one batched `resolve`, when the program has returned; the operations are then built in
+the order the program staged them. A program that stages nothing and names nothing makes no call; one that only reads makes
+only reads. A test holds it (`codemode-core.spec.ts`: no port call before the program returns, and the one call after is a
+`resolve`), and a ban test holds the code (`port.read` is reached only from the read function, `port.resolve` only from the seal).
+
+**The `HostPort` contract** (for #343; `core/types.ts`):
+
+| Member | Called by | Contract |
+|---|---|---|
+| `read(op, payload): Promise<ReadReply>` | `m.read.*` only, and the lookups behind them | One read-only editor op, an op of the table (`READS` without `via: 'resolve'`). The host answers when it has the reply: **asynchronous**, so a plain QuickJS host returns a guest promise. The core counts it against the read budget and caches it by op and payload, the promise included, so two identical reads in flight are one. |
+| `resolve(request): Promise<ResolveReply>` | the seal, once, at `finish` | The batch below. Called only when the list names something to resolve (so never for a read-only program), after the program has returned and its promise settled. The host answers it with read-only editor ops, the rows of the table with `via: 'resolve'` (`browse.packs`, `authoring.summaries`, `browse.get`, `logic.instantiate`, `assets.list`), however it likes to batch them. |
+| `stage?(operation, source, index)`, `log?(line)`, `done?(result)` | the seal; `m.log`; the end | Observers. The core tells the host, it never asks the host to apply anything. |
+
+`ResolveRequest` (every list in the reply is parallel to the list of the same name):
+
+| Field | Holds | Reply |
+|---|---|---|
+| `packs` | the pack the program writes to (at most one) | `{ state: "ok" \| "builtin" \| "missing", nearest? }`: a built-in or missing pack is SDK-0008 at the line of the first stage into it |
+| `refs` | each stored resource the program names, in first-named order: `{ kind, directory, pack, id, needsDocument, rulesKey? }`. `needsDocument` is true when an operation names it | `{ found: false, nearest? }` is SDK-0007 at the line that first named it, with the nearest ids. `{ found: true, path, rev, rules }` when `needsDocument`: the document's path, its stored revision, and the length of the field `rulesKey` names in its tree |
+| `instantiate` | each recipe to expand: `{ recipe, params }`, in the order the program instantiated | `{ rules, warnings? }` (warnings are SDK-0017) or `{ error: { code?, message } }` (SDK-0010 with the server's code) |
+| `assets` | each asset path the program referenced, in the pack it writes to | `{ found, nearest? }`; a missing one is SDK-0011 |
+
+**One rule for unknown ids.** An id the program names through `m.ref.<type>` or `m.edit` that does not exist is **SDK-0007 at seal,
+at the line that named it** (one per id, however many uses), and the run ends with no operations, so the list never goes to
+the dry run. The dry run's references stage (#360) therefore cannot report the same id a second time: it checks the ids a
+program writes *inside field values* (a string it typed), which the core cannot see, and nothing the core has already refused.
+
+**How the interleavings stay right.** Every rule index is computed at seal, in staging order, from one counter per document: its
+stored count (from the resolve) or 0 for a document the program creates, plus what the earlier operations on it added, a
+recipe's expansion counting for as many rules as the server expanded it to. Two adds, an instantiate and an add on three
+different documents, interleaved, give the indexes the old call-time reads gave (`codemode-core.spec.ts`, and the ops goldens did
+not change). A stored document counts once towards the cap of 50 documents by its identity (a conservative count: two resources
+in one file count twice here, once at the server).
+
+**What the old design read at call time, and what became of each** (the table that decided #381):
+
+| Member | Used to read | Now |
+|---|---|---|
+| first stage into a pack | `browse.packs` | `ResolveRequest.packs` |
+| `m.ref.<type>("pack:id")` | `authoring.summaries` (1 to 2) | `refs`, existence only (`needsDocument: false`) |
+| `m.edit(ref)` and the operations on a stored resource | `authoring.summaries`, `browse.get` | `refs`: path, `rev`, rule count |
+| `rules.instantiate(recipe)` | `logic.instantiate` | `instantiate` |
+| `m.ref.asset(path)` | `assets.list`, at finish | `assets` |
+| `m.read.packs`, `resources`, `get`, `references`, `history`, `diagnostics` | one op each | unchanged, and now **asynchronous**: the program awaits them (`await m.read.get(ref)`); the only members that wait for the host |
+| `m.docs.*`, `m.hasCapability`, every builder | none | none |
 
 **Values.** A step, condition, mechanic entry, GUI layer, source, expression, context value, trigger and reference is a frozen
 object the core builds and records in a private `WeakMap`; the program cannot forge one, and anything it writes by hand is plain
@@ -425,7 +476,7 @@ arity is checked against `minArguments` and `variadic`, and a value a document c
 `undefined` in a list) is SDK-0009 with its field path. Two spellings the registry cannot yet settle are benchmark S12 (a
 variable inside an expression) and S14 (an asset in a field).
 
-**The run.** `finish` returns the `ProgramResult` of §5.2: `ok`, `operations`, `sources` (the program line and column of each
+**The run.** `finish` (asynchronous: it seals the list with one `resolve`, then returns) gives the `ProgramResult` of §5.2: `ok`, `operations`, `sources` (the program line and column of each
 operation, from the stack frame of the call, parallel to `operations`), `diagnostics`, `summary`, `logs`, the bounded `returned`,
 and counters. A run with an error diagnostic has **no operations**, and an error is recorded before it is thrown, so a program
 that catches it still fails. Anything the program throws that is not the core's is one SDK-0001 with the program's line. After
@@ -450,9 +501,15 @@ is `{ folder? }` (the transaction has no file parameter, benchmark S13); `Resour
 `ContentTypeFields` and `ContentTypeHandles` maps those are typed from, and leaves `PackWriter` and `rules` out of a surface whose
 jar lacks the `codemode` or `logic` capability (§7), which the core leaves off at run time by the same function.
 
-**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check are executed and their lists recorded as
-goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a `<task>.world.json` beside it that the fake port answers from, T11's asset list today), each checked against the wire shape read from the plugin's own parser
-(`TransactionOps.operationOf`), every kind of operation, every error. `codemode-core-drift.spec.ts`: the declarations and the
+**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check (T04, T08, T11, T16, T25, T29, and the two corpus-only programs below) are executed and
+their lists recorded as goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a
+`<task>.world.json` beside it that the fake port answers from), every kind of operation, every error.
+Two corpus-only programs (no benchmark task reads and then edits what it found) cover the async half end to end: **C01** awaits `m.read.resources` and edits each stored resource it found (read, then stage, then seal with `rev` on stored documents; it replays as accepted against the fixture pack), and **C02** reads and then names an id with a typo, pinned as SDK-0007 at the line that named it; a run that ends with an error has no list, so its golden is a `runs/` record and there is nothing to replay. A read the program never awaits is waited for at `finish`, so its bytes are in the stats and its failure in the diagnostics whatever order a slow host answers in (a read the host never answers is the host's deadline to end).
+**`CodemodeReplayTest` (JVM, `plugin` module) replays every golden through the real `authoring.transaction` with `dryRun=true`**
+over the real registries and the fixture packs, and pins which stages ran, the diagnostics and the documents beside it
+(`fixtures/golden/codemode/replay/`): the same fixtures test both sides, so a list the core stages and the server refuses fails
+there. A golden whose replay reports a problem stays in the corpus with its diagnostic pinned and a `replay.note` in its
+`expect.json` naming what flips it (T04: #355, #378; T11: #355; T16: #355 and benchmark S18). `codemode-core-drift.spec.ts`: the declarations and the
 bundled core are walked with the TypeScript checker and compared member by member (`m`, each catalog, the pack writer, each
 collection, each handle, each rule set) over both recorded registries, a jar without each capability, and a jar that predates the
 capability list. `codemode-core-bans.spec.ts`: the core holds no registry id as a literal (the generator's ban, applied here),

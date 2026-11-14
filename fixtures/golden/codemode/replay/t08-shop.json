@@ -1,0 +1,51 @@
+{
+  "golden": "t08-shop",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": false
+    },
+    {
+      "id": "build",
+      "ran": false
+    },
+    {
+      "id": "behavior",
+      "ran": false
+    },
+    {
+      "id": "gui",
+      "ran": true
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "guis/shop.yml",
+      "kind": "created",
+      "operations": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  ]
+}

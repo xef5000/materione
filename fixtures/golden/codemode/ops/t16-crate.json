@@ -1,0 +1,164 @@
+{
+  "task": "T16",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a crate and its key: right-clicking the crate with a key gives one of five weighted rewards.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "crate_key",
+      "edits": [
+        {
+          "field": [
+            "crate_key",
+            "material"
+          ],
+          "value": "TRIPWIRE_HOOK"
+        },
+        {
+          "field": [
+            "crate_key",
+            "display_name"
+          ],
+          "value": "<gold>Crate Key"
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "furnitures",
+      "id": "crate",
+      "edits": [
+        {
+          "field": [
+            "crate",
+            "model"
+          ],
+          "value": "models/crate.json"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "furnitures/crate.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "click:right",
+            "do": [
+              {
+                "require": [
+                  {
+                    "take_item": {
+                      "item": "bench:crate_key",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>You need a Crate Key."
+                  }
+                ]
+              },
+              {
+                "set_var": {
+                  "var": "roll",
+                  "op": "set",
+                  "value": "${random(1, 100)}"
+                }
+              },
+              {
+                "choose": [
+                  {
+                    "if": "${vars.roll <= 50}",
+                    "then": [
+                      {
+                        "give_item": {
+                          "item": "minecraft:iron_ingot",
+                          "amount": 8
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.roll <= 80}",
+                    "then": [
+                      {
+                        "give_item": {
+                          "item": "minecraft:gold_ingot",
+                          "amount": 4
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.roll <= 95}",
+                    "then": [
+                      {
+                        "give_item": {
+                          "item": "minecraft:diamond",
+                          "amount": 2
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.roll <= 99}",
+                    "then": [
+                      {
+                        "give_item": {
+                          "item": "minecraft:netherite_scrap",
+                          "amount": 1
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.roll <= 100}",
+                    "then": [
+                      {
+                        "give_item": {
+                          "item": "minecraft:nether_star",
+                          "amount": 1
+                        }
+                      },
+                      {
+                        "broadcast": "<gold>${player.name} found a Nether Star!"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 5,
+      "column": 21
+    },
+    {
+      "line": 13,
+      "column": 28
+    },
+    {
+      "line": 15,
+      "column": 13
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 3,
+    "documents": 2
+  }
+}

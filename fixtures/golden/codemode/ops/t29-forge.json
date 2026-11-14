@@ -1,0 +1,193 @@
+{
+  "task": "T29",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a forge GUI: a ruby sword and 3 rubies plus 200 coins become the refined ruby sword.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "refined_ruby_sword",
+      "edits": [
+        {
+          "field": [
+            "refined_ruby_sword",
+            "material"
+          ],
+          "value": "NETHERITE_SWORD"
+        },
+        {
+          "field": [
+            "refined_ruby_sword",
+            "display_name"
+          ],
+          "value": "<red>Refined Ruby Sword"
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "forge",
+      "edits": [
+        {
+          "field": [
+            "forge",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "forge",
+            "title"
+          ],
+          "value": "Forge"
+        },
+        {
+          "field": [
+            "forge",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "forge"
+            ]
+          }
+        },
+        {
+          "field": [
+            "forge",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:slots",
+              "id": "inputs",
+              "region": "container",
+              "input": true,
+              "durable": "required"
+            },
+            {
+              "type": "materione:button",
+              "id": "forge_button",
+              "x": 134,
+              "y": 34,
+              "width": 18,
+              "height": 18
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/forge.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "forge_button",
+            "do": [
+              {
+                "if": {
+                  "slot_has": {
+                    "slot": 11,
+                    "item": "sample:ruby_sword",
+                    "amount": 1
+                  }
+                },
+                "else": [
+                  {
+                    "message": "<red>Put a ruby sword in the first slot."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "if": {
+                  "slot_has": {
+                    "slot": 13,
+                    "item": "sample:ruby",
+                    "amount": 3
+                  }
+                },
+                "else": [
+                  {
+                    "message": "<red>Put 3 rubies in the second slot."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "require": [
+                  {
+                    "take_money": 200
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>You need 200 coins."
+                  }
+                ]
+              },
+              {
+                "custody.consume": {
+                  "slot": 11,
+                  "await": "saved"
+                }
+              },
+              {
+                "custody.consume": {
+                  "slot": 13,
+                  "await": "saved"
+                }
+              },
+              {
+                "give_item": {
+                  "item": "bench:refined_ruby_sword",
+                  "amount": 1
+                }
+              },
+              "gui.refresh"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 5,
+      "column": 25
+    },
+    {
+      "line": 6,
+      "column": 22
+    },
+    {
+      "line": 15,
+      "column": 13
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 23,
+        "column": 32
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 3,
+    "documents": 2
+  }
+}

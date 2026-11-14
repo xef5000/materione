@@ -1,0 +1,53 @@
+{
+  "golden": "t29-forge",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": true
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "items/refined_ruby_sword.yml",
+      "kind": "created",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "guis/forge.yml",
+      "kind": "created",
+      "operations": [
+        1,
+        2
+      ]
+    }
+  ]
+}
