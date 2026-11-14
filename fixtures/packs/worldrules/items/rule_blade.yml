@@ -1,0 +1,14 @@
+# An item that holds an entity.hit rule (logic.md section 37): it fires for the item in the player's main hand, the way
+# break does for a tool. The same trigger a rule document answers, with item.* describing this item.
+rule_blade:
+  material: IRON_SWORD
+  display_name: "Rule Blade"
+  behavior:
+    - on: entity.hit
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-BLADE ${item.id} hit ${target.type}"
+        - chat: "CHECK blade ${item.id} hit ${target.type}"
+    # the same trigger a rule document answers (`death`): fires once per stack of this item among a dying player's drops
+    - on: death
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-ITEMDEATH ${item.id}"

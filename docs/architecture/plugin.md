@@ -554,6 +554,14 @@ meaning and step paths as for items (`gui.validate` returns them for a `saved` o
 section of the wrong shape, and three warnings on a rule that loads and never runs: a `layer:` that names no
 layer of the GUI or a hidden one, a `slot:` outside the container, and a trigger no GUI fires.
 
+The `rule` content type ([`logic.md`](logic.md) §37, #327) takes no new code either. A rule document's `behavior:` goes through the
+same flow compiler, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` mean what they mean for an item, with step paths. The
+cases a rule document adds are `MTR-0021` warnings that leave its siblings and the document live. Two skip the one rule: a
+`type:` that names an entity type this server does not have, and a `cause:` that names a damage cause it does not have. The third
+loads the rule and says it never runs: its trigger is one no rule document fires (a `click`). A document whose `behavior:` is not a
+list, or whose `flows:` is not a mapping, is not a rule document: it is reported with `MTR-0008` ("failed to parse as rule"),
+is left out of the live shadow, and the rest of its pack loads.
+
 The GUI open commands ([`logic.md`](logic.md) §23, #215) add four codes. A malformed `open:` block (a non-mapping,
 an unknown key, a bad command name, an argument of an unknown type) is `MTR-0021` at `open`, like a malformed
 `behavior:`. The other problems of the block are these:
@@ -764,6 +772,7 @@ The one-line rule: **the server stays up, the diagnostics say why, and nothing i
 | Crash-safe input slots: encoding a 27-stack escrow account on the owner thread; one strict click (the whole tier-1 step) on a 27-entry account; a nine-slot shift | ≤ 200 µs; ≤ 1 ms; ≤ 2 ms (medians) | `EscrowPerfTest`; the owner thread does memory only (no file, no wait: `EscrowIoBansTest`); gui-input-durability.md §8, §12 row P |
 | Crash-safe input slots, tier 3: `Player.saveData()` calls by the barrier | at most 1 per player per `escrow_barrier_cooldown_seconds` (default 5 s), backing off to 1 per 5 min while the disk does not confirm; only while an exit that carries an effect waits; none for a plain `custody.consume` (the trash slot) | `BarrierBookTest` and `BarrierBookPropertyTest` hold the limit and the narrowness, `EscrowBarrierBansTest` the single call site; the read-back and DONE append are IO-executor work (`EscrowReadBackTest`, `EscrowReadBackStressTest`); gui-input-durability.md §5.4, §12 row B. The save's own cost is the platform's per-player autosave cost, not measured in CI (row H's IT observes it) |
 | GUI refresh pass (50 open windows × 54 dynamic slots, every 20 ticks: each window's render and diff) | ≤ 2 ms per pass, best of three | `DynamicSlotsPerfTest`; measured 0.43 ms; logic.md §6.3, §24. The Bukkit stack build of a changed slot is outside the budget |
+| A world-event handler (`entity.hit`, `entity.kill`, `player.hurt`, `player.join`, ...) when no rule of any host answers the trigger | ≤ 250 ns per event | `WorldEventGateTest`; measured about 3 ns. The listeners are registered once and each handler's first act is one lookup in the live shadow's `WorldRules` view; it returns before it reads the event, a stack or the world. A trigger some rule answers pays the context build and the flow dispatch (the row above), only for the events that rule filters in; logic.md §37 |
 
 Honesty notes: the < 1 µs resolve is the *cached* path; first touch of a stack pays a PDC read
 (~10–50 µs, NBT decode). The updater's inventory scans are the real cost center — they are

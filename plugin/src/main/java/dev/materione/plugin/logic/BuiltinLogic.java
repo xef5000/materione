@@ -21,6 +21,7 @@ import dev.materione.behavior.logic.LogicIds;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.session.GuiSession;
 import dev.materione.plugin.gui.trigger.GuiTriggers;
+import dev.materione.plugin.logic.trigger.WorldTriggers;
 import dev.materione.plugin.logic.action.ActionbarAction;
 import dev.materione.plugin.logic.action.BroadcastAction;
 import dev.materione.plugin.logic.action.CancelAction;
@@ -220,6 +221,15 @@ public final class BuiltinLogic {
     /** Registers built-ins with the server's currency-read ownership policy. */
     public static void register(
             LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge, CurrencyReads reads) {
+        register(api, owner, items, bridge, reads, dev.materione.platform.entity.EntityPalette.entityTypes());
+    }
+
+    /**
+     * As above, with the entity types the world triggers' {@code type} filter accepts (logic.md §37): the server's
+     * registry in the plugin, a fixed list in a test, empty to accept any name.
+     */
+    public static void register(LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge, CurrencyReads reads,
+            List<String> entityTypes) {
         OpenGuis guis = player -> bridge.services()
                 .flatMap(services -> services.sessions().current(player.getUniqueId()))
                 .filter(GuiSession::isOpen)
@@ -232,6 +242,12 @@ public final class BuiltinLogic {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
         for (TriggerType trigger : GuiTriggers.all()) {
+            api.triggers().register(owner, builtIn(trigger.id()), trigger);
+        }
+        // the world events a rule document (and an item) answers: entity hit and kill, player hurt, join, quit, ...
+        // (logic.md section 37); the filter palettes come from the running server
+        for (TriggerType trigger : WorldTriggers.all(
+                entityTypes, dev.materione.platform.entity.EntityPalette.damageCauses())) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
         for (ActionType<?> action : actions(items)) {

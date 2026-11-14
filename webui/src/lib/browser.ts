@@ -59,7 +59,7 @@ export interface TypeTab {
 }
 
 /** Display order for the tabs an author reaches for most. */
-const ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates', 'glyphs', 'sounds', 'paintings', 'effects', 'guis'];
+const ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates', 'glyphs', 'sounds', 'paintings', 'effects', 'guis', 'rules'];
 
 const LABELS: Record<string, { label: string; singular: string }> = {
   items: { label: 'Items', singular: 'item' },
@@ -72,6 +72,7 @@ const LABELS: Record<string, { label: string; singular: string }> = {
   paintings: { label: 'Paintings', singular: 'painting' },
   effects: { label: 'Text effects', singular: 'effect' },
   guis: { label: 'GUIs', singular: 'GUI' },
+  rules: { label: 'Rules', singular: 'rule' },
 };
 
 /** Types not built yet, shown so the shape of the product is visible. */

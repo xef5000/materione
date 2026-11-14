@@ -18,7 +18,7 @@ public final class Scaffolds {
     /** Type directories with a scaffold ({@code pack.yml} is createPack's). */
     public static final List<String> SCAFFOLD_TYPES =
             List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs", "sounds", "paintings", "effects",
-                    "guis", "variables");
+                    "guis", "variables", "rules");
 
     /**
      * @param path pack-relative path; the first segment picks the scaffold
@@ -39,6 +39,7 @@ public final class Scaffolds {
             case "effects" -> effect(name);
             case "guis" -> gui(name);
             case "variables" -> variable(name);
+            case "rules" -> rule(name);
             default -> throw new IllegalArgumentException(
                     "no scaffold for '" + dir + "' — create documents under "
                             + SCAFFOLD_TYPES);
@@ -155,6 +156,20 @@ public final class Scaffolds {
                 + "  scope: player # player | server\n"
                 + "  type: number # number | string | boolean\n"
                 + "  default: 0\n";
+    }
+
+    /**
+     * The first rule document (logic.md section 37): one rule on a player joining. A rule document needs no host, so
+     * the starter is a complete, running greeting the author edits down or replaces.
+     */
+    private static String rule(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  description: \"" + display(id) + "\"\n"
+                + "  behavior:\n"
+                + "    - on: player.join\n"
+                + "      do:\n"
+                + "        - message: \"<yellow>Welcome, ${player.name}!\"\n";
     }
 
     private static String sound(String id) {

@@ -1871,11 +1871,12 @@
           "id": "damage"
         },
         {
-          "description": "The player dies carrying the item",
+          "description": "The player dies: for an item, once for each stack of it among the drops; in a rule document, once",
           "details": [],
           "displayName": "Death",
           "firedBy": [
-            "item"
+            "item",
+            "rule"
           ],
           "id": "death"
         },
@@ -2001,6 +2002,63 @@
             "gui"
           ],
           "id": "gui.click_inventory"
+        },
+        {
+          "description": "The player damages an entity (a melee hit, or a projectile the player shot). On an item, it fires for the item in the player's main hand; a rule can cancel the damage",
+          "details": [],
+          "displayName": "Entity hit",
+          "firedBy": [
+            "item",
+            "rule"
+          ],
+          "id": "entity.hit"
+        },
+        {
+          "description": "An entity dies and a player is its killer. On an item, it fires for the item in the player's main hand",
+          "details": [],
+          "displayName": "Entity killed",
+          "firedBy": [
+            "item",
+            "rule"
+          ],
+          "id": "entity.kill"
+        },
+        {
+          "description": "The player takes damage. On an item, it fires for the item the player holds and for each piece of armor the player wears; a rule can cancel the damage",
+          "details": [],
+          "displayName": "Player hurt",
+          "firedBy": [
+            "item",
+            "rule"
+          ],
+          "id": "player.hurt"
+        },
+        {
+          "description": "A player joins the server",
+          "details": [],
+          "displayName": "Player join",
+          "firedBy": [
+            "rule"
+          ],
+          "id": "player.join"
+        },
+        {
+          "description": "A player leaves the server. Steps after a wait do not run: the player is gone",
+          "details": [],
+          "displayName": "Player quit",
+          "firedBy": [
+            "rule"
+          ],
+          "id": "player.quit"
+        },
+        {
+          "description": "A player respawns after dying",
+          "details": [],
+          "displayName": "Player respawn",
+          "firedBy": [
+            "rule"
+          ],
+          "id": "player.respawn"
         }
       ],
       "functions": [
@@ -5978,18 +6036,27 @@
               "type": "integer"
             },
             {
+              "description": "What killed the player, as a damage cause such as fall or entity_attack (custom when unknown)",
+              "hosts": [
+                "rule"
+              ],
+              "path": "damage.cause",
+              "type": "string"
+            },
+            {
               "description": "Variables written earlier in this run by set_var",
               "hosts": [],
               "path": "vars.*",
               "type": "raw"
             }
           ],
-          "description": "The player dies carrying the item",
+          "description": "The player dies: for an item, once for each stack of it among the drops; in a rule document, once",
           "details": [],
           "displayName": "Death",
           "filters": [],
           "firedBy": [
-            "item"
+            "item",
+            "rule"
           ],
           "id": "death",
           "parameters": [],
@@ -7220,6 +7287,1086 @@
             "gui"
           ],
           "id": "gui.click_inventory",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event: the entity that was hit or died, else the player",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The entity's type, e.g. zombie",
+              "hosts": [],
+              "path": "target.type",
+              "type": "string"
+            },
+            {
+              "description": "The entity's UUID",
+              "hosts": [],
+              "path": "target.uuid",
+              "type": "string"
+            },
+            {
+              "description": "Whether the entity is a player",
+              "hosts": [],
+              "path": "target.is_player",
+              "type": "boolean"
+            },
+            {
+              "description": "The entity's health before the damage lands",
+              "hosts": [],
+              "path": "target.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The damage dealt before armor and effects reduce it",
+              "hosts": [],
+              "path": "damage.amount",
+              "type": "decimal"
+            },
+            {
+              "description": "The damage after armor, effects and other plugins have changed it, at the moment the rule runs",
+              "hosts": [],
+              "path": "damage.final",
+              "type": "decimal"
+            },
+            {
+              "description": "The damage cause, e.g. entity_attack or projectile",
+              "hosts": [],
+              "path": "damage.cause",
+              "type": "string"
+            },
+            {
+              "description": "The Materione id of the item (the one hosting the rule, or the main-hand item in a rule document), blank for a vanilla item",
+              "hosts": [],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [],
+              "path": "item.durability_max",
+              "type": "integer"
+            }
+          ],
+          "description": "The player damages an entity (a melee hit, or a projectile the player shot). On an item, it fires for the item in the player's main hand; a rule can cancel the damage",
+          "details": [],
+          "displayName": "Entity hit",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Only this entity type (a type, or a list of types), e.g. zombie",
+              "id": "type",
+              "label": "Type",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "kill",
+                "world_border",
+                "contact",
+                "entity_attack",
+                "entity_sweep_attack",
+                "projectile",
+                "suffocation",
+                "fall",
+                "fire",
+                "fire_tick",
+                "melting",
+                "lava",
+                "drowning",
+                "block_explosion",
+                "entity_explosion",
+                "void",
+                "lightning",
+                "suicide",
+                "starvation",
+                "poison",
+                "magic",
+                "wither",
+                "falling_block",
+                "thorns",
+                "dragon_breath",
+                "custom",
+                "fly_into_wall",
+                "hot_floor",
+                "campfire",
+                "cramming",
+                "dryout",
+                "freeze",
+                "sonic_boom"
+              ],
+              "description": "Only this damage cause (a cause, or a list of causes)",
+              "id": "cause",
+              "label": "Cause",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "item",
+            "rule"
+          ],
+          "id": "entity.hit",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event: the entity that was hit or died, else the player",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The entity's type, e.g. zombie",
+              "hosts": [],
+              "path": "target.type",
+              "type": "string"
+            },
+            {
+              "description": "The entity's UUID",
+              "hosts": [],
+              "path": "target.uuid",
+              "type": "string"
+            },
+            {
+              "description": "Whether the entity is a player",
+              "hosts": [],
+              "path": "target.is_player",
+              "type": "boolean"
+            },
+            {
+              "description": "The Materione id of the item (the one hosting the rule, or the main-hand item in a rule document), blank for a vanilla item",
+              "hosts": [],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [],
+              "path": "item.durability_max",
+              "type": "integer"
+            }
+          ],
+          "description": "An entity dies and a player is its killer. On an item, it fires for the item in the player's main hand",
+          "details": [],
+          "displayName": "Entity killed",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Only this entity type (a type, or a list of types), e.g. zombie",
+              "id": "type",
+              "label": "Type",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "item",
+            "rule"
+          ],
+          "id": "entity.kill",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event: the entity that was hit or died, else the player",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The damage dealt before armor and effects reduce it",
+              "hosts": [],
+              "path": "damage.amount",
+              "type": "decimal"
+            },
+            {
+              "description": "The damage after armor, effects and other plugins have changed it, at the moment the rule runs",
+              "hosts": [],
+              "path": "damage.final",
+              "type": "decimal"
+            },
+            {
+              "description": "The damage cause, e.g. entity_attack or projectile",
+              "hosts": [],
+              "path": "damage.cause",
+              "type": "string"
+            },
+            {
+              "description": "The type of the entity responsible for the damage (the shooter, for a projectile), blank when none was (a fall, fire)",
+              "hosts": [],
+              "path": "source.type",
+              "type": "string"
+            },
+            {
+              "description": "The Materione id of the item (the one hosting the rule, or the main-hand item in a rule document), blank for a vanilla item",
+              "hosts": [],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [],
+              "path": "item.durability_max",
+              "type": "integer"
+            }
+          ],
+          "description": "The player takes damage. On an item, it fires for the item the player holds and for each piece of armor the player wears; a rule can cancel the damage",
+          "details": [],
+          "displayName": "Player hurt",
+          "filters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "kill",
+                "world_border",
+                "contact",
+                "entity_attack",
+                "entity_sweep_attack",
+                "projectile",
+                "suffocation",
+                "fall",
+                "fire",
+                "fire_tick",
+                "melting",
+                "lava",
+                "drowning",
+                "block_explosion",
+                "entity_explosion",
+                "void",
+                "lightning",
+                "suicide",
+                "starvation",
+                "poison",
+                "magic",
+                "wither",
+                "falling_block",
+                "thorns",
+                "dragon_breath",
+                "custom",
+                "fly_into_wall",
+                "hot_floor",
+                "campfire",
+                "cramming",
+                "dryout",
+                "freeze",
+                "sonic_boom"
+              ],
+              "description": "Only this damage cause (a cause, or a list of causes)",
+              "id": "cause",
+              "label": "Cause",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "item",
+            "rule"
+          ],
+          "id": "player.hurt",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event: the entity that was hit or died, else the player",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "Whether this is the first time the player has joined this server",
+              "hosts": [],
+              "path": "player.first_join",
+              "type": "boolean"
+            }
+          ],
+          "description": "A player joins the server",
+          "details": [],
+          "displayName": "Player join",
+          "filters": [],
+          "firedBy": [
+            "rule"
+          ],
+          "id": "player.join",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event: the entity that was hit or died, else the player",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "A player leaves the server. Steps after a wait do not run: the player is gone",
+          "details": [],
+          "displayName": "Player quit",
+          "filters": [],
+          "firedBy": [
+            "rule"
+          ],
+          "id": "player.quit",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event: the entity that was hit or died, else the player",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "A player respawns after dying",
+          "details": [],
+          "displayName": "Player respawn",
+          "filters": [],
+          "firedBy": [
+            "rule"
+          ],
+          "id": "player.respawn",
           "parameters": [],
           "registeredBy": "materione",
           "sinceVersion": "0.1.0"
@@ -11235,6 +12382,51 @@
             "uiHint": "text"
           }
         ]
+      },
+      {
+        "description": "Rules and named flows that answer world events (an entity hit or killed, a player joining) with no item, block, furniture or GUI to hold them",
+        "directory": "rules",
+        "displayName": "Rule",
+        "name": "rule",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "A note for the people who edit this document",
+            "id": "description",
+            "label": "Description",
+            "order": 0,
+            "required": false,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "category": "behaviour",
+            "description": "ECA rules this document holds; each answers one trigger",
+            "icon": "activity",
+            "id": "behavior",
+            "label": "When… do…",
+            "module": true,
+            "order": 10,
+            "required": false,
+            "section": "behavior",
+            "summary": "React to world events with conditions and actions",
+            "type": "list",
+            "uiHint": "behavior-rules"
+          },
+          {
+            "advanced": true,
+            "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+            "id": "flows",
+            "label": "Flows",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
+          }
+        ]
       }
     ]
   },
@@ -14137,6 +15329,7 @@
     "items": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  material: STICK\n  display_name: \"Demo Scaffold\"\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n",
     "paintings": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: painting/demo_scaffold # exactly 16 px per block\n  width: 1\n  height: 1\n  # author: \"Unknown\"\n  # title: \"Demo Scaffold\"\n  # placeable: false — join the vanilla random-placement pool\n  # Paintings apply at the next server restart (world datapack).\n",
     "recipes": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  type: shaped # shaped | shapeless | furnace\n  result: demo_scaffold\n  shape:\n    - \" A \"\n    - \" B \"\n    - \" A \"\n  ingredients:\n    A: minecraft:stone\n    B: minecraft:stick\n",
+    "rules": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  description: \"Demo Scaffold\"\n  behavior:\n    - on: player.join\n      do:\n        - message: \"<yellow>Welcome, ${player.name}!\"\n",
     "sounds": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  sounds:\n    - demo_scaffold # upload the .ogg to assets/sounds/\n  # subtitle: \"Demo Scaffold\"\n  # volume: 1.0\n  # pitch: 1.0\n  # jukebox: — turn this sound into a music-disc song\n  #   description: \"Demo Scaffold\"\n  #   duration: 90\n  #   comparator_output: 7\n  #   range: 1.0\n",
     "templates": "# Shared inheritance base: definitions pull this in via `template:`\n# and override individual fields.\ndemo_scaffold:\n  material: PAPER\n",
     "variables": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  scope: player # player | server\n  type: number # number | string | boolean\n  default: 0\n"
@@ -17340,6 +18533,51 @@
           "section": "economy",
           "type": "string",
           "uiHint": "text"
+        }
+      ]
+    },
+    {
+      "description": "Rules and named flows that answer world events (an entity hit or killed, a player joining) with no item, block, furniture or GUI to hold them",
+      "directory": "rules",
+      "displayName": "Rule",
+      "name": "rule",
+      "parameters": [
+        {
+          "advanced": false,
+          "description": "A note for the people who edit this document",
+          "id": "description",
+          "label": "Description",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "category": "behaviour",
+          "description": "ECA rules this document holds; each answers one trigger",
+          "icon": "activity",
+          "id": "behavior",
+          "label": "When… do…",
+          "module": true,
+          "order": 10,
+          "required": false,
+          "section": "behavior",
+          "summary": "React to world events with conditions and actions",
+          "type": "list",
+          "uiHint": "behavior-rules"
+        },
+        {
+          "advanced": true,
+          "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+          "id": "flows",
+          "label": "Flows",
+          "order": 30,
+          "required": false,
+          "section": "behavior",
+          "type": "raw",
+          "uiHint": "advanced"
         }
       ]
     }

@@ -61,8 +61,8 @@ class ContentPerfBudgetTest {
         Loaded loaded = loadCorpus(workDir);
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
-        // Every pack under fixtures/packs, including the safe-read and placeholder probe items.
-        assertThat(loaded.shadow.itemCount()).isEqualTo(76);
+        // Every pack under fixtures/packs, including the safe-read and placeholder probe items and the worldrules blade (#327).
+        assertThat(loaded.shadow.itemCount()).isEqualTo(77);
         assertThat(elapsedMs)
                 .as("full reload (parse + validate + graph + compile + shadow build) wall time")
                 .isLessThan(FULL_RELOAD_BUDGET_MS);
@@ -176,9 +176,9 @@ class ContentPerfBudgetTest {
         var report = runtime.apply(loaded.shadow, loaded.outcome().sha256());
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
-        assertThat(report.added()).isEqualTo(76);
+        assertThat(report.added()).isEqualTo(77);
         assertThat(elapsedMs)
-                .as("apply swap of 76 items — the main-thread stall proxy (0 stalls > 50 ms)")
+                .as("apply swap of 77 items — the main-thread stall proxy (0 stalls > 50 ms)")
                 .isLessThan(APPLY_SWAP_BUDGET_MS);
     }
 
@@ -199,7 +199,7 @@ class ContentPerfBudgetTest {
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
         assertThat(result.completed()).isTrue();
-        assertThat(shadow.itemCount()).isEqualTo(76);
+        assertThat(shadow.itemCount()).isEqualTo(77);
         assertThat(elapsedMs)
                 .as("targeted single-file reload (scoped parse + compile + shadow + pre-apply diff)")
                 .isLessThan(TARGETED_RELOAD_BUDGET_MS);

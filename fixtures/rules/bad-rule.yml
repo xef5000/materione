@@ -1,0 +1,24 @@
+# Fault fixture (#327): one document, four rules. Each broken rule is skipped alone with MTR-0021 and the good rule
+# still loads. The unknown entity type is the case the issue names: a filter the schema rejects makes the rule
+# unreadable, so it is skipped, never loaded with the filter dropped (a rule on every entity is not what was written).
+bad_rules:
+  behavior:
+    - id: unknown_entity
+      on: entity.kill
+      type: zombi
+      do:
+        - message: "never"
+    - id: unknown_cause
+      on: entity.hit
+      cause: stubbed_toe
+      do:
+        - message: "never"
+    - id: unknown_trigger
+      on: player.sneeze
+      do:
+        - message: "never"
+    - id: fine
+      on: entity.kill
+      type: zombie
+      do:
+        - message: "kill ${target.type}"

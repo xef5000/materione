@@ -828,7 +828,7 @@ final class AuthoringTransactions {
 
         private boolean hasLogic(String directory) {
             return directory.equals("items") || directory.equals("blocks") || directory.equals("furnitures")
-                    || directory.equals("guis");
+                    || directory.equals("guis") || directory.equals("rules");
         }
 
         /** Each resource of the document through the content type's own parse, diagnose and compile. */

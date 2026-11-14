@@ -1,0 +1,10 @@
+# The worldrules fixture pack (#327, logic.md section 37): rule documents that answer world events, no item, block,
+# furniture or GUI to hold them. Every rule announces itself with a line the harness reads from the console
+# (`say MATERIONE-WORLDRULES-...`, via run_command) or with a chat line the QA catalog reads from a real client
+# (`CHECK ...`). The harness (PaperWorldEventsIT) and the QA catalog (qa/catalog/worldrules.mjs) are the only
+# readers; the plugin's own tests read the same files through WorldRulesFixtureTest. One item (the blade) proves that an
+# item holds an entity.hit rule too; no other fixture suite loads this pack, so their pinned counts stay their own.
+id: worldrules
+version: 1.0.0
+schema_version: 1
+depends: []

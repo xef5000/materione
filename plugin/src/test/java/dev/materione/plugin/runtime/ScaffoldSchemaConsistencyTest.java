@@ -32,6 +32,10 @@ class ScaffoldSchemaConsistencyTest {
         check("paintings", "sunset_wall", new dev.materione.content.paintings.PaintingType());
         check("effects", "ruby_wave", new dev.materione.content.effects.EffectType());
         check("guis", "shop_main", guiType());
+        check("rules", "welcome_greeter", new dev.materione.content.rules.RuleType());
+        // the web copy of the New rule starter must match core's byte for byte
+        assertThat(dev.materione.web.rpc.ops.Scaffolds.forPath("rules/welcome_greeter.yml", null))
+                .isEqualTo(Scaffolds.forPath("rules/welcome_greeter.yml", null));
         // The web copy of the New GUI starter (the demo recording reads it) must match byte for byte.
         assertThat(dev.materione.web.rpc.ops.Scaffolds.forPath("guis/shop_main.yml", null))
                 .isEqualTo(Scaffolds.forPath("guis/shop_main.yml", null));

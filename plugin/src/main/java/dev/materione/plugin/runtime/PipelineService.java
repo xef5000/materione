@@ -21,6 +21,8 @@ import dev.materione.content.recipes.RecipeType;
 import dev.materione.plugin.runtime.behavior.BlockBehaviors;
 import dev.materione.plugin.runtime.behavior.FurnitureBehaviors;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
+import dev.materione.plugin.runtime.behavior.RuleDocuments;
+import dev.materione.plugin.runtime.behavior.WorldRules;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
@@ -175,6 +177,9 @@ public final class PipelineService {
         // named currencies (logic.md §18): content whose money is read at use, not emitted to the pack
         var currencies = new dev.materione.content.currency.CurrencyType();
         registry.register(NamespacedId.of("materione", "currency"), currencies, currencies.describe(), "materione");
+        // host-less rule documents (logic.md section 37): runtime logic, compiled into the shadow's world-rule view
+        var rules = new dev.materione.content.rules.RuleType();
+        registry.register(NamespacedId.of("materione", "rule"), rules, rules.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -405,6 +410,8 @@ public final class PipelineService {
         var furnitureType = contentTypes().stream().filter(t -> t.name().equals("furniture")).findFirst();
         var guiType = contentTypes().stream().filter(t -> t.name().equals("gui")).findFirst();
         var currencyType = contentTypes().stream().filter(t -> t.name().equals("currency")).findFirst();
+        var ruleType = contentTypes().stream().filter(t -> t.name().equals("rule")).findFirst();
+        var ruleDocuments = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var currencies = new java.util.ArrayList<dev.materione.api.logic.provider.Currency>();
         var guiModels = new LinkedHashMap<NamespacedId, CompiledGui>();
         var glyphType = contentTypes().stream().filter(t -> t.name().equals("glyph")).findFirst();
@@ -423,6 +430,7 @@ public final class PipelineService {
             builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
             builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
             builder.view(FurnitureBehaviors.KEY, FurnitureBehaviors.empty());
+            builder.view(WorldRules.KEY, WorldRules.empty());
             builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
                     dev.materione.plugin.runtime.mechanics.ItemMechanics.empty());
             builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
@@ -607,6 +615,8 @@ public final class PipelineService {
                     compileGuiModel(pack, resource, raw, templates, guiType.get(), guiModels);
                 } else if ("currency".equals(resource.contentType()) && currencyType.isPresent()) {
                     acceptCurrency(resource, raw, templates, currencyType.get(), currencies);
+                } else if ("rule".equals(resource.contentType()) && ruleType.isPresent()) {
+                    acceptRuleDocument(resource, raw, templates, ruleType.get(), ruleDocuments);
                 }
             }
         }
@@ -615,6 +625,8 @@ public final class PipelineService {
         builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors, mechanicAvailability));
         builder.view(BlockBehaviors.KEY, new BlockBehaviors(blockBehaviors));
         builder.view(FurnitureBehaviors.KEY, new FurnitureBehaviors(furnitureBehaviors));
+        // the rule documents, and which triggers any item answers: a world event with no rule on it costs a lookup
+        builder.view(WorldRules.KEY, WorldRules.of(ruleDocuments, behaviors));
         builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
                 new dev.materione.plugin.runtime.mechanics.ItemMechanics(itemMechanics));
         builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
@@ -700,6 +712,27 @@ public final class PipelineService {
      * keeps the currency: it reports unavailable at use, which is the honest answer, and it needs no
      * reload once the plugin arrives.
      */
+    private void acceptRuleDocument(
+            ContentResource resource, Map<String, Object> raw,
+            Map<String, Map<String, Object>> templates, ContentType ruleType,
+            Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> out) {
+        Optional<Object> parsed;
+        try {
+            parsed = ruleType.parse(resource.id(), raw, templates);
+        } catch (RuntimeException e) {
+            diagnostics.publish(Diagnostic.error(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED, "shadow build skipped " + resource.id() + ": " + e));
+            return;
+        }
+        if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.rules.RuleDefinition document) {
+            List<dev.materione.behavior.rule.Rule> compiled =
+                    RuleDocuments.compile(document, logicLookup(), diagnostics::publish);
+            if (!compiled.isEmpty()) {
+                out.put(document.id(), compiled);
+            }
+        }
+    }
+
     private void acceptCurrency(
             ContentResource resource, Map<String, Object> raw,
             Map<String, Map<String, Object>> templates, ContentType currencyType,

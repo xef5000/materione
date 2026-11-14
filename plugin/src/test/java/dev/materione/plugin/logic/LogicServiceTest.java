@@ -73,7 +73,7 @@ class LogicServiceTest {
         // the built-ins are there beside them, registered the same way
         assertThat(vocabulary.actions()).extracting(BehaviorVocabulary.Action::id)
                 .contains("run_command", "message", "sound", "potion", "cancel", "set_var");
-        assertThat(vocabulary.triggers()).hasSize(26); // 23 before #218; gui.slot_change and gui.click_inventory added; gui.page in #219
+        assertThat(vocabulary.triggers()).hasSize(32); // 23 before #218; gui.slot_change and gui.click_inventory added; gui.page in #219; the six world triggers of #327 (the death of a player is the existing death trigger)
         assertThat(action.id()).isEqualTo(NamespacedId.of("example", "greet"));
         assertThat(condition.id()).isEqualTo(NamespacedId.of("example", "is_night"));
     }

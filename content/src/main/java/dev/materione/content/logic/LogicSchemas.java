@@ -21,6 +21,14 @@ public final class LogicSchemas {
                         "React to clicks and opens with conditions and actions"));
     }
 
+    /** The {@code behavior:} rules of a host with its own wording (the rule document, logic.md §37). */
+    public static ParameterSchema behavior(String description) {
+        return new ParameterSchema("behavior", ParameterType.LIST, false, null, description, null, null)
+                .withEditor(new ParameterSchema.EditorMetadata(
+                        "When… do…", "behavior", 10, false, "behavior-rules", "", "", true, "behaviour", "activity",
+                        "React to world events with conditions and actions"));
+    }
+
     /** The named flows {@code call:} runs from this resource's rules (logic.md §2.4). */
     public static ParameterSchema flows() {
         return new ParameterSchema("flows", ParameterType.RAW, false, null,

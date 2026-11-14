@@ -46,12 +46,12 @@
 
 | Kind | Shipped |
 |---|---|
-| Content types | `item`, `block`, `furniture`, `glyph`, `sound`, `painting`, `effect`, `recipe`, `gui`, `currency`, `variable` |
+| Content types | `item`, `block`, `furniture`, `glyph`, `sound`, `painting`, `effect`, `recipe`, `gui`, `currency`, `variable`, `rule` (since #327) |
 | Mechanics | `commands`, `food`, `durability`, `soulbound`, `backpack` |
-| Triggers (live) | `click`, `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage` (durability), `death` (the carrier dies); `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`, `gui.page` |
+| Triggers (live) | `click`, `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage` (durability), `death` (the carrier dies); since #327 `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`, `player.death`; `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`, `gui.page` |
 | Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `gui.open`, `gui.close`, `gui.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
 | Conditions | `has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has` |
-| Flow steps | action, `if`, `require`, `wait`, `stop`, `call` (same resource), `choose`; rule options `id`, `cooldown`, `chance`, `delay` |
+| Flow steps | action, `if`, `require`, `wait`, `stop`, `call` (same resource), `choose`; rule options `id`, `cooldown`, `charges`, `per`; action options `chance`, `delay` (there is no rule-level `chance`) |
 | Variables | scopes `local`, `session`, `player`, `server`; types `number`, `string`, `boolean` |
 | GUI | components `panel`, `image`, `paint`, `text`, `button`, `item`, `slots`, `list`; the `open:` block (commands, typed args, permission, requirement) |
 
@@ -61,38 +61,41 @@
 
 | # | Task (the prompt, shortened) | Area | Verdict | Fails on |
 |---|---|---|---|---|
-| T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Fail | TRIG-ENTITY, STATE, TARGET |
+| T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Fail | STATE, TARGET |
 | T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | CMD, STATE, VIEW, TARGET, CUSTODY |
 | T03 | **Backpack**: a 3-row backpack item that keeps its contents | item | Pass (preset route) | by-hand route: CUSTODY |
 | T04 | **Kits**: `/kits` menu with Starter (once) and Daily (every 24 h) | GUI, items | Partial | TIME |
 | T05 | **Healing wand**: right-click heals 4 hearts, 30 s cooldown, tells the time left | ability | Partial | TIME |
-| T06 | **Quest**: kill 10 zombies, get 100 coins and a trophy; progress in `/quests` | progression | Fail | RULE, TRIG-ENTITY |
+| T06 | **Quest**: kill 10 zombies, get 100 coins and a trophy; progress in `/quests` | progression | Pass (#327) | |
 | T07 | **Daily reward**: `/daily`, one claim per day, a streak that resets if a day is missed | GUI, progression | Fail | TIME |
 | T08 | **Shop**: `/shop` with buy and sell for coins | GUI, economy | Pass | |
 | T09 | **Warp menu**: `/warps` with spawn, mines, arena, and a link to the survival server | GUI | Pass | |
-| T10 | **Welcome**: greet players on join; first join gets the starter kit and a broadcast | server | Fail | RULE, TRIG-PLAYER |
+| T10 | **Welcome**: greet players on join; first join gets the starter kit and a broadcast | server | Pass (#327) | |
 | T11 | **Golden berry**: food that gives regeneration and speed for 5 s | item | Pass | |
-| T12 | **Lifesteal dagger**: heal the wielder for 20% of the damage dealt | weapon | Fail | TRIG-ENTITY, VERB |
+| T12 | **Lifesteal dagger**: heal the wielder for 20% of the damage dealt | weapon | Fail | VERB |
 | T13 | **Excavator pickaxe**: mines a 3x3 area | tool | Fail | VERB |
 | T14 | **Dash blade**: right-click launches the player forward with a particle trail, 5 s cooldown | ability | Fail | VERB |
-| T15 | **Mob drop**: zombies have a 5% chance to drop a Rotten Heart | mobs | Fail | RULE, TRIG-ENTITY |
+| T15 | **Mob drop**: zombies have a 5% chance to drop a Rotten Heart | mobs | Pass (#327) | |
 | T16 | **Crate**: a placed crate opened with a key gives one of five weighted rewards and announces rare ones | furniture | Pass | |
-| T17 | **Leaderboard**: `/top` shows the ten players with the most kills | GUI, progression | Fail | RULE, TRIG-ENTITY, QUERY |
+| T17 | **Leaderboard**: `/top` shows the ten players with the most kills | GUI, progression | Fail | QUERY |
 | T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Fail | CUSTODY |
 | T19 | **Vending machine**: a furniture that opens a shop when right-clicked | furniture | Pass | |
-| T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | RULE, TIMER, VIEW, VERB |
+| T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | TIMER, VIEW, VERB |
 | T21 | **`/pay <player> <amount>`** | command, economy | Fail | CMD, TARGET |
-| T22 | **Arena region**: entering `arena` gives the PvP kit, leaving removes it | integration | Fail | RULE, PROVIDER |
+| T22 | **Arena region**: entering `arena` gives the PvP kit, leaving removes it | integration | Fail | PROVIDER |
 | T23 | **Rank-up**: `/rankup` pays 10 000 coins for the next rank and announces it | GUI, economy | Pass | |
 | T24 | **Ruby ore**: a custom block that drops a ruby and 5 XP, 10% chance of a second ruby | block | Pass | |
 | T25 | **Miner's heirloom**: a pickaxe with 2 000 durability that is kept on death | item | Pass | |
-| T26 | **Announcements**: every 5 minutes broadcast the next of four tips | server | Fail | RULE, TIMER |
+| T26 | **Announcements**: every 5 minutes broadcast the next of four tips | server | Fail | TIMER |
 | T27 | **`/discord`**: prints the invite link | command | Fail | CMD |
-| T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | RULE, TRIG-PLAYER, VIEW |
+| T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**10 pass, 2 are partial, 17 fail.** "Fails on" lists what the honest program needs, not everything that
-would be nice.
+**13 pass, 2 are partial, 14 fail** after #327 (rules without a host and the entity and player triggers, logic.md §37): T06, T10
+and T15 flipped from Fail, and the gaps RULE, TRIG-ENTITY and TRIG-PLAYER left the "Fails on" column of the eight other tasks that
+listed them (T01, T12, T17, T20, T22, T26, T28, and T06's own). The count was 10, 2 and 17 when the page was written. The clock of
+#328 is not re-checked here: T04, T05 and T07 keep the verdicts they had until that issue's author re-runs them against the real
+shapes. "Fails on" lists what the honest program needs, not everything that would be nice.
 
 **The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built:
 
@@ -111,23 +114,23 @@ would be nice.
 Conventions: `const p = m.pack("bench")`. A `✗` comment is the error the generated surface would give. Lines without one
 type-check against today's registries. Summaries (`m.summary`) are omitted where they add nothing.
 
-### T01 Bloodfang sword — Fail (TRIG-ENTITY, STATE, TARGET)
+### T01 Bloodfang sword — Fail (STATE, TARGET)
 
-The program is codemode.md §9.1. Its `✗` lines, restated against today's surface:
+The program is codemode.md §9.1. Its `✗` lines, restated against today's surface (the `entity.hit` and `entity.kill` triggers
+pass since #327: an item holds them and `target.*` and `damage.*` are in their context):
 
 ```ts
 const level = p.variables.create("bloodfang_level", { type: "number", holder: "item", default: 1 });
 //                                                                    ^^^^^^ ✗ TS2353 'holder' does not exist; scope is
 //                                                                      "player" | "server"                       [STATE]
 sword.rules.add({
-  on: m.triggers.entityHit,          // ✗ TS2339 'entityHit' does not exist on type 'ItemTriggers'               [TRIG-ENTITY]
+  on: m.triggers.entityHit,
   do: [ m.actions.potion({ effect: "wither", seconds: 5, amplifier: m.expr`${level} - 1`, target: m.target.struck }) ],
 });                                  // ✗ TS2353 'target' does not exist in type 'PotionParams'                  [TARGET]
 sword.rules.add({ on: m.triggers.entityKill, do: [ m.actions.setVar(xp, { op: "add", value: 10 }) ] });
-//                              ^^^^^^^^^^ ✗ TS2339                                                              [TRIG-ENTITY]
 ```
 
-What passes today: the item, the model reference, the GUI with its text and button, `has_money`/`take_money` under `require`,
+What passes today: the item, the model reference, the two combat triggers, the GUI with its text and button, `has_money`/`take_money` under `require`,
 the sneak-right-click rule (`click` with `player.sneaking`), the permission test (`has_permission` as each rule's condition).
 The bleed is written with the shipped `potion` verb aimed at the struck entity, so it needs TARGET and not a new damage verb;
 a *true-damage* bleed would add VERB. With level and XP held by the **player** instead of the stack the state lines pass, but
@@ -200,19 +203,18 @@ wand.rules.add({
 The ability and its cooldown pass. "Tells the time left" does not: a blocked run is silent and the remaining time is not a
 context variable. With a clock this is one player variable and one expression, the same shape as T04.
 
-### T06 Quest — Fail (RULE, TRIG-ENTITY)
+### T06 Quest — Pass (#327)
 
 ```ts
 const kills = p.variables.create("quest_zombies", { scope: "player", type: "number", default: 0 });
 const done  = p.variables.create("quest_zombies_done", { scope: "player", type: "boolean", default: false });
 const trophy = p.items.create("zombie_trophy", { material: "zombie_head", display_name: "<gold>Zombie Slayer" });
 
-p.rules.create("quest_zombies", {
-//^^^^^ ✗ TS2339 'rules' does not exist on type 'PackWriter': a rule must live in an item, block, furniture or GUI [RULE]
-  on: m.triggers.entityKill({ type: "zombie" }),                       // ✗ TS2339                               [TRIG-ENTITY]
+p.rules.create("quest_zombies", {                                      // a `rule` document: rules/quest_zombies.yml
+  on: m.triggers.entityKill({ type: "zombie" }),                       // `entity.kill`, filter `type: zombie`
   if: m.conditions.var(done, "==", false),
   do: [ m.actions.setVar(kills, { op: "add", value: 1 }),
-        m.steps.if(m.expr`${kills} >= 10`, { then: [
+        m.steps.if(m.conditions.var(kills, ">=", 10), { then: [        // a `var` condition: the shape the harness runs
           m.actions.giveMoney({ amount: 100 }), m.actions.giveItem({ item: trophy, amount: 1 }),
           m.actions.setVar(done, { op: "set", value: true }), m.actions.title("<gold>Quest complete") ] }) ],
 });
@@ -220,8 +222,10 @@ const menu = p.guis.create("quests", { container: "chest_3", title: "Quests", op
 menu.layers.addText({ slot: 13, text: m.expr`"Zombies: " + min(${kills}, 10) + " / 10"` });
 ```
 
-State, reward and the progress menu pass. The counting rule has no host and no trigger. Hosting it on "every sword" is the
-kind of workaround the strict rule forbids.
+State, reward, the progress menu and the counting rule pass. The rule is a `rule` document of its own (logic.md §37), and the
+only line that changed from the paper version is the finish test: a variable is read by the `var` condition, which the harness
+scenario (`PaperWorldEventsIT`) runs for a two-kill quest on Paper, rather than by an expression. The player is the killer;
+a zombie that dies of fall damage fires nothing, and neither does a kill by a mob, which is correct for this task.
 
 ### T07 Daily reward — Fail (TIME)
 
@@ -275,20 +279,25 @@ menu.layers.addButton({ slot: 16, item: "minecraft:ender_pearl", name: "Survival
   rules: [{ on: m.triggers.guiClick, do: [ m.actions.connect({ server: "survival" }) ] }] });
 ```
 
-### T10 Welcome — Fail (RULE, TRIG-PLAYER)
+### T10 Welcome — Pass (#327)
 
 ```ts
-const seen = p.variables.create("joined_before", { scope: "player", type: "boolean", default: false });
-p.rules.create("welcome", {                                              // ✗ TS2339 'rules'                    [RULE]
-  on: m.triggers.playerJoin,                                             // ✗ TS2339                            [TRIG-PLAYER]
-  do: [ m.steps.if(m.conditions.var(seen, "==", false), {
+p.rules.create("welcome", {                                              // a `rule` document: rules/welcome.yml
+  on: m.triggers.playerJoin,                                             // `player.join`, with `player.first_join` in context
+  do: [ m.steps.if(m.expr`player.first_join`, {
           then: [ m.actions.broadcast(m.expr`"<yellow>Welcome " + player.name + " to the server!"`),
-                  m.actions.giveItem({ item: "minecraft:stone_sword", amount: 1 }), m.actions.setVar(seen, { op: "set", value: true }) ],
+                  m.actions.giveItem({ item: "minecraft:stone_sword", amount: 1 }) ],
           else: [ m.actions.message(m.expr`"<gray>Welcome back, " + player.name`) ] }) ],
 });
 ```
 
-The shipped logic recipe `welcome_message` (primitives.md §4.10) is a flow fragment and needs the same host. Every verb passes.
+The paper version stored a `joined_before` variable to tell a first join from a later one. The trigger now says it
+(`player.first_join` is true when the server has never seen the player), so the variable, and the `set_var` that kept it, are
+gone. The shipped logic recipe `welcome_message` (primitives.md §4.10) is a flow fragment that now has a host to be instantiated
+into. The harness scenario greets a fake player with `first=true`, and the QA catalog's rejoin test reads `first=false`.
+
+A player who joins while the server is starting, before the first reload applies, fires nothing: a rule is resolved from the live
+shadow at event entry (logic.md §37).
 
 ### T11 Golden berry — Pass
 
@@ -299,12 +308,12 @@ berry.rules.add({ on: m.triggers.consume, do: [
   m.actions.potion({ effect: "regeneration", seconds: 5, amplifier: 1 }), m.actions.potion({ effect: "speed", seconds: 5 }) ] });
 ```
 
-### T12 Lifesteal dagger — Fail (TRIG-ENTITY, VERB)
+### T12 Lifesteal dagger — Fail (VERB)
 
 ```ts
 const dagger = p.items.create("lifesteal_dagger", { material: "iron_sword", display_name: "<dark_red>Leech" });
 dagger.rules.add({
-  on: m.triggers.entityHit,                                              // ✗ TS2339                            [TRIG-ENTITY]
+  on: m.triggers.entityHit,                                              // passes since #327: `damage.final` is in context
   do: [ m.actions.heal({ amount: m.expr`damage.final * 0.2` }) ],        // ✗ TS2339 'heal'                     [VERB]
 });
 ```
@@ -333,18 +342,22 @@ blade.rules.add({ on: m.triggers.click({ detail: "right" }), cooldown: 5_000, do
   m.actions.sound("entity.ender_dragon.flap") ] });
 ```
 
-### T15 Mob drop — Fail (RULE, TRIG-ENTITY)
+### T15 Mob drop — Pass (#327)
 
 ```ts
 const heart = p.items.create("rotten_heart", { material: "rotten_flesh", display_name: "<dark_green>Rotten Heart" });
-p.rules.create("zombie_heart", {                                          // ✗ TS2339 'rules'                   [RULE]
-  on: m.triggers.entityKill({ type: "zombie" }), chance: 0.05,            // ✗ TS2339                           [TRIG-ENTITY]
-  do: [ m.actions.giveItem({ item: heart, amount: 1 }) ],
+p.rules.create("zombie_heart", {                                          // a `rule` document: rules/zombie_heart.yml
+  on: m.triggers.entityKill({ type: "zombie" }),                          // `entity.kill`, filter `type: zombie`
+  do: [ m.actions.giveItem({ item: heart, amount: 1 }, { chance: 0.05 }) ],   // `chance:` is an option of the action
 });
 ```
 
 Written with `give_item` to the killer, which is shipped. "Drops on the ground" would add a drop-at-location verb (VERB);
 the prompt does not force it. A drop when no player made the kill is loot-table territory (#11) and is out of the task.
+
+**Correction found while re-checking against the real shapes.** The paper version put `chance: 0.05` on the rule. There is no
+rule-level `chance`: it is an option of an action (`give_item: {...}` then `chance: 0.05`, logic.md §2.2), and it is the one that
+exists. The program above is the real shape; T24's second ruby had the same slip and is fixed below.
 
 ### T16 Crate — Pass
 
@@ -369,12 +382,12 @@ A weighted draw is one `random()` and a `choose`, and the arithmetic on the weig
 This is the pattern §5 relies on: **authoring-time computation replaces a runtime feature**. A first-class draw (#11, loot
 tables) would be shorter, and nothing here needs it.
 
-### T17 Leaderboard — Fail (RULE, TRIG-ENTITY, QUERY)
+### T17 Leaderboard — Fail (QUERY)
 
 ```ts
 const kills = p.variables.create("kills", { scope: "player", type: "number", default: 0 });
 p.rules.create("count_kills", { on: m.triggers.entityKill, do: [ m.actions.setVar(kills, { op: "add", value: 1 }) ] });
-//^^^^^ ✗ [RULE]                          ^^^^^^^^^^ ✗ [TRIG-ENTITY]
+// the counting rule passes since #327 (a kill by a player, any entity type: `entity.kill` with no `type:` filter)
 const top = p.guis.create("top", { container: "chest_3", title: "Top kills", open: { commands: ["top"] } });
 top.layers.addList({ slots: [10, 11, 12, 13, 14, 15, 16, 19, 20, 21],
   source: m.lists.ranking({ variable: kills, order: "desc", limit: 10 }),
@@ -407,11 +420,11 @@ const machine = p.furnitures.create("vending_machine", { model: m.ref.asset("mod
 machine.rules.add({ on: m.triggers.click({ detail: "right" }), do: [ m.actions.guiOpen(shop), m.actions.sound("block.note_block.chime") ] });
 ```
 
-### T20 Mana and a fire wand — Fail (RULE, TIMER, VIEW, VERB)
+### T20 Mana and a fire wand — Fail (TIMER, VIEW, VERB)
 
 ```ts
 const mana = p.variables.create("mana", { scope: "player", type: "number", default: 100, min: 0, max: 100 });
-p.rules.create("mana_regen", {                                            // ✗ [RULE]
+p.rules.create("mana_regen", {                                            // a rule document: passes since #327
   on: m.triggers.every({ seconds: 1, for: "each_player" }),               // ✗ TS2339 'every'                   [TIMER]
   do: [ m.actions.setVar(mana, { op: "add", value: 2 }) ] });
 p.huds.create("mana_bar", { layers: [ m.hud.bar({ value: m.expr`${mana} / 100`, anchor: "hotbar_right" }) ] });
@@ -438,10 +451,10 @@ p.commands.create("pay", {                                                // ✗
 
 `open.args` already has the `player` argument type, the Brigadier sync and `suggest:`; they are reachable only from a GUI.
 
-### T22 Arena region — Fail (RULE, PROVIDER)
+### T22 Arena region — Fail (PROVIDER)
 
 ```ts
-p.rules.create("arena_enter", {                                           // ✗ [RULE]
+p.rules.create("arena_enter", {                                           // a rule document: passes since #327
   on: m.triggers.regionEnter({ region: "arena" }),                        // ✗ TS2339: no region provider kind  [PROVIDER]
   do: [ m.actions.giveItem({ item: "minecraft:iron_sword", amount: 1 }), m.actions.message("<red>PvP is on.") ] });
 ```
@@ -470,7 +483,7 @@ menu.layers.addButton({ slot: 13, item: "minecraft:emerald", name: "Rank up", ru
 const ruby = m.ref.item("sample:ruby");
 const ore = p.blocks.create("ruby_ore", { texture: m.ref.asset("textures/block/ruby_ore.png"), hardness: 3 });
 ore.rules.add({ on: m.triggers.break, do: [ m.actions.giveItem({ item: ruby, amount: 1 }), m.actions.giveExp({ points: 5 }) ] });
-ore.rules.add({ on: m.triggers.break, chance: 0.1, do: [ m.actions.giveItem({ item: ruby, amount: 1 }) ] });
+ore.rules.add({ on: m.triggers.break, do: [ m.actions.giveItem({ item: ruby, amount: 1 }, { chance: 0.1 }) ] });   // `chance:` is an action option
 ```
 
 The ruby goes to the breaker's inventory. A world drop is the block's own `drops:` field where the block type has one.
@@ -484,12 +497,12 @@ p.items.create("miners_heirloom", { material: "netherite_pickaxe", display_name:
 
 Both are class F mechanics (primitives.md §4.2) and both work. They are the next presets after the backpack.
 
-### T26 Announcements — Fail (RULE, TIMER)
+### T26 Announcements — Fail (TIMER)
 
 ```ts
 const tips = ["Use /kits for a starter kit.", "Vote daily for keys.", "Join our Discord: /discord", "Read /rules."];
 const next = p.variables.create("tip_index", { scope: "server", type: "number", default: 0 });
-p.rules.create("announce", {                                              // ✗ [RULE]
+p.rules.create("announce", {                                              // a rule document: passes since #327
   on: m.triggers.every({ minutes: 5 }),                                   // ✗ [TIMER]
   do: [ m.steps.choose(tips.map((t, i) => ({ if: m.expr`${next} == ${i}`, then: [ m.actions.broadcast(`<aqua>[Tip] ${t}`) ] }))),
         m.actions.setVar(next, { op: "set", value: m.expr`(${next} + 1) % ${tips.length}` }) ] });
@@ -503,14 +516,14 @@ p.commands.create("discord", { do: [ m.actions.message("<blue>Join us: <u>discor
 
 The smallest task in the set, and it fails. A GUI whose `gui.opening` rule messages and cancels would imitate it.
 
-### T28 Rules on first join — Fail (RULE, TRIG-PLAYER, VIEW)
+### T28 Rules on first join — Fail (VIEW)
 
 ```ts
 const accepted = p.variables.create("rules_accepted", { scope: "player", type: "boolean", default: false });
 const rules = p.dialogs.create("rules", { title: "Server rules", body: ["Be kind.", "No cheating."],     // ✗ 'dialogs' (#6) [VIEW]
   buttons: [ { label: "Accept", do: [ m.actions.setVar(accepted, { op: "set", value: true }) ] },
              { label: "Leave",  do: [ m.actions.runCommand({ command: "kick %player% Rules declined", as: "console" }) ] } ] });
-p.rules.create("rules_gate", { on: m.triggers.playerJoin, if: m.conditions.var(accepted, "==", false),   // ✗ [RULE] [TRIG-PLAYER]
+p.rules.create("rules_gate", { on: m.triggers.playerJoin, if: m.conditions.var(accepted, "==", false),   // passes since #327
   do: [ m.actions.dialogOpen(rules) ] });
 ```
 
@@ -542,9 +555,9 @@ Each is a capability, named for what it does (U1). The third column is where the
 
 | Gap id | The missing primitive | primitives.md | Tasks that need it | Tasks it alone unblocks |
 |---|---|---|---|---|
-| **RULE** | A rule unit with no host: behavior not attached to an item, block, furniture or GUI | §5.5 | T06 T10 T15 T17 T20 T22 T26 T28 (8) | none alone (a host-less rule needs a host-less trigger) |
-| **TRIG-ENTITY** | Triggers for entity events with the entity and the damage in context: hit, hurt, kill | §4.3, §5.5 | T01 T06 T12 T15 T17 (5) | with RULE: T06 T15 |
-| **TRIG-PLAYER** | Triggers for a player's lifecycle: join, quit, respawn, death | §5.5 | T10 T28 (2) | with RULE: T10 |
+| **RULE** | A rule unit with no host: behavior not attached to an item, block, furniture or GUI | §5.5 | T06 T10 T15 T17 T20 T22 T26 T28 (8) | **Closed by #327** (the `rule` content type, logic.md §37); with the triggers below it flipped T06 T10 T15 |
+| **TRIG-ENTITY** | Triggers for entity events with the entity and the damage in context: hit, hurt, kill | §4.3, §5.5 | T01 T06 T12 T15 T17 (5) | **Closed by #327** (`entity.hit`, `entity.kill`, `player.hurt`); T06 T15 pass, the rest keep other gaps |
+| **TRIG-PLAYER** | Triggers for a player's lifecycle: join, quit, respawn, death | §5.5 | T10 T28 (2) | **Closed by #327** (`player.join`, `player.quit`, `player.respawn`, `player.death`); T10 passes, T28 keeps VIEW |
 | **VERB** | Entity and world verbs: heal, damage, velocity, particle, launch, break or set a block, edit a stack | §5.7 | T12 T13 T14 T20, F2 F5 (4) | T13 T14 |
 | **TIME** | A clock in expressions (`now()`), durations, and a cooldown that persists and can be read | new | T04 T05 T07 (3) | T04 T05 T07 |
 | **CMD** | Commands as content | §5.4 | T02 T21 T27 (3) | T27 |
@@ -567,7 +580,7 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | Rank | Issue | Gaps | Passes after it (cumulative) | Newly passing | Cost |
 |---|---|---|---|---|---|
 | 0 | (today) | | 10 of 29 | | |
-| 1 | **Rules without a host, with the entity and player triggers** (#327) | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, six trigger registrations, firing sites behind the thread gateway |
+| 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328) | TIME | 16 | T04 T05 T07 | Small: expression functions and one rule option |
 | 3 | **Entity and world verbs** (#329) | VERB | 19 | T12 T13 T14 | Medium: about eight actions, each small; protection checks |
 | 4 | **Commands as content** (#330) | CMD | 20 | T27 | Small to medium: lift the `open:` block |

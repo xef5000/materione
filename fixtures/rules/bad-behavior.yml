@@ -1,0 +1,10 @@
+# Fault fixture (#327): a rule document whose behavior: is not a list is not a rule document. It parses to nothing, the
+# pipeline quarantines it, and the healthy sibling in the same file (a different resource) is unaffected.
+broken:
+  behavior: "when a player joins, say hello"
+
+healthy:
+  behavior:
+    - on: player.join
+      do:
+        - message: "hello"

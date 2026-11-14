@@ -129,6 +129,39 @@ class LogicAuthoringApiTest {
         assertThat(result.ok()).isFalse();
     }
 
+    /** A rule document (logic.md §37) is a host like any other: read, edited and saved through the same edits. */
+    @Test
+    void aRuleDocumentWithNoRulesYetTakesAnAddedRuleAndKeepsItsOtherKeys() {
+        String path = "rules/greet.yml";
+        String seed = "greet:\n  description: Hello  # kept\n  future: keep-me\n";
+        authoring.createDocument(actor, new CreateDocumentRequest(PACK, path, "greet", "Greet", seed));
+
+        assertThat(logic.get(PACK, path).value().rules()).isEmpty();
+        var rule = Map.<String, Object>of("on", "click", "do", List.of(Map.of("message", "hi")));
+        ApiResult<LogicView> result = logic.edit(actor,
+                new LogicEditRequest(PACK, path, 1, List.of(new LogicEdit.AddRule(0, rule))));
+
+        assertThat(result.ok()).isTrue();
+        assertThat(result.value().rules()).hasSize(1);
+        String raw = authoring.getDocument(PACK, path).value().raw();
+        assertThat(raw).contains("description: Hello  # kept").contains("future: keep-me").contains("behavior:");
+    }
+
+    @Test
+    void theFurnitureFolderIsTheOneThePackLayoutNames() {
+        String path = "furnitures/chair.yml";
+        authoring.createDocument(actor, new CreateDocumentRequest(PACK, path, "chair", "Chair", "chair:\n  texture: t\n"));
+
+        assertThat(logic.get(PACK, path).ok()).isTrue();
+        // #359: a logic edit addressed to a furniture document is applied, not refused as "not a logic folder"
+        var rule = Map.<String, Object>of("on", "place", "do", List.of(Map.of("message", "hi")));
+        ApiResult<LogicView> edited = logic.edit(actor,
+                new LogicEditRequest(PACK, path, 1, List.of(new LogicEdit.AddRule(0, rule))));
+        assertThat(edited.ok()).isTrue();
+        assertThat(edited.value().rules()).hasSize(1);
+        assertThat(authoring.getDocument(PACK, path).value().raw()).contains("behavior:");
+    }
+
     // ------------------------------------------------------------------
     // rules
 

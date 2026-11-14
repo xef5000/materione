@@ -72,7 +72,12 @@ Action         = registry entry + params         // shared across all content ty
   furniture/air), `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`,
   `inv_click`, `death`, `consume`, `tick` (timers), `menu.click`, `hud.threshold`,
   `dialog.submit`, `custom` (addon-defined). A menu button click and an item right-click are
-  the same `click` event carrying different context fields.
+  the same `click` event carrying different context fields. *As built (#327, logic.md §37):*
+  the **world events** `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`,
+  `player.respawn`, and the existing `death` (now also hosted by rule documents), fired for the `rule` content type (rules with no
+  item, block, furniture or GUI to hold them) and, for the first three, for an item's rules
+  (the item in the main hand; worn armor too for `player.hurt`). Their listeners are static
+  wiring that cost one set lookup per event when no rule answers the trigger.
 - **Condition evaluation**: one universal expression engine (settled decision). Expressions
   parse once at load into an AST; runtime evaluation is tree-walk with typed values;
   compile-to-lambda is a later optimization, not a design change. PlaceholderAPI resolves

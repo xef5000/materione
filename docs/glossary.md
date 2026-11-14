@@ -67,6 +67,7 @@ here.
 | **Resource** | The atomic unit of content: identity (`ns:id`) + type + facets + provenance. | master §5.1 |
 | **Restart-required** | Change class that cannot hot-apply (datapack-baked content); staged for next boot and reported honestly. | master §6.4 |
 | **Revision number** | Per-document counter rejecting stale concurrent writes (last-writer-wins *with visible warning*). | master §9.4 |
+| **Rule document** | A `rule` content resource (`rules/*.yml`): a `behavior:` list and `flows:` with the exact shape of any host's, owned by no item, block, furniture or GUI. The world fires its triggers (`entity.hit`, `player.join`, ...); the subject of a run is the player the trigger names. | logic.md §37 |
 | **Sandbox (code mode)** | The isolated runtime in the cloud editor's page that runs a program with no ambient authority: only the SDK object, bounded reads, bounded staged output. QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe (owner decision, PR #326). | codemode.md §4 |
 | **SDK** | The typed TypeScript API an agent's program is written against: a fixed core (handles, read API, staging recorder) plus a surface generated per server from the registries' self-description, including presets and addon primitives. The preferred way to read content and state as well as write it. | master §3.2, codemode.md §3 |
 | **Self-description** | Registry-entry metadata (name, description, parameter schema, since-version) that generates editor forms, docs, and tab completion — the single schema source. | plugin.md §3 |
@@ -76,4 +77,5 @@ here.
 | **Trusted workstation** | Opt-in flag where an editor persists its signing key (IndexedDB) and the plugin whitelists it, skipping repeated in-game trust prompts; revocable in-game. | web.md §5.2 |
 | **Trigger** | Anything that starts a pipeline run (startup, command, web save, watcher, import) — all funnel into the same entry. | master §6.5 |
 | **Validation levels 1–5** | Syntax → schema → semantic (references) → platform (version gates) → build (allocation feasibility). | master §5.4 |
+| **World trigger** | A logic trigger the world fires with no host: `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`; the existing `death` is also hosted by rule documents. The first three are fired for an item's rules as well as for rule documents. Not to be confused with a pipeline **Trigger**. | logic.md §37 |
 | **Wrapping key** | Random 256-bit key encrypting the session blob; transported only in the URL fragment. | web.md §5.2 |

@@ -231,6 +231,14 @@ node --test harness\protocol\floor-bot.test.mjs
   off-thread `saveData` loop as the positive control. Not a Folia port of the harness: the Folia platform axis for the
   existing ITs and the QA suite is #314.
 
+- **World events and rule documents** (`PaperWorldEventsIT`, `WorldEventsRunner`, logic.md section 37, #327). Runs by default (one boot). The
+  `worldrules` fixture pack holds a `rule` document and an item; the fake-connection players of the durability probe join, are hit,
+  killed, hurt and killed again, respawn and leave, with the entities from `summon` and the hits from the console's
+  `damage ... by <player>`. Each rule announces itself with `say MATERIONE-WORLDRULES-...`; the runner reads those lines (a join greets with
+  `first=true`, two zombie kills finish a quest held in a player variable, a cancelled hit leaves a husk at 20 health) and fails on any
+  `MTR-0021`, `MTR-0022`, `MTR-0023` or bridge-failure line. A player who has just joined is invulnerable for three seconds, so the hurt
+  step waits.
+
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 
 The tiers above are headless — the opt-in protocol client does not render, so visual failure modes
