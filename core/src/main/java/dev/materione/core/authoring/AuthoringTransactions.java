@@ -270,7 +270,7 @@ final class AuthoringTransactions {
         if (!diagnostics.isEmpty()) {
             return new Planned(false, false, null, List.of(), diagnostics, stages(false), List.of(), List.of());
         }
-        return validateAndCommit(actor, entry.pack(), plan, diagnostics, dryRun, revertId);
+        return validateAndCommit(actor, entry.pack(), plan, diagnostics, dryRun, revertId, true);
     }
 
     private static int editCount(TransactionOperation operation) {
@@ -310,7 +310,7 @@ final class AuthoringTransactions {
         if (refused) {
             return new Planned(false, false, null, List.of(), diagnostics, stages(false), List.of(), List.of());
         }
-        return validateAndCommit(actor, request.pack(), plan, diagnostics, request.dryRun(), transactionId);
+        return validateAndCommit(actor, request.pack(), plan, diagnostics, request.dryRun(), transactionId, false);
     }
 
     /**
@@ -319,7 +319,7 @@ final class AuthoringTransactions {
      */
     private Planned validateAndCommit(
             ActorContext actor, String pack, Plan plan, List<OperationDiagnostic> diagnostics, boolean dryRun,
-            String transactionId) throws IOException {
+            String transactionId, boolean revert) throws IOException {
         List<TransactionDocument> shown = new ArrayList<>();
         List<DocumentStore.PlannedWrite> writes = new ArrayList<>();
         for (Work work : plan.docs.values()) {
@@ -332,7 +332,7 @@ final class AuthoringTransactions {
                 writes.add(write);
             }
         }
-        Validation validation = new Validation(plan).run();
+        Validation validation = new Validation(plan, !revert).run();
         diagnostics.addAll(validation.diagnostics());
         boolean accepted = diagnostics.stream().noneMatch(found -> found.diagnostic().severity() == Severity.ERROR);
         if (dryRun || !accepted || writes.isEmpty()) {
@@ -842,6 +842,11 @@ final class AuthoringTransactions {
          * and the documents it deleted or moved away taken out.
          */
         Map<String, Map<String, Object>> templatePool() {
+            return templatePool(true);
+        }
+
+        /** @param overlay false for the stored pool alone, without this list's templates and items laid over it */
+        Map<String, Map<String, Object>> templatePool(boolean overlay) {
             Set<String> wanted = new LinkedHashSet<>();
             for (Work work : docs.values()) {
                 if (work.text != null) {
@@ -857,7 +862,7 @@ final class AuthoringTransactions {
                     new LinkedHashMap<>(api.summaryComputer().resolutionPool(wanted).definitions());
             for (Work work : docs.values()) {
                 boolean template = work.path.startsWith("templates/");
-                if (!template && !AuthoringApiImpl.isItemDocument(work.path)) {
+                if (!overlay || (!template && !AuthoringApiImpl.isItemDocument(work.path))) {
                     continue;
                 }
                 String prefix = template ? "" : TemplateResolver.ITEM_PREFIX;
@@ -947,10 +952,20 @@ final class AuthoringTransactions {
         private StagedReferences references;
         private StagedReferences.View staging;
         private Map<String, Map<String, Object>> templates;
+        private Map<String, Map<String, Object>> storedTemplates;
         private final Map<NamespacedId, Optional<VariableDeclaration>> declaredVariables = new HashMap<>();
+        private final Map<NamespacedId, Optional<VariableDeclaration>> storedVariables = new HashMap<>();
+        /** True while the baseline (the documents as stored) is measured: lookups then read the stored pack. */
+        private boolean measuringBefore;
+        private final boolean baseline;
 
-        Validation(Plan plan) {
+        /**
+         * @param baseline true for an edit: a finding the document already had before the list is reported as
+         *        pre-existing and does not refuse it. False for a revert, which stays strict (#372).
+         */
+        Validation(Plan plan, boolean baseline) {
             this.plan = plan;
+            this.baseline = baseline;
         }
 
         List<OperationDiagnostic> diagnostics() {
@@ -971,7 +986,6 @@ final class AuthoringTransactions {
             boolean guiWired = !(api.gui() instanceof UnavailableGuiAuthoring);
             boolean logicWired = !(api.logic() instanceof UnavailableLogicAuthoring);
             Allocations allocations = previews == null ? null : previews.get();
-            Map<String, Map<String, Object>> pool = null;
             Set<String> seen = new HashSet<>();
             registeredTypes = registered == null ? List.of() : registered;
             // the one view of the pack as the list leaves it, for the logic check and the references stage alike
@@ -988,38 +1002,87 @@ final class AuthoringTransactions {
                 int operation = work.lastOperation();
                 String directory = work.path.contains("/") ? work.path.substring(0, work.path.indexOf('/')) : "";
                 boolean isGui = "guis".equals(directory) && guiWired;
-                List<Diagnostic> own = new ArrayList<>();
                 ContentType type = types.get(directory);
-                if (type != null && !isGui) {
-                    schemaRan = true;
-                    if (allocations != null) {
-                        buildRan = true;
-                        if (pool == null) {
-                            pool = plan.templatePool();
+                List<Diagnostic> own = documentFindings(work.path, work.text, directory, type, isGui, guiWired,
+                        logicWired, allocations);
+                // the baseline: what the document already had before the list (measured only for a document that
+                // exists on disk and has a finding now, so a clean list costs nothing extra)
+                Set<String> before = Set.of();
+                if (baseline && !own.isEmpty() && work.original != null) {
+                    measuringBefore = true;
+                    try {
+                        before = new HashSet<>();
+                        for (Diagnostic old : documentFindings(work.path, work.original, directory, type, isGui,
+                                guiWired, logicWired, allocations)) {
+                            before.add(work.path + "|" + findingKey(old));
                         }
-                        compileResources(work, type, pool, allocations, own);
+                    } finally {
+                        measuringBefore = false;
                     }
                 }
-                if (isGui) {
-                    guiRan = true;
-                    var gui = api.gui().validate(new dev.materione.api.gui.GuiAuthoringApi.GuiValidateRequest(
-                            new dev.materione.api.gui.GuiAuthoringApi.Yaml(plan.pack, work.text), List.of(),
-                            staging == null ? null : this::variable));
-                    own.addAll(gui.ok() ? gui.value() : gui.diagnostics());
-                } else if (logicWired && hasLogic(directory)) {
-                    behaviorRan = true;
-                    validateLogic(work, directory, own);
-                }
                 for (Diagnostic diagnostic : own) {
-                    String key = work.path + "|" + diagnostic.code().code() + "|" + diagnostic.message() + "|"
-                            + diagnostic.target();
+                    String key = work.path + "|" + findingKey(diagnostic);
                     if (seen.add(key)) {
-                        found.add(new OperationDiagnostic(operation, diagnostic));
+                        found.add(before.contains(key)
+                                ? preexisting(operation, diagnostic) : new OperationDiagnostic(operation, diagnostic));
                     }
                 }
             }
             runReferences(seen);
             return this;
+        }
+
+        /** A finding's identity across the before and after states of a document. */
+        private String findingKey(Diagnostic diagnostic) {
+            return diagnostic.code().code() + "|" + diagnostic.message() + "|" + diagnostic.target();
+        }
+
+        /**
+         * One document's findings through the per-document stages (schema and build, GUI, behavior), for the text
+         * given: the result of the list, or, for the baseline, the document as stored.
+         */
+        private List<Diagnostic> documentFindings(String path, String text, String directory, ContentType type,
+                boolean isGui, boolean guiWired, boolean logicWired, Allocations allocations) {
+            List<Diagnostic> own = new ArrayList<>();
+            if (type != null && !isGui) {
+                schemaRan = true;
+                if (allocations != null) {
+                    buildRan = true;
+                    compileResources(path, text, type, templatePool(), allocations, own);
+                }
+            }
+            if (isGui) {
+                guiRan = true;
+                var gui = api.gui().validate(new dev.materione.api.gui.GuiAuthoringApi.GuiValidateRequest(
+                        new dev.materione.api.gui.GuiAuthoringApi.Yaml(plan.pack, text), List.of(),
+                        staging == null ? null : this::variable));
+                own.addAll(gui.ok() ? gui.value() : gui.diagnostics());
+            } else if (logicWired && hasLogic(directory)) {
+                behaviorRan = true;
+                validateLogic(text, directory, own);
+            }
+            return own;
+        }
+
+        /** The template pool: the result's, or, while the baseline is measured, the stored one. */
+        private Map<String, Map<String, Object>> templatePool() {
+            if (measuringBefore) {
+                if (storedTemplates == null) {
+                    storedTemplates = plan.templatePool(false);
+                }
+                return storedTemplates;
+            }
+            if (templates == null) {
+                templates = plan.templatePool(true);
+            }
+            return templates;
+        }
+
+        /** The finding as a warning marked pre-existing: the document had it before the list, so it does not refuse it. */
+        private OperationDiagnostic preexisting(int operation, Diagnostic diagnostic) {
+            return new OperationDiagnostic(operation, new Diagnostic(
+                    diagnostic.code(), Severity.WARN, diagnostic.message(), diagnostic.resource(),
+                    diagnostic.location(), diagnostic.hint(), diagnostic.target()), true);
         }
 
         /**
@@ -1031,7 +1094,7 @@ final class AuthoringTransactions {
                 return;
             }
             try {
-                var outcome = references.check(staging, stagedDocuments);
+                var outcome = references.check(staging, stagedDocuments, baseline);
                 referencesRan = true;
                 for (OperationDiagnostic diagnostic : outcome.diagnostics()) {
                     String key = "ref|" + diagnostic.operation() + "|" + diagnostic.diagnostic().code().code() + "|"
@@ -1085,20 +1148,18 @@ final class AuthoringTransactions {
             if (staging == null) {
                 return Optional.empty();
             }
-            Optional<VariableDeclaration> known = declaredVariables.get(id);
+            Map<NamespacedId, Optional<VariableDeclaration>> cache = measuringBefore ? storedVariables : declaredVariables;
+            Optional<VariableDeclaration> known = cache.get(id);
             if (known != null) {
                 return known;
             }
             Optional<VariableDeclaration> parsed = Optional.empty();
-            Optional<ContentResource> resource = references.declared(staging, "variable", id);
+            Optional<ContentResource> resource = references.declared(staging, "variable", id, measuringBefore);
             ContentType type = registeredTypes.stream().filter(t -> t.name().equals("variable")).findFirst().orElse(null);
             if (resource.isPresent() && type != null
                     && resource.get().document().data().get(id.value()) instanceof Map<?, ?> definition) {
                 try {
-                    if (templates == null) {
-                        templates = plan.templatePool();
-                    }
-                    Optional<Object> made = type.parse(id, LosslessYaml.stringKeyed(definition), templates);
+                    Optional<Object> made = type.parse(id, LosslessYaml.stringKeyed(definition), templatePool());
                     if (made.isPresent() && made.get() instanceof VariableDeclaration declaration) {
                         parsed = Optional.of(declaration);
                     }
@@ -1106,7 +1167,7 @@ final class AuthoringTransactions {
                     // a variable that does not parse declares nothing, as in the pipeline's pre-pass
                 }
             }
-            declaredVariables.put(id, parsed);
+            cache.put(id, parsed);
             return parsed;
         }
 
@@ -1116,15 +1177,15 @@ final class AuthoringTransactions {
         }
 
         /** Each resource of the document through the content type's own parse, diagnose and compile. */
-        private void compileResources(Work work, ContentType type, Map<String, Map<String, Object>> pool,
+        private void compileResources(String path, String text, ContentType type, Map<String, Map<String, Object>> pool,
                 Allocations allocations, List<Diagnostic> out) {
-            for (Map.Entry<String, Map<String, Object>> resource : resources(work.text).entrySet()) {
+            for (Map.Entry<String, Map<String, Object>> resource : resources(text).entrySet()) {
                 NamespacedId id;
                 try {
                     id = NamespacedId.of(plan.pack, resource.getKey());
                 } catch (IllegalArgumentException malformed) {
                     out.add(Diagnostic.error(DiagnosticCodes.CONTENT_SCHEMA_INVALID,
-                            "'" + resource.getKey() + "' in " + work.path + " is not a valid resource id"));
+                            "'" + resource.getKey() + "' in " + path + " is not a valid resource id"));
                     continue;
                 }
                 var emitter = new DiscardingEmitter(plan.pack, api.packDirectory(plan.pack), out);
@@ -1145,10 +1206,10 @@ final class AuthoringTransactions {
 
         /** The flow compiler over each resource's {@code behavior:} and {@code flows:}. */
         @SuppressWarnings("unchecked")
-        private void validateLogic(Work work, String directory, List<Diagnostic> out) {
+        private void validateLogic(String text, String directory, List<Diagnostic> out) {
             // a rule document is a behavior host with no resource of its own: the host the warning is about
             String host = "rules".equals(directory) ? "rule" : null;
-            for (Map.Entry<String, Map<String, Object>> resource : resources(work.text).entrySet()) {
+            for (Map.Entry<String, Map<String, Object>> resource : resources(text).entrySet()) {
                 // the rules' bare on: key loads as a YAML-1.1 boolean: normalized, as the editor's parsed view is
                 Object behavior = LosslessYaml.stringKeyedDeep(resource.getValue().get("behavior"));
                 Object flows = LosslessYaml.stringKeyedDeep(resource.getValue().get("flows"));

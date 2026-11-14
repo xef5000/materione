@@ -280,6 +280,17 @@ in a document's final state is attributed to the **last operation that touched t
 reached the state that failed), and `-1` is a problem of the list as a whole. An `ERROR` makes the list not accepted: a dry run
 reports it, an apply refuses and writes nothing. A warning is reported and never refuses.
 
+**Findings a document already had (#372).** In a document the list touches, a finding that the same document already had as
+stored does not refuse the list: it is reported as a **warning** with `OperationDiagnostic.preexisting = true` (wire:
+`"preexisting": true` on the diagnostic, additive, always present), at the operation that touched the document. Only a finding
+the list adds refuses it. The comparison is made in every stage that can refuse: schema and build, behavior and GUI (the
+document's original text through the same per-document stage, with stored templates and the stored pack's variables), and
+references (the written resource's stored version against the stored pack). A finding is the same when its code, message and
+target are; one a list rewords or moves is new. The baseline is measured only for a document that exists on disk and has a
+finding now. A document that does not parse as stored cannot be patched (the syntax refusal stands), so a list can only
+**delete or move** it; it never carries pre-existing syntax findings. **Reverts stay strict:** `revertTransaction` has no
+baseline, so a restored state that fails validation is refused with its findings as errors, and there is no "restore anyway".
+
 **Result.** `TransactionResult(accepted, applied, dryRun, transactionId, documents, diagnostics, stages)`; each document is
 `TransactionDocument(path, kind, previousRevision, revision, text, movedFrom, operations)` with `kind` one of `CREATED`, `CHANGED`,
 `UNCHANGED`, `DELETED`, `MOVED`, `revision` the revision it has (a dry run: would get), `text` the resulting text (null when
