@@ -282,10 +282,23 @@ public interface GuiAuthoringApi {
         }
     }
 
-    /** {@link #validate}: the same inputs as {@link GuiRenderRequest}. */
-    record GuiValidateRequest(GuiSource source, List<AuthoringApi.ModelAsset> assets) {
+    /**
+     * {@link #validate}: the same inputs as {@link GuiRenderRequest}. {@code variables}, when set, resolves a
+     * persistent variable by id for this check ahead of the server's own declarations: a transaction's dry run
+     * passes the pack as the list leaves it, so a variable an earlier operation declares is not reported as
+     * undeclared (codemode.md section 10). Null leaves the server's view.
+     */
+    record GuiValidateRequest(
+            GuiSource source,
+            List<AuthoringApi.ModelAsset> assets,
+            java.util.function.Function<dev.materione.api.NamespacedId,
+                    java.util.Optional<dev.materione.api.logic.variable.VariableDeclaration>> variables) {
         public GuiValidateRequest {
             assets = assets == null ? List.of() : List.copyOf(assets);
+        }
+
+        public GuiValidateRequest(GuiSource source, List<AuthoringApi.ModelAsset> assets) {
+            this(source, assets, null);
         }
     }
 

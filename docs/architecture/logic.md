@@ -3788,8 +3788,9 @@ quest_zombies:
    is the compiler's business: it is skipped alone with `MTR-0021` (an unknown `on:`, a filter the trigger's schema rejects, an unknown
    entity type or damage cause) and its siblings load. A rule whose trigger no rule document fires (a `click`) loads and is reported as
    never running, the warning a GUI gives for the same mistake. No diagnostic code was added ([`plugin.md`](plugin.md) §5). The "never
-   runs" warning is raised when the shadow is built, where the host is known; the offline dry run (`logic.validate`, an authoring
-   transaction) reports the compiler's problems and not this one, because a draft carries no host.
+   runs" warning is raised when the shadow is built, where the host is known, by `UnfiredTriggers`; the offline validation raises the
+   same warning when the draft names its host (`LogicDraft.host`, set by an authoring transaction for a `rules/` document, #378), so a
+   dry run reports it for a created rule document. `logic.validate` from the editor passes no host and reports the compiler's problems only.
 5. **The subject of a host-less run is the player the trigger names.** The run belongs to that player (cooldowns are per player by
    default, a `cancelPlayer` on quit ends its parked runs, the player facet and PlaceholderAPI resolve for them). `player.*`, `server.*`,
    `world.*`, `location.*` and `vars` are in every trigger's context, built by the same code the item bridge uses (`BehaviorService.baseRoot`).

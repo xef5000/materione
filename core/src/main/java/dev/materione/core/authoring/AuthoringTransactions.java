@@ -17,11 +17,13 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.LogicAuthoringApi.LogicDraft;
+import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentConflictException;
 import dev.materione.core.document.Documents;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.LosslessYaml;
+import dev.materione.core.pipeline.ContentResource;
 import dev.materione.core.pipeline.ResourceCompiler;
 import dev.materione.core.pipeline.TemplateResolver;
 import java.io.IOException;
@@ -32,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -939,6 +942,12 @@ final class AuthoringTransactions {
         private boolean behaviorRan;
         private boolean guiRan;
         private boolean referencesRan;
+        private List<ContentType> registeredTypes = List.of();
+        private List<StagedReferences.StagedDocument> stagedDocuments = List.of();
+        private StagedReferences references;
+        private StagedReferences.View staging;
+        private Map<String, Map<String, Object>> templates;
+        private final Map<NamespacedId, Optional<VariableDeclaration>> declaredVariables = new HashMap<>();
 
         Validation(Plan plan) {
             this.plan = plan;
@@ -964,6 +973,10 @@ final class AuthoringTransactions {
             Allocations allocations = previews == null ? null : previews.get();
             Map<String, Map<String, Object>> pool = null;
             Set<String> seen = new HashSet<>();
+            registeredTypes = registered == null ? List.of() : registered;
+            // the one view of the pack as the list leaves it, for the logic check and the references stage alike
+            stagedDocuments = stagedDocuments();
+            beginStaging();
             for (Work work : plan.docs.values()) {
                 if (work.isNoop() || !work.mutated || work.text == null) {
                     continue;
@@ -990,11 +1003,12 @@ final class AuthoringTransactions {
                 if (isGui) {
                     guiRan = true;
                     var gui = api.gui().validate(new dev.materione.api.gui.GuiAuthoringApi.GuiValidateRequest(
-                            new dev.materione.api.gui.GuiAuthoringApi.Yaml(plan.pack, work.text), List.of()));
+                            new dev.materione.api.gui.GuiAuthoringApi.Yaml(plan.pack, work.text), List.of(),
+                            staging == null ? null : this::variable));
                     own.addAll(gui.ok() ? gui.value() : gui.diagnostics());
                 } else if (logicWired && hasLogic(directory)) {
                     behaviorRan = true;
-                    validateLogic(work, own);
+                    validateLogic(work, directory, own);
                 }
                 for (Diagnostic diagnostic : own) {
                     String key = work.path + "|" + diagnostic.code().code() + "|" + diagnostic.message() + "|"
@@ -1013,22 +1027,11 @@ final class AuthoringTransactions {
          * finding they already made is not reported twice.
          */
         private void runReferences(Set<String> seen) {
-            var parsed = api.parsedContent();
-            if (parsed == null) {
+            if (staging == null) {
                 return;
             }
-            List<StagedReferences.StagedDocument> staged = new ArrayList<>();
-            for (Work work : plan.docs.values()) {
-                if (work.isNoop()) {
-                    continue;
-                }
-                boolean touched = work.mutated && work.kind() != Kind.UNCHANGED;
-                staged.add(new StagedReferences.StagedDocument(
-                        work.path, work.original, work.text, touched, work.lastOperation()));
-            }
             try {
-                var outcome = new StagedReferences(
-                        plan.pack, api.packDirectory(plan.pack), parsed.get(), api.referenceCache()).check(staged);
+                var outcome = references.check(staging, stagedDocuments);
                 referencesRan = true;
                 for (OperationDiagnostic diagnostic : outcome.diagnostics()) {
                     String key = "ref|" + diagnostic.operation() + "|" + diagnostic.diagnostic().code().code() + "|"
@@ -1041,6 +1044,70 @@ final class AuthoringTransactions {
                 // the pack could not be read: the stage did not run, and the apply's own write will say why
                 referencesRan = false;
             }
+        }
+
+        /** The working set as the references stage reads it: every document the list did not no-op. */
+        private List<StagedReferences.StagedDocument> stagedDocuments() {
+            List<StagedReferences.StagedDocument> staged = new ArrayList<>();
+            for (Work work : plan.docs.values()) {
+                if (work.isNoop()) {
+                    continue;
+                }
+                boolean touched = work.mutated && work.kind() != Kind.UNCHANGED;
+                staged.add(new StagedReferences.StagedDocument(
+                        work.path, work.original, work.text, touched, work.lastOperation()));
+            }
+            return staged;
+        }
+
+        /** Reads the pack as stored and as the list leaves it, once; none when the pack set is not wired or unreadable. */
+        private void beginStaging() {
+            var parsed = api.parsedContent();
+            if (parsed == null) {
+                return;
+            }
+            try {
+                references = new StagedReferences(
+                        plan.pack, api.packDirectory(plan.pack), parsed.get(), api.referenceCache());
+                staging = references.view(stagedDocuments);
+            } catch (IOException | RuntimeException failure) {
+                // the pack could not be read: neither the references stage nor the staged lookups run
+                staging = null;
+            }
+        }
+
+        /**
+         * A persistent variable by id in the pack as the list leaves it (this pack's staged documents laid over its
+         * stored ones, every other pack as last parsed), parsed by the variable content type as the pipeline's
+         * pre-pass does. Empty when the view is unavailable or nothing declares it.
+         */
+        private Optional<VariableDeclaration> variable(NamespacedId id) {
+            if (staging == null) {
+                return Optional.empty();
+            }
+            Optional<VariableDeclaration> known = declaredVariables.get(id);
+            if (known != null) {
+                return known;
+            }
+            Optional<VariableDeclaration> parsed = Optional.empty();
+            Optional<ContentResource> resource = references.declared(staging, "variable", id);
+            ContentType type = registeredTypes.stream().filter(t -> t.name().equals("variable")).findFirst().orElse(null);
+            if (resource.isPresent() && type != null
+                    && resource.get().document().data().get(id.value()) instanceof Map<?, ?> definition) {
+                try {
+                    if (templates == null) {
+                        templates = plan.templatePool();
+                    }
+                    Optional<Object> made = type.parse(id, LosslessYaml.stringKeyed(definition), templates);
+                    if (made.isPresent() && made.get() instanceof VariableDeclaration declaration) {
+                        parsed = Optional.of(declaration);
+                    }
+                } catch (RuntimeException unparsable) {
+                    // a variable that does not parse declares nothing, as in the pipeline's pre-pass
+                }
+            }
+            declaredVariables.put(id, parsed);
+            return parsed;
         }
 
         private boolean hasLogic(String directory) {
@@ -1078,7 +1145,9 @@ final class AuthoringTransactions {
 
         /** The flow compiler over each resource's {@code behavior:} and {@code flows:}. */
         @SuppressWarnings("unchecked")
-        private void validateLogic(Work work, List<Diagnostic> out) {
+        private void validateLogic(Work work, String directory, List<Diagnostic> out) {
+            // a rule document is a behavior host with no resource of its own: the host the warning is about
+            String host = "rules".equals(directory) ? "rule" : null;
             for (Map.Entry<String, Map<String, Object>> resource : resources(work.text).entrySet()) {
                 // the rules' bare on: key loads as a YAML-1.1 boolean: normalized, as the editor's parsed view is
                 Object behavior = LosslessYaml.stringKeyedDeep(resource.getValue().get("behavior"));
@@ -1089,7 +1158,7 @@ final class AuthoringTransactions {
                 var draft = new LogicDraft(plan.pack, resource.getKey(),
                         behavior instanceof List<?> list ? (List<Object>) list : List.of(),
                         flows instanceof Map<?, ?> map ? LosslessYaml.stringKeyed(map) : Map.of(),
-                        null);
+                        null, host, staging == null ? null : this::variable);
                 var result = api.logic().validate(draft);
                 out.addAll(result.ok() ? result.value() : result.diagnostics());
             }

@@ -1,17 +1,14 @@
 package dev.materione.plugin.runtime.behavior;
 
 import dev.materione.api.diagnostics.Diagnostic;
-import dev.materione.api.diagnostics.DiagnosticCodes;
-import dev.materione.api.diagnostics.Severity;
-import dev.materione.api.logic.TriggerDescription;
 import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.ParsedRules;
 import dev.materione.behavior.rule.Rule;
+import dev.materione.behavior.rule.UnfiredTriggers;
 import dev.materione.content.rules.RuleDefinition;
 import dev.materione.content.rules.RuleType;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -34,19 +31,8 @@ public final class RuleDocuments {
     public static List<Rule> compile(RuleDefinition document, LogicLookup lookup, Consumer<Diagnostic> report) {
         ParsedRules parsed = FlowCompiler.compile(document.id(), document.behavior(), document.flows(), lookup);
         parsed.problems().forEach(report);
-        for (Rule rule : parsed.rules()) {
-            Optional<TriggerDescription> trigger = lookup.trigger(rule.on().type());
-            if (trigger.isPresent() && trigger.get().fired() && !trigger.get().firedBy().contains(RuleType.NAME)) {
-                report.accept(new Diagnostic(
-                        DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
-                        document.id() + " rule '" + rule.id() + "' at " + rule.path().child("on")
-                                + ": trigger '" + rule.on().type() + "' is not fired for rule documents, so this "
-                                + "rule never runs",
-                        document.id(), null,
-                        "use a trigger the editor lists for rule documents, such as entity.kill or player.join",
-                        rule.path().child("on").target()));
-            }
-        }
+        // the same check the offline validation makes (UnfiredTriggers), where the host is known
+        UnfiredTriggers.check(parsed.rules(), lookup, RuleType.NAME, document.id()).forEach(report);
         return parsed.rules();
     }
 

@@ -1,6 +1,6 @@
 {
   "golden": "t04-daily-kit",
-  "accepted": false,
+  "accepted": true,
   "applied": false,
   "stages": [
     {
@@ -38,12 +38,6 @@
       "code": "MTR-0022",
       "severity": "warn",
       "message": "bench:kits rule 'bench:kits#0' at behavior.0.do.0.if: unexpected trailing input ':' in expression: now() - bench:kit_daily_at >= 86400"
-    },
-    {
-      "operation": 2,
-      "code": "MTR-0063",
-      "severity": "error",
-      "message": "bench:kits rule 'bench:kits#0' at behavior.0.do.3: action 'set_var' rejected: 'bench:kit_daily_at' is not a declared variable (declare it in a variables file of its pack)"
     }
   ],
   "documents": [
