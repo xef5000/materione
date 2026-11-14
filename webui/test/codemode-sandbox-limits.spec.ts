@@ -35,9 +35,9 @@ const GOOD_RESULT = `{ ok: true, sdkVersion: 'x', pack: null, operations: [], so
 
 describe('each limit ends the run with a diagnostic and no operations, and the next run works', () => {
   const failures: [string, string, string, Partial<SandboxLimits>][] = [
-    ['an endless loop', 'm.pack("bench").items.create("a1", {}); while (true) {}', 'SBX-0001', { cpuMs: 150 }],
+    ['an endless loop', 'm.pack("bench").items.create("a1", { material: "STONE" }); while (true) {}', 'SBX-0001', { cpuMs: 150 }],
     ['unbounded allocation', 'const keep = []; while (true) keep.push(new Array(100000).fill(1));', 'SBX-0002', { memoryMb: 32 }],
-    ['an await that never settles', 'm.pack("bench").items.create("a1", {}); await new Promise(() => {});', 'SBX-0009', {}],
+    ['an await that never settles', 'm.pack("bench").items.create("a1", { material: "STONE" }); await new Promise(() => {});', 'SBX-0009', {}],
   ];
   it.each(failures)('%s is %s', async (_name, program, code, limits) => {
     const runner = await runnerOf();
@@ -50,7 +50,7 @@ describe('each limit ends the run with a diagnostic and no operations, and the n
     expect(failed.diagnostics[0]!.hint).toBeTruthy();
     expect(performance.now() - started).toBeLessThan(5000);
     // a fresh sandbox boots afterwards and runs the next program
-    const next = await runner.run(checked('const h = m.pack("bench").items.create("a1", {}); return 1;'), surface, hostOf(WORLD));
+    const next = await runner.run(checked('const h = m.pack("bench").items.create("a1", { material: "STONE" }); return 1;'), surface, hostOf(WORLD));
     expect(next.ok).toBe(true);
     expect(next.operations).toHaveLength(1);
     expect(next.metrics.booted).toBe(true);
@@ -109,7 +109,7 @@ describe('each limit ends the run with a diagnostic and no operations, and the n
 });
 
 describe('determinism: the same program and the same answers are the same bytes, in any sandbox', () => {
-  const program = 'const stamp = [new Date().getTime(), Date.now(), typeof Date(), new Date(2020, 0, 1).getFullYear(), Math.random(), Math.random()]; m.pack("bench").items.create("a1", {}); return stamp;';
+  const program = 'const stamp = [new Date().getTime(), Date.now(), typeof Date(), new Date(2020, 0, 1).getFullYear(), Math.random(), Math.random()]; m.pack("bench").items.create("a1", { material: "STONE" }); return stamp;';
   it('a fixed Date and a seeded Math.random, run after run and across fresh sandboxes', async () => {
     const first = await (await runnerOf()).run(checked(program), surface, hostOf(WORLD));
     const again = await (await runnerOf()).run(checked(program), surface, hostOf(WORLD));
@@ -164,7 +164,7 @@ describe('what the program can see', () => {
     const result = await runner.run(
       checked(`(Object.prototype as any).polluted = 'yes'; (Object.prototype as any).ok = false; (Array.prototype as any).length; Object.defineProperty(Object.prototype, 'kind', { value: 'forged' });
         JSON.parse('{"__proto__": {"hostPolluted": true}}');
-        const p = m.pack("bench"); p.items.create("a1", {}); return { got: ({} as any).polluted };`),
+        const p = m.pack("bench"); p.items.create("a1", { material: "STONE" }); return { got: ({} as any).polluted };`),
       surface,
       hostOf(WORLD),
     );
@@ -181,11 +181,11 @@ describe('what the program can see', () => {
 describe('source positions: operations and errors name the line the agent wrote', () => {
   it('a staged operation and a thrown error map back through the source map to the program as written', async () => {
     const runner = await runnerOf();
-    const program = 'const p = m.pack("bench");\n\nconst h: any = p.items.create("a1", {});\nconst typed: number = 3;\nthrow new Error("boom " + typed);';
+    const program = 'const p = m.pack("bench");\n\nconst h: any = p.items.create("a1", { material: "STONE" });\nconst typed: number = 3;\nthrow new Error("boom " + typed);';
     const result = await runner.run(checked(program), surface, hostOf(WORLD));
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toMatchObject([{ code: 'SDK-0001', message: expect.stringContaining('boom 3'), source: { line: 5 } }]);
-    const staged = await runner.run(checked('const p = m.pack("bench");\n\n  p.items.create("a1", {});'), surface, hostOf(WORLD));
+    const staged = await runner.run(checked('const p = m.pack("bench");\n\n  p.items.create("a1", { material: "STONE" });'), surface, hostOf(WORLD));
     expect(staged.sources).toEqual([{ line: 3, column: 11 }]);
   });
 });
