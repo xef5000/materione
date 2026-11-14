@@ -22,10 +22,16 @@ export interface OpEntry {
   readonly capability?: string;
   /** For `authoring.transaction`: the operation kind the member stages. */
   readonly kind?: string;
+  /**
+   * `resolve` for a member whose answer the host gives at seal (codemode.md section 3.9): the core does not call the
+   * op, the host's resolver does, and the row is the allowlist and the compat gate's record of it. Absent: the core
+   * asks for the op itself, through `HostPort.read`, because the program awaits the answer.
+   */
+  readonly via?: 'resolve';
 }
 
 export const READS: readonly OpEntry[] = [
-  { sdk: 'm.pack', op: 'browse.packs' },
+  { sdk: 'm.pack', op: 'browse.packs', via: 'resolve' },
   { sdk: 'm.read.packs', op: 'browse.packs' },
   { sdk: 'm.read.resources', op: 'authoring.summaries' },
   { sdk: 'm.read.get', op: 'browse.get' },
@@ -33,9 +39,9 @@ export const READS: readonly OpEntry[] = [
   { sdk: 'm.read.history', op: 'browse.history' },
   { sdk: 'm.read.diagnostics', op: 'admin.diagnostics.recent' },
   { sdk: 'm.ref', op: 'authoring.summaries' },
-  { sdk: 'm.ref.asset', op: 'assets.list' },
-  { sdk: 'm.edit', op: 'browse.get' },
-  { sdk: 'rules.instantiate', op: 'logic.instantiate', capability: 'logic' },
+  { sdk: 'm.ref.asset', op: 'assets.list', via: 'resolve' },
+  { sdk: 'm.edit', op: 'browse.get', via: 'resolve' },
+  { sdk: 'rules.instantiate', op: 'logic.instantiate', capability: 'logic', via: 'resolve' },
 ];
 
 export const WRITES: readonly OpEntry[] = [

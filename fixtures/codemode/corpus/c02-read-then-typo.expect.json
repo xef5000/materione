@@ -1,0 +1,11 @@
+{
+  "task": "C02",
+  "title": "Read, then an id with a typo",
+  "registry": "plugin-current",
+  "result": "pass",
+  "run": {
+    "ok": false,
+    "diagnostics": [{ "code": "SDK-0007", "line": 5 }],
+    "note": "The list never reaches the dry run: SDK-0007 at seal ends the run with no operations, so there is no replay for this program."
+  }
+}

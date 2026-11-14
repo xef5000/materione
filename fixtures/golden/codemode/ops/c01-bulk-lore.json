@@ -1,0 +1,98 @@
+{
+  "task": "C01",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "sample",
+  "summary": "Adds a festival lore line to 4 ruby items.",
+  "operations": [
+    {
+      "kind": "setFields",
+      "path": "items/ruby.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "field": [
+            "ruby",
+            "lore"
+          ],
+          "value": [
+            "<gray>Kept for the harvest festival"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "setFields",
+      "path": "items/ruby_disc.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "field": [
+            "ruby_disc",
+            "lore"
+          ],
+          "value": [
+            "<gray>Kept for the harvest festival"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "setFields",
+      "path": "items/ruby_sword.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "field": [
+            "ruby_sword",
+            "lore"
+          ],
+          "value": [
+            "<gray>Kept for the harvest festival"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "setFields",
+      "path": "items/templated_ruby.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "field": [
+            "templated_ruby",
+            "lore"
+          ],
+          "value": [
+            "<gray>Kept for the harvest festival"
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 6,
+      "column": 19
+    },
+    {
+      "line": 6,
+      "column": 19
+    },
+    {
+      "line": 6,
+      "column": 19
+    },
+    {
+      "line": 6,
+      "column": 19
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 1,
+    "readBytes": 476,
+    "staged": 4,
+    "documents": 4
+  }
+}

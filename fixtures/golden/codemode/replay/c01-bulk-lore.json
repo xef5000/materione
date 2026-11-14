@@ -1,0 +1,66 @@
+{
+  "golden": "c01-bulk-lore",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "items/ruby.yml",
+      "kind": "changed",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "items/ruby_disc.yml",
+      "kind": "changed",
+      "operations": [
+        1
+      ]
+    },
+    {
+      "path": "items/ruby_sword.yml",
+      "kind": "changed",
+      "operations": [
+        2
+      ]
+    },
+    {
+      "path": "items/templated_ruby.yml",
+      "kind": "changed",
+      "operations": [
+        3
+      ]
+    }
+  ]
+}

@@ -237,9 +237,9 @@ interface PackInfo {
   readonly builtin: boolean;
 }
 
-/** One row of a pack's catalog. */
-interface ResourceSummary {
-  readonly ref: Ref;
+/** One row of a pack's catalog; `K` is the content type asked for, so `m.edit(row.ref)` is typed by it. */
+interface ResourceSummary<K extends string = string> {
+  readonly ref: Ref<K>;
   readonly pack: string;
   /** The directory the document lives under (`items`). */
   readonly type: string;
@@ -295,14 +295,18 @@ interface ServerDiagnostic {
   readonly [key: string]: JsonValue;
 }
 
-/** Reads see the stored state, never the program's own staged edits (codemode.md section 3.2). Each call is budgeted. */
+/**
+ * Reads see the stored state, never the program's own staged edits (codemode.md section 3.2). Each call is budgeted, and
+ * each one **waits for the host**: it returns a promise, so a program `await`s it. Nothing else in the SDK waits for
+ * anything: staging is synchronous and makes no call (codemode.md section 3.9).
+ */
 interface ReadApi {
-  packs(): readonly PackInfo[];
-  resources(options: { readonly pack: string; readonly type?: ContentTypeName; readonly query?: string; readonly limit?: number }): readonly ResourceSummary[];
-  get<K extends keyof ContentTypeFields & string>(ref: Ref<K>): ResourceView<ContentTypeFields[K]>;
-  references(ref: Ref): ReferenceResult;
-  history(ref: Ref, limit?: number): readonly RevisionInfo[];
-  diagnostics(): readonly ServerDiagnostic[];
+  packs(): Promise<readonly PackInfo[]>;
+  resources<T extends ContentTypeName = ContentTypeName>(options: { readonly pack: string; readonly type?: T; readonly query?: string; readonly limit?: number }): Promise<readonly ResourceSummary<T>[]>;
+  get<K extends keyof ContentTypeFields & string>(ref: Ref<K>): Promise<ResourceView<ContentTypeFields[K]>>;
+  references(ref: Ref): Promise<ReferenceResult>;
+  history(ref: Ref, limit?: number): Promise<readonly RevisionInfo[]>;
+  diagnostics(): Promise<readonly ServerDiagnostic[]>;
 }
 
 /** One parameter of a content type, as the registry describes it. */

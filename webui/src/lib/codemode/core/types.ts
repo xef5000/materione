@@ -18,17 +18,60 @@ export interface SourcePosition {
 export type ReadReply = { ok: true; data: unknown } | { ok: false; error: { code?: string; message: string } };
 
 /**
- * The one injected port (codemode.md section 3.1). The core never reaches the network, the editor's state or
- * the server on its own: every read goes through `read`, which the host answers from the live session and may
- * refuse (it also holds the allowlist: the core only asks for ops of its operation table). `stage`, `log` and
- * `done` are observers: the core tells the host what it recorded, it never asks the host to apply anything.
+ * The one injected port (codemode.md section 3.1, 3.9). The core never reaches the network, the editor's state or
+ * the server on its own, and **staging makes no call at all**: a program that only writes calls the port once, when
+ * it finishes, with `resolve`. Only `m.read.*` waits for the host, through `read`, which is asynchronous, so the
+ * sandbox needs no asyncify. `stage`, `log` and `done` are observers.
  */
 export interface HostPort {
-  /** One read-only editor op. Synchronous from the program's side: the sandbox suspends the program while the host answers. */
-  read(op: string, payload: Record<string, unknown>): ReadReply;
+  /** One read-only editor op, for `m.read.*`: an allowlisted op of the operation table. The host answers when it has the reply. */
+  read(op: string, payload: Record<string, unknown>): Promise<ReadReply>;
+  /**
+   * The seal step: everything staging could not know, in one batch, answered by the host from read-only editor
+   * ops. Called once, after the program has returned, and not at all when the program staged nothing and named
+   * nothing.
+   */
+  resolve(request: ResolveRequest): Promise<ResolveReply>;
+  /** Told of each operation as the seal builds it, in order. */
   stage?(operation: StagedOperation, source: SourcePosition | null, index: number): void;
   log?(line: string): void;
   done?(result: ProgramResult): void;
+}
+
+/** One stored resource the program names (`m.ref.<type>`, `m.edit`). */
+export interface ResolveRef {
+  /** The content type name. */
+  kind: string;
+  /** The directory its documents live under: what `authoring.summaries` filters on. */
+  directory: string;
+  pack: string;
+  /** The resource's own id. */
+  id: string;
+  /** Whether an operation names it: then the answer carries its path, revision and rule count; otherwise only whether it exists. */
+  needsDocument: boolean;
+  /** The field of its tree that holds its rules, when the content type has one (the rule count is its length). */
+  rulesKey?: string;
+}
+
+/** The seal's batch. Every list in the reply is parallel to the list of the same name here. */
+export interface ResolveRequest {
+  /** The packs the program writes to (at most one). */
+  packs: string[];
+  refs: ResolveRef[];
+  /** Recipes to expand, in the order the program instantiated them. */
+  instantiate: { recipe: string; params: JsonValue }[];
+  /** Assets the program referenced, in the pack it writes to. */
+  assets: { pack: string; path: string }[];
+}
+
+export interface ResolveReply {
+  /** `state`: ok, builtin (read-only), or missing; `nearest` names the closest packs when it is missing. */
+  packs: { state: 'ok' | 'builtin' | 'missing'; nearest?: string[] }[];
+  /** A found reference with `needsDocument: true` carries `path`, `rev` and `rules`; a missing one carries the nearest ids (`pack:id`) of its type. */
+  refs: ({ found: true; path?: string; rev?: number; rules?: number } | { found: false; nearest?: string[] })[];
+  /** The expansion, or the server's refusal (its code and message). */
+  instantiate: ({ rules: JsonValue[]; warnings?: unknown[] } | { error: { code?: string; message: string } })[];
+  assets: { found: boolean; nearest?: string[] }[];
 }
 
 /** The limits of one run (codemode.md section 4.2). The transaction's own caps are the server's (api.md section 3.3.1). */
@@ -119,8 +162,11 @@ export interface SessionConfig {
 export interface Session {
   /** The program's one global. */
   readonly m: Record<string, unknown>;
-  /** Ends the run and returns its result. After it, every call on `m` fails with SDK-0003 (and is reported by `late`). */
-  finish(outcome?: Outcome): ProgramResult;
+  /**
+   * Ends the run: the program has returned (and awaited what it meant to), the list is sealed with one `resolve`, and the
+   * result comes back. After it, every call on `m` fails with SDK-0003 (and is reported by `late`).
+   */
+  finish(outcome?: Outcome): Promise<ProgramResult>;
   /** Diagnostics raised after `finish` (a continuation that kept a handle). Empty for a program that ended cleanly. */
   late(): SdkDiagnostic[];
 }
