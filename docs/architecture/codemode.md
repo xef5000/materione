@@ -1244,6 +1244,18 @@ alone, under the hard cap above.
 
 **Still open.** The model allowlist and the routing rule (#385); the numbers for rates and the free allowance; everything in #386.
 
+
+### 12.2 Permissions, approval and old errors (decided 2026-11-14, #358, #372)
+
+| Question | Answer |
+|---|---|
+| What may the agent do? | **What its user may do.** The chatbot acts on behalf of the user; its rights are a subset of the session's, equal in M6.5. The actor can be narrowed later; no setting exists yet. |
+| What may a session do? | **Everything the editor can.** The editor is for server admins and a session is approved by one (master §9.2 as amended). The per-operation `materione.edit.<pack>` check in a transaction always passes for a session; it refuses only a built-in pack. It is not a protection and no text here relies on it. |
+| Who may revert? | Any session with edit rights, including a transaction another session applied. The audit records who. |
+| Where is the per-object approval (C10, C11) enforced? | **In the editor page.** It shows the diff and sends the transaction only after the user approves. The audit's `approval` field is what the page asserted; the server does not verify it and holds no grant. |
+| A touched document already has an error | Findings that existed before the transaction are **reported as warnings** and do not refuse it; only findings the transaction adds refuse it. Rare by construction (agents and the editor do not write faulty documents) but direct YAML editing makes it possible. Implementation: #372. |
+| A revert whose restored state fails validation | **Refused.** Reverts stay strict; there is no "restore anyway". |
+
 ## 13. Not verified
 
 - The numbers of §2.4 are as the fetched pages report them: the arXiv page through a mirror, and the daily.dev page is a
