@@ -989,6 +989,83 @@ what is applied (D6, master §6.4):
 The grant is the owner's protection, not the transaction's: every apply, granted or not, is transactional, audited and
 reversible as above.
 
+**As built (#346, track A3): the proposal lifecycle in the editor host.** `webui/src/lib/codemode/host/`. Session memory only
+(D1: nothing is persisted, there is no editor-only content state) and outside the sandbox. Per §12.2 the approval is enforced
+**in the editor page**: the page decides, the server records the `approval` value it is told and verifies nothing, and no wire op
+was added (the transport is `authoring.transaction` and `authoring.revertTransaction`, capability `codemode`).
+
+| Piece | File | What it is |
+|---|---|---|
+| Object identity | `objects.ts` | An object is one stored document: `<pack>:<path>`, exact string match (no case folding, no `..`, no wildcard). A name that is not canonical is not an object id and no grant can cover it. |
+| Classification | `classify.ts` | Pure. Inputs: the operation list, the dry run's document list, the objects this session created. **Nothing the model said** (summary, return value, logs, program text) is a parameter. |
+| Grants and policy | `grants.ts` | `GrantSet` (monotonic: no revoke), `ApprovalGesture`, `decide`. |
+| Store | `store.ts` | `ProposalStore`: proposals, plans, the change log, the one queue, the apply chokepoint. |
+| Wire | `transport.ts` | The two ops by literal name, a strict reader for `accepted`/`applied`, the capability check. |
+
+**Classification, per operation kind** (the wire kinds of `TransactionOps.operationOf`), after a clean dry run:
+
+| Operation | Creates | Touches an existing object |
+|---|---|---|
+| `create` | the new document | none |
+| `duplicate` | the copy | none (the source is only read) |
+| `saveAsTemplate` | the template | none (the source is untouched, api.md §3.3.1) |
+| `setFields`, `logicEdit`, `guiEdit`, `detachTemplate` | none | `path` |
+| `delete` | none | `path` |
+| `move` | `toPath` | `fromPath` (it is removed) |
+| any other kind, or a known kind with no canonical path | | **unknown: fail closed** |
+
+On top of the table the dry run is the authority for what *changes*: a document it reports as changed or deleted, or under a kind
+the editor does not know, is touched whether or not an operation names it. A path is **new**, not existing, when this session
+created it in an applied proposal, or an earlier operation of the same proposal created it (a created document or a move
+target, by the report's operation indexes, strictly earlier). An *unknown* operation, a non-canonical name and a path the dry
+run reports that is not canonical are **blockers**: no grant can cover them, and only the approval of that one proposal clears
+them (and it clears nothing for a later proposal). "Existing" is "not created by this session": a document a human adds
+mid-session counts as existing, which is the conservative side of §5.6's definition.
+
+**Grants.** Per object, per session, in host memory. They only grow: the class has no removal, a session's end is the end of the
+`ProposalStore` (`dispose()`, or a new store), and nothing persists them. The only call that adds one takes an
+`ApprovalGesture`, which `gestureFromEvent` makes only from an event the browser dispatched itself (`isTrusted`; a script's
+`dispatchEvent` or `click()` is not trusted) and which is **single use**. Three ways to approve, all from a gesture:
+`approve({ proposal })` (the proposal's existing objects, then applies it), `approve({ objects })`, and `approve({ plan })` (C11:
+one approval covers every existing object the plan **declared** through `declarePlan`, across its programs; a program that
+reaches another object stops and asks for that object only). Declaring a plan grants nothing: it is model-authored data. The
+chat tool gets `store.agent`, which has `propose`, `declarePlan` and reads and has no approve, grant, apply, reject or revert
+(a ban test reads the type and the object). The asserted `approval` is `granted` when the proposal touched an existing object (or
+was approved as a whole) and `not_needed` when it only created.
+
+**The path of a proposal.** `propose(result, { program })` refuses without a call a result with `ok: false`, an empty list, a
+missing or non-canonical pack, or a malformed operation. Otherwise: a **dry run, always**; a refused one (an error diagnostic that
+is not `preexisting`, or `accepted: false`) returns its diagnostics to the agent with the operation's program line from
+`sources`, and nothing is applied; a clean one is classified, and applies on its own when `decide` allows it, else it **waits**
+with `needs` (the ungranted existing objects) and `needsProposalApproval`. Apply sends the **same frozen operation list** that
+was dry-run, never the program, with `origin: code-mode`, the program text and the asserted approval; it is sent in exactly one
+place (`send`), which re-checks the policy against the current grants. Diagnostics carry `preexisting` when the server sends it
+(#372): such a finding is shown as a warning and never blocks. `autoApply: false` leaves a clean proposal waiting for `apply`.
+
+**Stale.** `MTR-0034` from the dry run or the apply marks the proposal `stale`: nothing was applied (the server's all-or-none),
+it is never forced or retried, and the problem says to re-run the program against the new state (§6, phase 4); the agent
+proposes again. After any apply the host also marks stale, without asking the server, each *waiting* proposal of the pack
+that touches or creates a document the apply wrote. A transport failure or an unreadable reply is `failed`: an unreadable
+reply is never taken for success (the reader is strict about `accepted`, `applied` and `dryRun`).
+
+**Stacked proposals (5.5).** One queue: each proposal's dry run and its apply are one slot, so stacked programs apply in the
+order proposed and never interleave. The programs of a plan are separate proposals; each reads the state the previous apply
+produced.
+
+**The change log and revert.** `log()` lists each applied proposal: summary, program text, asserted approval, documents,
+transaction id, whether it is revertible and why not, and the last refused revert's diagnostics. `revert(id, gesture)` runs
+`authoring.revertTransaction` dry run first, then the apply; a refusal (`MTR-0034`, `MTR-0104`, a restored state that does not
+validate) is shown and nothing is written. It needs a gesture and is not on the agent's port; any session with edit rights may
+revert (§12.2).
+
+**Proven by** `codemode-host-classify.spec.ts` (every kind, the fail-closed cases, the four rows of the table as `decide`, random
+lists), `codemode-host-store.spec.ts` (the lifecycle against a model of the transaction, a property test that an operation on an
+existing object without a grant is never sent, plan approval, stale at the dry run and between dry run and apply, the change log
+and revert), `codemode-host-transport.spec.ts` (the lifecycle replayed over `editor-codemode-v1.json`) and
+`codemode-host-bans.spec.ts` (the sandbox side cannot load or name approval, the agent port, one grant and one apply call site,
+no storage, literal op names for the compat gate). **Not built here**: the review and change-log UI and the chat tool (#347,
+#348), which call this API; the sandbox host (#343); a real-server test of the approval flow.
+
 ---
 
 ## 6. How errors reach the agent
