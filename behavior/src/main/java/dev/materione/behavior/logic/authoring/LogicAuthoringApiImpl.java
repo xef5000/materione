@@ -14,8 +14,10 @@ import dev.materione.api.logic.LogicAuthoringApi;
 import dev.materione.api.logic.LogicEdit;
 import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
+import dev.materione.behavior.logic.VariableOverlayLookup;
 import dev.materione.behavior.logic.recipe.RecipeExpander;
 import dev.materione.behavior.rule.ParsedRules;
+import dev.materione.behavior.rule.UnfiredTriggers;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -148,8 +150,15 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
         }
         List<Object> behavior = withTrigger(draft.behavior(), draft.trigger());
         Map<String, Object> flows = draft.flows().isEmpty() ? null : draft.flows();
-        ParsedRules parsed = FlowCompiler.compile(owner, behavior, flows, lookup);
-        return ApiResult.ok(parsed.problems());
+        LogicLookup view = draft.variables() == null ? lookup : new VariableOverlayLookup(lookup, draft.variables());
+        ParsedRules parsed = FlowCompiler.compile(owner, behavior, flows, view);
+        if (draft.host() == null || draft.host().isBlank()) {
+            return ApiResult.ok(parsed.problems());
+        }
+        // the check the shadow build makes where the host is known (logic.md section 37)
+        var problems = new ArrayList<>(parsed.problems());
+        problems.addAll(UnfiredTriggers.check(parsed.rules(), view, draft.host(), owner));
+        return ApiResult.ok(problems);
     }
 
     @Override

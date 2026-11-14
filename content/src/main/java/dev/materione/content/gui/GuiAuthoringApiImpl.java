@@ -68,6 +68,7 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
     private final AuthoringApi authoring;
     private final Registry<GuiComponent> components;
     private final GuiType type;
+    private final GuiRuleChecker ruleChecker;
     private final Path packsRoot;
     private final Supplier<Allocations> previewAllocations;
     private final List<String> materials;
@@ -104,6 +105,7 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
         this.previewAllocations = Objects.requireNonNull(previewAllocations, "previewAllocations");
         this.materials = materials == null ? List.of() : List.copyOf(materials);
+        this.ruleChecker = Objects.requireNonNull(ruleChecker, "ruleChecker");
         this.type = new GuiType(components, ruleChecker);
     }
 
@@ -212,7 +214,12 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         if (!pool.ok()) {
             return ApiResult.fail(pool.diagnostics());
         }
-        return ApiResult.ok(withLogicAndOpen(subject, check(subject, textures.value(), pool.value()).diagnostics()));
+        // a request that carries its own view of the declared variables is checked by the same type over a checker
+        // that resolves them through it (the pack as a transaction leaves it)
+        GuiType checked = request.variables() == null
+                ? type : new GuiType(components, ruleChecker.withVariables(request.variables()));
+        return ApiResult.ok(withLogicAndOpen(subject,
+                check(subject, textures.value(), pool.value(), checked).diagnostics()));
     }
 
     /**
@@ -660,6 +667,11 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
      * answer, and nothing is skipped on disk.
      */
     private Check check(Subject subject, TextureSource textures, Map<String, Map<String, Object>> templates) {
+        return check(subject, textures, templates, type);
+    }
+
+    private Check check(Subject subject, TextureSource textures, Map<String, Map<String, Object>> templates,
+            GuiType type) {
         NamespacedId id = subject.id();
         var diagnostics = new ArrayList<Diagnostic>();
         var emitter = new CollectingEmitter(textures, diagnostics);

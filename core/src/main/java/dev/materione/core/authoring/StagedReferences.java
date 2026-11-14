@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -156,28 +157,72 @@ final class StagedReferences {
         return check(staged, true);
     }
 
-    private Outcome check(List<StagedDocument> staged, boolean everything) throws IOException {
+    /**
+     * The pack as stored and as the list leaves it: one view, built once per dry run, that the references stage and
+     * the logic check both read (D6: no second mechanism for "the pack after the list").
+     */
+    static final class View {
+        private final List<ContentResource> stored = new ArrayList<>();
+        private final List<ContentResource> result = new ArrayList<>();
+        private final Map<ContentResource, Integer> touchedOperation = new IdentityHashMap<>();
+        private final Set<ContentResource> touchedResources = Collections.newSetFromMap(new IdentityHashMap<>());
+        private Map<String, ContentResource> declarations;
+    }
+
+    View view(List<StagedDocument> staged) throws IOException {
         Map<String, StagedDocument> byPath = new LinkedHashMap<>();
         staged.forEach(document -> byPath.put(document.path(), document));
-
-        // the pack as stored, and as the list leaves it
-        List<ContentResource> stored = new ArrayList<>();
-        List<ContentResource> result = new ArrayList<>();
-        Map<ContentResource, Integer> touchedOperation = new IdentityHashMap<>();
-        Set<ContentResource> touchedResources = Collections.newSetFromMap(new IdentityHashMap<>());
-        readStored(byPath, stored, result);
+        View view = new View();
+        readStored(byPath, view.stored, view.result);
         for (StagedDocument document : staged) {
             if (document.text() == null) {
                 continue;
             }
             for (ContentResource resource : resourcesOf(document.path(), document.text())) {
-                result.add(resource);
+                view.result.add(resource);
                 if (document.touched()) {
-                    touchedResources.add(resource);
-                    touchedOperation.put(resource, document.operation());
+                    view.touchedResources.add(resource);
+                    view.touchedOperation.put(resource, document.operation());
                 }
             }
         }
+        return view;
+    }
+
+    /**
+     * The resource of {@code contentType} with this id in the pack as the list leaves it: this pack's documents
+     * with the staged ones laid over, every other pack as the last pipeline run parsed it. Lookups by id, for the
+     * checks that resolve declared content one at a time (the logic check's variables).
+     */
+    Optional<ContentResource> declared(View view, String contentType, NamespacedId id) {
+        if (view.declarations == null) {
+            Map<String, ContentResource> index = new HashMap<>();
+            if (parsed != null) {
+                for (ContentPack other : parsed.packs()) {
+                    if (!other.id().equals(pack)) {
+                        other.resources().forEach(resource -> index.putIfAbsent(resource.contentType() + "|" + resource.id(), resource));
+                    }
+                }
+            }
+            view.result.forEach(resource -> index.put(resource.contentType() + "|" + resource.id(), resource));
+            view.declarations = index;
+        }
+        return Optional.ofNullable(view.declarations.get(contentType + "|" + id));
+    }
+
+    Outcome check(View staging, List<StagedDocument> staged) throws IOException {
+        return check(staging, staged, false);
+    }
+
+    private Outcome check(List<StagedDocument> staged, boolean everything) throws IOException {
+        return check(view(staged), staged, everything);
+    }
+
+    private Outcome check(View staging, List<StagedDocument> staged, boolean everything) throws IOException {
+        List<ContentResource> stored = staging.stored;
+        List<ContentResource> result = staging.result;
+        Map<ContentResource, Integer> touchedOperation = staging.touchedOperation;
+        Set<ContentResource> touchedResources = staging.touchedResources;
 
         ParsedContent view = parsed == null ? ParsedContent.EMPTY : parsed;
         ContentPack manifestSource = view.packs().stream().filter(p -> p.id().equals(pack)).findFirst().orElse(null);
