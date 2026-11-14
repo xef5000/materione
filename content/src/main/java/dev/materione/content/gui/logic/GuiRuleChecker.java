@@ -31,4 +31,15 @@ public interface GuiRuleChecker {
     default List<Diagnostic> checkLayers(GuiDefinition gui) {
         return List.of();
     }
+
+    /**
+     * This checker with persistent variables resolved through {@code variables} ahead of the host's own
+     * declarations, for one validation (a transaction's dry run checks the pack as the list leaves it). A checker
+     * that resolves no variables is its own answer.
+     */
+    default GuiRuleChecker withVariables(
+            java.util.function.Function<dev.materione.api.NamespacedId,
+                    java.util.Optional<dev.materione.api.logic.variable.VariableDeclaration>> variables) {
+        return this;
+    }
 }

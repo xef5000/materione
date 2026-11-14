@@ -88,7 +88,17 @@ session with account access:
 - **No plan purchases or subscriptions.** The account stays on the free plan
   unless the owner upgrades it personally in the dashboard. Workers AI, Images,
   Stream, Logpush, and Browser Rendering are off-limits entirely (per-unit/GPU
-  pricing).
+  pricing), with **one exception**:
+- **Model inference for the editor chatbot (owner decision, #351, 2026-11-14)**
+  may be bought through **AI Gateway with unified billing**, and only under all
+  of these: prepaid credits bought by the owner with **auto top-up off**; a
+  **gateway spend limit** (a dollar budget that blocks) set by the owner; gateway
+  rate limits; a call only against a positive user balance or the capped free
+  daily allowance; a fixed model allowlist in the proxy Worker; the credential
+  only in that Worker. Agents never buy credits, change billing, change a
+  gateway's limits or routing, or widen the allowlist's price tier. Anything
+  else on Workers AI stays off-limits. Design:
+  `docs/architecture/codemode.md` §12.1.
 - **Deploy-class commands are the user's to run, not the agent's**: `wrangler`
   `deploy`/`versions`/`delete`/`secret`/`kv`/`r2`/`d1`/`queues`/`pages`-class
   subcommands and `cloudflare-api` MCP `execute` calls are denied to agents by

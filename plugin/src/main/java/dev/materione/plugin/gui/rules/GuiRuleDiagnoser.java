@@ -50,6 +50,13 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
     }
 
     @Override
+    public GuiRuleChecker withVariables(
+            java.util.function.Function<dev.materione.api.NamespacedId,
+                    Optional<dev.materione.api.logic.variable.VariableDeclaration>> variables) {
+        return new GuiRuleDiagnoser(() -> new dev.materione.behavior.logic.VariableOverlayLookup(lookup.get(), variables));
+    }
+
+    @Override
     public List<Diagnostic> check(GuiDefinition gui) {
         LogicLookup registries = lookup.get();
         GuiRuleSet.Compiled compiled = GuiRuleSet.compile(gui.id(), gui.rules(), registries);

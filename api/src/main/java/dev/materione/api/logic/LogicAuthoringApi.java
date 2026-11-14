@@ -149,17 +149,35 @@ public interface LogicAuthoringApi {
     /**
      * An unsaved draft of a resource's logic: its {@code behavior:} list and {@code flows:} map as
      * YAML would read them. {@code trigger}, when set, is the {@code on:} for rules that name none.
+     *
+     * <p>{@code host} is the behavior host the draft belongs to when it is a document with no resource of its
+     * own (the content type's name, {@code rule}); with it, {@code validate} also reports a rule whose trigger the
+     * host never fires, as the shadow build does (logic.md section 37). Null for the hosts that fire everything.
+     *
+     * <p>{@code variables}, when set, resolves a persistent variable by id for this draft ahead of the server's own
+     * declarations: it is how a transaction's dry run shows the check the pack as the list leaves it, so a variable
+     * an earlier operation declares is not reported as undeclared (codemode.md section 10). Null leaves the
+     * server's view.
      */
     record LogicDraft(
             String pack,
             String resourceId,
             List<Object> behavior,
             Map<String, Object> flows,
-            String trigger) {
+            String trigger,
+            String host,
+            java.util.function.Function<dev.materione.api.NamespacedId,
+                    java.util.Optional<dev.materione.api.logic.variable.VariableDeclaration>> variables) {
 
         public LogicDraft {
             behavior = behavior == null ? List.of() : List.copyOf(behavior);
             flows = unmodifiable(flows);
+        }
+
+        /** A draft with no host and the server's own variable view. */
+        public LogicDraft(
+                String pack, String resourceId, List<Object> behavior, Map<String, Object> flows, String trigger) {
+            this(pack, resourceId, behavior, flows, trigger, null, null);
         }
     }
 
