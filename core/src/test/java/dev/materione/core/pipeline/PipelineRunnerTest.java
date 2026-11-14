@@ -313,6 +313,37 @@ class PipelineRunnerTest {
                 .anySatisfy(message -> assertThat(message).contains("items/a.yml and items/b.yml"));
     }
 
+    /**
+     * The parse a transaction's dry run resolves other packs against (#357): a targeted run indexes only the pack it
+     * rebuilt, and the pack it rode over keeps its assets.
+     */
+    @Test
+    void lastParsedKeepsTheAssetsOfAPackATargetedRunRodeOver(@TempDir Path packsRoot) throws IOException {
+        Path ridden = writeFingerprintedPack(packsRoot, "ridden");
+        Files.createDirectories(ridden.resolve("assets/textures"));
+        Files.write(ridden.resolve("assets/textures/gem.png"), new byte[] {1});
+        Files.writeString(ridden.resolve("items/a.yml"), "a:\n  material: STICK\n");
+        Path touched = writeFingerprintedPack(packsRoot, "touched");
+        Files.createDirectories(touched.resolve("assets/textures"));
+        Files.write(touched.resolve("assets/textures/rock.png"), new byte[] {1});
+        Files.writeString(touched.resolve("items/b.yml"), "b:\n  material: STICK\n");
+        // the second helper call started a fresh fingerprint table: record the first pack's manifest again
+        fingerprints.record("ridden/pack.yml", FingerprintCache.sha256(ridden.resolve("pack.yml")));
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        assertThat(runner.lastParsed().knownAssets())
+                .contains(NamespacedId.parse("ridden:gem"), NamespacedId.parse("touched:rock"));
+
+        Files.writeString(touched.resolve("items/b.yml"), "b2:\n  material: STICK\n");
+        assertThat(runner.request(new ReloadScope.FileSet(Set.of(touched.resolve("items/b.yml"))), packsRoot)
+                .completed()).isTrue();
+
+        assertThat(diagnostics.recent(256).stream().map(Diagnostic::message))
+                .noneMatch(message -> message.startsWith("targeted scope expanded"));
+        assertThat(runner.lastParsed().knownAssets())
+                .contains(NamespacedId.parse("ridden:gem"), NamespacedId.parse("touched:rock"));
+        assertThat(runner.lastParsed().packs()).extracting(ContentPack::id).containsExactlyInAnyOrder("ridden", "touched");
+    }
+
     /** A pack with fingerprints recorded by a full run, as the boot path leaves it. */
     private Path writeFingerprintedPack(Path packsRoot, String id) throws IOException {
         fingerprints = FingerprintCache.empty();

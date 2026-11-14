@@ -81,6 +81,37 @@ public final class PipelineRunner {
 
     private volatile ContentGraph lastGraph = new ContentGraph();
     private volatile java.util.List<ContentPack> lastPacks = java.util.List.of();
+    private volatile ParsedContent lastParsed = ParsedContent.EMPTY;
+
+    /** The packs, asset index and painting sizes of the last run (empty before the first run). */
+    public ParsedContent lastParsed() {
+        return lastParsed;
+    }
+
+    /**
+     * The run's packs with their asset index. A targeted run indexes only the packs it rebuilt, so the assets of a
+     * pack it rode over (the same instance as in the previous run) are carried from the previous parse.
+     */
+    private ParsedContent parsedOf(PipelineContext context, java.util.List<ContentPack> previous) {
+        var assets = new java.util.LinkedHashSet<>(context.knownAssets());
+        var sizes = new java.util.LinkedHashMap<>(context.paintingSizes());
+        var ridden = new java.util.HashSet<String>();
+        for (ContentPack pack : context.packs()) {
+            if (previous.stream().anyMatch(old -> old == pack)) {
+                ridden.add(pack.id());
+            }
+        }
+        if (!ridden.isEmpty()) {
+            ParsedContent before = lastParsed;
+            before.knownAssets().stream().filter(id -> ridden.contains(id.namespace())).forEach(assets::add);
+            before.paintingSizes().forEach((id, size) -> {
+                if (ridden.contains(id.namespace())) {
+                    sizes.put(id, size);
+                }
+            });
+        }
+        return new ParsedContent(context.packs(), assets, sizes);
+    }
 
     /**
      * Requests a run, serializing the core stages without dropping requests.
@@ -113,6 +144,7 @@ public final class PipelineRunner {
         try {
             quarantine.clear();
             parseStage.run(context);
+            lastParsed = parsedOf(context, lastPacks);
             lastPacks = java.util.List.copyOf(context.packs());
             validateStage.run(context);
             graphStage.run(context);

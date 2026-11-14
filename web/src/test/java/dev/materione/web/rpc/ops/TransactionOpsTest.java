@@ -154,6 +154,37 @@ class TransactionOpsTest {
         assertThat(badLogic.data().getAsJsonObject().get("accepted").getAsBoolean()).isFalse();
     }
 
+    /** The reference stage over the wire (#357): a delete that orphans a user is refused, and the report says so. */
+    @Test
+    void aDeleteThatOrphansAReferenceIsRefusedOnTheWireWithTheOperationAndTheStageSaysItRan() throws Exception {
+        Session session = session();
+        ((AuthoringApiImpl) session.authoring()).parsedContent(() -> dev.materione.core.pipeline.ParsedContent.EMPTY);
+        session.authoring().putDocument(ActorContext.console(), new AuthoringApi.PutDocumentRequest(
+                PACK, "recipes/forge.yml", 0, "forge:\n  type: shapeless\n  result: sword\n"));
+        session.reloads.clear();
+        List<String> before = snapshot();
+
+        for (boolean dryRun : new boolean[] {true, false}) {
+            Wire.Response refused = session.dispatcher.dispatch(frame("t-ref-" + dryRun, """
+                    {"pack":"demo","dryRun":%s,"operations":[
+                      {"kind":"delete","path":"items/sword.yml","rev":1}]}""".formatted(dryRun)));
+
+            assertThat(refused.ok()).isTrue();
+            JsonObject report = refused.data().getAsJsonObject();
+            assertThat(report.get("accepted").getAsBoolean()).isFalse();
+            assertThat(report.get("applied").getAsBoolean()).isFalse();
+            JsonObject found = report.getAsJsonArray("diagnostics").get(0).getAsJsonObject();
+            assertThat(found.get("operation").getAsInt()).isEqualTo(0);
+            assertThat(found.get("code").getAsString())
+                    .isEqualTo(dev.materione.api.diagnostics.DiagnosticCodes.UNRESOLVED_REFERENCE.code());
+            assertThat(found.get("message").getAsString()).contains("forge", "sword");
+            assertThat(stageRan(report, "references")).isTrue();
+            assertThat(stageRan(report, "platform")).isFalse();
+            assertThat(snapshot()).as("refused, so nothing written (dryRun=" + dryRun + ")").isEqualTo(before);
+        }
+        assertThat(session.reloads).isEmpty();
+    }
+
     @Test
     void aMalformedRequestIsABadRequestAndALostFlagNeverBecomesAWrite() throws Exception {
         Session session = session();

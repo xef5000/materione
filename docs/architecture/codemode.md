@@ -10,8 +10,8 @@
 >
 > **Status.** **Design, docs only (#320).** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
 > (2026-11-12, §12). The model provider is the one question still open (§12, master §14.8). Lines still marked "recommended"
-> are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); the SDK, the sandbox and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
-> SDK is generated, so its real spelling comes from the registries it is generated from (§3.1).
+> are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); **the SDK generator is built (#337, §3.8)**, with its recorded registries, goldens and the first program corpus; the rest of the SDK, the sandbox and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
+> SDK is generated, so its real spelling comes from the registries it is generated from (§3.1). §3.8 has the real spellings.
 >
 > **Traceability.**
 >
@@ -287,6 +287,82 @@ program (`m.docs.type("item")`, `m.docs.search("bleed")`). A type error returns 
 the rest. How large the index may be and what lives in a system prompt versus a skill is a tuning question for the benchmark
 (§11) and is not decided here.
 
+### 3.8 As built: the generator (#337)
+
+*As built (#337, M6.5 track A1).* The generator of §3.1 exists, with its recorded registries and goldens. It is the first piece of
+SDK code; the core (#339), the type-check Worker and the sandbox are not built (the server's transaction is, #341, §10).
+
+| Piece | Where | What it is |
+|---|---|---|
+| **Surface document** | `webui/src/lib/codemode/generate/surface.ts` | One typed JSON value, `SurfaceDocument`, assembled by `assembleSurface(describe, capabilities)` from the reply of `authoring.describe` (content types with field schemas; the behavior vocabulary: actions, conditions, triggers with filters and context schemas, mechanics, expression functions, recipes, item, list and input sources, step kinds, rule and action options; the GUI components and containers) and the session blob's capability list. Its field names are the wire's, so the assembler is a tolerant reader and not a second schema: a malformed entry is dropped, a registry the server does not send is empty (a smaller surface, §7), and a jar that predates the capability list gives `capabilities: null` (the full surface is assumed). `fetchSurface(channel)` (`codemode/surface-source.ts`) makes the one existing call, `authoring.describe`. |
+| **Generator** | `generate/generate.ts` | `generateSdk(surface): string`, pure, DOM-free, importing only the surface types. Deterministic: entries sorted by id, parameters in the registry's order, LF. |
+| **Fixed core types** | `generate/core.d.ts` | Hand-written declarations of what the generated text refers to (`Ref`, `MiniMessage`, `Expr`, `ActionStep`, `TriggerBinding`, `RuleSet`, `m`, ...), with **empty interfaces the generated text merges members into** (`PackWriter`, `RefFactory`, `ActionCatalog`, ...). Types only. #339 owns it and may reshape it; the generator needs only the names it declares. It is excluded from the editor's own `tsconfig.json`, because it declares globals. |
+| **Recorded registries** | `fixtures/codemode/registry/` | `plugin-current.json`, written by the JVM test `EditorDemoSnapshotTest` from the real `authoring.describe` op and `SessionBlob.CURRENT_CAPABILITIES` (so it cannot drift: a new action changes it there, and the generator golden then shows the SDK diff); `with-addon.json`, derived from it by a test helper (one fake addon's action, trigger and content type) and checked to equal that derivation. |
+| **Goldens** | `fixtures/golden/codemode/*.d.ts` | The generated text for each snapshot, compared byte for byte (`codemode-generate.spec.ts`). Regenerate with `MATERIONE_GOLDEN_REGEN=true` (the vitest counterpart of `-Dmaterione.golden.regen=true`), review, commit. |
+| **Program corpus** | `fixtures/codemode/corpus/` | `<task>.ts` with `<task>.expect.json` (registry, `pass` or `fail`, the diagnostics a failure must show). The first six: T04 (the daily kit, with `m.fn.now()`), T08, T11, T25 (pass), T27 (fails with TS2339 on `commands`) and T05 (fails with TS2322: the clock work added the `on_cooldown` rule option, but self-description describes it as a `raw` value, so a step list in it is rejected until a step-list parameter kind exists, #355). `codemode-compile.spec.ts` type-checks each with the real `typescript` package against the golden surface. |
+| **Ban tests** | `codemode-generator-bans.spec.ts` | The generator source holds no registry id as a string literal (every id of both snapshots is compared), imports only `./surface`, and touches no DOM, storage or network global. |
+
+**The mapping, as built** (§3.1's table with the real spellings):
+
+| Self-description | Generated |
+|---|---|
+| `string`, `integer`, `decimal`, `boolean` | `string`, `number`, `number`, `boolean`; `min`, `max`, `unit`, `default`, `example` become TSDoc |
+| `enum` | A union of the `allowedValues`; one with more than 16 values gets a named alias (`ItemFieldsMaterial`) |
+| `reference` with a `referenceKind` | `Ref<"kind">`; without one, `Ref` |
+| `string` whose widget hint is `formatted-text` | `MiniMessage`; a `formatted-lines` list is `MiniMessage[]`. Built with `m.mm`, so a plain string literal is a type error |
+| `string` whose widget hint names a content type (`item`, `sound`, `variable`) | `string \| Ref<"that type">` (read from the registry, not listed) |
+| `list` with `nested` | An array of an object type; a list of `referenceKind` `mechanic` is `MechanicEntry[]` and one whose nested `type` references `gui-component` is `GuiLayerEntry[]` (the two reference kinds that name a polymorphic registry) |
+| `raw` | `JsonValue` |
+| A list whose widget hint is `behavior-rules` | Not a field: the resource's handle gets `rules` (below) |
+
+**Names.** The collection of a content type is its `directory` (`p.items`, `p.guis`, `p.currencies`); its record type is
+`<Name>Fields` and its handle `<Name>Handle`. An action, condition, mechanic, trigger, GUI component, recipe or source is a method
+of its catalog, named by the camel-cased local part of its id (`run_command` is `runCommand`, `gui.open` is `guiOpen`,
+`materione:backpack` is `backpack`). Two entries whose local parts collide are told apart by their namespaces
+(`exampleGreet`, `otherGreet`); an id without a namespace is never renamed. The registry id is always in the return type
+(`ActionStep<"gui.open">`) and the TSDoc carries `@since`, `@registeredBy`, `@category` and, for an entry the server reports
+unavailable (a provider that is not installed), a plain line `Unavailable on the connected server: <reason>` (not `@deprecated`: a missing provider is a configuration of the recorded server, not a verdict on the entry). A registry's ids are
+also exported as literal unions (`ActionId`, `TriggerId`, `RefKind`, `Capability`, ...).
+
+**A builder is called with its parameters, or with the one bare value the registry's `shorthand` names.**
+`m.actions.takeMoney(250)` and `m.actions.takeMoney({ amount: 250, delay: 20 })` are both valid; the shorthand form exists only
+when every other parameter is optional. Every action also takes the registry's `actionOptions` (`chance`, `delay`).
+
+**Trigger-typed rules (benchmark S1, S7).** A trigger is a value built by calling its member, with its variant and filters:
+`m.triggers.click({ detail: "right" })`, `m.triggers.guiClick({ layer: "buy", click: "left" })`; filters are typed from the
+trigger's `filters` and are **not** widened to lists (the self-description does not say which accept one; §13). The result is a
+`TriggerBinding<Id, Context>`, where `Context` is generated from the trigger's declared context schema **by the host that fires
+it**: `{ item: {...}, furniture: {...} }`, each host's entry holding the variables whose `hosts` list is empty or names it, as a
+tree of `ContextValue<T>` (`ctx.player.sneaking`). A resource handle's `rules` is a `RuleSet<"item">`, and
+
+```ts
+sword.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({
+  if: m.expr`${ctx.player.sneaking}`,
+  cooldown: 1000,
+  do: [ m.actions.message("careful") ],
+}));
+```
+
+takes the trigger first and types the rest from it: the callback receives the context for the rule's own host, so `ctx.player.health`
+is a type error on a furniture rule (the schema fills it for items only); a trigger no host of that type fires (`guiClick` on an
+item, or a trigger whose `firedBy` is empty) is a type error on the argument, naming the missing host; and a key the rule body
+does not carry is a type error (the registered `ruleOptions`, `cooldown` among them, are the only options). A context value
+interpolated into `m.expr` becomes its path, so a variable the trigger does not declare cannot be written by accident. What is not
+checked is the expression *text* itself: only its interpolations are typed; its syntax and its bare identifiers are the stage
+check's and the server's (§13).
+**Expression functions** are `m.fn.<id>(...)`, typed from the function's parameters (`minArguments` makes trailing ones optional,
+`variadic` makes the last a rest parameter), accepting a literal, an `Expr` or a context value and returning `Expr<number>`,
+`Expr<string>` or `Expr<boolean>`. A function the server lacks (`m.fn.sqrt()` today) is TS2339, the same as every other gap.
+
+**Where the generated surface stops.** A registry the wire does not carry produces nothing, and this is the list of what that
+leaves out today (issue #355 tracks the self-description additions): presets (D12 layer 2: there is no preset registry yet); currencies and economy providers (a `currency` is a
+content type, so it is a collection, but there is no provider registry; an unavailable `give_money` shows through `available`);
+which action and condition parameters accept an `Expr` (every scalar is typed as its literal); that a trigger filter accepts a list;
+`supersededBy` (S5); the parameters of the structural steps (`if`, `require`, `choose`, `wait`, `call`), which `core.d.ts` types by
+hand because they are the flow model and not registry entries (`StepBuilders` follows logic.md §2.2 and the engine's step compiler: `require` takes steps, `if` takes a condition and a `then` or `else`; **this hand-typing is temporary until #355** puts the step grammar in self-description, after which the generator emits it); and the GUI layer rules (a layer's behavior is the GUI's own
+`gui.click` rules filtered by `layer`, so that is how a shop button is written). None of this needed a server change, and none was
+made.
+
 ---
 
 ## 4. The sandbox, and where it runs
@@ -528,7 +604,9 @@ and **the resulting documents**, from which the editor draws the diff. A dry run
 criterion of #320).
 
 This stage is the authority. A program can type-check and run and still be refused here: a reference that does not resolve after
-the edits are combined, a flow the compiler rejects, a note-block state that cannot be allocated, a stage into a built-in pack
+the edits are combined (both a reference *from* a document the list wrote, and one *to* a document the list deleted or whose id it
+removed, from an untouched resource of this pack or of another; a document a later operation creates satisfies an earlier
+reference; #357), a flow the compiler rejects, a note-block state that cannot be allocated, a stage into a built-in pack
 (read-only, master §7.3), an operation the actor's permissions do not allow (the dry run checks each operation's node:
 `materione.edit.<pack>`, master §9.2).
 
@@ -812,13 +890,13 @@ what sits *behind* the existing protocol. Each needs its own design and issue be
 | Order and failure | Strictly in order; shape, limits and permissions are reported together first; then planning stops at the first operation that cannot apply, with its index. All-or-none write with checkpoints, rolled back (files, journals, created directories) on any failure. |
 | Permissions (item 2) | `materione.edit.<pack>` per operation and built-in packs read-only: one diagnostic per refused operation (`MTR-0055`, `MTR-0095`). |
 | Dry run | Same path under the store lock; writes nothing, queues no reload, returns diagnostics tagged with the operation index and the resulting documents with their would-be revisions. An apply writes exactly those documents, with one audit entry (it names the transaction id) and one pack reload. |
-| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:`; the GUI compile. **Not run: cross-resource references and the platform gate**, which need the parsed pack set and run in the reload after an apply. The report lists each stage and whether it ran. |
+| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:`; the GUI compile; **references** (#357: `ReferenceValidator` over the staged pack and the other packs as stored, both directions, only the findings the list adds for untouched resources; see api.md §3.3.1). **Not run: the platform gate (D10), which needs the live server, and the pack-wide allocation (the build stage allocates the list's own resources on a copy of the real table; the final table is the reload's, so no further allocation preview is built).** What `ReferenceValidator` does not cover is not covered here either: it checks `template`, `model`, `texture`, recipe, drop, placement, evolution, glyph-alias, jukebox and asset-source references, and a GUI's references to items are not among them (the `gui` stage reports what the GUI compile reports; whether the pipeline should resolve them at level 3 is a separate question). The report lists each stage and whether it ran. |
 | Wire and capability (item 7) | `authoring.transaction`, gated on the new session capability `codemode` (`editor-op-gates.json`, golden frames in `editor-codemode-v1.json`). Additive: an older editor never calls it. |
 
 Still open in §10: item 3 (revert by transaction id: the id is in the audit entry, the revert is #344), item 4 (the audit's
 `origin`, approval mode and program text, #344), item 5 (trace and variable reads, #345), item 6 (the preset view).
 Two limits worth knowing for the SDK: a transaction carries no binaries (a paint layer's PNG still goes through `gui().edit`),
-and a dry run cannot see a reference broken by a deletion (use `findReferences` first, §5.6).
+and `findReferences` (§5.6) remains the way to *show* impact before a list is written: the dry run now *refuses* a list that breaks a reference the pipeline checks, but it does not list every use of a resource (a GUI's item reference, for one, is not a pipeline reference).
 
 ---
 
@@ -827,7 +905,7 @@ and a dry run cannot see a reference broken by a deletion (use `findReferences` 
 Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`):
 
 - **Golden SDK output.** The generator's `.d.ts` for each recorded registry snapshot (`fixtures/`), including a snapshot with an
-  addon-registered primitive, so §3.6 is tested rather than claimed.
+  addon-registered primitive, so §3.6 is tested rather than claimed. *Built (#337, §3.8).*
 - **A program corpus that only grows.** Positive programs (the Bloodfang shape) and negative ones (`/trade` against a snapshot
   without the primitives) with their expected diagnostics, type-checked in CI against every supported jar's recorded registry (§7).
 - **Sandbox tests as ban tests.** A program that touches `fetch`, `globalThis`, timers, the DOM, `postMessage`, `import`, or
@@ -882,9 +960,15 @@ sections cited. One question stays open.
   ceilings.
 - Which reads exist on the editor wire today (traces, runtime variables) was read from `api.md` and `web.md`, not from the
   code (§10 item 5).
-- The generated type surface for polymorphic entries (an action step as a discriminated union) and for the logic expression
-  language (`m.expr`) is a direction; how well TypeScript can type-check an embedded expression string, versus checking it at
-  stage time, is a design question of the generator.
+- **Narrowed by #337 (§3.8).** Polymorphic entries are built and compiled: an action, condition, mechanic, trigger or GUI
+  component is a typed builder keyed by registry id, type-checked by the real `typescript` package against the recorded
+  registries. What stays open is the logic expression language (`m.expr`): only its *interpolations* are typed (a trigger's
+  context values, handles, `m.fn` results); how much of the expression *text* TypeScript or the stage check can verify is not
+  decided, and a bare identifier in the text is checked by neither today.
+- Not verified by #337: the generated surface was type-checked on the headless recording of today's plugin
+  (`EditorDemoSnapshotTest`: no economy provider, so `give_money` and `take_money` are recorded as unavailable) and on a fake addon,
+  never against a live server's `authoring.describe`; and that every `firedBy` entry of a trigger names a content type was read from
+  the data, not enforced (hosts are matched by name, so one that is not a content type simply has no handle that can add the rule).
 - *Resolved by #341:* the `LogicEdit` and `GuiEdit` vocabularies could be driven from one in-memory transaction without
   reworking their revision handling: each surface got a `stage` method that applies the edits to a parsed tree, and its `edit`
   keeps its own revision check (§10, as built). `bulk` is untouched.

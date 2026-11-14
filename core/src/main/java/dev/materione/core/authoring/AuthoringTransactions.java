@@ -675,10 +675,11 @@ final class AuthoringTransactions {
     // validation of the result
 
     private static List<Stage> stages(boolean ran) {
-        return stagesFor(false, false, false, false, ran);
+        return stagesFor(false, false, false, false, false, ran);
     }
 
-    private static List<Stage> stagesFor(boolean schema, boolean build, boolean behavior, boolean gui, boolean ran) {
+    private static List<Stage> stagesFor(
+            boolean schema, boolean build, boolean behavior, boolean gui, boolean references, boolean ran) {
         List<Stage> out = new ArrayList<>();
         out.add(new Stage("syntax", ran,
                 ran ? "every resulting document parses as lossless YAML (an edit that would break it is refused)"
@@ -697,10 +698,14 @@ final class AuthoringTransactions {
         out.add(new Stage("gui", gui,
                 gui ? "the GUI compile, its open: block and its rules, as gui.validate reports them"
                         : "not run: no GUI compiler is wired, or no GUI is in the result"));
-        out.add(new Stage("references", false,
-                "not run: master 5.4 level 3 needs the parsed pack set, and runs in the reload after an apply"));
+        out.add(new Stage("references", references,
+                references ? "the pipeline's ReferenceValidator over the pack as the list leaves it and the other "
+                        + "packs as stored: every resource the list wrote, and the untouched ones that name "
+                        + "something it changed (the findings the list adds)"
+                        : "not run: no parsed pack set is wired, or the list was refused"));
         out.add(new Stage("platform", false,
-                "not run: the platform gate (D10) and the pack-wide allocation run in the reload after an apply"));
+                "not run: the platform gate (D10) needs the live server, and the pack-wide allocation runs in the "
+                        + "reload after an apply (the build stage above checks each resource against a preview)"));
         return out;
     }
 
@@ -716,6 +721,7 @@ final class AuthoringTransactions {
         private boolean buildRan;
         private boolean behaviorRan;
         private boolean guiRan;
+        private boolean referencesRan;
 
         Validation(Plan plan) {
             this.plan = plan;
@@ -726,7 +732,7 @@ final class AuthoringTransactions {
         }
 
         List<Stage> stages() {
-            return stagesFor(schemaRan, buildRan, behaviorRan, guiRan, true);
+            return stagesFor(schemaRan, buildRan, behaviorRan, guiRan, referencesRan, true);
         }
 
         Validation run() {
@@ -781,7 +787,43 @@ final class AuthoringTransactions {
                     }
                 }
             }
+            runReferences(seen);
             return this;
+        }
+
+        /**
+         * Reference resolution over the staged set (master 5.4 level 3), after the per-document stages so that a
+         * finding they already made is not reported twice.
+         */
+        private void runReferences(Set<String> seen) {
+            var parsed = api.parsedContent();
+            if (parsed == null) {
+                return;
+            }
+            List<StagedReferences.StagedDocument> staged = new ArrayList<>();
+            for (Work work : plan.docs.values()) {
+                if (work.isNoop()) {
+                    continue;
+                }
+                boolean touched = work.mutated && work.kind() != Kind.UNCHANGED;
+                staged.add(new StagedReferences.StagedDocument(
+                        work.path, work.original, work.text, touched, work.lastOperation()));
+            }
+            try {
+                var outcome = new StagedReferences(
+                        plan.pack, api.packDirectory(plan.pack), parsed.get(), api.referenceCache()).check(staged);
+                referencesRan = true;
+                for (OperationDiagnostic diagnostic : outcome.diagnostics()) {
+                    String key = "ref|" + diagnostic.operation() + "|" + diagnostic.diagnostic().code().code() + "|"
+                            + diagnostic.diagnostic().message();
+                    if (seen.add(key)) {
+                        found.add(diagnostic);
+                    }
+                }
+            } catch (IOException failure) {
+                // the pack could not be read: the stage did not run, and the apply's own write will say why
+                referencesRan = false;
+            }
         }
 
         private boolean hasLogic(String directory) {
