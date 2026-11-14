@@ -605,6 +605,15 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0104", Severity.ERROR, "Transaction cannot be reverted");
 
     /**
+     * A rule step or condition names content by a static id that no pack declares: an item for {@code give_item},
+     * a GUI for {@code gui.open}. Found at reference resolution (master 5.4 level 3), so a transaction's dry run
+     * reports it against the operation that removed the content. The step is kept and fails when it runs; this is a
+     * warning because content an addon provides is not in any pack.
+     */
+    public static final DiagnosticCode RULE_STEP_REFERENCE_UNRESOLVED =
+            new DiagnosticCode("MTR-0105", Severity.WARN, "A rule step names content no pack declares");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -740,7 +749,8 @@ public final class DiagnosticCodes {
             ESCROW_TRANSFER_REFUSED,
             ESCROW_UNSUPPORTED,
             ESCROW_RECOVERY_OWED,
-            TRANSACTION_REVERT_UNAVAILABLE);
+            TRANSACTION_REVERT_UNAVAILABLE,
+            RULE_STEP_REFERENCE_UNRESOLVED);
 
     private DiagnosticCodes() {}
 

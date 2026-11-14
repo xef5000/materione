@@ -5,3 +5,14 @@ This product includes software developed and maintained by xef5000.
 
 Licensed under the Apache License, Version 2.0.
 See the LICENSE file for details.
+
+Third-party software distributed with the editor
+------------------------------------------------
+
+TypeScript (https://www.typescriptlang.org), Copyright (c) Microsoft Corporation,
+licensed under the Apache License, Version 2.0. Its compiler and its ES5 to ES2022
+library declaration files ship as the editor's type-check Worker (webui, code mode).
+
+QuickJS (https://bellard.org/quickjs/), Copyright (c) Fabrice Bellard and Charlie Gordon, and quickjs-emscripten
+(https://github.com/justjake/quickjs-emscripten), Copyright (c) Jake Teton-Landis, both licensed under the MIT License.
+The engine compiled to WebAssembly ships as the editor's code-mode sandbox (webui, code mode).

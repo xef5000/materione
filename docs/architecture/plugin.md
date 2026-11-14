@@ -448,7 +448,8 @@ bus, once per layer, targeting `layers.<index>` so the editor opens that layer:
 |---|---|---|
 | `MTR-0052` | warning | A GUI layer was skipped: unknown or malformed `type:`, a missing or invalid field the component rejects, a duplicate or malformed `id:`, or a component that failed while parsing. At compile time (gui.md §4) the same code also covers a layer whose texture is missing or unreadable, a text run the fonts cannot draw (non-ASCII, `< \ & §`, or a `default` run above row 5: its 8 px glyphs cannot start higher), and an item overwritten by a later layer in the same slot. The layer is absent from the compiled GUI; the GUI and its other layers are unaffected. Fix the named layer's fields or its texture. |
 | `MTR-0053` | error | The GUI background codepoint block (`U+E200`–`U+F8FF`, one durable allocation per GUI) is used up. That GUI is quarantined and the rest of the pack compiles. Retire unused GUIs; the allocation table never reuses codepoints. |
-| `MTR-0054` | warning | A GUI slot names an item that is not live when the shadow is built (an unknown Materione id, or a `minecraft:` id that is no material). The slot stays empty and the rest of the GUI is shown; nothing is guessed. Fix the item id or the pack that defines it (gui.md §5). |
+| `MTR-0054` | warning | A GUI slot names an item that is not live (an unknown Materione id, or a `minecraft:` id that is no material). The slot stays empty and the rest of the GUI is shown; nothing is guessed. Fix the item id or the pack that defines it (gui.md §5). An id no pack declares is reported by reference resolution (level 3, so a transaction's dry run reports it too, #363); the shadow build reports the rest (a declared item that is not live, a vanilla id that is no material) and does not repeat the first. |
+| `MTR-0105` | warning | A rule step or condition names content by a static id that no pack declares: an item for `give_item`, `take_item` or `has_item`, a GUI for `gui.open` ([`codemode.md`](codemode.md) §10, #363). Found at reference resolution from the self-description of the action (a parameter drawn with the `item` widget, or a `REFERENCE` with a declared kind), so the dry run reports it against the operation that removed the content. The step is kept and fails when it runs; templated values are expressions and are not checked. |
 | `MTR-0055` | error | An actor asked an operation without the permission node it needs (`materione.gui.open`; for an authoring transaction, `materione.edit.<pack>`, reported once per refused operation). Nothing happens. |
 
 The pipeline's duplicate-id rule (plugin.md §4.2, #194) adds one code:
@@ -613,6 +614,31 @@ warning does not.
 | `SDK-0015` | warning | A formatted-text value passed to `m.mm` has a `<` that never closes with `>`. The text is staged as given. |
 | `SDK-0016` | warning | The program used a registry entry the server reports as unavailable here (an economy action with no provider, a transfer with no proxy). The step is staged; it will not run until the server is configured. |
 | `SDK-0017` | warning | The server warned while expanding a recipe for `rules.instantiate`. The expansion is staged; the message is the server's. |
+
+**Checker diagnostic codes** ([`codemode.md`](codemode.md) §6 phase 1, §5.1, §3.10; #342). The type-check Worker answers a
+program's TypeScript diagnostics under their own codes (`TS####`, with the compiler's meaning, not documented here) and
+raises four of its own, `CHK-####`, under the same stable-API rule and shape (`{code, severity, message, hint, line,
+column}`, where `line` and `column` are positions in the program as written, 0 when there is none). They are errors:
+the program does not run. The editor's test compares the table in `webui/src/lib/codemode/typecheck/types.ts` with this one.
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `CHK-0001` | error | The program uses a construct the checker refuses whatever the types say: a `@ts-nocheck`, `@ts-ignore` or `@ts-expect-error` comment (it would switch the check off), an ambient `declare`, a `namespace` or `declare global` (it could conjure a global the surface does not have), an `import` or an `export` (a program is a script body, not a module). Fix the type error instead of silencing it; the program has one global, `m`. |
+| `CHK-0002` | error | The program (65,536 characters) or the generated declarations (1 MiB) is larger than the checker takes. Split the work into more than one program. |
+| `CHK-0003` | error | The check passed its wall-clock deadline (5 s once the checker is up) and its Worker was terminated. Simplify the program: deeply nested or recursive types and very large literals are what costs. The next check boots a fresh checker. |
+| `CHK-0004` | error | The checker could not run: its asset did not load within 20 s, or its Worker failed. Reload the editor; if it persists, the host is not serving the checker's static file. |
+| `SBX-0001` | error | The program used more than 1000 ms of engine CPU time (waiting on the editor does not count). The run ended, nothing was staged, and the sandbox was discarded. Avoid unbounded loops; stage the work directly. |
+| `SBX-0002` | error | The program used more memory than a run may (64 MiB cap on the engine memory). Work on a page of the data at a time. |
+| `SBX-0003` | error | The engine lost its stack to recursion (QuickJS stack 256 KiB). Ordinary deep recursion is the program's own SDK-0001; this is the engine-level case. Use a loop. |
+| `SBX-0004` | error | The program made more reads than a run may (100) or the answers were larger than 2 MiB, as the host counted. Read a list once and filter it in the program. |
+| `SBX-0005` | error | A read was not answered within 5 s, or the seal within 20 s. Try again and read less. |
+| `SBX-0006` | error | The sandbox held the run past its wall-clock backstop (10 s with no editor answer outstanding, 60 s in all) and was destroyed. Simplify the program. |
+| `SBX-0007` | error | The staged operations are more than 200, touch more than 50 documents, or are larger than 256 KiB, as the host counted them. Split the work into more than one program. |
+| `SBX-0008` | error | The logs (16 KiB) or the return value (64 KiB) are larger than a run may produce. Log and return summaries, not documents. |
+| `SBX-0009` | error | The program never finished: it awaits something that cannot settle. Await only the SDK reads. |
+| `SBX-0010` | error | The sandbox sent a message, an op or a result the host refuses (a malformed message, an op outside the SDK reads, a second seal, an oversize payload). The sandbox was discarded; run the program again. |
+| `SBX-0011` | error | The sandbox could not start: its static files did not load or its engine did not become ready within 10 s. Reload the editor; if it persists, the host is not serving the sandbox's files under sandbox/. |
+| `SBX-0012` | error | The program could not be run (it was not a checked program, or the engine failed). Run it again. |
 
 ---
 

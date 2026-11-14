@@ -41,6 +41,11 @@ public final class PipelineRunner {
         this.quarantine = Objects.requireNonNull(quarantine, "quarantine");
     }
 
+    /** The logic vocabulary the validate stage finds the static references of rules with (#363). */
+    public void staticReferences(dev.materione.core.pipeline.validate.StaticReferences references) {
+        validateStage.staticReferences(references);
+    }
+
     /** True while a run is in flight (tests and doctor may look, never block on it). */
     public boolean isRunning() {
         return running.get();

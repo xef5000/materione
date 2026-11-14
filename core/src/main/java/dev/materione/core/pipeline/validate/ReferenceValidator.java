@@ -81,6 +81,10 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if ("item".equals(resource.contentType())) {
             validateJukeboxSong(resource, definition, environment, problems);
         }
+        if ("gui".equals(resource.contentType())) {
+            validateGuiSlots(resource, definition, environment, problems);
+        }
+        validateLogicReferences(resource, environment, problems);
         return problems;
     }
 
@@ -514,6 +518,142 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             for (ContentResource resource : pack.resources()) {
                 if (("block".equals(resource.contentType()) || "furniture".equals(resource.contentType()))
                         && resource.id().equals(id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------------
+    // static references in a GUI's slots and in logic (#363)
+
+    /**
+     * A GUI item layer whose {@code item:} is a plain id names a live item or the slot stays empty. The same check
+     * the shadow build makes ({@code MTR-0054}, same message), made here so the pipeline and a transaction's dry run
+     * report it at level 3. A {@code minecraft:} id is the platform's to judge at apply, a templated value or a named
+     * source is resolved per viewer.
+     */
+    private static void validateGuiSlots(
+            ContentResource resource, Map<?, ?> definition, ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get("layers") instanceof List<?> layers)) {
+            return;
+        }
+        for (int index = 0; index < layers.size(); index++) {
+            if (!(layers.get(index) instanceof Map<?, ?> layer) || !isItemLayer(layer.get("type"))
+                    || !(layer.get("item") instanceof String written) || written.isBlank()
+                    || written.contains("${") || written.contains("%")) {
+                continue;
+            }
+            NamespacedId id;
+            try {
+                id = written.trim().contains(":")
+                        ? NamespacedId.parse(written.trim()) : NamespacedId.of("materione", written.trim());
+            } catch (IllegalArgumentException malformed) {
+                continue; // not an id: the layer's own parse reports it
+            }
+            if (id.isReservedNamespace() || isItem(environment, id) || isPlaceable(environment, id)) {
+                continue;
+            }
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.GUI_SLOT_ITEM_UNRESOLVED, Severity.WARN,
+                    "GUI " + resource.id() + " slot " + slotOf(layer) + " names '" + id
+                            + "', which is not a live item; the slot stays empty",
+                    resource.id(), null,
+                    "check the item id (/materione browse lists the live items) or the pack that defines it",
+                    dev.materione.api.diagnostics.DiagnosticTarget.field("layers", String.valueOf(index), "item")));
+        }
+    }
+
+    private static boolean isItemLayer(Object type) {
+        return type instanceof String text && (text.equals("item") || text.equals("materione:item"));
+    }
+
+    private static String slotOf(Map<?, ?> layer) {
+        return layer.get("slot") instanceof Number slot
+                ? String.valueOf(slot.intValue()) : String.valueOf(layer.get("slot"));
+    }
+
+    /**
+     * The content a resource's rules name by a static id ({@link StaticReferences}): an item of {@code give_item}, a
+     * GUI of {@code gui.open}. A reference no pack declares is a warning on the resource that names it; the step
+     * stays and fails when it runs. An id in the {@code minecraft:} namespace is the platform's. A bare item name is
+     * any pack's, as the runtime resolves it; a bare GUI name is a sibling in the naming resource's pack, or any
+     * GUI of that name.
+     */
+    private static void validateLogicReferences(
+            ContentResource resource, ValidationEnvironment environment, List<Diagnostic> problems) {
+        for (StaticReferences.Ref ref : environment.staticReferences().of(resource)) {
+            boolean found = switch (ref.kind()) {
+                case "item" -> itemNamed(environment, ref.written());
+                case "gui" -> guiNamed(environment, resource, ref.written());
+                default -> true; // a kind this validator does not resolve is not reported
+            };
+            if (!found) {
+                problems.add(new Diagnostic(
+                        DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED, Severity.WARN,
+                        resource.id() + " step '" + ref.origin() + "' at " + String.join(".", ref.target())
+                                + " names " + ref.kind() + " '" + ref.written() + "', which no pack declares",
+                        resource.id(), null,
+                        "check the id, or declare the " + ref.kind() + " in a pack",
+                        dev.materione.api.diagnostics.DiagnosticTarget.field(ref.target().toArray(String[]::new))));
+            }
+        }
+    }
+
+    private static boolean itemNamed(ValidationEnvironment environment, String written) {
+        if (written.regionMatches(true, 0, "minecraft:", 0, "minecraft:".length())) {
+            return true;
+        }
+        if (written.contains(":")) {
+            NamespacedId id;
+            try {
+                id = NamespacedId.parse(written);
+            } catch (IllegalArgumentException malformed) {
+                return true; // not an id: the step's own parse reports it
+            }
+            return isItem(environment, id) || isPlaceable(environment, id);
+        }
+        for (ContentPack pack : environment.packs()) {
+            for (ContentResource other : pack.resources()) {
+                String type = other.contentType();
+                if ((type.equals("item") || type.equals("block") || type.equals("furniture"))
+                        && other.id().value().equalsIgnoreCase(written)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean guiNamed(ValidationEnvironment environment, ContentResource from, String written) {
+        if (written.contains(":")) {
+            NamespacedId id;
+            try {
+                id = NamespacedId.parse(written);
+            } catch (IllegalArgumentException malformed) {
+                return true;
+            }
+            return declares(environment, "gui", id);
+        }
+        for (ContentPack pack : environment.packs()) {
+            for (ContentResource other : pack.resources()) {
+                if (other.contentType().equals("gui") && other.id().value().equalsIgnoreCase(written)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean declares(ValidationEnvironment environment, String contentType, NamespacedId id) {
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(id.namespace())) {
+                continue;
+            }
+            for (ContentResource other : pack.resources()) {
+                if (other.contentType().equals(contentType) && other.id().equals(id)) {
                     return true;
                 }
             }

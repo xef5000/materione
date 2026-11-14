@@ -121,8 +121,12 @@ class GuiValidateParityTest {
         List<ContentType> types = List.of(new GuiType(components));
         new PackCompiler().compile(packs, types, allocation, temp.resolve("generated"), diagnostics, quarantine, -1);
         NamespacedId resource = NamespacedId.of(PACK, "main");
+        // gui.validate is the GUI's own compile (parse, diagnose, compile). The static slot item is checked by
+        // reference resolution (level 3, the pipeline's validate stage and a transaction's references stage, #363),
+        // which needs every pack's items: that finding is not part of this parity.
         return diagnostics.recent(512).stream()
                 .filter(diagnostic -> resource.equals(diagnostic.resource()))
+                .filter(diagnostic -> !diagnostic.code().code().equals("MTR-0054"))
                 .toList();
     }
 

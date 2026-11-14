@@ -33,6 +33,13 @@ public final class ValidateStage {
         List<Diagnostic> validate(ContentResource resource, ValidationEnvironment environment);
     }
 
+    private volatile StaticReferences staticReferences = StaticReferences.NONE;
+
+    /** The logic vocabulary the references of rules are found with; set once at boot, none checks none. */
+    public void staticReferences(StaticReferences references) {
+        this.staticReferences = references == null ? StaticReferences.NONE : references;
+    }
+
     public void run(PipelineContext context) {
         for (ContentPack pack : context.packs()) {
             if (pack.manifest() == null) {
@@ -41,7 +48,8 @@ public final class ValidateStage {
                 pack.resources().forEach(resource -> context.excluded().add(resource.id()));
             }
         }
-        var environment = new ValidationEnvironment(context.packs(), context.knownAssets(), context.paintingSizes());
+        var environment = new ValidationEnvironment(
+                context.packs(), context.knownAssets(), context.paintingSizes(), staticReferences);
         for (ContentPack pack : context.packs()) {
             if (pack.manifest() == null) {
                 continue;

@@ -3131,7 +3131,7 @@ interface GuiCloseActionParams extends ActionOptions {
 /** Parameters of `gui.open`. */
 interface GuiOpenActionParams extends ActionOptions {
   /** The GUI to open: pack:id, or a name in this GUI's pack. */
-  gui: Ref;
+  gui: Ref<"gui">;
   /** Arguments the GUI opens with, name to text; templates allowed. */
   args?: JsonValue;
 }
@@ -3441,7 +3441,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category gui
    */
-  guiOpen(params: GuiOpenActionParams | Ref, options?: ActionOptions): ActionStep<"gui.open">;
+  guiOpen(params: GuiOpenActionParams | Ref<"gui">, options?: ActionOptions): ActionStep<"gui.open">;
   /**
    * Moves a list of the open GUI to another page: next, previous, first, last, or a page number. The window shows the page and gui.page runs.
    * @since 1.0.0
