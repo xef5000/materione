@@ -5,19 +5,19 @@
   "stages": [
     {
       "id": "syntax",
-      "ran": false
+      "ran": true
     },
     {
       "id": "schema",
-      "ran": false
+      "ran": true
     },
     {
       "id": "build",
-      "ran": false
+      "ran": true
     },
     {
       "id": "behavior",
-      "ran": false
+      "ran": true
     },
     {
       "id": "gui",
@@ -25,7 +25,7 @@
     },
     {
       "id": "references",
-      "ran": false
+      "ran": true
     },
     {
       "id": "platform",
@@ -35,10 +35,32 @@
   "diagnostics": [
     {
       "operation": 2,
-      "code": "MTR-0008",
+      "code": "MTR-0009",
       "severity": "error",
-      "message": "'furnitures/crate.yml' is not a document that holds logic (items/, blocks/, furniture/ or guis/)"
+      "message": "unresolved model 'models/crate.json'"
+    },
+    {
+      "operation": 2,
+      "code": "MTR-0009",
+      "severity": "error",
+      "message": "unresolved texture 'block/crate'"
     }
   ],
-  "documents": []
+  "documents": [
+    {
+      "path": "items/crate_key.yml",
+      "kind": "created",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "furnitures/crate.yml",
+      "kind": "created",
+      "operations": [
+        1,
+        2
+      ]
+    }
+  ]
 }

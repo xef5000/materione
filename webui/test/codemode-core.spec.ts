@@ -2,8 +2,8 @@
  * The SDK core (codemode.md section 3.1 to 3.4, issue 339): programs run against the BUNDLED core in a bare
  * context (no globals but the language's), with a fake port, and the staged operation list is what is
  * checked. The corpus programs that type-check are executed and their lists recorded as goldens
- * (fixtures/golden/codemode/ops/); a list is also validated against the wire shape the plugin's own parser
- * reads, so the core cannot stage what the server does not accept.
+ * (fixtures/golden/codemode/ops/); the JVM test CodemodeReplayTest replays each through the real
+ * authoring.transaction dry run and pins the server's outcome (fixtures/golden/codemode/replay/).
  */
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -11,7 +11,6 @@ import { join } from 'node:path';
 import { SDK_CODES, type ProgramResult, type SdkDiagnostic } from '../src/lib/codemode/core';
 import { CORPUS_DIR, GOLDEN_DIR, goldenText, readSnapshot, surfaceNamed, surfaceOf, withFakeAddon } from './helpers/codemode';
 import { bareContext, inBare, run, type World } from './helpers/sdk-runner';
-import { wireProblems, wireShapes } from './helpers/wire';
 
 const surface = surfaceNamed('plugin-current');
 /** The diagnostics that end a run (a warning, such as an entry unavailable on the recorded server, does not). */
@@ -59,9 +58,6 @@ describe('the corpus, executed (the operation lists are goldens: fixtures/golden
       const line = programLines[(source?.line ?? 0) - 1] ?? '';
       expect(line, `operation ${index} at line ${source?.line}`).toMatch(/\.(create|add|instantiate|set|duplicate|delete)\(/);
     });
-    // every operation is in the wire's shape
-    const shapes = wireShapes();
-    for (const operation of first.result.operations) expect(wireProblems(operation, shapes), JSON.stringify(operation)).toEqual([]);
     // the golden
     const record = {
       task: entry.expect.task,
@@ -84,17 +80,6 @@ describe('the corpus, executed (the operation lists are goldens: fixtures/golden
   it('records a golden for each passing program and no other', () => {
     const goldens = readdirSync(join(GOLDEN_DIR, 'ops')).filter((name) => name.endsWith('.json')).sort();
     expect(goldens).toEqual(passing.map((entry) => `${entry.stem}.json`).sort());
-  });
-});
-
-describe('the wire shape the core stages is the plugin parser\'s', () => {
-  it('reads the operation kinds from TransactionOps and finds the nine of the transaction', () => {
-    expect([...wireShapes().keys()].sort()).toEqual(['create', 'delete', 'detachTemplate', 'duplicate', 'guiEdit', 'logicEdit', 'move', 'saveAsTemplate', 'setFields']);
-  });
-
-  it('refuses a field the parser does not read, and a missing required one', () => {
-    expect(wireProblems({ kind: 'setFields', path: 'items/a.yml', edits: [], nonsense: 1 })).toEqual(['setFields: the wire reads no "nonsense"']);
-    expect(wireProblems({ kind: 'delete' })).toEqual(['delete: the wire requires "path"']);
   });
 });
 
@@ -178,8 +163,6 @@ describe('every kind of operation, and what it stages', () => {
       { kind: 'detachTemplate', path: 'guis/menu.yml', rev: 7, resource: 'menu' },
       { kind: 'saveAsTemplate', fromPath: 'items/shield.yml', rev: 1, resource: 'shield', templateId: 'shields', fields: ['material'] },
     ]);
-    const shapes = wireShapes();
-    for (const operation of result.operations) expect(wireProblems(operation, shapes)).toEqual([]);
   });
 
   it('a recipe is expanded by the server (a read) and staged as one addRule per rule', async () => {

@@ -2,5 +2,8 @@
   "task": "T11",
   "title": "Golden berry",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "replay": {
+    "note": "The dry run reports MTR-0009 on the texture: the core writes the uploaded asset path as given and the field wants the path relative to assets/textures/ (benchmark S14; #355 gives asset-typed fields their path convention, after which the core converts)."
+  }
 }

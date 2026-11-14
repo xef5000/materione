@@ -2,5 +2,8 @@
   "task": "T04",
   "title": "Daily kit",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "replay": {
+    "note": "The dry run reports MTR-0022 on `${now() - bench:kit_daily_at >= 86400}`: a declared variable has no expression spelling (benchmark S12; #355 puts it in self-description, after which the core writes vars.player.bench.kit_daily_at). It also reports MTR-0063: the logic check does not see the variable the same list creates, so set_var rejects it (#378). Both pinned; this golden flips when those land."
+  }
 }
