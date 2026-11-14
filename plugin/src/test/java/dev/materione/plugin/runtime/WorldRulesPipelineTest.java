@@ -82,7 +82,7 @@ class WorldRulesPipelineTest {
                 .containsExactly("hit_zombie", "hit_husk_cancelled");
         // the item holds its own rule on the same trigger, and it is not in the document index
         var blade = shadow.view(ItemBehaviors.KEY).forItem(NamespacedId.of("worldrules", "rule_blade")).orElseThrow();
-        assertThat(blade).extracting(rule -> rule.on().type()).containsExactly(EventTypes.ENTITY_HIT);
+        assertThat(blade).extracting(rule -> rule.on().type()).containsExactly(EventTypes.ENTITY_HIT, EventTypes.DEATH);
     }
 
     @Test
