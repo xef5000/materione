@@ -34,6 +34,11 @@ const SESSION_BLOB = `${WEB_JAVA}/dev/materione/web/protocol/SessionBlob.java`;
 const RELAY_CLIENT = `${WEB_JAVA}/dev/materione/web/relay/RelayClient.java`;
 const SPA_SRC = 'webui/src';
 const SPA_SESSION = 'webui/src/lib/protocol/session.ts';
+// The code-mode SDK core's operation table (codemode.md section 7): every editor op the SDK reads or writes
+// through is named here, as `op: '...'`, and an entry that needs a session capability names it as
+// `capability: '...'`. The core checks the capability before it exposes the member (core/session.ts `exposed`,
+// the same capabilityOn the generator uses), so a capability named here counts as one the editor checks.
+const SDK_OP_TABLE = 'webui/src/lib/codemode/core/ops.ts';
 
 /** File access over the working tree, or over a git ref. */
 export function sourceAt(ref) {
@@ -130,8 +135,13 @@ export function extractEditor(source = sourceAt()) {
   const files = source.list(SPA_SRC).filter((file) => /\.(ts|svelte)$/.test(file));
   const ops = [];
   const dynamic = [];
+  const tableCapabilities = [];
   for (const file of files) {
     const text = source.read(file);
+    if (file === SDK_OP_TABLE) {
+      for (const match of text.matchAll(/\bop:\s*'([^']+)'/g)) ops.push(match[1]);
+      for (const match of text.matchAll(/\bcapability:\s*'([^']+)'/g)) tableCapabilities.push(match[1]);
+    }
     for (const match of text.matchAll(/\.call\(\s*(['"`])([^'"`]+)\1/g)) ops.push(match[2]);
     // Look past whitespace, so a literal op on the next line is not "dynamic".
     for (const match of text.matchAll(/\.call\((?=\s*([^\s'"`)][^)\s,]*))/g)) {
@@ -141,9 +151,10 @@ export function extractEditor(source = sourceAt()) {
   const session = source.read(SPA_SESSION);
   const versions = /SUPPORTED_PROTOCOL_VERSIONS\s*=\s*\[([^\]]*)\]/.exec(session);
   if (!versions) throw new Error(`${SPA_SESSION}: SUPPORTED_PROTOCOL_VERSIONS = […] not found`);
-  const capabilityChecks = new Set(
-    files.flatMap((file) => [...source.read(file).matchAll(/hasCapability\([^,]+,\s*['"]([^'"]+)['"]\)/g)].map((m) => m[1])),
-  );
+  const capabilityChecks = new Set([
+    ...files.flatMap((file) => [...source.read(file).matchAll(/hasCapability\([^,]+,\s*['"]([^'"]+)['"]\)/g)].map((m) => m[1])),
+    ...tableCapabilities,
+  ]);
   return {
     ops: sortedUnique(ops),
     dynamicCalls: dynamic,

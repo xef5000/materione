@@ -1,0 +1,59 @@
+{
+  "task": "T25",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds the miner's heirloom: a netherite pickaxe with 2000 durability, soulbound.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "miners_heirloom",
+      "edits": [
+        {
+          "field": [
+            "miners_heirloom",
+            "material"
+          ],
+          "value": "NETHERITE_PICKAXE"
+        },
+        {
+          "field": [
+            "miners_heirloom",
+            "display_name"
+          ],
+          "value": "<gold>Miner's Heirloom"
+        },
+        {
+          "field": [
+            "miners_heirloom",
+            "mechanics"
+          ],
+          "value": [
+            {
+              "materione:durability": {
+                "max": 2000
+              }
+            },
+            {
+              "materione:soulbound": {}
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 9
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 1,
+    "readBytes": 19,
+    "staged": 1,
+    "documents": 1
+  }
+}

@@ -73,3 +73,9 @@ export function checkDeclarations(sdk: string): Problem[] {
   const built = build(files, false);
   return problems(ts.getPreEmitDiagnostics(built), undefined);
 }
+
+/** The program of the core's declarations and a generated surface, for walking their types (the drift test). */
+export function declarationProgram(sdk: string): ts.Program {
+  const files = new Map<string, string>([[CORE, readFileSync(CORE_DTS, 'utf8')], [SDK, sdk]]);
+  return build(files, true);
+}

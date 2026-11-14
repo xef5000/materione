@@ -586,6 +586,34 @@ about, so the editor opens it:
 | `MTR-0072` | warning | At render, a GUI item's source could not produce an item for the viewer: an unknown player's head, a missing live item, an optional plugin that is not installed. The slot shows a barrier whose lore is the reason. Rate-limited per layer. |
 | `MTR-0073` | warning | At render, a dynamic GUI layer's condition or template failed. The condition counts as false, so the layer is hidden; a template renders its fallback, and an amount that is not a number shows 1. A missing or failed rich-title transport also uses this code: a dynamic-visual window is refused or closed rather than using a stale title and click policy (logic.md §6.4). Rate-limited per layer. |
 
+**SDK diagnostic codes** ([`codemode.md`](codemode.md) §6 phase 2, §3.9; #339). The code-mode SDK core runs in the
+editor, not in the plugin, and raises its own diagnostics for what a *program* does wrong while it runs. They are
+`SDK-####`: the same stable-API rule as `MTR-####` (never reused, never renumbered, a change of meaning is a new
+code), the same shape (`{code, severity, message, hint, source}`, where `source` is the program line), and they
+share the namespace only in this table. The editor's test compares the table in `webui/src/lib/codemode/core/diagnostics.ts`
+with this one. An error ends the run with no operations (a program that fails at line 40 has changed nothing); a
+warning does not.
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `SDK-0001` | error | The program threw (a `TypeError`, a thrown string, anything that is not one of the SDK's own diagnostics). The message is what it threw and `source` the line it threw from. Fix the program. |
+| `SDK-0002` | error | The program called `m.fail(message)`: its own, deliberate report that it cannot do the task (a missing asset, a missing primitive). The message is the program's. |
+| `SDK-0003` | error | A call on `m` or on a handle after the run ended (a continuation kept a handle past the program's return). Nothing is staged after `finish`; the result is unchanged and the diagnostic is reported separately. |
+| `SDK-0004` | error | The program writes to a second pack. A program is one transaction in one pack (codemode.md §5.4, decision C12); split the change into two programs. Reads of any pack are fine. |
+| `SDK-0005` | error | A limit of the run: more staged operations than the transaction takes (200), more edits in one operation (256), more distinct documents touched (50), more reads than the budget or more bytes read than the budget, a summary or a log past its size. The message names the limit; the hint says what to do (usually: split the program, or read less). |
+| `SDK-0006` | error | The member needs a session capability the connected server does not advertise (`codemode` for any write, `logic` for rules). Such a member is also absent from the generated types, so this is reached only by a call that bypasses them. |
+| `SDK-0007` | error | No such resource: `m.ref.<type>("pack:id")` or `m.edit(...)` named a resource the stored state does not have. The hint names the nearest existing ids. A resource this program creates is found by its handle, not by a read. |
+| `SDK-0008` | error | The pack does not exist, or it is a built-in pack (read-only, master §7.3). Raised when the program first stages into it. The hint names the nearest packs. |
+| `SDK-0009` | error | A value cannot be written to a document: a function, a non-finite number, `undefined` in a list, a non-plain object, or a value (a trigger, a recipe) that is not data. The message names the field path. |
+| `SDK-0010` | error | A read was refused: the server answered an op the SDK made with an error (`serverCode` carries the plugin's `MTR-####` when it gave one), or answered without what the SDK needs. The message names the op. |
+| `SDK-0011` | error | An asset the program references with `m.ref.asset` is not in the pack, found when the run ends. The hint names the nearest assets. Uploading is the owner's: a program cannot. |
+| `SDK-0012` | error | An argument is not valid: an id outside the server's grammar (2 to 64 of `a-z`, `0-9`, `_`, `-`), a parameter the registry entry does not have, a trigger no host of that type fires, a step list that holds a non-step, a wrong arity for an expression function, an operation on a document the program deleted. The message names the call and the hint the valid choices. |
+| `SDK-0013` | error | The resource or its path is already staged by this program. |
+| `SDK-0014` | error | The program's return value cannot be returned: it is not data, or it is larger than the bound (16 KiB). Summarize in the program. |
+| `SDK-0015` | warning | A formatted-text value passed to `m.mm` has a `<` that never closes with `>`. The text is staged as given. |
+| `SDK-0016` | warning | The program used a registry entry the server reports as unavailable here (an economy action with no provider, a transfer with no proxy). The step is staged; it will not run until the server is configured. |
+| `SDK-0017` | warning | The server warned while expanding a recipe for `rules.instantiate`. The expansion is staged; the message is the server's. |
+
 ---
 
 ## 6. Platform isolation layer

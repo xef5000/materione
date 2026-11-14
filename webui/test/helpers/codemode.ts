@@ -126,3 +126,21 @@ export function goldenText(path: string, text: string): string {
   }
   return readFileSync(path, 'utf8');
 }
+
+/** Every id a registry of the recorded snapshots carries. */
+export function registryIds(): Set<string> {
+  const ids = new Set<string>();
+  for (const snapshot of [readSnapshot('plugin-current'), withFakeAddon(readSnapshot('plugin-current'))]) {
+    const surface = surfaceOf(snapshot);
+    const b = surface.behavior;
+    for (const type of surface.contentTypes) {
+      ids.add(type.name);
+      if (type.directory !== undefined) ids.add(type.directory);
+    }
+    for (const group of [b.actions, b.conditions, b.triggers, b.mechanics, b.functions, b.recipes, b.itemSources, b.listSources, b.inputMethods, b.steps, b.categories, surface.gui.components, surface.gui.containers]) {
+      for (const entry of group) ids.add(entry.id);
+    }
+    for (const capability of surface.capabilities ?? []) ids.add(capability);
+  }
+  return ids;
+}

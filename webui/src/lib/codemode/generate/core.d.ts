@@ -27,14 +27,31 @@ interface Ref<K extends string = string> {
   readonly id: string;
 }
 
-/** What `create` returns for content type `K` with fields `F`: a name, usable as a `Ref<K>`. */
+/** What `create` returns for content type `K` with fields `F`, and what `m.edit` returns for an existing one: a name, usable as a `Ref<K>`, that stages edits to its document. */
 interface ResourceHandle<K extends string = string, F = unknown> extends Ref<K> {
   readonly __fields?: F;
+  /** Stages a field patch: each key given is set, and every other key (and any unknown key of the document) is left as it is. */
+  set(fields: Partial<F>): void;
+  /** Stages the removal of fields, so the resource reads them from its template or its default again. */
+  unset(...keys: readonly (keyof F & string)[]): void;
+  /** Stages a copy of this resource under a new id, with `fields` applied over the copy. The copy is a handle of the same kind. */
+  duplicate(id: string, options?: DuplicateOptions<F>): this;
+  /** Stages the deletion of this resource's document. Only a resource that exists already can be deleted: a resource this program creates is simply not created. */
+  delete(): void;
+  /** Stages cutting this resource's link to its template, copying what it inherited into its own document. */
+  detachTemplate(): void;
+  /** Stages saving the named `fields` (at least one) of this resource as the template `templateId`, which others can inherit from. */
+  saveAsTemplate(templateId: string, fields: readonly (keyof F & string)[]): void;
 }
 
 interface CreateOptions {
-  /** The file to write the resource into; default one file per resource under the type's directory. */
-  readonly file?: string;
+  /** A subfolder of the type's directory to write the document into; default the directory itself. One document per resource. */
+  readonly folder?: string;
+}
+
+interface DuplicateOptions<F = unknown> extends CreateOptions {
+  /** Field values applied over the copy. */
+  readonly fields?: Partial<F>;
 }
 
 /** The writer of one content type inside a pack. */
@@ -197,6 +214,11 @@ interface RefFactory {
   asset<K extends string = string>(path: string): Ref<K>;
 }
 
+/** Generated: the record type of each content type, by name. */
+interface ContentTypeFields {}
+/** Generated: the handle type of each content type, by name. */
+interface ContentTypeHandles {}
+
 interface ActionCatalog {}
 interface ConditionCatalog {}
 interface MechanicCatalog {}
@@ -206,6 +228,114 @@ interface RecipeCatalog {}
 interface GuiComponentCatalog {}
 interface ItemSourceCatalog {}
 interface ListSourceCatalog {}
+
+// ---- the read side ----------------------------------------------------------------------------------
+
+/** A pack the connected server has. Built-in packs can be read and referenced, never written. */
+interface PackInfo {
+  readonly id: string;
+  readonly builtin: boolean;
+}
+
+/** One row of a pack's catalog. */
+interface ResourceSummary {
+  readonly ref: Ref;
+  readonly pack: string;
+  /** The directory the document lives under (`items`). */
+  readonly type: string;
+  readonly path: string;
+  /** The resource's own id, without its pack. */
+  readonly id: string;
+  readonly name: string;
+  readonly health: string;
+  readonly healthMessage?: string;
+}
+
+/** A stored resource as a typed object. */
+interface ResourceView<F = unknown> {
+  readonly ref: Ref;
+  readonly path: string;
+  readonly revision: number;
+  /** The resource's own tree, typed by its content type. */
+  readonly fields: F;
+  /** What the server computes beside the stored text (inheritance, allocated ids). */
+  readonly computed: JsonValue;
+}
+
+/** What a scan of the pack set read, so "no hits" is not mistaken for "unused": `complete` is false when something was left unread. */
+interface ReferenceCoverage {
+  readonly complete: boolean;
+  readonly documentsScanned: number;
+  readonly notScanned: readonly string[];
+}
+
+/** Where a resource is used, with what the scan covered. */
+interface ReferenceResult {
+  readonly hits: readonly ReferenceHit[];
+  readonly coverage: ReferenceCoverage;
+}
+
+/** One place a resource is used. */
+interface ReferenceHit {
+  readonly pack: string;
+  readonly type: string;
+  readonly path: string;
+  readonly id: string;
+  readonly field: readonly string[];
+  readonly value: string;
+}
+
+interface RevisionInfo {
+  readonly rev: number;
+  readonly [key: string]: JsonValue;
+}
+
+/** A diagnostic the server holds now, as the editor's diagnostics list shows it. */
+interface ServerDiagnostic {
+  readonly [key: string]: JsonValue;
+}
+
+/** Reads see the stored state, never the program's own staged edits (codemode.md section 3.2). Each call is budgeted. */
+interface ReadApi {
+  packs(): readonly PackInfo[];
+  resources(options: { readonly pack: string; readonly type?: ContentTypeName; readonly query?: string; readonly limit?: number }): readonly ResourceSummary[];
+  get<K extends keyof ContentTypeFields & string>(ref: Ref<K>): ResourceView<ContentTypeFields[K]>;
+  references(ref: Ref): ReferenceResult;
+  history(ref: Ref, limit?: number): readonly RevisionInfo[];
+  diagnostics(): readonly ServerDiagnostic[];
+}
+
+/** One parameter of a content type, as the registry describes it. */
+interface ParamDoc {
+  readonly id: string;
+  readonly type: string;
+  readonly required: boolean;
+  readonly description?: string;
+  readonly allowedValues?: readonly string[];
+  readonly referenceKind?: string;
+  readonly default?: string;
+}
+
+interface TypeDoc {
+  readonly name: string;
+  readonly directory: string;
+  readonly description: string;
+  readonly fields: readonly ParamDoc[];
+}
+
+/** One registry entry found by `m.docs.search`. `member` is its spelling in the SDK (`m.actions.takeMoney`). */
+interface DocEntry {
+  readonly kind: string;
+  readonly id: string;
+  readonly member: string;
+  readonly summary: string;
+}
+
+/** The registry's own text, searched in the program: the same words the declarations carry as documentation. */
+interface DocsApi {
+  type(name: ContentTypeName): TypeDoc;
+  search(query: string, limit?: number): readonly DocEntry[];
+}
 
 // ---- the program's one global -----------------------------------------------------------------------
 
@@ -227,6 +357,13 @@ interface Materione {
   mm(text: string): MiniMessage;
   /** A logic expression; interpolate context values, variable handles and `m.fn` results. */
   expr<T = unknown>(strings: TemplateStringsArray, ...values: readonly ExprOperand[]): Expr<T>;
+  /** An existing resource's handle: it stages edits to that resource, checked against the stored state when the program runs. */
+  edit<K extends keyof ContentTypeHandles & string>(ref: Ref<K>): ContentTypeHandles[K];
+  readonly read: ReadApi;
+  readonly docs: DocsApi;
+  readonly sdk: { readonly version: string };
+  /** Adds a line to the run's log (bounded). */
+  log(...values: readonly unknown[]): void;
   /** A one-line, human-readable summary of the change, carried with the operation list for review. */
   summary(text: string): void;
   /** Ends the run with a diagnostic and no operations. */

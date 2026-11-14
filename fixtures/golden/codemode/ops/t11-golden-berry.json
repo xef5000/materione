@@ -1,0 +1,96 @@
+{
+  "task": "T11",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds the golden berry: eating it gives regeneration II and speed for five seconds.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "golden_berry",
+      "edits": [
+        {
+          "field": [
+            "golden_berry",
+            "material"
+          ],
+          "value": "SWEET_BERRIES"
+        },
+        {
+          "field": [
+            "golden_berry",
+            "display_name"
+          ],
+          "value": "<gold>Golden Berry"
+        },
+        {
+          "field": [
+            "golden_berry",
+            "texture"
+          ],
+          "value": "textures/item/golden_berry.png"
+        },
+        {
+          "field": [
+            "golden_berry",
+            "mechanics"
+          ],
+          "value": [
+            {
+              "materione:food": {
+                "nutrition": 4,
+                "saturation": 6
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/golden_berry.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "consume",
+            "do": [
+              {
+                "potion": {
+                  "type": "regeneration",
+                  "duration": 100,
+                  "amplifier": 1
+                }
+              },
+              {
+                "potion": {
+                  "type": "speed",
+                  "duration": 100
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 23
+    },
+    {
+      "line": 10,
+      "column": 13
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 2,
+    "readBytes": 107,
+    "staged": 2,
+    "documents": 1
+  }
+}

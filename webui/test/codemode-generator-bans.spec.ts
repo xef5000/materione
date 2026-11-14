@@ -13,7 +13,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { readSnapshot, surfaceOf, withFakeAddon } from './helpers/codemode';
+import { registryIds } from './helpers/codemode';
 
 const GENERATE_DIR = fileURLToPath(new URL('../src/lib/codemode/generate', import.meta.url));
 
@@ -24,6 +24,8 @@ const GENERATE_DIR = fileURLToPath(new URL('../src/lib/codemode/generate', impor
  */
 const SCHEMA_VOCABULARY: Record<string, string> = {
   number: 'the recipe-parameter value kind; also the id of an expression function',
+  codemode: 'the session capability of the transaction op: protocol vocabulary (capabilities.ts), not a registry entry',
+  logic: 'the session capability of the logic ops: protocol vocabulary (capabilities.ts), not a registry entry',
 };
 
 function sourceFiles(): { name: string; text: string }[] {
@@ -68,30 +70,12 @@ function identifiersOf(text: string): Set<string> {
   return found;
 }
 
-/** Every id a registry of the recorded snapshots carries. */
-function registryIds(): Set<string> {
-  const ids = new Set<string>();
-  for (const snapshot of [readSnapshot('plugin-current'), withFakeAddon(readSnapshot('plugin-current'))]) {
-    const surface = surfaceOf(snapshot);
-    const b = surface.behavior;
-    for (const type of surface.contentTypes) {
-      ids.add(type.name);
-      if (type.directory !== undefined) ids.add(type.directory);
-    }
-    for (const group of [b.actions, b.conditions, b.triggers, b.mechanics, b.functions, b.recipes, b.itemSources, b.listSources, b.inputMethods, b.steps, b.categories, surface.gui.components, surface.gui.containers]) {
-      for (const entry of group) ids.add(entry.id);
-    }
-    for (const capability of surface.capabilities ?? []) ids.add(capability);
-  }
-  return ids;
-}
-
 describe('the SDK generator is registry-agnostic', () => {
   const files = sourceFiles();
   const ids = registryIds();
 
   it('scans the generator and the recorded registries, not nothing', () => {
-    expect(files.map((file) => file.name)).toEqual(expect.arrayContaining(['generate.ts', 'surface.ts']));
+    expect(files.map((file) => file.name)).toEqual(expect.arrayContaining(['generate.ts', 'surface.ts', 'names.ts', 'context.ts', 'capabilities.ts']));
     expect(ids.size).toBeGreaterThan(150);
     // a sample of ids the ban is about
     for (const id of ['item', 'run_command', 'materione:backpack', 'click', 'gui.click', 'has_money', 'materione:button', 'example:greet']) {
@@ -114,10 +98,10 @@ describe('the SDK generator is registry-agnostic', () => {
     }
   });
 
-  it('imports nothing from the editor: only the surface types', () => {
+  it('imports nothing from the editor: only the surface types and the shared naming policy', () => {
     for (const file of files) {
       for (const specifier of importsOf(file.text)) {
-        expect(['./surface'], `${file.name} imports ${specifier}`).toContain(specifier);
+        expect(['./surface', './names', './context', './capabilities'], `${file.name} imports ${specifier}`).toContain(specifier);
       }
     }
   });

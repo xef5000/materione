@@ -198,3 +198,40 @@ describe('an addon registration is usable with no SDK code (D5, codemode.md sect
     expect(found.some((problem) => problem.code === 2339 && problem.message.includes('power'))).toBe(true);
   });
 });
+
+describe('handles, editing and the read side are typed (issue 339)', () => {
+  const pack = 'const p = m.pack("t");\n';
+
+  it('types set, unset, duplicate, delete and the template calls by the content type\'s fields', () => {
+    expect(codes(`${pack}
+      const sword = p.items.create("s", { material: "DIAMOND_SWORD" });
+      sword.set({ material: "IRON_SWORD", display_name: m.mm("<red>Sword") });
+      sword.unset("display_name");
+      const copy = sword.duplicate("s2", { folder: "x", fields: { material: "STICK" } });
+      copy.rules.add(m.triggers.click(), () => ({ do: [] }));
+      sword.saveAsTemplate("swords", ["material"]);`)).toEqual([]);
+    expect(codes(`${pack}p.items.create("s", { material: "STICK" }).set({ secret: 1 });`)).toContain(2353);
+    expect(codes(`${pack}p.items.create("s", { material: "STICK" }).set({ display_name: "plain" });`)).toContain(2322);
+    expect(codes(`${pack}p.items.create("s", { material: "STICK" }).unset("nonsense");`)).toContain(2345);
+    expect(codes(`${pack}p.items.create("s", { material: "STICK" }).saveAsTemplate("t");`)).toContain(2554);
+  });
+
+  it('edits an existing resource through its reference, typed by the reference\'s kind', () => {
+    expect(codes('const sword = m.edit(m.ref.item("rpg:sword")); sword.set({ material: "STICK" }); sword.delete();')).toEqual([]);
+    expect(codes('m.edit(m.ref.item("rpg:sword")).set({ container: "chest_1" });')).toContain(2353);
+    expect(codes('m.edit(m.ref.asset("textures/x.png"));').length).toBeGreaterThan(0);
+  });
+
+  it('types the read side: a stored resource is a typed record, a catalog row carries its reference', () => {
+    expect(codes(`
+      const view = m.read.get(m.ref.item("rpg:sword"));
+      const material: string | undefined = view.fields.material;
+      const rows = m.read.resources({ pack: "rpg", type: "item", limit: 5 }).map((row) => row.ref);
+      const found = m.docs.search("bleed").map((entry) => entry.member);
+      const doc = m.docs.type("item").fields.length;
+      const hits = m.read.references(m.ref.item("rpg:sword")).hits.length;
+      const complete: boolean = m.read.references(m.ref.item("rpg:sword")).coverage.complete;`)).toEqual([]);
+    expect(codes('m.read.resources({ pack: "rpg", type: "nonsense" });').length).toBeGreaterThan(0);
+    expect(codes('m.read.get(m.ref.item("rpg:sword")).fields.nonsense;')).toContain(2339);
+  });
+});
