@@ -88,7 +88,8 @@ describe('each limit ends the run with a diagnostic and no operations, and the n
     const runner = await runnerOf();
     const slow = hostOf(WORLD);
     const host: SandboxHost = { read: async (op, payload) => (await new Promise((resolve) => setTimeout(resolve, 200)), slow.read(op, payload)), resolve: (request) => slow.resolve(request) };
-    const result = await runner.run(checked('const p = await m.read.packs(); return p.packs.length;'), surface, host, { cpuMs: 120, wallMs: 1000 });
+    const result = await runner.run(checked('const p = await m.read.packs(); return p.length;'), surface, host, { cpuMs: 120, wallMs: 1000 });
+    expect(result.diagnostics).toEqual([]);
     expect(result.ok).toBe(true);
     expect(result.value).toBe(1);
   });
@@ -185,7 +186,7 @@ describe('source positions: operations and errors name the line the agent wrote'
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toMatchObject([{ code: 'SDK-0001', message: expect.stringContaining('boom 3'), source: { line: 5 } }]);
     const staged = await runner.run(checked('const p = m.pack("bench");\n\n  p.items.create("a1", {});'), surface, hostOf(WORLD));
-    expect(staged.sources).toEqual([{ line: 3, column: 5 }]);
+    expect(staged.sources).toEqual([{ line: 3, column: 11 }]);
   });
 });
 

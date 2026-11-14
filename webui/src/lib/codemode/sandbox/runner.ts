@@ -217,6 +217,8 @@ function accept(resultJson: string, limits: SandboxLimits, mapPosition: (positio
     else return { violation: 'protocol', message: 'the sandbox returned a source position of the wrong shape' };
   }
   // a run with an error has no operations, whatever the guest says
+  // QuickJS throws "out of memory" INTO the program, and the core reports an uncaught throw as SDK-0001: the host names it
+  if (diagnosticList.some((entry) => entry.code === 'SDK-0001' && /out of memory/i.test(entry.message))) return { violation: 'memory-limit', message: 'the program used more memory than a run may' };
   const hasError = diagnosticList.some((entry) => entry.severity === 'error');
   const success = ok && !hasError;
   return {
