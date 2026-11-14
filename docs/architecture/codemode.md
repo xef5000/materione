@@ -368,7 +368,7 @@ made.
 *As built (#339, M6.5 track A2).* The fixed half of §3.1 exists: `webui/src/lib/codemode/core/`, the runtime that the generated
 types of §3.8 are types *of*. It is plain ES2020, DOM-free and dependency-free, and it is tested **bundled** (esbuild, one
 script) in a bare `vm` context that holds the language's intrinsics and nothing else, with a fake port, so what is proven is what
-the sandbox (#343, not built) will load. The sandbox itself, the chat tool and the review UI are
+the sandbox (#343, built: §4.6) loads. The sandbox itself, the chat tool and the review UI are
 not part of it.
 
 | Piece | Where | What it is |
@@ -786,6 +786,88 @@ make**, so the sandbox cannot make the editor send an operation the SDK's table 
   and by the staged-only write model (even a sandbox that misbehaves has no apply); *prompt injection through content the agent
   reads* (an item lore that says "ignore your instructions"): reads are data, the program's effects are limited to staged
   operations, and **nothing applies without a human reviewing the diff** (§5.6).
+
+### 4.6 As built: the production sandbox (#343)
+
+*As built (#343, M6.5 track A2).* D13's sandbox exists: `webui/src/lib/codemode/sandbox/`, with the spike's six amendments applied. It builds
+on the type-check Worker (#342: it takes the program's `js` and `map` and the shared `wrapProgram`) and the core (§3.9: it is the guest, bundled).
+There is no UI: the chat tool (#348) and the proposal flow (#346) call `run` and wire the host.
+
+**API** (`sandbox/index.ts`): `run(checkedProgram, surface, host, limits?) -> RunResult`, and `createSandboxRunner({ spawn?, loadAssets? })`
+(`run`, `dispose`, `stats`) for a runner of one's own. `checkedProgram` is `{ js, map }`, what a passing `CheckResult` carries. `host` is a
+`SandboxHost { read(op, payload): Promise<ReadReply>; resolve(request): Promise<ResolveReply> }`, injected. `createOpHost(call)` builds one from a
+function that makes a read-only editor op (the sealed channel's `call`, reduced to its answer): its `read` refuses any op outside the table's
+reads, and its `resolve` answers the seal's batch with the table's `via: 'resolve'` ops (`browse.packs`, `authoring.summaries`,
+`browse.get`, `logic.instantiate`, `assets.list`). `RunResult` is `{ ok, sdkVersion, pack, operations, sources, diagnostics, late, summary,
+logs, value, stats, metrics }`: the core's `ProgramResult` with `sources` and every diagnostic position mapped to the program as written,
+`value` the return value, and `metrics` the host's timings (never part of a determinism comparison). A run never rejects; a failed run has
+`ok: false`, no operations, and a diagnostic. One run at a time; later calls queue.
+
+| Piece | Where | What it is |
+|---|---|---|
+| **Build step** | `webui/vite.sandbox.ts` (a Vite plugin in both configs) | Emits `sandbox/frame.html`, `engine.js`, `core.js`, `quickjs.wasm` into the SPA output (so both hosts serve them as plain files; the dev server serves the same URLs). The frame document holds ONE inline script and a meta CSP naming its sha256, **computed in the build from the exact text** (`frameDocument`); a spec re-hashes the production file. |
+| **Frame** | `sandbox/frame-boot.ts` | The inline script: one `init` from `window.parent` (wasm bytes, engine source, core source, transferred in: the frame never fetches), a blob Worker from the engine source, the private port handed on. |
+| **Engine** | `sandbox/engine.ts`, `worker-entry.ts` | QuickJS **sync** build in the Worker; a fresh runtime per run; interrupt handler for CPU (engine time only); `WebAssembly.Memory` `maximum`; stack 256 KiB. The guest is the core evaluated in a function body with a determinism prelude (`Date` fixed at 2026-01-01T00:00:00Z, `Math.random` seeded 12345); `m` is the one non-intrinsic global; the host functions are closed over, never globals. `m.read.*` are guest promises the host resolves (then jobs are pumped); staging makes no host call; the one `resolve` happens inside `finish`. |
+| **Host** | `sandbox/sandbox.ts`, `runner.ts`, `protocol.ts` | The iframe (`sandbox="allow-scripts"`, never `allow-same-origin`), the channel, the budgets, the backstops, and validation of every message and of the result. Any limit, refused message or aborted engine **destroys the frame**; the next run boots a fresh one. |
+| **Positions** | `sandbox/sourcemap.ts` | The engine's positions are in `wrapProgram(js)`; the emitter's map gives the program's own line and column, with line 1's columns shifted by `WRAP_PREFIX` (one wrapper). QuickJS reports a call at its `(` where V8 reports the callee name; the host moves the column back to the callee name so the goldens are engine-independent. |
+
+**Limits as enforced** (`DEFAULT_SANDBOX_LIMITS`, overridable per run; the sandbox's diagnostics are `SBX-####` in plugin.md section 5, the core's limits stay `SDK-0005`):
+
+| Limit | Default | Enforced by | Ends the run with |
+|---|---|---|---|
+| CPU time | 1000 ms of engine time (waiting on the editor is free) | interrupt handler in the engine | `SBX-0001` |
+| Memory | 64 MiB `WebAssembly.Memory` maximum (QuickJS heap limit 75% of it) | the wasm memory; the engine | `SBX-0002` |
+| Stack | 256 KiB (an overflow the program does not catch is the program's own `SDK-0001`) | QuickJS | `SDK-0001` / `SBX-0003` |
+| Reads / read bytes | 100 / 2 MiB | the core (`SDK-0005`) and, independently, **the host's own count** | `SDK-0005` / `SBX-0004` |
+| One read, the seal | 5 s, 20 s unanswered | host timer | `SBX-0005` |
+| Wall-clock backstop | 10 s with no editor answer outstanding; 60 s in all | host timer; destroys the frame | `SBX-0006` |
+| Operations, documents, bytes of operations | 200, 50, 256 KiB | the core, and the host's recount of the result | `SDK-0005` / `SBX-0007` |
+| Logs, return value | 16 KiB, 64 KiB | the core, and the host's recount | `SDK-0014` / `SBX-0008` |
+| Never finishes | nothing pending, program not done | engine | `SBX-0009` |
+| A call's payload, a message, the result | 64 KiB; shape-checked; result at most operations + logs + return + 256 KiB | host validator | `SBX-0010` |
+
+The host never believes the frame: the allowlist is the host's (`READ_ALLOWLIST`, from the core's operation table; an op outside it ends the run), the
+reads and bytes are counted on the host, the seal may resolve once, and the result is rebuilt field by field from validated JSON, with operations dropped when any
+diagnostic is an error. A `__proto__` key in a result is data (`JSON.parse` makes an own property; the host never assigns by a guest key).
+
+**Isolation, proven on the production artifact** (`codemode-sandbox-built.pw.ts`; a static host that sends a Content-Type and no other header, with a server hit
+log). Native probes in a frame and in the blob Worker, under the production CSP (the build's own `frameDocument` around a different inline script: the probes cannot
+be injected into the emitted frame itself, whose own policy a spec asserts): `fetch` (also `no-cors`), XHR, WebSocket, `import()`, `importScripts`, nested Worker,
+storage, cookies, IndexedDB, `window.parent` and `top` access and navigation, `window.open`, `eval`, `new Function` all fail; a nested frame, `sendBeacon` and
+`BroadcastChannel` are fire-and-forget and the server's hit log and the editor's BroadcastChannel listener stay empty; the Worker's `self.origin` is `"null"`.
+Inner layer: the guest sees QuickJS intrinsics and `m` (a spec pins the list); `Function('return this')()` and constructor walks give the guest's own global; a guest `import()` is refused.
+
+**Determinism, proven in the real sandbox.** The corpus (T04, T08, T11, T16, T25, T29, C01, C02, with their world files; T05 and T27 do not type-check and are not run)
+goes through the type-check Worker and then the sandbox, the fake editor answering through `createOpHost`, and every record is byte for byte the existing goldens in
+`fixtures/golden/codemode/ops` and `runs`. None changed.
+
+**Lazy and static.** Nothing loads until the first run. The editor's production JavaScript is byte-identical with and without the sandbox (1,641,589 B both; the
+plugin only adds static files). The sandbox's files: `core.js` 49,149 B (14,431 gzip), `engine.js` 59,303 B (17,188), `quickjs.wasm` 503,134 B (234,043), `frame.html`
+1,576 B: about 266 KB gzip on the first run. `esbuild` and the QuickJS packages are devDependencies: they are bundled at build time, so nothing moves to
+`dependencies`. QuickJS and quickjs-emscripten are MIT (`NOTICE`); the project licence is not decided here.
+
+**Measured** (Chromium, Playwright 1.64.1, localhost, Windows 11, one machine): first run, boot 23 ms and 45 ms run; a warm run 15 ms, of which about 13 ms is guest setup (the core
+evaluated and the 200 KB surface parsed, per run); a CPU-bound guest under a 250 to 300 ms deadline stalls the editor's main thread for 11 to 12 ms.
+
+**Hosting.** Neither host needs anything new: the files sit under `sandbox/` in the SPA output. **Verified against the code only, not the live hosts:** the plugin's
+`EditorListener.serveStatic` accepts `sandbox/frame.html` (its path charset, classpath resources under `/webui/`) and maps `.html`, `.js` and `.wasm` to content types; the
+relay's Workers static assets serve the SPA output directory as files. Not verified: Workers static assets' default `html_handling` may answer
+`/sandbox/frame.html` with a redirect to `/sandbox/frame` (an iframe follows it); and under the single-page fallback a missing file answers HTML, which `loadSandboxAssets` turns
+into a clear `SBX-0011`. Neither was exercised on a deployed relay (deploys are the owner's).
+
+**How it is proven.** `codemode-sandbox.spec.ts` (Node, the real engine run in-process): the corpus against the goldens. `codemode-sandbox-limits.spec.ts`: each limit, determinism,
+guest globals, pollution, source positions, and a **lying core** (a stand-in for a guest that escaped the program) that tries a write op, a made-up op, too many reads, bytes, operations,
+logs, a second seal, malformed results and forged `__proto__` keys. `codemode-sandbox-build.spec.ts`: the production build's files, the CSP hash recomputed from the emitted frame, the editor's
+bundle byte-identical, the codes against plugin.md, the message validator. `codemode-sandbox.pw.ts` (dev server) and `codemode-sandbox-built.pw.ts` (production artifact): the corpus in the real frame,
+laziness, isolation of both layers, the wall-clock backstop destroying a frame, editor responsiveness, the memory cap, the read deadline.
+
+**Browsers.** Chromium only was run. `MATERIONE_PW_BROWSERS=firefox,webkit` adds those engines for the sandbox specs (`playwright.config.ts`), off by default and not in CI; the browsers
+were not installed here, so **there is no Firefox or WebKit result**: a `blob:` Worker from an opaque-origin frame, the wasm stack depth under 256 KiB, `WebAssembly.Memory` `maximum`
+and a transfer of an `ArrayBuffer` plus a `MessagePort` to a `'*'` target remain unverified there (§13). The supported-browser decision stays the owner's.
+
+**What this does not do.** No chat tool, grants, review UI or model call. The guest keeps `eval` and `Function` (they reach only the guest's own global; deleting them would not
+remove the constructor path). A program can forge its own result JSON (it controls `JSON.stringify` in its realm); that gains nothing beyond `m`: the host rebuilds and bounds it, and
+the server's dry run is the authority.
 
 ---
 

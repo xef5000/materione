@@ -31,7 +31,7 @@ export function bundleCore(): Promise<string> {
 }
 
 export { fakePort, type Call, type World, type WorldResource } from './world';
-import { fakePort, type World } from './world';
+import { fakePort, type Call, type World } from './world';
 
 // ---- running a program --------------------------------------------------------------------------------
 
