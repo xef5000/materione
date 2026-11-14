@@ -226,20 +226,17 @@ describe('handles, editing and the read side are typed (issue 339)', () => {
   });
 
   it('types the read side: every read is a promise, a stored resource a typed record, a catalog row carries its reference', () => {
-    // the program entry is async (the host wraps it), so the checker sees the body of an async function
-    const inAsync = (body: string): string => `(async () => {
-${body}
-})();`;
-    expect(codes(inAsync(`
+    // checkProgram wraps the program as the type-check Worker does (typecheck/wrap.ts): the body of an async function
+    expect(codes(`
       const view = await m.read.get(m.ref.item("rpg:sword"));
       const material: string | undefined = view.fields.material;
       const rows = (await m.read.resources({ pack: "rpg", type: "item", limit: 5 })).map((row) => row.ref);
       const found = m.docs.search("bleed").map((entry) => entry.member);
       const doc = m.docs.type("item").fields.length;
       const hits = (await m.read.references(m.ref.item("rpg:sword"))).hits.length;
-      const complete: boolean = (await m.read.references(m.ref.item("rpg:sword"))).coverage.complete;`))).toEqual([]);
-    expect(codes(inAsync('await m.read.resources({ pack: "rpg", type: "nonsense" });')).length).toBeGreaterThan(0);
-    expect(codes(inAsync('(await m.read.get(m.ref.item("rpg:sword"))).fields.nonsense;'))).toContain(2339);
+      const complete: boolean = (await m.read.references(m.ref.item("rpg:sword"))).coverage.complete;`)).toEqual([]);
+    expect(codes('await m.read.resources({ pack: "rpg", type: "nonsense" });').length).toBeGreaterThan(0);
+    expect(codes('(await m.read.get(m.ref.item("rpg:sword"))).fields.nonsense;')).toContain(2339);
     // forgetting the await is a type error, and staging needs none
     expect(codes('m.read.get(m.ref.item("rpg:sword")).fields;')).toContain(2339);
     expect(codes('const p = m.pack("t"); p.items.create("s", { material: "STICK" }).set({ material: "BONE" });')).toEqual([]);
