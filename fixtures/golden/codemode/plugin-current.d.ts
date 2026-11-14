@@ -723,6 +723,7 @@ interface ContentTypeFields {
   item: ItemFields;
   painting: PaintingFields;
   recipe: RecipeFields;
+  rule: RuleFields;
   sound: SoundFields;
   variable: VariableFields;
 }
@@ -738,6 +739,7 @@ interface ContentTypeHandles {
   item: ItemHandle;
   painting: PaintingHandle;
   recipe: RecipeHandle;
+  rule: RuleHandle;
   sound: SoundHandle;
   variable: VariableHandle;
 }

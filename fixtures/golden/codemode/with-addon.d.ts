@@ -748,6 +748,7 @@ interface ContentTypeFields {
   painting: PaintingFields;
   quest: QuestFields;
   recipe: RecipeFields;
+  rule: RuleFields;
   sound: SoundFields;
   variable: VariableFields;
 }
@@ -764,6 +765,7 @@ interface ContentTypeHandles {
   painting: PaintingHandle;
   quest: QuestHandle;
   recipe: RecipeHandle;
+  rule: RuleHandle;
   sound: SoundHandle;
   variable: VariableHandle;
 }

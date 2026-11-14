@@ -147,6 +147,17 @@ describe('the SDK core is registry-agnostic', () => {
   });
 });
 
+describe('the ban sees a planted id', () => {
+  it('flags a content type or an action id written as a literal, and not a word that is no id', () => {
+    const ids = registryIds();
+    const flagged = (code: string): string[] => literalsOf(code).filter((value) => ids.has(value) && !(value in SCHEMA_VOCABULARY));
+    expect(flagged("const kind = 'rule';")).toEqual(['rule']);
+    expect(flagged('const kind = "item"; const a = `take_money`;')).toEqual(['item', 'take_money']);
+    // the core's own private words are not ids: a handle tag must not borrow a registry word
+    expect(flagged("const tag = 'ruleHandle';")).toEqual([]);
+  });
+});
+
 describe('the SDK core reaches the server only through its table', () => {
   const all = files();
   const { ops, capabilities } = plugin();
