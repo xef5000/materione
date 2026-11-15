@@ -1543,12 +1543,14 @@ on the cheap model; move to the mid-tier model for the rest of the request after
 The gateway's own routing is used only for provider failure (fallback), so the escalation rule stays in one place and is testable.
 Whether this beats "always mid-tier" is one of the things #385 measures.
 
-**Accounts, payments and the ledger are a subsystem of their own (#386), not designed here.** Buying credits means accounts,
-a payment processor, a balance ledger with exactly-once debits, refunds, tax and terms. The ledger is state, but not content
-(D1 is unaffected). It is designed and costed before it is built; the vertical slice can be proven first on the free allowance
-alone, under the hard cap above.
+**Accounts, payments and the ledger are designed in [`ai-credits.md`](ai-credits.md) (owner decision, #386, 2026-11-15).**
+Google and Discord OAuth 2.0 (PKCE) in a popup issue a host-locked `__Host-` `HttpOnly` session cookie on `ai.materione.com`,
+keeping editor session keys (`?s=...#...`) completely unlinkable from `ai.materione.com`, OAuth providers, and Polar (`D11`).
+Polar Merchant of Record handles custom `$10–$200` top-ups scaled strictly off `net_amount` (`100 credits / $1 = $0.75` wholesale AI
+budget), recorded in a two-bucket atomic D1 picodollar ledger (`credit_balance_picos` + dual-gated `$0.05/day` per-account and
+per-canonical-subnet free allowance under a `$1.00/day` global pool). The ledger is state, not content (D1 is unaffected).
 
-**Still open.** The model allowlist and the routing rule (#385); the numbers for rates and the free allowance; everything in #386.
+**Still open.** The model allowlist and the routing rule (#385); the #386 design in [`ai-credits.md`](ai-credits.md) is ready for implementation.
 
 *As built (#348): the agent loop, context assembly, and `editor.materione.com` boundary.* The SPA side (`webui/src/lib/codemode/chat/`) is wired
 and verified with a scripted provider (`scripted.ts`, `scripts/bloodfang.ts`):

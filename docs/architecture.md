@@ -1114,10 +1114,12 @@ primary method (display entities only; legacy paths only if a converter needs th
    | What leaves the end-to-end boundary (§9.2) | The model call, and only it: the conversation, the slice of the SDK surface in context, and what a program returns to the model (bounded, codemode.md §4.2). Cloudflare and the model provider see that text. The editor says so before the first message of a session. Pack content is still read in the browser and is not sent wholesale (codemode.md §3.3 point 3). |
 
    The cost guardrails in `CLAUDE.md` are amended in the same change to allow exactly this, under a hard cap (prepaid credits,
-   no auto top-up, a gateway spend limit, rate limits, a per-account quota). Design and the conditions: codemode.md §12.1.
+   no auto top-up, a gateway spend limit, rate limits, a per-account quota). Design and the conditions: codemode.md §12.1 and
+   [`architecture/ai-credits.md`](architecture/ai-credits.md).
    A **credit ledger** is new state, but it is not content: D1 is about content, and the ledger holds balances and usage only.
-   **Still open:** which model or models (measured on the benchmark, #385), and the whole of accounts, payments and the ledger
-   (#386), which is a subsystem of its own and is designed before any of it is built.
+   **Decided (2026-11-15, #386):** accounts, payments, the two-bucket D1 picodollar ledger, and the dual-gated `$0.05/day` free
+   allowance under a `$1.00/day` global pool are designed in [`architecture/ai-credits.md`](architecture/ai-credits.md).
+   **Still open:** which model or models and routing rule (measured on the benchmark, #385).
 9. **Milestone placement of D12's work — decided (owner, PR #322); name TBD.** The agent vertical slice (the chatbot and its tools,
    plus the fold-down of primitives.md §5 it needs) is a **milestone between M6 and M7**, name to be decided (written "M6.5 / TBD" in
    [`roadmap.md`](roadmap.md); existing milestones are not renumbered). The goal is a nice vertical slice before expanding
@@ -1139,7 +1141,7 @@ primary method (display entities only; legacy paths only if a converter needs th
    | **The one-pack rule and the 50-document cap** | Kept for now; open to lifting later |
    | **Program retention** | The program text is kept (size-bounded) in the audit |
    | **D13 or an amendment to D12** | D13 |
-   | **Who runs and pays for the model, and which model** | **Still open** (§14.8); the specific model is to be decided |
+   | **Who runs and pays for the model, and which model** | Host, billing, accounts, payments & ledger **designed** (§14.8, [`architecture/ai-credits.md`](architecture/ai-credits.md), #351 & #386); model selection measured in #385 remains open |
 
 > **Resolved since first draft:** project naming (Materione, everywhere), the ECA expression
 > engine (one universal engine — D4), relay pattern (LuckPerms-style, D11), cloud platform
