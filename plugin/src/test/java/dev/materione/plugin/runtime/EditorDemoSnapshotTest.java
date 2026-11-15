@@ -205,6 +205,9 @@ class EditorDemoSnapshotTest {
         if (productionAuthoring) {
             authoring.previewAllocations(() -> pipeline.allocation().preview());
             authoring.parsedContent(() -> pipeline.runner().lastParsed());
+            authoring.staticReferences(new dev.materione.core.pipeline.validate.StaticReferenceWalker(
+                    new dev.materione.behavior.logic.RegistryLogicVocabulary(
+                            new dev.materione.behavior.logic.RegistryLogicLookup(registries))));
         }
         var assets = new dev.materione.core.assets.AssetApiImpl(assetStore, packsRoot, (actor, pack, changed) -> { });
         EditorTransportService[] transport = new EditorTransportService[1];

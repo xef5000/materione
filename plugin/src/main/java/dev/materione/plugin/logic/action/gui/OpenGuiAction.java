@@ -58,7 +58,8 @@ public final class OpenGuiAction implements ActionType<OpenGuiAction.Params> {
                 "Opens a GUI for the player, replacing the window they have; the old one goes on the back stack",
                 List.of(
                         new ParameterSchema("gui", ParameterType.REFERENCE, true, null,
-                                "The GUI to open: pack:id, or a name in this GUI's pack", null, null),
+                                "The GUI to open: pack:id, or a name in this GUI's pack", null, null)
+                                .withWidget("reference", "gui"),
                         new ParameterSchema("args", ParameterType.RAW, false, null,
                                 "Arguments the GUI opens with, name to text; templates allowed", null, null)),
                 "1.0.0"), LogicCategory.GUI, "gui");

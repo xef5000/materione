@@ -94,7 +94,13 @@ public record TransactionResult(
      * attributed to the last operation that touched the document, because that is the operation after which
      * the document reached the state that failed.
      */
-    public record OperationDiagnostic(int operation, Diagnostic diagnostic) {}
+    public record OperationDiagnostic(int operation, Diagnostic diagnostic, boolean preexisting) {
+
+        /** A finding the list introduced, or any finding outside a before/after comparison. */
+        public OperationDiagnostic(int operation, Diagnostic diagnostic) {
+            this(operation, diagnostic, false);
+        }
+    }
 
     /**
      * One validation stage of master section 5.4 (or the behavior compile that rides with it): its id, whether it

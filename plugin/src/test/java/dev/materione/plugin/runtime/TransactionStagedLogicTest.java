@@ -46,6 +46,8 @@ class TransactionStagedLogicTest {
         EditorDemoSnapshotTest.closeAll();
     }
 
+    private Path packDirectory;
+
     private RpcDispatcher server() throws IOException {
         Path root = Files.createTempDirectory(temp, "server");
         StorageService.StorageState storage = new StorageService().init(root);
@@ -54,6 +56,7 @@ class TransactionStagedLogicTest {
                     storage.contentPacksDir().resolve(fixturePack));
         }
         RpcDispatcher dispatcher = EditorDemoSnapshotTest.realOps(root, storage, true);
+        packDirectory = storage.contentPacksDir().resolve(PACK);
         JsonObject create = new JsonObject();
         create.addProperty("pack", PACK);
         call(dispatcher, "edit.createPack", create);
@@ -153,6 +156,86 @@ class TransactionStagedLogicTest {
         assertThat(report.getAsJsonArray("diagnostics").get(0).getAsJsonObject().get("message").getAsString())
                 .contains("is not fired for rule documents");
         assertThat(report.get("accepted").getAsBoolean()).isTrue();
+    }
+
+    /** Applies a list (not a dry run). */
+    private JsonObject apply(RpcDispatcher dispatcher, String... operations) {
+        JsonObject request = JsonParser.parseString(
+                "{\"pack\":\"" + PACK + "\",\"dryRun\":false,\"operations\":[" + String.join(",", operations) + "]}")
+                .getAsJsonObject();
+        return call(dispatcher, "authoring.transaction", request);
+    }
+
+    @Test
+    void deletingAnItemAGuiSlotAndAStaticStepNameIsReportedAgainstTheDeletingOperation() throws IOException {
+        RpcDispatcher server = server();
+        String token = """
+                {"kind":"create","type":"items","id":"token","edits":[
+                  {"field":["token","material"],"value":"PAPER"}]}""";
+        String hub = """
+                {"kind":"create","type":"guis","id":"hub","edits":[
+                  {"field":["hub","container"],"value":"chest_3"},
+                  {"field":["hub","title"],"value":"Hub"},
+                  {"field":["hub","layers"],"value":[
+                    {"type":"materione:item","id":"slot","slot":4,"item":"bench:token"},
+                    {"type":"materione:button","id":"go","x":70,"y":30,"width":36,"height":20}]},
+                  {"field":["hub","behavior"],"value":[
+                    {"on":"gui.click","layer":"go","do":[
+                      {"give_item":"bench:token"},
+                      {"gui.open":{"gui":"bench:hub"}},
+                      {"give_item":"%player_name%"}]}]}]}""";
+        JsonObject applied = apply(server, token, hub);
+        assertThat(applied.get("accepted").getAsBoolean()).as(String.valueOf(applied)).isTrue();
+        assertThat(findings(applied)).as("a pack that names only what it declares is clean").isEmpty();
+        int revision = 1;
+
+        String delete = "{\"kind\":\"delete\",\"path\":\"items/token.yml\",\"rev\":" + revision + "}";
+        JsonObject report = dryRun(server, delete);
+
+        assertThat(report.get("accepted").getAsBoolean()).as("warnings never refuse").isTrue();
+        assertThat(findings(report)).contains("0 MTR-0054 warn", "0 MTR-0105 warn");
+        assertThat(findings(report)).as("a templated id is an expression, not checked")
+                .filteredOn(finding -> finding.contains("MTR-0105")).hasSize(1);
+    }
+
+    @Test
+    void aBehaviorFindingTheDocumentAlreadyHadIsPreexistingAndOneTheEditAddsRefuses() throws IOException {
+        RpcDispatcher server = server();
+        // a hand edit: a rule that sets a variable nobody declares (MTR-0063 at the rule)
+        Files.createDirectories(packDirectory.resolve("items"));
+        Files.writeString(packDirectory.resolve("items/old.yml"), """
+                old:
+                  material: PAPER
+                  behavior:
+                    - on: click
+                      do:
+                        - set_var: {var: "bench:ghost", op: set, value: 1}
+                """);
+
+        JsonObject tolerated = dryRun(server, """
+                {"kind":"setFields","path":"items/old.yml","rev":0,"edits":[
+                  {"field":["old","material"],"value":"BONE"}]}""");
+        assertThat(tolerated.get("accepted").getAsBoolean()).as(String.valueOf(tolerated)).isTrue();
+        var diagnostic = tolerated.getAsJsonArray("diagnostics").asList().stream()
+                .map(JsonElement::getAsJsonObject)
+                .filter(found -> found.get("code").getAsString().equals("MTR-0063")).findFirst().orElseThrow();
+        assertThat(diagnostic.get("severity").getAsString()).isEqualTo("warn");
+        assertThat(diagnostic.get("preexisting").getAsBoolean()).isTrue();
+
+        // the same edit that also adds a second, new undeclared variable is refused, and the old one stays pre-existing
+        JsonObject added = dryRun(server, """
+                {"kind":"setFields","path":"items/old.yml","rev":0,"edits":[
+                  {"field":["old","behavior"],"value":[{"on":"click","do":[
+                    {"set_var":{"var":"bench:ghost","op":"set","value":1}},
+                    {"set_var":{"var":"bench:phantom","op":"set","value":1}}]}]}]}""");
+        assertThat(added.get("accepted").getAsBoolean()).isFalse();
+        var codes = added.getAsJsonArray("diagnostics").asList().stream().map(JsonElement::getAsJsonObject)
+                .filter(found -> found.get("code").getAsString().equals("MTR-0063")).toList();
+        assertThat(codes).anyMatch(found -> !found.get("preexisting").getAsBoolean()
+                && found.get("severity").getAsString().equals("error")
+                && found.get("message").getAsString().contains("phantom"));
+        assertThat(codes).anyMatch(found -> found.get("preexisting").getAsBoolean()
+                && found.get("message").getAsString().contains("ghost"));
     }
 
     @Test

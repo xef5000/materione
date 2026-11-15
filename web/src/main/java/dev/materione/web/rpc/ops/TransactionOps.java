@@ -223,6 +223,8 @@ public final class TransactionOps {
         for (OperationDiagnostic found : result.diagnostics()) {
             JsonObject json = GuiAuthoringOps.diagnosticsJson(List.of(found.diagnostic())).get(0).getAsJsonObject();
             json.addProperty("operation", found.operation());
+            // additive (#372): a finding the document already had before the list, shown as a warning that does not refuse it
+            json.addProperty("preexisting", found.preexisting());
             diagnostics.add(json);
         }
         payload.add("diagnostics", diagnostics);

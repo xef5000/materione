@@ -377,7 +377,7 @@ only (§9.4).
   the other registries under its class key. The shadow builder compiles every GUI through the same
   `GuiCompiler` the pack compile runs, with the GUI's durable background codepoint and its own pack's
   textures, and resolves each slot against the shadow's items (placement items included) at apply
-  time. An item that is not live is `MTR-0054`: the slot stays empty and the rest of the GUI shows. A
+  time. An item that is not live is `MTR-0054`: the slot stays empty and the rest of the GUI shows. (Since #363 an id no pack declares is reported by reference resolution, level 3, and the shadow build reports only the rest.) A
   GUI that does not parse, or has no codepoint, is absent from the view, which is what "not live"
   means. The view lives in `plugin/`, not `core/`, because it holds `CompiledGui` (content depends on
   core) and resolves `minecraft:` ids to materials.
