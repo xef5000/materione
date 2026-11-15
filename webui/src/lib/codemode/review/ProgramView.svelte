@@ -80,7 +80,6 @@
     display: flex;
     align-items: baseline;
     gap: var(--space-2);
-    min-width: max-content;
     padding: 0 var(--space-2);
   }
   .line.hit {
@@ -94,7 +93,10 @@
     user-select: none;
   }
   code {
-    white-space: pre;
+    /* long lines wrap inside the panel instead of being clipped at its edge */
+    min-width: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     color: var(--fg-code);
   }
   .staged {
