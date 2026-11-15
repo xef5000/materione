@@ -82,6 +82,7 @@
   .doc {
     list-style: none;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
     padding: var(--space-2);
     border: 1px solid var(--border);

@@ -175,6 +175,7 @@
 <style>
   .revert {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
   }
   .cannot,
@@ -194,6 +195,7 @@
   .preview,
   .why {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
     padding: var(--space-2);
     border: 1px solid var(--border-strong);
@@ -207,6 +209,7 @@
     margin: 0;
     padding: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
   }
   .refusals li,

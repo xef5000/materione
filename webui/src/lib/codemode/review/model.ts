@@ -95,7 +95,7 @@ export function documentViews(proposal: Pick<Proposal, 'pack' | 'documents' | 'c
     const kind = typeof document.kind === 'string' ? document.kind : 'changed';
     const isNew = created.has(object) || (kind === 'created' && !existing.has(object));
     const text = typeof document.text === 'string' ? document.text : null;
-    const before = Object.prototype.hasOwnProperty.call(proposal.before, path) ? (proposal.before[path] as string | null) : undefined;
+    const before = Object.hasOwn(proposal.before, path) ? (proposal.before[path] as string | null) : undefined;
     let diff: Diff | null = null;
     let diffNote: string | null = null;
     if (isNew || kind === 'created') diff = diffText(null, text);
@@ -214,7 +214,7 @@ export function hasBlockingError(problems: readonly Problem[]): boolean {
 /** A change-log entry's documents drawn as diffs (the stored text before it applied against the text it wrote). */
 export function logDocumentViews(entry: Pick<ChangeLogEntry, 'documents' | 'before'>): { document: AppliedDocument; diff: Diff | null; note: string | null }[] {
   return entry.documents.map((document) => {
-    const known = Object.prototype.hasOwnProperty.call(entry.before, document.path);
+    const known = Object.hasOwn(entry.before, document.path);
     const before = known ? (entry.before[document.path] as string | null) : undefined;
     if (document.kind === 'created') return { document, diff: diffText(null, document.text), note: null };
     if (before === undefined) return { document, diff: null, note: 'The text before this change was not read, so only the result is available.' };

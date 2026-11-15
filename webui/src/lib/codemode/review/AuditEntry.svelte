@@ -47,6 +47,7 @@
 <style>
   .entry {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
     padding: var(--space-3);
     border: 1px solid var(--border);

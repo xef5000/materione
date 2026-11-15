@@ -9,6 +9,7 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The code-mode review panel and change log (#347, D13).** When the server advertises `codemode`, the editor rail has a Review entry: a side panel that shows each agent proposal as the dry run reports it (new content and changes to existing objects apart, a line diff per file, findings by operation, the program with the line that staged each step), with Approve, plan approval and Reject for changes to existing content, and a change log of applied transactions (this session and the server audit) with a previewed, confirmed Revert. Only a real click approves, applies or reverts. Fixed in the same change: a server warning (`"severity": "warn"`) was read as an error and blocked its proposal. See codemode.md section 5.6.
 - **Rules without a host, and the world triggers (#327, D12).** A new content type, `rule` (`rules/*.yml`), holds a `behavior:` list and `flows:`
   with the exact shape of an item's, owned by no item, block, furniture or GUI; the same compiler, interpreter, trace and `LogicEdit` edit it. Six
   new triggers, registered with self-description (filters, context, hosts, cancellability) so the editor and the code-mode SDK need no hand-written

@@ -1351,9 +1351,16 @@ out, the picker stagger, the flip-free large list, the fade-in of a thumbnail wi
 sized. QA entries `editor.motion-*` in `qa/catalog/editor.mjs` cover the same interactions with
 screenshots for eyes review.
 
-### 6.4 The agent chatbot and code mode (D13; design only)
+### 6.4 The agent chatbot and code mode (D13)
 
-*Not built.* The chatbot fixed on the cloud editor's page (master §14.8) is an ordinary editor client of the protocol in §4: the
+*As built (#347): the review panel and change log* (the human-review half of D13; the chatbot and model call are not built). A side panel of
+the workbench, a **Review** entry in the rail's Support group that exists only when the session blob advertises `codemode`; it shows each proposal's
+dry-run facts, the diff per document, the findings and the program, the approval controls, and the change log with a previewed revert. It uses
+the design tokens and the shared `Button` and `Chip` only (the editor is dark-only today; the panel follows whatever the tokens do), carries every
+state in words, is fully keyboard-operable, moves focus into itself only when the owner opens it, and respects reduced motion (it has no motion of
+its own). Detail and tests: [`codemode.md`](codemode.md) §5.6, *As built (#347)*.
+
+*Not built (the chatbot).* The chatbot fixed on the cloud editor's page (master §14.8) is an ordinary editor client of the protocol in §4: the
 same handshake, the same in-game-approved session, the same permission nodes, no new endpoint and no new token scope. It
 changes the SPA, not the relay. Its tool runs a TypeScript program against an SDK generated from the connected plugin's
 registries, in a sandbox in the page, and the program's only effect is the editor operations of §4.2, staged and applied

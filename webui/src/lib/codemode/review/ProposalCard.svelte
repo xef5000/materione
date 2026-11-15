@@ -173,6 +173,7 @@
 <style>
   .card {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
     padding: var(--space-3);
     border: 1px solid var(--border);
@@ -219,6 +220,7 @@
   }
   .body {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-3);
   }
   .state {
@@ -261,6 +263,7 @@
     margin: var(--space-1) 0 0;
     padding: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);
   }
   .objects code {

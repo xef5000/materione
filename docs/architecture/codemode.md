@@ -1063,8 +1063,62 @@ lists), `codemode-host-store.spec.ts` (the lifecycle against a model of the tran
 existing object without a grant is never sent, plan approval, stale at the dry run and between dry run and apply, the change log
 and revert), `codemode-host-transport.spec.ts` (the lifecycle replayed over `editor-codemode-v1.json`) and
 `codemode-host-bans.spec.ts` (the sandbox side cannot load or name approval, the agent port, one grant and one apply call site,
-no storage, literal op names for the compat gate). **Not built here**: the review and change-log UI and the chat tool (#347,
-#348), which call this API; the sandbox host (#343); a real-server test of the approval flow.
+no storage, literal op names for the compat gate). **Not built here**: the chat tool (#348), which calls the agent port; a
+real-server test of the approval flow. The review and change-log UI is built (below).
+
+**As built (#347, track A4): the review panel and the change log.** `webui/src/lib/codemode/review/` (components and view model),
+`host/actions.ts` (the owner's actions), mounted by `Workbench.svelte`. This is D13's human-review step: it shows **what will be
+written, from the dry run**, and the owner's click is the only thing that approves, applies or reverts.
+
+| Piece | File | What it is |
+|---|---|---|
+| Where it mounts | `Workbench.svelte` | A **side panel** (a third column; over the workspace below 1000 px) toggled by a **Review** entry in the rail's Support group, present **only when the session blob advertises `codemode`** (a channel with no blob, as in the demo, has none). It opens by itself, without taking focus, when a proposal first needs approval, and the rail entry carries a count. Opening it from the rail moves focus to its heading; Escape or the close button closes it and returns focus to the rail entry. |
+| The owner's actions | `host/actions.ts` | `ReviewActions`: the one place a DOM event becomes an `ApprovalGesture` (`gestureFromEvent`). `approveProposal`, `approvePlan`, `applyReady`, `reject` and `confirmRevert` each take the click event; an event a script made (`isTrusted` false, a plain object) makes no gesture and the action does nothing and says so. `previewRevert` is a read (the dry run) and needs none. |
+| Session state | `review/state.svelte.ts` | One `ProposalStore` per channel, a raw (never proxied) copy of its snapshot, the audit rows. Session memory only (D1): the store, its grants and its log end with the workbench. It exports the agent port (`reviewAgentPort`, which has no approval of any kind) for the chat tool and for the browser harness. |
+| View model | `review/model.ts`, `review/diff.ts` | Pure. Documents grouped as new content then changes to existing objects, each with a line diff (the dry run's text against the stored text), the findings grouped by operation, the program rows with the operation each line staged. **Nothing reads the agent's summary** (a test reads the file). |
+
+What each state shows, in words and never by colour alone:
+
+| State | Shown | Offered |
+|---|---|---|
+| Applied on its own (only creates) | the facts line ("Creates 2 documents."), the sentence that nothing needed approval, the documents and diffs, the findings, the program | nothing; it is in the change log with Revert |
+| Needs approval | the chip, the facts, **new content** and **changes to existing objects** as separate groups with a diff per file (the ones that need approval open), the findings by operation (errors, warnings, "already there before this change"), the program collapsed with a "staged operation N" label on each line that staged one, the plan's declared objects if it belongs to one | **Approve and apply** (approves exactly the listed existing objects, applies now, and covers later changes to them for the session; the text says so), **Approve plan: N objects, once** (C11), **Reject**. A proposal with something the editor does not understand (a blocker) says what and its button reads **Approve this proposal** |
+| Refused, failed | the dry run's findings or the transport error, "nothing was written" | nothing: the agent writes a new program |
+| Stale (MTR-0034) | "A document changed after the program read it", "ask the agent to run the program again against the current files" | nothing: no force and no retry |
+| Rejected, reverted | what happened | nothing |
+
+The agent's summary is shown **apart** (a dashed box labelled "The agent's words, not checked by the editor"). The facts line, the
+groups and the counts come from the documents and classification.
+
+The **change log** is the second tab. *This session*: each applied transaction with origin, whether it needed approval, the
+documents as diffs (the stored text is read once, after a clean dry run and before any apply, by the store's optional
+`readDocument`; if it cannot be read the entry says only the result is available), the program, and **Revert**. *Recent transactions on
+the server*: `admin.audit.recent` rows for `authoring.transaction` and `authoring.revertTransaction` that this session did not apply
+(who, when, origin, the approval the editor asserted, pack and document count from the target, the kept program text with its digest and
+whether it was truncated). Revert is **preview, then confirm**: `ProposalStore.previewRevert` is the server's dry run of
+`authoring.revertTransaction` and shows each document as a diff of what is stored now against what would be restored; a refusal shows
+each reason (MTR-0034 per document that moved on, MTR-0104, a restored state that does not validate) and offers no confirmation; a
+transaction the server could not record shows `revertNote` and no Revert; only the confirmation (`revertTransaction`, from a click)
+writes. An audit row cannot tell whether it is still revertible (the audit holds no flag), so its preview is how the owner finds out.
+Any session with edit rights may revert (section 12.2).
+
+Findings read the wire as the server sends it: severity is the lowercased `Severity` enum (`info`, `warn`, `error`), `info` and `warn`
+are warnings that never block, and an unknown value is an error (fail closed). The first reading of `"warning"` turned every ordinary server
+warning into a blocking error; `codemode-host-severity.spec.ts` reads the recorded replay frame that carries `"warn"`.
+
+**Proven by** `codemode-review.spec.ts` (the diff against random texts, the view model, an event a script made approves nothing, plan
+approval applies only the programs it covers, and ban tests: no review component makes a gesture or calls approve, apply, reject or
+revert on the store, every action takes its click event, no timer and no store subscription runs an action), the Playwright specs
+`browser/specs/codemode-review.pw.ts` against the `?codemode` harness (auto-applied new content, approval of an existing-object change,
+a plan over two programs, reject, stale after a conflicting edit, errors and warnings, revert with preview, revert refused, not revertible,
+the audit list, a synthetic click approves nothing, the keyboard-only flow with focus in and out) and the QA entries
+`editor.browser-codemode-review-*`. **The harness**: nothing in the product produces proposals until the chat exists (#348), so
+`browser/codemode-feed.ts` feeds a corpus program's recorded sealed result (`fixtures/golden/codemode/ops/`, with its program text from
+`fixtures/codemode/corpus/`, retargeted to the fixture pack) through `store.agent.propose` and `declarePlan`, the two calls the chat tool will
+get; `browser/codemode-fixture.ts` answers the two transaction ops over the fixture documents in the real reply shapes. It lives under
+`browser/` and is not in the editor build. **Not built**: a real-server run of the panel (the live QA entries check the capability gate, the empty
+states and focus; proposal states run in the harness until a real producer exists), and `findReferences`/`queryGraph` impact in the proposal view (the
+dry run now refuses what breaks a reference the pipeline checks; a listing of every use is a separate read).
 
 ---
 

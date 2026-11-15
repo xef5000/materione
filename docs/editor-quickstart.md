@@ -253,6 +253,25 @@ Server view).
   **Reset to inherited** removes your override on the next **Save & apply**
   (**Undo** before then). Nothing else in the file changes.
 
+## 7c. Reviewing what the agent proposes
+
+When the connected server supports code mode, the rail's Support group has a **Review** entry (with a count when something waits for you).
+It opens a panel beside your workspace with two tabs.
+
+- **Proposals** — each proposal the agent made. A proposal that only **creates** new content is applied on its own; it is listed here and in the
+  change log, and offers nothing to approve. A proposal that changes or deletes something that **already exists** waits: you see exactly which files
+  it writes (new content and changes to existing objects, listed separately), a line-by-line diff of each file, the findings the server's dry run
+  reported (errors block and have no Approve; warnings and findings that were already there before the change are shown but do not block) and, collapsed,
+  the program with the line that staged each step. Press **Approve and apply** to approve those objects and apply the change; approving covers later
+  changes to the same objects for the rest of this session. If the agent declared a plan, **Approve plan** approves all its named objects once.
+  **Reject** drops it. The agent's own summary is shown in a separate, labelled box: read the diff, not the summary. If a file changed after the
+  agent read it, the proposal says it is out of date and nothing is written; ask the agent to run it again.
+- **Change log** — what was applied in this session, and recent transactions from the server's audit (who, when, where from, the program). **Revert…**
+  shows what a revert would restore, file by file, before you confirm. If a file has changed since, the revert is refused and says which; a transaction
+  the server did not keep what it needs for says so and has no Revert.
+
+Everything here works from the keyboard (Tab to a button, Enter or Space to press it); Escape closes the panel.
+
 ## 8. When things go wrong
 
 - **Problems** — diagnostics stream in live, including repeated occurrences; file-backed locations open the
