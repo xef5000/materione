@@ -402,6 +402,72 @@ async function waitForFileApply(page) {
   }, undefined, { timeout: 30_000 });
 }
 
+// The code-mode review panel and change log (issue 347, codemode.md section 5.6).
+const REVIEW_COVERS = [
+  'webui/src/lib/codemode/review/**',
+  'webui/src/lib/codemode/host/**',
+  'webui/src/lib/components/Workbench.svelte',
+  'webui/src/lib/components/icons.ts',
+  'webui/src/lib/ui/Button.svelte',
+  'webui/src/lib/ui/Chip.svelte',
+  'webui/src/app.css',
+  'webui/browser/codemode-fixture.ts',
+  'webui/browser/codemode-feed.ts',
+  'webui/browser/rpc-adapter.ts',
+  'webui/browser/fixture.ts',
+  'webui/browser/specs/codemode-review.pw.ts',
+  'fixtures/golden/codemode/ops/**',
+  'fixtures/codemode/corpus/**',
+  'webui/test-support/qa-browser.mjs',
+];
+
+/**
+ * Serves the browser harness (`webui/browser`, the same App and Workbench over a fixture channel) on a free loopback port for
+ * the duration of `run`, and points this test's browser page at it with `?codemode`. The harness is a dev server of the webui
+ * workspace; nothing here reaches the live server or writes a fixture.
+ */
+async function withReviewHarness(ctx, run) {
+  const { spawn } = await import('node:child_process');
+  const net = await import('node:net');
+  const webui = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'webui');
+  const port = await new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port: free } = probe.address();
+      probe.close(() => resolve(free));
+    });
+  });
+  const vite = path.join(webui, 'node_modules', 'vite', 'bin', 'vite.js');
+  const child = spawn(process.execPath, [vite, '--config', 'browser/vite.config.ts', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+    cwd: webui,
+    stdio: 'ignore',
+  });
+  try {
+    const page = await ctx.browser.openEditor();
+    const url = `http://127.0.0.1:${port}/browser/fixture.html?codemode`;
+    let ready = false;
+    for (let attempt = 0; attempt < 120 && !ready; attempt++) {
+      try {
+        ready = (await fetch(url)).ok;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    if (!ready) throw new Error('the browser harness did not start');
+    await page.goto(url);
+    await page.waitForFunction(() => document.documentElement.dataset.fixtureReady === 'true', undefined, { timeout: 60_000 });
+    await run(page);
+  } finally {
+    child.kill();
+  }
+}
+
+/** Feeds a recorded corpus program to the harness's review store through the agent port; resolves with the proposal id. */
+function feedProposal(page, name, options = {}) {
+  return page.evaluate(([program, opts]) => window.__materioneCodemode.propose(program, opts), [name, options]);
+}
+
 export default [
   test({
     id: 'editor.browser-rapid-saves',
@@ -674,8 +740,8 @@ export default [
       const page = await ctx.browser.openEditor();
       await page.getByLabel('project').selectOption('sample');
       const rail = page.getByRole('navigation', { name: 'Workspace navigation' });
-      // Four authoring views, three support views and the labels toggle.
-      ctx.expect(await rail.locator('svg.lucide-icon').count()).toBe(8);
+      // Four authoring views, four support views (Review appears because the server advertises code mode) and the labels toggle.
+      ctx.expect(await rail.locator('svg.lucide-icon').count()).toBe(9);
       ctx.expect(await rail.getByRole('button', { name: 'Content', exact: true }).locator('svg.lucide-icon').count()).toBe(1);
       await page.getByRole('button', { name: 'Content', exact: true }).click();
       const types = page.getByRole('navigation', { name: 'content types' });
@@ -716,7 +782,7 @@ export default [
       await page.getByRole('heading', { name: 'Problems', exact: true }).waitFor({ state: 'visible' });
       await ctx.browser.browserShot('icon-set-rail-collapsed');
       ctx.needsEyes(
-        'every icon is one Lucide stroke family (ISC, bundled, no runtime CDN) at the same visual weight: the rail (Start house, Content layers, Assets image, Files folder, Problems triangle, Activity pulse, Server, labels chevron) and its collapsed 48px form; the Content toolbar (back, up, list, grid, New item plus) and the type tabs, where each content type has its own icon (Items package, Blocks box, Furniture armchair, Recipes chef hat, Templates layout, Glyphs type, Sounds speaker, Paintings frame, Text effects sparkles); the Start tiles repeat the per-type icon; no unicode glyph such as an arrow, cross or diamond appears as an icon. Colours and spacing are unchanged from before the icon set (issue #149; the visual identity work is tracked in #150).',
+        'every icon is one Lucide stroke family (ISC, bundled, no runtime CDN) at the same visual weight: the rail (Start house, Content layers, Assets image, Files folder, Problems triangle, Review diff, Activity pulse, Server, labels chevron) and its collapsed 48px form; the Content toolbar (back, up, list, grid, New item plus) and the type tabs, where each content type has its own icon (Items package, Blocks box, Furniture armchair, Recipes chef hat, Templates layout, Glyphs type, Sounds speaker, Paintings frame, Text effects sparkles); the Start tiles repeat the per-type icon; no unicode glyph such as an arrow, cross or diamond appears as an icon. Colours and spacing are unchanged from before the icon set (issue #149; the visual identity work is tracked in #150).',
       );
     },
   }),
@@ -1762,6 +1828,145 @@ export default [
       ctx.needsEyes(
         'item-appearance-component shows sample:ruby_sword with ONE large item render (roughly a third to half of the studio width, no 32 px inventory slot), the Texture and 3D model buttons under it, and the Minecraft-style tooltip beside it with the name and lore as the editable text (no Display name / Lore form rows); item-appearance-texture-picker shows the compact explorer dialog with a search field, thumbnail rows grouped by folder, the current texture marked and Upload / Edit current / New texture actions; item-appearance-obfuscated shows the name drawn as scrambled characters of the same length while the lore is focused' + IDENTITY_EYES,
       );
+    },
+  }),
+
+  // The code-mode review panel and change log (issue 347, codemode.md section 5.6). The panel exists only where the server
+  // advertises `codemode`, so the live entries check what a real server shows. Nothing in the product produces proposals yet
+  // (the chat is issue 348), so the proposal states run in the browser harness (`webui/browser`, `?codemode`): the same App
+  // and panel, a transaction model over the fixture documents, and a recorded corpus program fed in through the agent port.
+  // Re-point these at a real proposal on a real server when the chat exists.
+  test({
+    id: 'editor.browser-codemode-review-panel',
+    title: 'the live editor shows a Review panel (code mode is advertised): it opens with focus inside, says what it is for, has a change log, and closes on Escape with focus returned',
+    covers: REVIEW_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      const toggle = page.getByRole('button', { name: /^Review/ });
+      await toggle.waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+      await toggle.click();
+      const panel = page.getByRole('region', { name: 'Review', exact: true });
+      await panel.waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect(await page.evaluate(() => document.activeElement?.id)).toBe('review-title');
+      ctx.expect(await panel.innerText()).toContain('No proposals yet');
+      await panel.getByRole('tab', { name: /^Change log/ }).click();
+      await panel.getByText('Nothing has been applied in this session yet.').waitFor({ state: 'visible' });
+      await page.keyboard.press('Escape');
+      await panel.waitFor({ state: 'hidden' });
+      ctx.expect(await page.evaluate(() => document.activeElement?.id)).toBe('review-toggle');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-review-panel-visual',
+    title: 'the Review panel reads as one piece of the editor: a side column beside the workspace, tabs, plain empty states, tokens only',
+    mode: 'visual',
+    dependsOn: ['editor.browser-codemode-review-panel'],
+    covers: REVIEW_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: /^Review/ }).click();
+      await page.getByRole('region', { name: 'Review', exact: true }).waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('codemode-review-empty');
+      await page.getByRole('tab', { name: /^Change log/ }).click();
+      await page.getByText('Recent transactions on the server').waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('codemode-review-change-log-empty');
+      ctx.needsEyes(
+        'codemode-review-empty shows the workspace with a Review column on the right (title, tabs Proposals and Change log, one plain paragraph saying nothing has been proposed and that only changes to existing content wait for approval); codemode-review-change-log-empty shows This session with its empty line and Recent transactions on the server with Refresh; the rail has a Review entry with the diff icon; text and focus keep WCAG AA contrast and nothing is clipped' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-review-flow',
+    title: 'in the browser harness a corpus program that changes existing items waits, shows its diff, applies after a click on Approve, and reverts after a preview and a confirmation; one that only creates applies on its own',
+    covers: REVIEW_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await withReviewHarness(ctx, async (page) => {
+        const created = await feedProposal(page, 't11-golden-berry');
+        const panel = page.getByRole('region', { name: 'Review', exact: true });
+        await page.getByRole('button', { name: /^Review/ }).click();
+        await panel.waitFor({ state: 'visible' });
+        ctx.expect(await panel.getByRole('article', { name: created, exact: true }).innerText()).toContain('nothing needed your approval');
+        const waiting = await feedProposal(page, 'c01-bulk-lore');
+        const proposal = panel.getByRole('article', { name: waiting, exact: true });
+        await proposal.getByText('Needs your approval').waitFor({ state: 'visible' });
+        ctx.expect(await proposal.getByRole('group', { name: /^Changes to items\/ruby\.yml/ }).innerText()).toContain('Kept for the harvest festival');
+        await proposal.getByRole('button', { name: 'Approve and apply' }).click();
+        await proposal.getByText('Applied', { exact: true }).first().waitFor({ state: 'visible' });
+        await panel.getByRole('tab', { name: /^Change log/ }).click();
+        const entry = panel.getByRole('article', { name: /^Applied tx-/ }).first();
+        await entry.getByRole('button', { name: /^Revert/ }).click();
+        const preview = entry.getByRole('group', { name: 'Revert preview' });
+        await preview.waitFor({ state: 'visible' });
+        await preview.getByRole('button', { name: 'Confirm revert' }).click();
+        await entry.getByText(/by tx-fixture/).waitFor({ state: 'visible' });
+      });
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-review-states-visual',
+    title: 'the review states read plainly in the harness: auto-applied, needs approval with diff and program, applied and its change log, revert preview, revert refused, refusal, warnings, stale, plan',
+    mode: 'visual',
+    dependsOn: ['editor.browser-codemode-review-flow'],
+    covers: REVIEW_COVERS,
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      await withReviewHarness(ctx, async (page) => {
+        const panel = page.getByRole('region', { name: 'Review', exact: true });
+        const shot = (name) => ctx.browser.browserShot(name);
+        const created = await feedProposal(page, 't11-golden-berry');
+        await page.getByRole('button', { name: /^Review/ }).click();
+        await panel.getByRole('button', { name: new RegExp(`^Expand ${created}`) }).click();
+        await shot('codemode-review-auto-applied');
+        const waiting = await feedProposal(page, 'c01-bulk-lore');
+        await panel.getByRole('button', { name: new RegExp(`^Collapse ${created}`) }).click();
+        await panel.getByRole('article', { name: waiting, exact: true }).getByText(/^Program \(/).click();
+        await shot('codemode-review-needs-approval-diff-program');
+        await panel.getByRole('article', { name: waiting, exact: true }).getByRole('button', { name: 'Approve and apply' }).click();
+        await panel.getByRole('article', { name: waiting, exact: true }).getByText('Applied', { exact: true }).first().waitFor({ state: 'visible' });
+        await panel.getByRole('tab', { name: /^Change log/ }).click();
+        await shot('codemode-review-change-log');
+        const entry = panel.getByRole('article', { name: /^Applied tx-/ }).first();
+        await entry.getByRole('button', { name: /^Revert/ }).click();
+        await entry.getByRole('group', { name: 'Revert preview' }).waitFor({ state: 'visible' });
+        await shot('codemode-review-revert-preview');
+        await entry.getByRole('button', { name: 'Cancel' }).click();
+        await page.evaluate(() => window.__materioneTestControls.externalEdit('fixture_pack', 'items/ruby_disc.yml'));
+        await entry.getByRole('button', { name: /^Revert/ }).click();
+        await entry.getByText('Revert refused').first().waitFor({ state: 'visible' });
+        await shot('codemode-review-revert-refused');
+        await page.reload();
+        await page.waitForFunction(() => document.documentElement.dataset.fixtureReady === 'true');
+        await page.evaluate(() => window.__materioneTestControls.codemode.diagnoseNext([
+          { code: 'MTR-0022', severity: 'error', message: 'rule bench:kits#0: unexpected trailing input', operation: 0 },
+        ]));
+        const refused = await feedProposal(page, 't04-daily-kit');
+        await page.getByRole('button', { name: /^Review/ }).click();
+        await panel.getByRole('article', { name: refused, exact: true }).getByRole('button', { name: /^Expand/ }).click();
+        await shot('codemode-review-refused');
+        await page.evaluate(() => window.__materioneTestControls.codemode.diagnoseNext([
+          { code: 'MTR-0021', severity: 'warning', message: 'this trigger never fires for rule documents', operation: 0 },
+          { code: 'MTR-0063', severity: 'error', message: 'unknown variable, already in this document before the change', operation: 0, preexisting: true },
+        ]));
+        const warned = await feedProposal(page, 'c01-bulk-lore', { slice: [3, 4] });
+        await panel.getByRole('article', { name: warned, exact: true }).scrollIntoViewIfNeeded();
+        await shot('codemode-review-warnings');
+        await page.evaluate(() => window.__materioneTestControls.externalEdit('fixture_pack', 'items/templated_ruby.yml'));
+        await panel.getByRole('article', { name: warned, exact: true }).getByRole('button', { name: 'Approve and apply' }).click();
+        await panel.getByRole('article', { name: warned, exact: true }).getByText('Out of date', { exact: true }).waitFor({ state: 'visible' });
+        await shot('codemode-review-stale');
+        ctx.needsEyes(
+          'codemode-review-auto-applied: an Applied proposal that only created content, with the sentence that nothing needed approval, no buttons, and the agent summary in a dashed box labelled as the agent\'s words; codemode-review-needs-approval-diff-program: the Needs your approval chip, "Changes to existing objects (4)", one diff per file with +/- signs, line numbers and a Needs approval chip each, the program with "staged operation N" labels, and Approve and apply plus Reject; codemode-review-change-log: the applied entry with Approved by you and a Revert button; codemode-review-revert-preview: what a revert would restore as diffs with Confirm revert and Cancel; codemode-review-revert-refused: Revert refused naming items/ruby_disc.yml and MTR-0034 with no confirm; codemode-review-refused: a Refused chip, an Error finding grouped under its operation with the program line, and no Approve; codemode-review-warnings: a Warning and an "Already there before this change" finding, neither blocking, with Approve; codemode-review-stale: Out of date with the instruction to ask the agent to run the program again and no button. Every state is named in words and no state is colour alone' + IDENTITY_EYES,
+        );
+      });
     },
   }),
 ];

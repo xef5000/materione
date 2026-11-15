@@ -14,6 +14,8 @@ import type { SessionBlob } from '../src/lib/protocol/session';
 import type { LogicEdit } from '../src/lib/logic/server';
 import { applyEdits, blockOf, isRecord as isLogicRecord, LogicEditRefused } from '../src/lib/logic/tree';
 import type { BrowserTestControls, FixtureAuditEntry, RecordedRpcCall, RecordedWrite } from './contract';
+import { CodemodeFixture } from './codemode-fixture';
+import { CURRENT_CAPABILITIES } from '../src/lib/protocol/session';
 
 interface FixtureDocument {
   pack: string;
@@ -889,8 +891,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #noContainers: boolean;
   /** Only the `?logic` fixture advertises a capability list (the GUI and logic APIs); the others have no blob, like the demo. */
   readonly blob?: SessionBlob;
+  /** `?codemode`: a server that advertises code mode and answers the two transaction ops over the fixture documents. */
+  readonly #codemode: CodemodeFixture | null = null;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; economy?: boolean; noContainers?: boolean; seed?: string; rows?: number } = {}) {
+  constructor(options: { codemode?: boolean; summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; economy?: boolean; noContainers?: boolean; seed?: string; rows?: number } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#modules = options.modules ?? false;
@@ -901,6 +905,31 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       this.blob = { sessionId: 'fixture', protocolVersions: [1], capabilities: ['gui', 'logic'], pluginSigningPubKey: new Uint8Array(32) };
     }
     this.#resources = [...RESOURCES];
+    if (options.codemode) {
+      this.blob = { sessionId: 'fixture', protocolVersions: [1], capabilities: [...CURRENT_CAPABILITIES], pluginSigningPubKey: new Uint8Array(32) };
+      // the stored items the recorded c01 program edits (revision 0, as its world records them)
+      const seeded: Record<string, Record<string, Record<string, unknown>>> = {
+        'items/ruby.yml': { ruby: { display_name: 'Ruby', material: 'EMERALD', lore: ['<gray>A deep red stone'] } },
+        'items/ruby_disc.yml': { ruby_disc: { display_name: 'Ruby Disc', material: 'MUSIC_DISC_13' } },
+        'items/ruby_sword.yml': { ruby_sword: { display_name: 'Ruby Sword', material: 'DIAMOND_SWORD', lore: ['<gray>Sharp'] } },
+        'items/templated_ruby.yml': { templated_ruby: { display_name: 'Templated Ruby', material: 'EMERALD' } },
+      };
+      for (const [path, parsed] of Object.entries(seeded)) {
+        this.#documents.set(`${PACK}/${path}`, makeDocument(path, 0, parsed));
+        const id = Object.keys(parsed)[0] as string;
+        this.#resources.push({ pack: PACK, type: 'items', path, id });
+      }
+      this.#codemode = new CodemodeFixture({
+        pack: PACK,
+        get: (path) => this.#documents.get(`${PACK}/${path}`),
+        put: (path, doc) => {
+          if (doc === null) this.#documents.delete(`${PACK}/${path}`);
+          else this.#documents.set(`${PACK}/${path}`, { pack: PACK, path, rev: doc.rev, raw: doc.raw, parsed: doc.parsed });
+        },
+        serialize: (parsed) => serializeFixtureYaml(parsed),
+        audit: (entry) => this.#auditEntries.unshift(entry),
+      });
+    }
     if (this.#gui) {
       // The GUI studio's fixture (issue #186): the sample shop screen with its two textures.
       this.#resources.push({ pack: PACK, type: 'guis', path: 'guis/shop/main.yml', id: 'main' });
@@ -1146,6 +1175,12 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     this.emitPush('push.reload', payload);
   }
 
+  /** The `?codemode` fixture's transaction model, for specs that stage a finding or an unrevertible apply. */
+  get codemode(): CodemodeFixture {
+    if (this.#codemode === null) throw new Error('open the fixture with ?codemode');
+    return this.#codemode;
+  }
+
   setAuditEntries(entries: readonly FixtureAuditEntry[]): void {
     this.#auditEntries = structuredClone([...entries]);
   }
@@ -1283,6 +1318,14 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.success(op, { valid: true, diagnostics: [] });
       case 'admin.audit.recent':
         return this.success(op, { entries: structuredClone(this.#auditEntries) });
+      case 'authoring.transaction':
+        return this.#codemode === null
+          ? this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`)
+          : this.success(op, this.#codemode.transaction(payload));
+      case 'authoring.revertTransaction':
+        return this.#codemode === null
+          ? this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`)
+          : this.success(op, this.#codemode.revert(payload));
       case 'admin.settings.get':
         return this.success(op, { raw: 'editor:\n  enabled: true\n', sha256: 'fixture-settings' });
       case 'admin.settings.put':

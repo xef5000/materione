@@ -4,15 +4,18 @@
  * tool reach only `store.agent`.
  */
 export { classify, type Blocker, type Classification, type ClassifyInput, type Effect, type OperationClass, type ReportDocument } from './classify';
+export { ReviewActions, type ActionResult } from './actions';
 export { decide, gestureFromEvent, GestureError, GrantSet, type ApprovalGesture, type Decision, type GrantView } from './grants';
 export { isObjectId, objectId, type ObjectId } from './objects';
 export {
   createProposalStore,
   ProposalStore,
   type AgentPort,
+  type AppliedDocument,
   type ApproveResult,
   type ApproveTarget,
   type ChangeLogEntry,
+  type DocumentReader,
   type Plan,
   type Problem,
   type ProblemPhase,
@@ -20,6 +23,8 @@ export {
   type ProposalInput,
   type ProposalState,
   type ProposeOptions,
+  type RevertOutcome,
+  type RevertPreview,
   type Snapshot,
   type StoreOptions,
 } from './store';

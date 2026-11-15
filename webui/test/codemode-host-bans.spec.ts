@@ -98,7 +98,7 @@ describe('one call site each for a grant and an apply', () => {
       if (file.name.startsWith('codemode/host/')) continue;
       expect(strip(file.text), file.name).not.toMatch(/gestureFromEvent\(|spendGesture\(|\bgrants?\./);
     }
-    expect(count(store, /spendGesture\(/g)).toBe(1); // revert; approve's spend is inside GrantSet.grant
+    expect(count(store, /spendGesture\(/g)).toBe(1); // the revert helper; approve's spend is inside GrantSet.grant
   });
 
   it('a real apply is sent in exactly one place, and only after the policy is re-evaluated there', () => {

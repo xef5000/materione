@@ -11,6 +11,6 @@ export default defineConfig({
   },
   publicDir: 'public',
   server: {
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden', '../fonts/smallcaps'] },
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden', '../fixtures/codemode', '../fonts/smallcaps'] },
   },
 });
