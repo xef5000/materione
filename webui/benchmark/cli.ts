@@ -24,8 +24,15 @@ Options:
   --help                          Show this help
   --mock                          Run with scripted offline mock provider ($0.00)
   --oracle jvm|memory             Oracle backend (default: memory)
-  --models id1,id2                Comma-separated model presets (default: claude-haiku-5-5)
-  --mid-model id                  Mid-tier model for escalate strategy (default: claude-sonnet-4-5)
+  --models id1,id2                Comma-separated model presets (default: gpt-6.1-sol-low)
+                                  Key presets: gpt-6.1-sol-low, gpt-6.1-sol-medium, gpt-6.1-sol-high,
+                                  gpt-6.1-sol-xhigh, gpt-6.1-sol-max, gpt-6.1-terra-low,
+                                  gpt-6.1-terra-medium, gpt-6.1-terra-high, gpt-6-luna-low,
+                                  gpt-6-luna-medium, gpt-6-luna-high, gpt-6-luna-xhigh,
+                                  claude-haiku-5-5, claude-haiku-5-5-medium, claude-haiku-5-5-high,
+                                  claude-haiku-5-5-xhigh, deepseek-v4.1-flash-1017,
+                                  gemini-4-hydrogen-xhigh, claude-sonnet-5-5
+  --mid-model id                  Mid-tier model for escalate strategy (default: gpt-6.1-sol-medium)
   --model-override id=json        Override model pricing/fields (repeatable)
   --strategy always-cheap|always-mid|escalate   Routing strategy (default: always-cheap)
   --context index|full-dts        Context mode (default: index)
@@ -60,8 +67,8 @@ async function main(): Promise<void> {
 
   let mock = false;
   let oracleKind: 'jvm' | 'memory' = 'memory';
-  let models = ['claude-haiku-5-5'];
-  let midModelId = 'claude-sonnet-4-5';
+  let models = ['gpt-6.1-sol-low'];
+  let midModelId = 'gpt-6.1-sol-medium';
   let strategy: RoutingStrategy = 'always-cheap';
   let contextMode: ContextMode = 'index';
   let mode: BenchmarkMode = 'codemode';

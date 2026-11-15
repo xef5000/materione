@@ -71,6 +71,7 @@ export interface TaskRunRecord {
   readonly escalated: boolean;
   readonly stopReason: string;
   readonly diagnostics: readonly string[];
+  readonly assistantReply?: string;
 }
 
 export interface ConfigRunResult {
@@ -490,10 +491,11 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
   const sandboxRunner = await createBenchmarkSandboxRunner(repoRoot);
 
   const results: ConfigRunResult[] = [];
+  const budget = new BudgetLedger(maxDollars, { allowZeroForMock: mock });
 
   try {
     for (const cfg of configs) {
-      const budget = new BudgetLedger(maxDollars, { allowZeroForMock: mock });
+      const configCostBefore = budget.spentPicos;
       const systemPrompt = assembleBenchmarkContext(surface, cfg.contextMode);
 
       const runOneCorpusTask = async (task: LoadedCorpusTask): Promise<TaskRunRecord> => {
@@ -533,7 +535,9 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
         });
 
         const costBefore = budget.spentPicos;
-        const history: ChatMessage[] = [{ role: 'user', text: task.expect.prompt }];
+        const synthesisDirective =
+          '\n\n[Benchmark harness: write to pack "bench" unless another pack is explicitly named in the request. Choose concrete defaults for any unspecified prices, coordinates, items, or layout rather than pausing to ask clarifying questions. Actions or conditions marked without a live runtime provider (such as economy or permissions in headless dry-run mode) can and should still be authored and dry-run normally; only stop without staging if a TypeScript missingPrimitive error proves the server registry lacks the required primitive.]';
+        const history: ChatMessage[] = [{ role: 'user', text: `${task.expect.prompt}${synthesisDirective}` }];
 
         if (cfg.mode === 'codemode') {
           const outcomes: ToolOutcome[] = [];
@@ -591,6 +595,10 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
             }
           }
 
+          const lastAssistant = [...loopRes.added]
+            .reverse()
+            .find((m): m is Extract<ChatMessage, { role: 'assistant' }> => m.role === 'assistant' && m.text.trim() !== '');
+
           return {
             id: task.expect.task,
             kind: task.expect.kind === 'followup' ? 'followup' : 'task',
@@ -612,6 +620,7 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
             escalated,
             stopReason: loopRes.stop,
             diagnostics: diagnostics.slice(0, 5),
+            assistantReply: lastAssistant?.text.trim().slice(0, 600),
           };
         } else {
           const baseRes = await runBaselineAgent(history, { provider, surface, oracle });
@@ -665,6 +674,10 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
             }
           }
 
+          const lastBaseAssistant = [...baseRes.added]
+            .reverse()
+            .find((m): m is Extract<ChatMessage, { role: 'assistant' }> => m.role === 'assistant' && m.text.trim() !== '');
+
           return {
             id: task.expect.task,
             kind: task.expect.kind === 'followup' ? 'followup' : 'task',
@@ -686,18 +699,40 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
             escalated,
             stopReason: baseRes.stop,
             diagnostics: diagnostics.slice(0, 5),
+            assistantReply: lastBaseAssistant?.text.trim().slice(0, 600),
           };
         }
       };
 
+      const totalItems = tasks.length + followups.length + vagues.length;
+      let completedItems = 0;
+      const logProgress = (id: string, status: string, ms: number): void => {
+        completedItems++;
+        if (!mock) {
+          const spent = (budget.spentPicos / 1_000_000_000_000).toFixed(4);
+          process.stderr.write(
+            `[${completedItems}/${totalItems}] ${cfg.label} :: ${id} -> ${status} (${(ms / 1000).toFixed(1)}s, total $${spent})\n`,
+          );
+        }
+      };
+
       const taskRecords: TaskRunRecord[] = [];
-      for (const t of tasks) taskRecords.push(await runOneCorpusTask(t));
+      for (const t of tasks) {
+        const rec = await runOneCorpusTask(t);
+        taskRecords.push(rec);
+        logProgress(rec.id, rec.expectedResult === 'pass' ? (rec.accepted ? 'PASS' : rec.s18AdjustedAccepted ? 'PASS(S18)' : `FAIL(${rec.stopReason})`) : rec.missingPrimitiveHonest ? 'HONEST-GAP' : 'FAKED-GAP', rec.wallTimeMs);
+      }
 
       const followupRecords: TaskRunRecord[] = [];
-      for (const f of followups) followupRecords.push(await runOneCorpusTask(f));
+      for (const f of followups) {
+        const rec = await runOneCorpusTask(f);
+        followupRecords.push(rec);
+        logProgress(rec.id, rec.expectedResult === 'pass' ? (rec.accepted && rec.regressionFree ? 'PASS' : 'FAIL') : rec.missingPrimitiveHonest ? 'HONEST-GAP' : 'FAKED-GAP', rec.wallTimeMs);
+      }
 
       const vagueRecords: VagueEvaluation[] = [];
       for (const v of vagues) {
+        const vt0 = Date.now();
         await oracle.resetWorld({ packs: v.packs });
         const host = createOracleSandboxHost(oracle);
         const store = createProposalStore({ transport: createOracleTransactionTransport(oracle) });
@@ -729,14 +764,18 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
               }),
           });
           const staged = store.snapshot().proposals.map((p) => ({ pack: p.pack, operations: p.operations }));
-          vagueRecords.push(evaluateVagueRequest(v, res.added, staged));
+          const ev = evaluateVagueRequest(v, res.added, staged);
+          vagueRecords.push(ev);
+          logProgress(v.id, ev.askedWhenShouldHave, Date.now() - vt0);
         } else {
           const res = await runBaselineAgent(history, { provider, surface, oracle });
           const staged = res.stagedBatches.map((b) => ({
             pack: b.pack,
             operations: b.operations as unknown as StagedOperation[],
           }));
-          vagueRecords.push(evaluateVagueRequest(v, res.added, staged));
+          const ev = evaluateVagueRequest(v, res.added, staged);
+          vagueRecords.push(ev);
+          logProgress(v.id, ev.askedWhenShouldHave, Date.now() - vt0);
         }
       }
 
@@ -747,7 +786,7 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
         contextMode: cfg.contextMode,
         cheapModelId: cfg.cheapModel.id,
         midModelId: cfg.midModel.id,
-        totalCostPicos: budget.spentPicos,
+        totalCostPicos: budget.spentPicos - configCostBefore,
         tasks: taskRecords,
         followups: followupRecords,
         vague: vagueRecords,
@@ -768,11 +807,22 @@ export function buildDefaultConfigs(options: {
   midModelId?: string;
   overrides?: Readonly<Record<string, Partial<BenchmarkModelSpec>>>;
 }): RunConfigSpec[] {
-  const midSpec = resolveModelSpec(options.midModelId ?? 'claude-sonnet-4-5', options.overrides);
+  const midSpec = resolveModelSpec(options.midModelId ?? 'gpt-6.1-sol-medium', options.overrides);
+  const defaultCheapSpec = resolveModelSpec('gpt-6.1-sol-low', options.overrides);
   return options.models.map((modelId) => {
     const spec = resolveModelSpec(modelId, options.overrides);
-    const cheapModel = spec.tier === 'cheap' ? spec : resolveModelSpec('claude-haiku-5-5', options.overrides);
-    const midModel = spec.tier === 'mid' ? spec : midSpec;
+    let cheapModel: BenchmarkModelSpec;
+    let midModel: BenchmarkModelSpec;
+    if (options.strategy === 'always-cheap') {
+      cheapModel = spec;
+      midModel = spec.tier === 'mid' ? spec : midSpec;
+    } else if (options.strategy === 'always-mid') {
+      cheapModel = spec.tier === 'cheap' ? spec : defaultCheapSpec;
+      midModel = spec;
+    } else {
+      cheapModel = spec;
+      midModel = midSpec;
+    }
     return {
       label: `${modelId} (${options.mode}, ${options.strategy}, ${options.contextMode})`,
       mode: options.mode,

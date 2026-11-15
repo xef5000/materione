@@ -3,7 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { runBaselineAgent } from '../benchmark/baseline';
 import { BudgetLedger } from '../benchmark/budget';
 import { assembleBenchmarkContext } from '../benchmark/context-mode';
-import { buildAnthropicRequest, buildCompatRequest, createGatewayProvider } from '../benchmark/gateway';
+import {
+  buildAnthropicRequest,
+  buildCompatRequest,
+  buildOpenAiResponsesRequest,
+  createGatewayProvider,
+  parseOpenAiResponses,
+} from '../benchmark/gateway';
 import { assertNonFrontierModel, PICOS_PER_DOLLAR, PRESET_MODELS, resolveModelSpec } from '../benchmark/models';
 import { defaultRegistrySnapshotPath, MemoryBenchmarkOracle } from '../benchmark/oracle';
 import { renderMarkdownReport, totalSpentDollars } from '../benchmark/report';
@@ -18,31 +24,32 @@ import { surfaceNamed } from './helpers/codemode';
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('benchmark models and non-frontier guard', () => {
-  it('accepts preset cheap and mid models and rejects frontier-priced or named models', () => {
-    expect(() => assertNonFrontierModel(resolveModelSpec('claude-haiku-5-5'))).not.toThrow();
-    expect(() => assertNonFrontierModel(resolveModelSpec('claude-sonnet-4-5'))).not.toThrow();
+  it('accepts all 22 preset models and rejects frontier-priced or named models', () => {
+    expect(Object.keys(PRESET_MODELS)).toHaveLength(22);
+    for (const id of Object.keys(PRESET_MODELS)) {
+      expect(() => assertNonFrontierModel(resolveModelSpec(id))).not.toThrow();
+    }
+
+    for (const [id, catalogId, upstreamModel] of [
+      ['gpt-6-astra', 'openai/gpt-6-astra', 'gpt-6-astra'],
+      ['claude-fable-5.2', 'anthropic/claude-fable-5.2', 'claude-fable-5.2'],
+      ['claude-opus-5.5', 'anthropic/claude-opus-5.5', 'claude-opus-5.5'],
+      ['gpt-5.5-pro', 'openai/gpt-5.5-pro', 'gpt-5.5-pro'],
+      ['o1-pro', 'openai/o1-pro', 'o1-pro'],
+    ] as const) {
+      expect(() =>
+        assertNonFrontierModel({
+          ...PRESET_MODELS['gpt-6.1-terra-medium']!,
+          id,
+          catalogId,
+          upstreamModel,
+        }),
+      ).toThrow(/Frontier-priced/);
+    }
 
     expect(() =>
       assertNonFrontierModel({
-        ...PRESET_MODELS['claude-sonnet-4-5']!,
-        id: 'claude-opus-4-6',
-        catalogId: 'anthropic/claude-opus-4-6',
-        upstreamModel: 'claude-opus-4-6',
-      }),
-    ).toThrow(/Frontier-priced/);
-
-    expect(() =>
-      assertNonFrontierModel({
-        ...PRESET_MODELS['gpt-5-mini']!,
-        id: 'o1-pro',
-        catalogId: 'openai/o1-pro',
-        upstreamModel: 'o1-pro',
-      }),
-    ).toThrow(/Frontier-priced/);
-
-    expect(() =>
-      assertNonFrontierModel({
-        ...PRESET_MODELS['claude-sonnet-4-5']!,
+        ...PRESET_MODELS['claude-sonnet-5-5']!,
         id: 'custom-overpriced',
         inputPicosPerToken: 10_000_000,
       }),
@@ -53,8 +60,8 @@ describe('benchmark models and non-frontier guard', () => {
 describe('BudgetLedger pre-turn hard cap', () => {
   it('refuses a turn before fetch when worst-case cost would exceed --max-dollars and settles in picodollars', () => {
     const budget = new BudgetLedger(0.01); // $0.01 = 10_000_000_000 picos
-    const mid = resolveModelSpec('claude-sonnet-4-5');
-    // Worst-case with maxOutputTokens=4096 * 10_000_000 picos = $0.04096 > $0.01
+    const mid = resolveModelSpec('claude-sonnet-5-5');
+    // Worst-case with maxOutputTokens=16384 * 10_000_000 picos = $0.16384 > $0.01
     const check = budget.canAffordTurn(mid, 1000);
     expect(check.ok).toBe(false);
     if (!check.ok) {
@@ -167,9 +174,9 @@ describe('GatewayProvider formatting and usage parsing', () => {
     const anthBody = JSON.parse(anthReq.init.body as string) as { system: { cache_control: { type: string } }[] };
     expect(anthBody.system[0]?.cache_control.type).toBe('ephemeral');
 
-    const gemini = resolveModelSpec('gemini-2.5-flash');
+    const deepseek = resolveModelSpec('deepseek-v4.1-flash-1017');
     const compatReq = buildCompatRequest(
-      gemini,
+      deepseek,
       {
         system: 'system prompt',
         messages: [{ role: 'user', text: 'hello' }],
@@ -178,6 +185,14 @@ describe('GatewayProvider formatting and usage parsing', () => {
       { accountId: 'acc', gatewayId: 'gw', token: 'tok' },
     );
     expect(compatReq.url).toBe('https://gateway.ai.cloudflare.com/v1/acc/gw/compat/chat/completions');
+    const compatHeaders = compatReq.init.headers as Record<string, string>;
+    expect(compatHeaders['cf-aig-authorization']).toBe('Bearer tok');
+    expect(compatHeaders.authorization).toBe('Bearer tok');
+    const compatBody = JSON.parse(compatReq.init.body as string) as Record<string, unknown>;
+    expect(compatBody.model).toBe('workers-ai/@cf/deepseek-ai/deepseek-v4.1-flash-1017');
+    expect(compatBody.max_completion_tokens).toBe(16384);
+    expect(compatBody.max_tokens).toBeUndefined();
+    expect(compatBody.reasoning_effort).toBe('high');
 
     const budget = new BudgetLedger(1.0);
     const provider = createGatewayProvider(haiku, budget, {
@@ -211,6 +226,189 @@ describe('GatewayProvider formatting and usage parsing', () => {
     expect(budget.statsFor('claude-haiku-5-5').cachedInputTokens).toBe(1000);
     expect(budget.statsFor('claude-haiku-5-5').cacheWriteTokens).toBe(200);
     expect(budget.spentPicos).toBeGreaterThan(0);
+  });
+
+  it('formats OpenAI Responses API requests, parses output/usage, and echoes encrypted reasoning on turn 2', async () => {
+    const luna = resolveModelSpec('gpt-6-luna-xhigh');
+    const req1 = buildOpenAiResponsesRequest(
+      luna,
+      {
+        system: 'system instructions',
+        messages: [{ role: 'user', text: 'Build a sword' }],
+        tools: [RUN_PROGRAM_TOOL],
+      },
+      { accountId: 'acc', gatewayId: 'gw', token: 'tok' },
+    );
+    expect(req1.url).toBe('https://gateway.ai.cloudflare.com/v1/acc/gw/openai/responses');
+    const body1 = JSON.parse(req1.init.body as string) as Record<string, unknown>;
+    expect(body1.model).toBe('gpt-6-luna');
+    expect(body1.instructions).toBe('system instructions');
+    expect(body1.store).toBe(false);
+    expect(body1.max_output_tokens).toBe(24576);
+    expect(body1.reasoning).toEqual({ effort: 'xhigh' });
+    expect(body1.include).toEqual(['reasoning.encrypted_content']);
+    const tools1 = body1.tools as Array<Record<string, unknown>>;
+    expect(tools1[0]).toMatchObject({
+      type: 'function',
+      name: RUN_PROGRAM_TOOL.name,
+      description: RUN_PROGRAM_TOOL.description,
+    });
+    expect(tools1[0]!.function).toBeUndefined();
+
+    const parsedTurn1 = parseOpenAiResponses({
+      status: 'completed',
+      output: [
+        { type: 'reasoning', id: 'rs_1', encrypted_content: 'enc_abc123' },
+        { type: 'function_call', call_id: 'call_1', name: 'run_program', arguments: '{"program":"return 1;"}' },
+      ],
+      usage: {
+        input_tokens: 1000,
+        input_tokens_details: { cached_tokens: 400 },
+        output_tokens: 300,
+        output_tokens_details: { reasoning_tokens: 200 },
+      },
+    });
+    expect(parsedTurn1.toolCalls).toEqual([
+      { id: 'call_1', name: 'run_program', input: { program: 'return 1;' } },
+    ]);
+    expect(parsedTurn1.usage).toEqual({
+      inputTokens: 600,
+      outputTokens: 300,
+      cachedInputTokens: 400,
+      cacheWriteTokens: 0,
+    });
+
+    const seenBodies: Array<Record<string, unknown>> = [];
+    const budget = new BudgetLedger(1.0);
+    let callCount = 0;
+    const provider = createGatewayProvider(luna, budget, {
+      accountId: 'acc',
+      gatewayId: 'gw',
+      token: 'tok',
+      fetchFn: async (_url, init) => {
+        callCount++;
+        seenBodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+        if (callCount === 1) {
+          return new Response(
+            JSON.stringify({
+              status: 'completed',
+              output: [
+                { type: 'reasoning', id: 'rs_1', encrypted_content: 'enc_turn1' },
+                { type: 'function_call', call_id: 'call_1', name: 'run_program', arguments: '{"program":"x"}' },
+              ],
+              usage: { input_tokens: 500, output_tokens: 100 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            status: 'completed',
+            output: [{ type: 'message', content: [{ type: 'output_text', text: 'All done.' }] }],
+            usage: { input_tokens: 600, output_tokens: 50 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    });
+
+    for await (const _ of provider.stream({
+      system: 'sys',
+      messages: [{ role: 'user', text: 'hi' }],
+      tools: [RUN_PROGRAM_TOOL],
+    })) {
+      /* drain turn 1 */
+    }
+    for await (const _ of provider.stream({
+      system: 'sys',
+      messages: [
+        { role: 'user', text: 'hi' },
+        { role: 'assistant', text: '', toolCalls: [{ id: 'call_1', name: 'run_program', input: { program: 'x' } }] },
+        { role: 'tool', callId: 'call_1', name: 'run_program', content: '{"status":"ok"}' },
+      ],
+      tools: [RUN_PROGRAM_TOOL],
+    })) {
+      /* drain turn 2 */
+    }
+
+    expect(seenBodies).toHaveLength(2);
+    const turn2Input = seenBodies[1]!.input as Array<Record<string, unknown>>;
+    expect(turn2Input[1]).toEqual({ type: 'reasoning', id: 'rs_1', encrypted_content: 'enc_turn1' });
+    expect(turn2Input[2]).toEqual({
+      type: 'function_call',
+      call_id: 'call_1',
+      name: 'run_program',
+      arguments: '{"program":"x"}',
+    });
+    expect(turn2Input[3]).toEqual({
+      type: 'function_call_output',
+      call_id: 'call_1',
+      output: '{"status":"ok"}',
+    });
+  });
+
+  it('sends adaptive thinking + effort for claude-haiku-5-5-xhigh and echoes thinking signature blocks on turn 2', async () => {
+    const haikuXhigh = resolveModelSpec('claude-haiku-5-5-xhigh');
+    const seenBodies: Array<Record<string, unknown>> = [];
+    const budget = new BudgetLedger(1.0);
+    let callCount = 0;
+    const provider = createGatewayProvider(haikuXhigh, budget, {
+      accountId: 'acc',
+      gatewayId: 'gw',
+      token: 'tok',
+      fetchFn: async (_url, init) => {
+        callCount++;
+        seenBodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+        if (callCount === 1) {
+          return new Response(
+            JSON.stringify({
+              content: [
+                { type: 'thinking', thinking: 'let me check', signature: 'sig_xyz' },
+                { type: 'tool_use', id: 'toolu_1', name: 'run_program', input: { program: 'x' } },
+              ],
+              usage: { input_tokens: 200, output_tokens: 80 },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            content: [{ type: 'text', text: 'Done.' }],
+            usage: { input_tokens: 300, output_tokens: 20 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      },
+    });
+
+    for await (const _ of provider.stream({
+      system: 'sys',
+      messages: [{ role: 'user', text: 'hi' }],
+      tools: [RUN_PROGRAM_TOOL],
+    })) {
+      /* drain turn 1 */
+    }
+    for await (const _ of provider.stream({
+      system: 'sys',
+      messages: [
+        { role: 'user', text: 'hi' },
+        { role: 'assistant', text: '', toolCalls: [{ id: 'toolu_1', name: 'run_program', input: { program: 'x' } }] },
+        { role: 'tool', callId: 'toolu_1', name: 'run_program', content: '{"status":"ok"}' },
+      ],
+      tools: [RUN_PROGRAM_TOOL],
+    })) {
+      /* drain turn 2 */
+    }
+
+    expect(seenBodies[0]!.thinking).toEqual({ type: 'adaptive' });
+    expect(seenBodies[0]!.output_config).toEqual({ effort: 'xhigh' });
+    const turn2Msgs = seenBodies[1]!.messages as Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    expect(turn2Msgs[1]!.content[0]).toEqual({
+      type: 'thinking',
+      thinking: 'let me check',
+      signature: 'sig_xyz',
+    });
+    expect(turn2Msgs[1]!.content[1]).toMatchObject({ type: 'tool_use', id: 'toolu_1' });
   });
 
   it('builds both index and full-dts context modes', () => {
@@ -513,5 +711,49 @@ describe('audit regression guards', () => {
     });
     expect(await verifyFollowupNoRegression(oracle, f4, [])).toBe(false);
     await oracle.close();
+  });
+
+  it('7. registers gpt-6.1-terra-high as default mid model, runs --models without substitution, and records assistantReply', async () => {
+    const sonnet55 = resolveModelSpec('claude-sonnet-5-5');
+    expect(sonnet55.tier).toBe('mid');
+    expect(sonnet55.upstreamModel).toBe('claude-sonnet-5-5');
+
+    const noEscCheap = buildDefaultConfigs({
+      models: ['gpt-6.1-terra-medium', 'gpt-6.1-sol-high'],
+      strategy: 'always-cheap',
+      contextMode: 'index',
+      mode: 'codemode',
+    });
+    expect(noEscCheap.map((c) => c.cheapModel.id)).toEqual(['gpt-6.1-terra-medium', 'gpt-6.1-sol-high']);
+
+    const noEscMid = buildDefaultConfigs({
+      models: ['gpt-6.1-terra-medium', 'gpt-6.1-sol-high'],
+      strategy: 'always-mid',
+      contextMode: 'index',
+      mode: 'codemode',
+    });
+    expect(noEscMid.map((c) => c.midModel.id)).toEqual(['gpt-6.1-terra-medium', 'gpt-6.1-sol-high']);
+
+    const cfgs = buildDefaultConfigs({
+      models: ['gpt-6.1-sol-low'],
+      strategy: 'escalate',
+      contextMode: 'index',
+      mode: 'codemode',
+    });
+    expect(cfgs[0]!.cheapModel.id).toBe('gpt-6.1-sol-low');
+    expect(cfgs[0]!.midModel.id).toBe('gpt-6.1-sol-medium');
+
+    const oracle = new MemoryBenchmarkOracle(defaultRegistrySnapshotPath(REPO_ROOT));
+    const results = await runBenchmarkSuite({
+      repoRoot: REPO_ROOT,
+      oracle,
+      configs: cfgs,
+      suite: 'tasks',
+      taskFilter: ['T08'],
+      maxDollars: 0,
+      mock: true,
+    });
+    await oracle.close();
+    expect(results[0]!.tasks[0]!.assistantReply).toBeTruthy();
   });
 });
