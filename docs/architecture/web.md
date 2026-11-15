@@ -73,6 +73,7 @@ One Worker, one D1 database, one cron trigger, one zone — each product has one
 | Workers (fetch handler) | `editor.materione.com/v1/*` | Relay API: frame mailbox (§3.2) + payload store (§3.1) + quotas (§3.3) |
 | D1 | `editor-relay` | `channels`, `frames`, `blobs` rows — the relay's entire state |
 | Cron Triggers | hourly | TTL sweep of expired channels/frames/blobs (§3.4) |
+| Separate Worker + D1 | `ai.materione.com` (`cloud/model-proxy/`, `model-proxy-allowance`) | Model proxy fronting AI Gateway Unified Billing (`codemode.md` §12.1) — separate from the relay so the relay stays ciphertext-only |
 
 Deliberately **not** used: Durable Objects (no WebSocket, no long-lived state — D11
 amendment), R2 (its beyond-free-allowance billing is the one product that could ever charge;
@@ -216,6 +217,22 @@ always the documented escape hatch.
 One hourly cron invocation deletes expired blobs, dead channels and their frames, and
 prunes channels over the retention cap (oldest frames first). Deletes are idempotent; the
 sweep is also the stored-below-2 GB enforcement point.
+
+### 3.5 Model proxy (`ai.materione.com` / `cloud/model-proxy/`)
+
+A separate stateless Worker (`materione-model-proxy`) + separate D1 database
+(`model-proxy-allowance`) fronts **Cloudflare AI Gateway Unified Billing** for the cloud
+editor's code-mode chatbot (`codemode.md` §12.1), keeping gateway credentials out of the
+browser while the relay Worker remains ciphertext-only:
+
+- **Strict origin gate**: only `Origin: https://editor.materione.com` is accepted (`403`
+  `bad_origin` before rate-limiter, D1, or upstream).
+- **Endpoints**: `POST /v1/chat` (streams Anthropic SSE with `materione_settlement`
+  summary) and `GET /v1/allowance` (read-only remaining daily allowance and pool status).
+- **Atomic ledger**: single-statement SQLite `BEFORE INSERT` / `AFTER UPDATE` triggers in
+  `model-proxy-allowance` reserve worst-case picodollars before calling AI Gateway and
+  settle exact reported token costs afterward (keeping the reservation if a stream fails
+  without completing). Hourly cron sweeps rows older than 2 UTC days.
 
 ---
 

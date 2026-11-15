@@ -56,8 +56,11 @@ webui/dist/
 # run artifacts (screenshots, transcripts, dossiers) are machine-local
 qa/results/
 
-# Cloud worker (cloud/editor-worker) — npm + wrangler artifacts
+# Cloud worker (cloud/editor-worker, cloud/model-proxy) — npm + wrangler artifacts
 cloud/editor-worker/node_modules/
 cloud/editor-worker/dist/
 cloud/editor-worker/.wrangler/
+cloud/model-proxy/node_modules/
+cloud/model-proxy/dist/
+cloud/model-proxy/.wrangler/
 .wrangler/

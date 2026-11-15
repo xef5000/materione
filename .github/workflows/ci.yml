@@ -223,6 +223,31 @@ jobs:
         working-directory: cloud/editor-worker
         run: npx wrangler deploy --dry-run --outdir dist
 
+  model-proxy:
+    name: model proxy worker (ubuntu)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloud/model-proxy/package-lock.json
+
+      - name: Model proxy tests (real Workers runtime + local D1)
+        working-directory: cloud/model-proxy
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+
+      - name: Wrangler dry-run
+        working-directory: cloud/model-proxy
+        run: npx wrangler deploy --dry-run --outdir dist
+
   browser:
     name: editor browser (ubuntu)
     runs-on: ubuntu-latest
