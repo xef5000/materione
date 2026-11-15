@@ -514,4 +514,30 @@ describe('audit regression guards', () => {
     expect(await verifyFollowupNoRegression(oracle, f4, [])).toBe(false);
     await oracle.close();
   });
+
+  it('7. registers claude-sonnet-5-5 as default mid model and records assistantReply on tasks', async () => {
+    const sonnet55 = resolveModelSpec('claude-sonnet-5-5');
+    expect(sonnet55.tier).toBe('mid');
+    expect(sonnet55.upstreamModel).toBe('claude-sonnet-5-5');
+    const cfgs = buildDefaultConfigs({
+      models: ['claude-haiku-5-5'],
+      strategy: 'escalate',
+      contextMode: 'index',
+      mode: 'codemode',
+    });
+    expect(cfgs[0]!.midModel.id).toBe('claude-sonnet-5-5');
+
+    const oracle = new MemoryBenchmarkOracle(defaultRegistrySnapshotPath(REPO_ROOT));
+    const results = await runBenchmarkSuite({
+      repoRoot: REPO_ROOT,
+      oracle,
+      configs: cfgs,
+      suite: 'tasks',
+      taskFilter: ['T08'],
+      maxDollars: 0,
+      mock: true,
+    });
+    await oracle.close();
+    expect(results[0]!.tasks[0]!.assistantReply).toBeTruthy();
+  });
 });

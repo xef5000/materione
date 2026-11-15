@@ -138,6 +138,22 @@ export function renderMarkdownReport(artifact: BenchmarkArtifact): string {
     }
   }
   lines.push('');
+
+  const unacceptedBuildable = artifact.configs.flatMap((cfg) =>
+    [...cfg.tasks, ...cfg.followups]
+      .filter((r) => r.expectedResult === 'pass' && !r.accepted)
+      .map((r) => ({ label: cfg.label, r })),
+  );
+  if (unacceptedBuildable.length > 0) {
+    lines.push('### Unaccepted Buildable Task Notes');
+    lines.push('');
+    for (const { label, r } of unacceptedBuildable) {
+      const reply = (r.assistantReply ?? '').replace(/\s+/g, ' ').slice(0, 220);
+      const diag = r.diagnostics[0] ? ` | diag: \`${r.diagnostics[0].replace(/`/g, "'").slice(0, 140)}\`` : '';
+      lines.push(`- **${label} · ${r.id}** (${r.stopReason}): ${reply || '(no assistant text)'}${diag}`);
+    }
+    lines.push('');
+  }
   return lines.join('\n');
 }
 

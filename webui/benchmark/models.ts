@@ -45,6 +45,19 @@ export const PRESET_MODELS: Readonly<Record<string, BenchmarkModelSpec>> = {
     maxOutputTokens: 4096,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
+  'claude-sonnet-5-5': {
+    id: 'claude-sonnet-5-5',
+    catalogId: 'anthropic/claude-sonnet-5.5',
+    tier: 'mid',
+    transport: 'anthropic',
+    upstreamModel: 'claude-sonnet-5-5',
+    inputPicosPerToken: 2_000_000, // $2.00 / 1M
+    cacheReadPicosPerToken: 100_000, // $0.10 / 1M
+    cacheWritePicosPerToken: 2_500_000, // $2.50 / 1M
+    outputPicosPerToken: 10_000_000, // $10.00 / 1M
+    maxOutputTokens: 4096,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
   'claude-sonnet-4-5': {
     id: 'claude-sonnet-4-5',
     catalogId: 'anthropic/claude-sonnet-4-5',
