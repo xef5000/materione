@@ -2,7 +2,8 @@
  * The type-check Worker is lazy (D13, codemode.md section 5.1): the TypeScript compiler and its library files are a separate
  * static asset that only `new Worker(...)` fetches, so the editor's own bundle does not carry them. Two production builds:
  *
- *   - the editor as shipped: no compiler anywhere in its output, no worker asset;
+ *   - the editor as shipped: the Assistant wires `check()`, so the build emits one lazy worker asset containing the compiler
+ *     while the editor's own JS chunks carry zero TypeScript compiler code;
  *   - the client imported STATICALLY (the worst case: whatever imports it eagerly): its own JavaScript stays small and the
  *     compiler is still a separate, much larger asset the page would fetch only on the first check.
  *
@@ -47,14 +48,18 @@ function emitted(dir: string): Emitted[] {
 const sum = (files: Emitted[], field: 'raw' | 'gzip'): number => files.reduce((total, file) => total + file[field], 0);
 
 describe('the type-check Worker does not enter the editor bundle', () => {
-  it('the editor as shipped holds no compiler and no worker asset', async () => {
+  it('the editor as shipped keeps the compiler out of its bundle and in one lazy worker asset', async () => {
     const out = mkdtempSync(join(tmpdir(), 'materione-spa-'));
     try {
       await build({ root: ROOT, configFile: join(ROOT, 'vite.config.ts'), logLevel: 'silent', build: { outDir: out, emptyOutDir: true, reportCompressedSize: false } });
       const files = emitted(out);
-      for (const file of files) for (const marker of COMPILER_MARKERS) expect(file.text.includes(marker), `${file.name} must not contain ${marker}`).toBe(false);
-      expect(files.some((file) => /worker/i.test(file.name))).toBe(false);
-      console.log(`editor bundle (JS): ${files.length} files, ${sum(files, 'raw')} B raw, ${sum(files, 'gzip')} B gzip`);
+      const worker = files.filter((file) => /worker/i.test(file.name));
+      const rest = files.filter((file) => !/worker/i.test(file.name));
+      expect(worker).toHaveLength(1);
+      for (const file of rest) for (const marker of COMPILER_MARKERS) expect(file.text.includes(marker), `${file.name} must not contain ${marker}`).toBe(false);
+      for (const marker of COMPILER_MARKERS) expect(worker[0]!.text.includes(marker)).toBe(true);
+      expect(worker[0]!.text.includes('interface HTMLElement')).toBe(false);
+      console.log(`editor bundle (JS): ${rest.length} files, ${sum(rest, 'raw')} B raw, ${sum(rest, 'gzip')} B gzip; worker asset ${worker[0]!.name}: ${worker[0]!.raw} B raw, ${worker[0]!.gzip} B gzip`);
     } finally {
       rmSync(out, { recursive: true, force: true });
     }

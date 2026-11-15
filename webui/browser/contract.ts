@@ -66,6 +66,10 @@ export interface CodemodeHarness {
   declarePlan(objects: string[], title?: string): string;
   /** The names of the corpus programs the harness can feed. */
   programs(): string[];
+  /** Installs the scripted Bloodfang provider into the chat session and returns its recorded prompts. */
+  connectBloodfangChat(paceMs?: number): readonly string[];
+  /** Disconnects the active chat provider. */
+  disconnectChatProvider(): void;
 }
 
 declare global {

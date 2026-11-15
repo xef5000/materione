@@ -1353,19 +1353,29 @@ screenshots for eyes review.
 
 ### 6.4 The agent chatbot and code mode (D13)
 
-*As built (#347): the review panel and change log* (the human-review half of D13; the chatbot and model call are not built). A side panel of
-the workbench, a **Review** entry in the rail's Support group that exists only when the session blob advertises `codemode`; it shows each proposal's
-dry-run facts, the diff per document, the findings and the program, the approval controls, and the change log with a previewed revert. It uses
-the design tokens and the shared `Button` and `Chip` only (the editor is dark-only today; the panel follows whatever the tokens do), carries every
-state in words, is fully keyboard-operable, moves focus into itself only when the owner opens it, and respects reduced motion (it has no motion of
-its own). Detail and tests: [`codemode.md`](codemode.md) §5.6, *As built (#347)*.
+*As built (#347, #348): the review panel, change log, and assistant panel* (the model proxy Worker is not built yet). Two side panels share the workbench's right column:
 
-*Not built (the chatbot).* The chatbot fixed on the cloud editor's page (master §14.8) is an ordinary editor client of the protocol in §4: the
-same handshake, the same in-game-approved session, the same permission nodes, no new endpoint and no new token scope. It
-changes the SPA, not the relay. Its tool runs a TypeScript program against an SDK generated from the connected plugin's
-registries, in a sandbox in the page, and the program's only effect is the editor operations of §4.2, staged and applied
-as one transaction; a change to existing content waits for the owner's approval, once per object per session (master §3.2,
-[`codemode.md`](codemode.md) §5.6). Consequences for this document:
+- **Review** (`#347`): an entry in the rail's Support group that exists only when the session blob advertises `codemode`; it shows each proposal's
+  dry-run facts, the diff per document, the findings and the program, the approval controls, and the change log with a previewed revert. It uses
+  the design tokens and the shared `Button` and `Chip` only (the editor is dark-only today; the panel follows whatever the tokens do), carries every
+  state in words, is fully keyboard-operable, moves focus into itself only when the owner opens it, and respects reduced motion (it has no motion of
+  its own). Detail and tests: [`codemode.md`](codemode.md) §5.6, *As built (#347)*.
+- **Assistant** (`#348`): an entry in the rail's Support group that opens a conversational panel (`ChatPanel.svelte`, `webui/src/lib/codemode/chat/`).
+  - **ModelProvider seam & bounds**: the agent loop (`loop.ts`) talks to a pluggable `ModelProvider` (`provider.ts`) and enforces `REPAIR_BUDGET = 3`
+    (consecutive failed programs in one request) and `MAX_MODEL_TURNS = 12`. No remote model is connected by default in this build (`host === 'cloud'`
+    shows `No model connected` until the model proxy lands).
+  - **Pre-conversation disclosure**: before the first message, `disclosure.ts` states in plain prose what leaves the page for the active provider.
+  - **Inline review reuse**: the loop holds only `AgentPort.propose` (`reviewAgentPort()`) and has no approval, apply, or revert capability. Proposals
+    render inline via `ProposalCard`, and the Assistant's **Change log** tab reuses `LogEntry`.
+  - **Cloud-superset boundary**: live AI requests exist **only** on `editor.materione.com` (`EditorHost === 'cloud'`). On the embedded local editor
+    (`/materione editor local`, `EditorHost === 'plugin'`), the Assistant panel shows a plain notice pointing to `/materione editor` on
+    `editor.materione.com` and makes zero external network requests. On a server that does not advertise `codemode`, it states so plainly with no composer.
+
+*Not built (the model proxy).* The chatbot fixed on the cloud editor's page (master §14.8, [`codemode.md`](codemode.md) §12.1) is an ordinary editor
+client of the protocol in §4: the same handshake, the same in-game-approved session, the same permission nodes, no new relay endpoint and no new
+token scope. Its tool runs a TypeScript program against an SDK generated from the connected plugin's registries, in a sandbox in the page, and the
+program's only effect is the editor operations of §4.2, staged and applied as one transaction; a change to existing content waits for the owner's
+approval, once per object per session (master §3.2, [`codemode.md`](codemode.md) §5.6). Consequences for this document:
 
 - **The SDK's operation table is subject to the release compatibility gate** (§6, *Versioning*): `editor-compat.mjs` scans it
   like the editor's own calls, and an operation newer than a release is gated on a capability the SDK checks (codemode.md §7).
@@ -1442,6 +1452,7 @@ in CI.
 | Probe used as a signing oracle | Answered on direct sockets only, ≤ 1 per socket, only for an unclaimed session, domain-separated signed text (§4.4) |
 | Compromised `materione.com` hosting (worst case) | Authenticity still holds (signatures verified plugin-side regardless of transport); confidentiality holds (keys never transit the cloud); worst case = denial, not intrusion |
 | Model-written code (code mode, D13) escapes its sandbox in the editor page | No ambient authority (only the SDK object); an opaque-origin sandbox with no network, storage or DOM; limits on CPU, memory, reads and output; the program's writes are *staged*, never performed; the server dry run decides validity; existing content changes only with the owner's per-object grant, held outside the sandbox (codemode.md §4, §5.6) |
+| Assistant sends sensitive data to a remote model (`editor.materione.com` only) | Only the conversation messages, the generated SDK index + system instructions, and bounded JSON outputs/diagnostics of `run_program` leave the page when a remote `ModelProvider` is active — never capability keys, server tokens, or unrequested pack files. Pre-chat disclosure (`disclosure.ts`) states this before the first message. Nothing leaves the page before a prompt is sent or on the local editor (`/materione editor local`, zero external calls) |
 | Prompt injection through content the agent reads (an item's lore, a pack's names) | Reads are data to the program; its only effect is staged operations; the dry-run and the human review of the diff stand between any instruction and the files; permissions are the owner's session's, never widened (codemode.md §4.5) |
 | Abuse of the shared free instance | Rate-limiter binding per IP, envelope-only store, hard quotas below free-tier ceilings; the free plan's hard stops mean abuse causes 429s and availability loss — never billing (§3.3) |
 | Abuse of free store as file host | Envelope-only content type, size caps, TTLs, per-IP limits, content-addressed dedup keeps honest traffic cheap (§3, §4.3) |

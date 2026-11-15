@@ -272,6 +272,19 @@ It opens a panel beside your workspace with two tabs.
 
 Everything here works from the keyboard (Tab to a button, Enter or Space to press it); Escape closes the panel.
 
+## 7d. Using the Assistant
+
+The **Assistant** rail entry (in the Support group, beside **Review**) opens an AI authoring panel on `editor.materione.com` (`/materione editor`).
+On `/materione editor local`, the local editor stays strictly between your browser and your server with zero external requests — the Assistant panel
+shows a plain notice directing you to run `/materione editor` when you want the assistant.
+
+- **Before your first message**: the panel displays a **"What leaves this page"** disclosure listing exactly what is sent (your conversation, the
+  server's generated SDK index, and bounded outputs/diagnostics of programs the assistant runs — never your session key or unrequested pack files).
+- **New content vs existing content**: the assistant's only tool runs a TypeScript program in a browser sandbox and asks the server for a dry run.
+  A program that only **creates** new content applies automatically and can be reverted from the Assistant's **Change log** tab. A program that
+  changes or deletes **existing** content pauses on an inline review card with a line-by-line diff and waits for you to click **Approve and apply**
+  (the assistant cannot approve, apply, or revert).
+
 ## 8. When things go wrong
 
 - **Problems** — diagnostics stream in live, including repeated occurrences; file-backed locations open the

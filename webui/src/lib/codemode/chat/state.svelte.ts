@@ -8,8 +8,8 @@
  * only `reviewAgentPort()`, which has propose, declarePlan and reads. The owner's buttons are the review components', inline
  * in the panel, and they act through `ReviewActions` with the click that caused them.
  *
- * No provider is connected by default: the model call is a later issue (the model proxy). The only provider this build has
- * is the scripted one, which the owner starts by hand as a demonstration and which sends nothing off the page.
+ * No provider is connected by default in this build: the model proxy is a later issue. `installChatProvider` is the seam
+ * for tests, the `?codemode` browser fixture, and the future cloud proxy provider.
  */
 import type { RpcChannel } from '../../api';
 import type { ReadReply } from '../core/types';
@@ -21,8 +21,6 @@ import { check } from '../typecheck';
 import { agentContext } from './context';
 import { runAgent, stopText } from './loop';
 import { addUsage, refusalText, type ChatMessage, type ModelProvider, type ModelUsage, type ProviderInfo } from './provider';
-import { createScriptedProvider } from './scripted';
-import { bloodfangScript } from './scripts/bloodfang';
 import { runProgram, type ToolOutcome } from './tool';
 
 export type ChatItem =
@@ -110,14 +108,6 @@ export function installChatProvider(provider: ModelProvider | null, prompts: rea
   handle.provider = provider;
   chat.provider = provider?.info ?? null;
   chat.prompts = prompts;
-}
-
-/** Starts the recorded Bloodfang demonstration against `pack`: the scripted provider, wholly in the page. */
-export function startDemonstration(pack: string): void {
-  const script = bloodfangScript(pack);
-  // a recording reads like a stream unless the user asked for reduced motion
-  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  installChatProvider(createScriptedProvider(script, { paceMs: still ? 0 : 14 }), script.prompts);
 }
 
 /** A new conversation with the same provider. What was applied stays applied (it is in the change log). */

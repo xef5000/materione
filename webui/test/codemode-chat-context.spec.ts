@@ -88,6 +88,7 @@ describe('the index is generated from the surface', () => {
       contentTypes: [{ name: 'widget', directory: 'widgets', displayName: 'Widget', description: 'A widget. With a second sentence.', parameters: [] }],
       behavior: { ...current.behavior, actions: [], conditions: [], triggers: [], mechanics: [], functions: [], recipes: [], itemSources: [], listSources: [], inputMethods: [], steps: [], categories: [] },
       gui: { components: [], containers: [] },
+      assets: null,
     };
     const small = buildIndex(tiny);
     expect(section(small, 'Content types')).toEqual(['widgets']);

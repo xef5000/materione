@@ -9,27 +9,28 @@
    * does not advertise code mode has no assistant, and the panel says so.
    */
   import { onMount, tick } from 'svelte';
+  import type { EditorHost } from '../../host';
   import Button from '../../ui/Button.svelte';
   import Chip from '../../ui/Chip.svelte';
   import Icon from '../../components/Icon.svelte';
-  import { workspace } from '../../state.svelte';
   import LogEntry from '../review/LogEntry.svelte';
   import ProgramView from '../review/ProgramView.svelte';
   import ProposalCard from '../review/ProposalCard.svelte';
   import { review } from '../review/state.svelte';
   import { disclosure } from './disclosure';
   import { REPAIR_BUDGET } from './loop';
-  import { chat, newConversation, sendMessage, startDemonstration, stopChat } from './state.svelte';
+  import { chat, newConversation, sendMessage, stopChat } from './state.svelte';
   import type { ToolStatus } from './tool';
 
   interface Props {
+    host?: EditorHost;
     /** Closes the panel; the caller returns focus to the control that opened it. */
     onClose: () => void;
     /** Opens the Review panel (the full list of proposals and the server's audit). */
     onOpenReview: () => void;
   }
 
-  let { onClose, onOpenReview }: Props = $props();
+  let { host = 'plugin', onClose, onOpenReview }: Props = $props();
 
   let heading = $state<HTMLElement | null>(null);
   let scroller = $state<HTMLElement | null>(null);
@@ -126,7 +127,7 @@
   <div class="head">
     <h2 id="assistant-title" tabindex="-1" bind:this={heading}>Assistant</h2>
     {#if chat.capable}
-      <Chip tone="neutral">{chat.provider === null ? 'No model connected' : recorded ? 'Recorded demonstration' : chat.provider.label}</Chip>
+      <Chip tone="neutral">{chat.provider !== null ? (recorded ? 'Recorded demonstration' : chat.provider.label) : host !== 'cloud' ? 'editor.materione.com only' : 'No model connected'}</Chip>
     {/if}
     <span class="spacer"></span>
     {#if chat.items.length > 0}
@@ -174,21 +175,18 @@
     {#if chat.tab === 'conversation'}
       <div id="assistant-tabpanel" class="content" role="tabpanel" aria-labelledby="assistant-tab-conversation" bind:this={scroller}>
         {#if chat.provider === null}
-          <div class="box" role="note" aria-label="No model connected">
-            <p class="lead">No model is connected in this version of the editor.</p>
-            <p>The assistant's model is not wired up yet, so you cannot chat with it. Nothing is sent anywhere.</p>
-            <p>
-              You can replay a <strong>recorded demonstration</strong> (the Bloodfang sword) to see how it will work. The answers are a recording; the
-              programs are real and run against
-              {#if workspace.activePack}pack <code>{workspace.activePack}</code>{:else}the pack you select{/if}: they create a sword, a menu and two
-              variables there (applied at once, each revertible from the change log) and propose a change to the item <code>ruby_sword</code>, which
-              waits for your approval.
-            </p>
-            <Button variant="primary" disabled={!workspace.activePack} onclick={() => workspace.activePack && startDemonstration(workspace.activePack)}>
-              Start the recorded demonstration
-            </Button>
-            {#if !workspace.activePack}<p class="hint">Select a pack first.</p>{/if}
-          </div>
+          {#if host !== 'cloud'}
+            <div class="box" role="note" aria-label="Available on editor.materione.com">
+              <p class="lead">The assistant is available on editor.materione.com.</p>
+              <p>The local editor stays entirely between your browser and your server and makes no external requests.</p>
+              <p>Run <code>/materione editor</code> in game to open this server on editor.materione.com when you want the assistant. Everything else in the editor works the same here.</p>
+            </div>
+          {:else}
+            <div class="box" role="note" aria-label="No model connected">
+              <p class="lead">No model is connected in this version of the editor.</p>
+              <p>The assistant's model proxy is not connected in this build yet, so nothing is sent anywhere.</p>
+            </div>
+          {/if}
         {:else if stated !== null}
           <section class="box" aria-label="What leaves this page">
             <p class="lead">{stated.headline}</p>

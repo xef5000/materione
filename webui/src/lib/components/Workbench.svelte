@@ -19,14 +19,16 @@
   import { connectReview, disposeReview, review } from '../codemode/review/state.svelte';
   import ChatPanel from '../codemode/chat/ChatPanel.svelte';
   import { chat, connectChat, disposeChat } from '../codemode/chat/state.svelte';
+  import type { EditorHost } from '../host';
   import { activityLog, connection, diagnostics, session, ui } from '../state.svelte';
   import { onDestroy, tick } from 'svelte';
 
   interface Props {
+    host?: EditorHost | null;
     onDisconnect: () => void;
   }
 
-  let { onDisconnect }: Props = $props();
+  let { host = 'plugin', onDisconnect }: Props = $props();
 
   type RailView = 'start' | 'content' | 'assets' | 'advanced' | 'diagnostics' | 'server';
   type RailTarget = RailView | 'activity' | 'review' | 'assistant';
@@ -293,7 +295,7 @@
     </main>
 
     {#if sidePanel === 'assistant'}
-      <ChatPanel onClose={closeAssistant} onOpenReview={openReviewFromAssistant} />
+      <ChatPanel host={host ?? 'plugin'} onClose={closeAssistant} onOpenReview={openReviewFromAssistant} />
     {:else if sidePanel === 'review'}
       <ReviewPanel onClose={closeReview} />
     {/if}

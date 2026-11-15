@@ -11,14 +11,13 @@ import { RUN_PROGRAM_TOOL, type ToolOutcome } from './tool';
 /**
  * The repair budget: the loop stops a request after this many FAILED tool calls (a type-check with errors, a run the
  * sandbox refused, a refused or stale dry run, a call that was not valid). A read and an accepted dry run do not count.
- * AWAITING OWNER CONFIRMATION: 3 is a placeholder until the benchmark measures how many repair turns a task needs
- * (codemode.md section 12.1, issue 385).
+ * Confirmed default until the benchmark measures how many repair turns a task needs (codemode.md section 12.1, issue 385).
  */
 export const REPAIR_BUDGET = 3;
 
 /**
  * The most model turns one user message may take, failed or not: a ceiling on what one request can cost when a real
- * provider bills per turn. AWAITING OWNER CONFIRMATION, with `REPAIR_BUDGET`.
+ * provider bills per turn. Confirmed default until issue 385 measures empirical budgets.
  */
 export const MAX_MODEL_TURNS = 12;
 

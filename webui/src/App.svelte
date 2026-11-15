@@ -199,7 +199,7 @@
         <Login phase={phase === 'active' ? 'closed' : phase} {error} {noncePrefix} onConnect={connect} />
       </div>
     {/if}
-    <Workbench onDisconnect={disconnect} />
+    <Workbench {host} onDisconnect={disconnect} />
   {:else if host === 'cloud' && phase === 'login'}
     <Landing busy={demoStarting} error={demoError} onDemo={startDemo} />
   {:else if host !== null || phase !== 'login'}
