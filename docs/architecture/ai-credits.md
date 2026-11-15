@@ -66,7 +66,7 @@ infrastructure, and zero password-reset attack surface.
 
 | Provider | Protocol & flow | Scopes | Verified-email gate | Stable subject | Extra eligibility signal |
 |---|---|---|---|---|---|
-| **Google** | OAuth 2.0 Auth Code + PKCE (`S256`) + `nonce` | `openid email profile` | `email_verified === true` on verified ID token / userinfo | `("google", sub)` | — |
+| **Google** | OAuth 2.0 Auth Code + PKCE (`S256`) | `openid email profile` | `email_verified === true` on verified ID token / userinfo | `("google", sub)` | — |
 | **Discord** | OAuth 2.0 Auth Code + PKCE (`S256`) | `identify email` | `verified === true` on `/users/@me` | `("discord", id)` | **Snowflake creation age `>= 7 days`** |
 
 **Discord Snowflake age check:** Discord's 64-bit Snowflake ID encodes exact UTC creation time:
@@ -81,11 +81,11 @@ Accounts whose Discord ID is `< 7 days` old at first sign-in are created with `f
 **Account linking & email normalization:**
 
 - Verified emails are normalized (`trim().toLowerCase()`) solely for initial lookup/linking; canonical identity is always `(provider, provider_subject)`.
-- Signing in with provider B while **already holding a valid session cookie** for `account_id` A links `(B, sub_B) -> A` (refusing if `(B, sub_B)` already belongs to a different account with balances/orders).
+- Signing in with provider B while **already holding a valid session cookie** for `account_id` A links `(B, sub_B) -> A` **only when `profile.email === accountA.email`** (and refuses if `(B, sub_B)` already belongs to a different account with balances/orders); signing in with a different email falls through to the normal email-match / new-account flow and issues a new session for that identity's own account.
 - Signing in unauthenticated with `(provider, sub)`:
   1. Look up `(provider, sub)` in `account_identities`. If found, sign into that `account_id` (even if the user later changed their email at Google/Discord).
   2. Otherwise, look up an existing `accounts` row with matching verified normalized email. If found, link `(provider, sub)` to that `account_id` (preventing accidental split credit balances).
-  3. Otherwise, insert a new `accounts` row (`id = crypto.randomUUID()`, `credit_balance_picos = 0`) and `account_identities` row.
+  3. Otherwise, insert a new `accounts` row (`id = crypto.randomUUID()`, `credit_balance_picos = 0`) and `account_identities` row (guarded by `UNIQUE(email)` with race-retry lookup/link on `UNIQUE constraint failed`).
 
 ### 2.3 Session cookie & zero-XSS-token architecture
 
@@ -93,8 +93,8 @@ All auth endpoints live on `https://ai.materione.com`:
 
 | Endpoint | Behavior |
 |---|---|
-| `GET /v1/auth/{google\|discord}/start` | Generates cryptographic `state`, `codeVerifier` (PKCE `S256`), and `nonce`; sets short-lived (10 min) HMAC-SHA256-signed cookie `materione_ai_oauth` (`HttpOnly; Secure; Path=/v1/auth; SameSite=Lax; Max-Age=600`), and redirects `302` to Google/Discord. |
-| `GET /v1/auth/{google\|discord}/callback` | Verifies `materione_ai_oauth` HMAC + `state`, exchanges `code` + `codeVerifier`, verifies `email_verified` / `verified`, upserts `accounts` & `account_identities`, generates a 256-bit `rawSessionToken`, inserts `token_hash = SHA-256(rawSessionToken)` into `sessions` (30-day TTL), clears `materione_ai_oauth`, sets `__Host-materione_ai_session=<rawSessionToken>; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=2592000`, and serves a CSP-locked (`default-src 'none'; script-src 'sha256-...'`) HTML page that calls `window.opener?.postMessage({ type: "materione-ai-auth-complete" }, "https://editor.materione.com")` and `window.close()`. |
+| `GET /v1/auth/{google\|discord}/start` | Generates cryptographic `state` and `codeVerifier` (PKCE `S256`), hashes any existing `__Host-materione_ai_session` cookie into `sessionTokenHash`, sets short-lived (10 min) HMAC-SHA256-signed cookie `__Host-materione_ai_oauth` (`HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=600`), and redirects `302` to Google/Discord. |
+| `GET /v1/auth/{google\|discord}/callback` | Verifies `__Host-materione_ai_oauth` HMAC + `state` + `sessionTokenHash` match against the callback request's session cookie (blocking Login CSRF), exchanges `code` + `codeVerifier`, verifies `email_verified` / `verified`, upserts `accounts` & `account_identities`, generates a 256-bit `rawSessionToken`, inserts `token_hash = SHA-256(rawSessionToken)` into `sessions` (30-day TTL), clears `__Host-materione_ai_oauth`, sets `__Host-materione_ai_session=<rawSessionToken>; HttpOnly; Secure; Path=/; SameSite=Lax; Max-Age=2592000`, and serves a CSP-locked (`default-src 'none'; script-src 'sha256-...'`) HTML page that calls `window.opener?.postMessage({ type: "materione-ai-auth-complete" }, "https://editor.materione.com")` and `window.close()`. |
 | `POST /v1/auth/logout` | Requires `Origin` + `Sec-Fetch-Site` check; deletes `sessions` row matching `SHA-256(cookie)` and clears `__Host-materione_ai_session` (`Max-Age=0`). |
 | `GET /v1/me` | Returns `200 { authenticated: false }` when unsigned, or `200 { authenticated: true, account: { id, displayName, provider }, credits, freeAllowance }` when signed in. |
 | `GET /v1/allowance` | Requires valid session (`401 unauthenticated` otherwise); returns `{ day, account, credits, freeAllowance }`. |
@@ -104,7 +104,7 @@ All auth endpoints live on `https://ai.materione.com`:
 - Both `editor.materione.com` and `ai.materione.com` share the registrable site `materione.com` (**same-site** in RFC 6265bis and the Fetch spec), so `fetch("https://ai.materione.com/v1/...", { credentials: "include" })` from `https://editor.materione.com` automatically sends `SameSite=Lax` cookies.
 - Cross-site origins (e.g. `https://evil.example`) **cannot** send `SameSite=Lax` cookies on `fetch` or `POST`, and are additionally rejected by `Origin === "https://editor.materione.com"` + `Sec-Fetch-Site === "same-site"` plus `Access-Control-Allow-Origin: https://editor.materione.com` / `Access-Control-Allow-Credentials: true`.
 - Because the session token is `HttpOnly`, **no bearer token ever enters `localStorage`, `sessionStorage`, JS memory, or URLs**.
-- Because `__Host-` prohibits a `Domain` attribute, `__Host-materione_ai_session` is host-locked to `ai.materione.com` and **never sent to `editor.materione.com` (`cloud/editor-worker/`)**. (The temporary OAuth state cookie uses `Path=/v1/auth` so it is not even sent to `/v1/chat`, `/v1/checkout`, or `/v1/portal`, since RFC 6265bis restricts `__Host-` to `Path=/`.)
+- Because `__Host-` prohibits a `Domain` attribute and requires `Path=/; Secure`, both `__Host-materione_ai_session` and `__Host-materione_ai_oauth` are host-locked to `ai.materione.com` — preventing any sibling `*.materione.com` subdomain from tossing a forged/foreign cookie and never sending session cookies to `editor.materione.com` (`cloud/editor-worker/`).
 
 ### 2.4 Proof of session-key unlinkability (`?s={code}#{wrapping-key}`)
 
@@ -181,7 +181,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
 
 CREATE TABLE IF NOT EXISTS account_identities (
   provider TEXT NOT NULL CHECK (provider IN ('google', 'discord')),
@@ -494,6 +494,7 @@ The single `UPDATE` populates `free_settled_picos` and `paid_settled_picos` alon
   3. Calls Polar `POST /v1/checkouts/` with:
      - `products: [POLAR_CREDITS_PRODUCT_ID]`
      - `amount: amountCents`
+     - `currency: "usd"` (pinned so Polar Adaptive Pricing never switches away from USD)
      - `external_customer_id: account.id`
      - `customer_email: account.email`
      - `customer_ip_address: rawCallerIp` (improves country tax accuracy; never persisted in D1)
@@ -503,23 +504,24 @@ The single `UPDATE` populates `free_settled_picos` and `paid_settled_picos` alon
 
 ### 4.3 Standard Webhooks verification & idempotent credit grant (`POST /v1/webhooks/polar`)
 
-- **Auth & security posture:** `POST /v1/webhooks/polar` is exempt from the browser `Origin` gate (Polar's servers call it) and authenticated strictly by **Standard Webhooks** HMAC-SHA256 verification before JSON parsing. Cloudflare **Bot Fight Mode** must remain **OFF** on `ai.materione.com` so Cloudflare does not challenge Polar's webhook deliveries.
+- **Auth & security posture:** `POST /v1/webhooks/polar` is exempt from the browser `Origin` gate (Polar's servers call it) and authenticated strictly by **Standard Webhooks** HMAC-SHA256 verification before JSON parsing. Rate limiting (`webhook:bad:${subnetHash}`, `10/min`) applies **only after signature verification fails** (`!validSig`), so legitimate Polar bursts from shared egress IPs are never throttled with `429`. Cloudflare **Bot Fight Mode** must remain **OFF** on `ai.materione.com` so Cloudflare does not challenge Polar's webhook deliveries.
 - **Signature verification (Web Crypto):**
   - Read headers `webhook-id`, `webhook-timestamp`, `webhook-signature`.
   - Reject if `|nowSeconds - Number(webhookTimestamp)| > 300` (5-minute replay window).
   - Compute `HMAC-SHA256(base64Decode(POLAR_WEBHOOK_SECRET.replace(/^whsec_/, '')), "${webhookId}.${webhookTimestamp}.${rawBody}")` and constant-time compare against any `v1,<b64>` entry in `webhook-signature`.
 - **`order.paid`:**
   - Extract `accountId = data.customer.external_id`, `orderId = data.id`, and `netCents = data.net_amount` (actual USD cents collected *after* discounts and *before* tax).
-  - Verify `data.product_id === POLAR_CREDITS_PRODUCT_ID` (or order item product matches), `netCents > 0`, and `accountId` exists.
+  - Verify `data.product_id === POLAR_CREDITS_PRODUCT_ID` (or order item product matches), `String(data.currency ?? "").toLowerCase() === "usd"`, `netCents >= 0`, and `accountId` exists.
   - Compute `grantedPicos = netCents * 7_500_000_000` (`$1.00 net = 100 credits = $0.75 wholesale AI budget`). **Scaling strictly off `data.net_amount` guarantees promo/discount codes can never mint unfunded AI tokens.**
   - Run an atomic D1 `db.batch(...)` (or SQLite transaction):
-    1. `INSERT INTO credit_ledger_entries (id, account_id, kind, delta_picos, balance_after_picos, polar_order_id, webhook_id, note, created_at) ...` — `webhook_id UNIQUE` guarantees idempotency; if `UNIQUE` constraint fails on a duplicate delivery, return `202` without double-crediting.
-    2. `INSERT INTO polar_orders (order_id, account_id, net_amount_cents, granted_picos, status, created_at, updated_at) VALUES (...) ON CONFLICT(order_id) DO NOTHING`.
-    3. `UPDATE accounts SET credit_balance_picos = credit_balance_picos + ?1, polar_customer_id = COALESCE(polar_customer_id, ?2), updated_at = ?3 WHERE id = ?4`.
-- **`order.refunded` & disputes / chargebacks:**
-  - Read cumulative `data.refunded_amount` (USD cents, tax-exclusive net refunded).
-  - Compute `deltaRefundedCents = data.refunded_amount - polar_orders.refunded_amount_cents`. If `deltaRefundedCents > 0`, deduct `deltaRefundedPicos = deltaRefundedCents * 7_500_000_000` from `accounts.credit_balance_picos`, update `polar_orders.refunded_amount_cents` / `refunded_picos`, and record a `'refund'` `credit_ledger_entries` row (`webhook_id UNIQUE`).
-  - **Friendly-fraud / spend-then-refund defense:** `accounts.credit_balance_picos` is explicitly allowed to become **negative** if the user already spent the credits before refunding or charging back. Any account with `credit_balance_picos < 0` sets `free_eligible = 0` and is blocked by `trg_reservations_before_insert` (`ACCOUNT_SUSPENDED`) until the negative balance is repaid; an unreversed chargeback/dispute sets `suspended = 1`.
+    1. `INSERT INTO polar_orders (order_id, account_id, net_amount_cents, granted_picos, status, created_at, updated_at) ...`
+    2. `INSERT INTO credit_ledger_entries (id, account_id, kind, delta_picos, balance_after_picos, polar_order_id, webhook_id, note, created_at) ...` — `webhook_id UNIQUE` and `idx_ledger_unique_purchase(polar_order_id)` guarantee idempotency; if `UNIQUE` constraint fails on a duplicate delivery, return `202` without double-crediting.
+    3. `UPDATE accounts SET polar_customer_id = COALESCE(polar_customer_id, ?1), updated_at = ?2 WHERE id = ?3` (balance & flags updated atomically by `trg_credit_ledger_after_insert`).
+- **`order.refunded`, `order.updated` (`status: "void"`), and disputes (`refund.created` / `refund.updated`):**
+  - **`order.refunded`:** if `order_id` is not yet in `polar_orders` (and is not for another product or non-USD currency), return **`503 order_not_yet_recorded`** so Polar's exponential backoff retries after `order.paid` commits; otherwise compute `deltaRefundedCents = min(order.net_amount_cents, data.refunded_amount) - order.refunded_amount_cents` and deduct `deltaRefundedCents * 7_500_000_000` via an optimistic-lock `db.batch` (`kind = 'refund'`, `webhook_id UNIQUE`).
+  - **`order.updated` (`status === "void"`):** if `order_id` is missing and `data.paid === true` (matching product/USD), return **`503`**; if found and `order.net_amount_cents > order.refunded_amount_cents`, reverse the remaining unrefunded balance (`kind = 'refund'`, `polar_orders.status = 'void'`).
+  - **`refund.created` / `refund.updated` (dispute):** when `data.dispute != null` or `data.reason === "dispute"`, look up `data.order_id` in `polar_orders` (`503` if not yet recorded). If `data.dispute.status === "won"`, insert `'dispute_release'` (`delta_picos = 0`, clearing `suspended = 0, suspend_reason = NULL`); otherwise insert `'dispute_hold'` (`delta_picos = 0`, setting `suspended = 1, suspend_reason = 'chargeback_dispute', free_eligible = 0`).
+  - **Friendly-fraud / spend-then-refund defense:** `accounts.credit_balance_picos` is explicitly allowed to become **negative** if the user already spent the credits before refunding or charging back. Any account with `credit_balance_picos < 0` sets `free_eligible = 0` and is blocked by `trg_reservations_before_insert` (`ACCOUNT_SUSPENDED`) until the negative balance is repaid; an unreversed chargeback/dispute sets `suspended = 1` (blocking both `/v1/chat` and `/v1/checkout` with `403 account_suspended`).
 
 ### 4.4 Receipts, tax invoices & Customer Portal
 
@@ -613,6 +615,9 @@ Every eligible account receives **`$0.05/day` (`50_000_000_000` picos ≈ `6.66 
    - Add Google + Discord OAuth PKCE endpoints (`/v1/auth/{google|discord}/{start|callback}`, `POST /v1/auth/logout`, `GET /v1/me`) with `__Host-materione_ai_session` `HttpOnly` cookie auth.
    - Replace IP-only caller gating on `/v1/chat` and `/v1/allowance` with session auth + dual-gated free bucket + prepaid credit balance; retire anonymous mode.
    - Add Polar endpoints (`POST /v1/checkout`, `GET /v1/checkout/complete`, `POST /v1/webhooks/polar` with Standard Webhooks HMAC verification, `POST /v1/portal`) and optional `ALERT_WEBHOOK_URL` float watermark check.
+
+   *As built (#409): Worker OAuth, Polar checkout/webhooks & two-bucket D1 ledger.*
+
 2. **`webui/` (`webui/src/lib/codemode/chat/` + Assistant panel):**
    - Implement the remote `ModelProvider` SSE client calling `https://ai.materione.com/v1/chat` with `credentials: "include"` when `EditorHost === 'cloud'`.
    - Wire the Assistant header/account bar: Sign in with Google / Discord popup flow (`postMessage` listener), live display of remaining daily free allowance + paid Materione AI credits (`GET /v1/allowance`), custom `$10–$200` Buy Credits form (`$10` / `$25` / `$50` quick-pick chips + live `100 credits / $1` preview calling `POST /v1/checkout`), and a Billing/Invoices link (`POST /v1/portal`).

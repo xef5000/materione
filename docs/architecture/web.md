@@ -222,22 +222,30 @@ sweep is also the stored-below-2 GB enforcement point.
 
 A separate stateless Worker (`materione-model-proxy`) + separate D1 database
 (`model-proxy-allowance`) fronts **Cloudflare AI Gateway Unified Billing** for the cloud
-editor's code-mode chatbot (`codemode.md` §12.1), keeping gateway credentials out of the
-browser while the relay Worker remains ciphertext-only:
+editor's code-mode chatbot (`codemode.md` §12.1, `ai-credits.md`), keeping gateway
+credentials out of the browser while the relay Worker remains ciphertext-only:
 
-- **Strict origin gate**: only `Origin: https://editor.materione.com` is accepted (`403`
-  `bad_origin` before rate-limiter, D1, or upstream).
-- **Endpoints**: `POST /v1/chat` (streams Anthropic SSE with `materione_settlement`
-  summary) and `GET /v1/allowance` (read-only remaining daily allowance and pool status).
-- **Atomic ledger**: single-statement SQLite `BEFORE INSERT` / `AFTER UPDATE` triggers in
-  `model-proxy-allowance` reserve mathematical `1 byte = 1 token + framing` worst-case
-  picodollars before calling AI Gateway and settle exact reported token costs afterward
+- **Strict origin gate + session-cookie OAuth**: SPA routes accept only
+  `Origin: https://editor.materione.com` with `Access-Control-Allow-Credentials: true`
+  (`403` `bad_origin` before rate-limiter, D1, or upstream). Users sign in via Google or
+  Discord OAuth 2.0 PKCE (`/v1/auth/{google|discord}/{start|callback}`), receiving an
+  `HttpOnly; Secure; Path=/; SameSite=Lax` `__Host-materione_ai_session` cookie (never sent
+  to `editor.materione.com`, keeping `?s={code}#{wrapping-key}` unlinkable).
+- **Endpoints**: `GET /v1/me`, `POST /v1/auth/logout`, `GET /v1/allowance`, `POST /v1/chat`
+  (streams Anthropic SSE with `materione_settlement` summary), and Polar MoR billing
+  routes (`POST /v1/checkout`, `GET /v1/checkout/complete`, `POST /v1/webhooks/polar` with
+  Standard Webhooks HMAC-SHA256 verification, `POST /v1/portal`).
+- **Two-bucket atomic ledger**: single-statement SQLite `BEFORE INSERT` / `AFTER UPDATE`
+  triggers in `model-proxy-allowance` reserve mathematical `1 byte = 1 token + framing`
+  worst-case picodollars from the dual-gated `$0.05/day` free allowance (verified account +
+  canonical IPv4 `/32` or IPv6 `/64` subnet inside a `$1.00/day` global pool) and draw any
+  remainder from prepaid `accounts.credit_balance_picos`, settling free-first / paid-second
   (or bounded/kept reservations on interrupted streams). `RATE_LIMITER` and D1 failures
-  fail closed to `503 unavailable`; caller identities canonicalize IPv6 to `/64` and
-  IPv4-mapped IPv6 to IPv4 before daily-salted SHA-256 hashing; `GLOBAL_DAILY_POOL_PICOS=0`
-  acts as an instant kill-switch; and an immutable server-owned system charter +
-  `run_program` tool lock prevents general-purpose LLM abuse. Hourly cron sweeps rows older
-  than 2 UTC days.
+  fail closed to `503 unavailable`; `GLOBAL_DAILY_POOL_PICOS=0` acts as an instant
+  free-pool kill-switch; and an immutable server-owned system charter + `run_program` tool
+  lock prevents general-purpose LLM abuse. Hourly cron sweeps expired sessions, free-usage
+  rows older than 2 UTC days, and settled/kept reservations older than 30 UTC days while
+  retaining durable accounts, Polar orders, and ledger entries.
 
 ---
 

@@ -1,4 +1,4 @@
-import { MAX_OUTPUT_TOKENS } from "./config";
+import { MAX_OUTPUT_TOKENS, PICOS_PER_CREDIT } from "./config";
 import { nowSeconds } from "./http";
 import { settleReservation } from "./ledger";
 import { computeSettledPicos, type ModelSpec } from "./models";
@@ -9,9 +9,11 @@ export interface SettlementStreamOptions {
   ctx: ExecutionContext;
   reservationId: string;
   reservedPicos: number;
+  freeReservedPicos: number;
   model: ModelSpec;
   abortController?: AbortController;
   isClientAborted?: () => boolean;
+  onSettled?: (settledPicos: number, freeSettledPicos: number, paidSettledPicos: number) => void;
   onFinalize?: () => void;
 }
 
@@ -151,9 +153,11 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
     ctx,
     reservationId,
     reservedPicos,
+    freeReservedPicos,
     model,
     abortController,
     isClientAborted,
+    onSettled,
     onFinalize,
   } = options;
   const reader = upstreamBody.getReader();
@@ -196,12 +200,20 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
 
   async function settleOnEnd(
     reason: "eof" | "error" | "client_cancel",
-  ): Promise<{ emitEvent: boolean; settledPicos: number; outputTokens: number } | null> {
+  ): Promise<{
+    emitEvent: boolean;
+    settledPicos: number;
+    freeSettledPicos: number;
+    paidSettledPicos: number;
+    outputTokens: number;
+  } | null> {
     if (settled) return null;
     settled = true;
 
     if (tracker.sawInputUsage && tracker.sawFinalOutputUsage && !tracker.usageMalformed) {
       const settledPicos = computeSettledPicos(model, tracker);
+      const freeSettledPicos = Math.min(settledPicos, freeReservedPicos);
+      const paidSettledPicos = Math.max(0, settledPicos - freeSettledPicos);
       await settleReservation(db, {
         id: reservationId,
         status: "settled",
@@ -212,9 +224,12 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
         cacheWriteTokens: tracker.cacheWriteTokens,
         settledAt: nowSeconds(),
       });
+      onSettled?.(settledPicos, freeSettledPicos, paidSettledPicos);
       return {
         emitEvent: reason === "eof" && tracker.sawMessageStop && !tracker.streamErrored,
         settledPicos,
+        freeSettledPicos,
+        paidSettledPicos,
         outputTokens: tracker.outputTokens,
       };
     }
@@ -231,6 +246,8 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
         ...tracker,
         outputTokens: boundedOutputTokens,
       });
+      const freeSettledPicos = Math.min(settledPicos, freeReservedPicos);
+      const paidSettledPicos = Math.max(0, settledPicos - freeSettledPicos);
       await settleReservation(db, {
         id: reservationId,
         status: "settled",
@@ -241,13 +258,18 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
         cacheWriteTokens: tracker.cacheWriteTokens,
         settledAt: nowSeconds(),
       });
+      onSettled?.(settledPicos, freeSettledPicos, paidSettledPicos);
       return {
         emitEvent: false,
         settledPicos,
+        freeSettledPicos,
+        paidSettledPicos,
         outputTokens: boundedOutputTokens,
       };
     }
 
+    const freeSettledPicos = Math.min(reservedPicos, freeReservedPicos);
+    const paidSettledPicos = Math.max(0, reservedPicos - freeSettledPicos);
     await settleReservation(db, {
       id: reservationId,
       status: "kept",
@@ -258,9 +280,12 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
       cacheWriteTokens: null,
       settledAt: nowSeconds(),
     });
+    onSettled?.(reservedPicos, freeSettledPicos, paidSettledPicos);
     return {
       emitEvent: false,
       settledPicos: reservedPicos,
+      freeSettledPicos,
+      paidSettledPicos,
       outputTokens: 0,
     };
   }
@@ -286,6 +311,9 @@ export function createSettlementStream(options: SettlementStreamOptions): Readab
               `event: materione_settlement\n` +
               `data: ${JSON.stringify({
                 settledPicos: outcome.settledPicos,
+                freeSettledPicos: outcome.freeSettledPicos,
+                paidSettledPicos: outcome.paidSettledPicos,
+                settledCredits: Number((outcome.settledPicos / PICOS_PER_CREDIT).toFixed(4)),
                 usage: {
                   inputTokens: tracker.inputTokens,
                   outputTokens: outcome.outputTokens,

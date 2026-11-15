@@ -11,10 +11,23 @@ export interface Env {
   ALLOW_TEST_UPSTREAM_OVERRIDE?: string;
   CALLER_DAILY_CAP_PICOS?: string;
   GLOBAL_DAILY_POOL_PICOS?: string;
+  SESSION_HMAC_SECRET?: string;
+  PUBLIC_BASE_URL?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  DISCORD_CLIENT_ID?: string;
+  DISCORD_CLIENT_SECRET?: string;
+  POLAR_ACCESS_TOKEN?: string;
+  POLAR_WEBHOOK_SECRET?: string;
+  POLAR_CREDITS_PRODUCT_ID?: string;
+  POLAR_API_BASE?: string;
+  ALERT_WEBHOOK_URL?: string;
+  LOADED_GATEWAY_CREDITS_USD?: string;
 }
 
 export const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": ALLOWED_ORIGIN,
+  "access-control-allow-credentials": "true",
   vary: "Origin",
 };
 
@@ -48,6 +61,7 @@ export function preflightResponse(): Response {
     status: 204,
     headers: {
       "access-control-allow-origin": ALLOWED_ORIGIN,
+      "access-control-allow-credentials": "true",
       "access-control-allow-methods": "GET, POST, OPTIONS",
       "access-control-allow-headers": "content-type",
       "access-control-max-age": "86400",
@@ -62,8 +76,28 @@ export function jsonResponse(body: unknown, status = 200, extraHeaders?: Headers
   headers.set("content-type", "application/json");
   headers.set("cache-control", "no-store");
   headers.set("access-control-allow-origin", ALLOWED_ORIGIN);
+  headers.set("access-control-allow-credentials", "true");
   headers.set("vary", "Origin");
   return new Response(JSON.stringify(body), { status, headers });
+}
+
+export function htmlResponse(
+  html: string,
+  status: number,
+  scriptSha256Base64: string,
+  extraHeaders?: HeadersInit,
+): Response {
+  const headers = new Headers(extraHeaders);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.set("cache-control", "no-store");
+  headers.set(
+    "content-security-policy",
+    `default-src 'none'; script-src 'sha256-${scriptSha256Base64}'`,
+  );
+  headers.set("referrer-policy", "no-referrer");
+  headers.set("x-frame-options", "DENY");
+  headers.set("x-content-type-options", "nosniff");
+  return new Response(html, { status, headers });
 }
 
 export function errorResponse(
@@ -74,6 +108,37 @@ export function errorResponse(
   extraHeaders?: HeadersInit,
 ): Response {
   return jsonResponse(
+    {
+      error,
+      code: typeof extra?.code === "string" ? extra.code : error,
+      message,
+      ...extra,
+    },
+    status,
+    extraHeaders,
+  );
+}
+
+export function plainJsonResponse(
+  body: unknown,
+  status = 200,
+  extraHeaders?: HeadersInit,
+): Response {
+  const headers = new Headers(extraHeaders);
+  headers.set("content-type", "application/json");
+  headers.set("cache-control", "no-store");
+  headers.set("x-content-type-options", "nosniff");
+  return new Response(JSON.stringify(body), { status, headers });
+}
+
+export function plainErrorResponse(
+  status: number,
+  error: string,
+  message: string,
+  extra?: Record<string, unknown>,
+  extraHeaders?: HeadersInit,
+): Response {
+  return plainJsonResponse(
     {
       error,
       code: typeof extra?.code === "string" ? extra.code : error,

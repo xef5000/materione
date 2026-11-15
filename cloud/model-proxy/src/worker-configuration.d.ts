@@ -11,6 +11,18 @@ declare namespace Cloudflare {
     ALLOW_TEST_UPSTREAM_OVERRIDE?: string;
     CALLER_DAILY_CAP_PICOS?: string;
     GLOBAL_DAILY_POOL_PICOS?: string;
+    SESSION_HMAC_SECRET?: string;
+    PUBLIC_BASE_URL?: string;
+    GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    DISCORD_CLIENT_ID?: string;
+    DISCORD_CLIENT_SECRET?: string;
+    POLAR_ACCESS_TOKEN?: string;
+    POLAR_WEBHOOK_SECRET?: string;
+    POLAR_CREDITS_PRODUCT_ID?: string;
+    POLAR_API_BASE?: string;
+    ALERT_WEBHOOK_URL?: string;
+    LOADED_GATEWAY_CREDITS_USD?: string;
     TEST_MIGRATIONS: { name: string; queries: string[] }[];
   }
 }
