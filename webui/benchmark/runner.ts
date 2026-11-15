@@ -491,10 +491,11 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
   const sandboxRunner = await createBenchmarkSandboxRunner(repoRoot);
 
   const results: ConfigRunResult[] = [];
+  const budget = new BudgetLedger(maxDollars, { allowZeroForMock: mock });
 
   try {
     for (const cfg of configs) {
-      const budget = new BudgetLedger(maxDollars, { allowZeroForMock: mock });
+      const configCostBefore = budget.spentPicos;
       const systemPrompt = assembleBenchmarkContext(surface, cfg.contextMode);
 
       const runOneCorpusTask = async (task: LoadedCorpusTask): Promise<TaskRunRecord> => {
@@ -785,7 +786,7 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
         contextMode: cfg.contextMode,
         cheapModelId: cfg.cheapModel.id,
         midModelId: cfg.midModel.id,
-        totalCostPicos: budget.spentPicos,
+        totalCostPicos: budget.spentPicos - configCostBefore,
         tasks: taskRecords,
         followups: followupRecords,
         vague: vagueRecords,
