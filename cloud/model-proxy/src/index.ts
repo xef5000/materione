@@ -21,7 +21,9 @@ import { getAllowanceStatus, reserveAllowance, settleReservation, sweepOldDays }
 import { computeWorstCaseReservationPicos, getDefaultModel } from "./models";
 import { createSettlementStream } from "./sse";
 import { callUpstreamModel } from "./upstream";
-import { buildUpstreamPayload, validateChatRequest } from "./validate";
+import { validateChatRequest } from "./validate";
+
+const UPSTREAM_TIMEOUT_MS = 90_000;
 
 async function handleAllowance(
   env: Env,
@@ -46,16 +48,16 @@ async function handleChat(
   day: string,
   callerHash: string,
 ): Promise<Response> {
-  const validation = await validateChatRequest(request);
+  const model = getDefaultModel();
+  const validation = await validateChatRequest(request, model);
   if (!validation.ok) {
     return errorResponse(validation.status, validation.error, validation.message);
   }
 
-  const model = getDefaultModel();
   const caps = resolveCaps(env);
   const reservedPicos = computeWorstCaseReservationPicos(
     model,
-    validation.value.estimatedInputTokens,
+    validation.value.upperBoundInputTokens,
     MAX_OUTPUT_TOKENS,
   );
 
@@ -91,11 +93,28 @@ async function handleChat(
     );
   }
 
+  const upstreamAbortController = new AbortController();
+  const onRequestAbort = () => upstreamAbortController.abort();
+  if (request.signal.aborted) {
+    upstreamAbortController.abort();
+  } else {
+    request.signal.addEventListener("abort", onRequestAbort, { once: true });
+  }
+  const timeoutId = setTimeout(() => upstreamAbortController.abort(), UPSTREAM_TIMEOUT_MS);
+  const cleanupAbort = () => {
+    clearTimeout(timeoutId);
+    request.signal.removeEventListener("abort", onRequestAbort);
+  };
+
   let upstreamResponse: Response;
   try {
-    const upstreamPayload = buildUpstreamPayload(model, validation.value);
-    upstreamResponse = await callUpstreamModel(env, upstreamPayload);
+    upstreamResponse = await callUpstreamModel(
+      env,
+      validation.value.upstreamBodyJson,
+      upstreamAbortController.signal,
+    );
   } catch {
+    cleanupAbort();
     await settleReservation(env.DB, {
       id: reservationId,
       status: "kept",
@@ -110,6 +129,7 @@ async function handleChat(
   }
 
   if (!upstreamResponse.ok || !upstreamResponse.body) {
+    cleanupAbort();
     await upstreamResponse.body?.cancel().catch(() => {});
     const definitePreProviderReject = upstreamResponse.status >= 400 && upstreamResponse.status < 500;
     await settleReservation(env.DB, {
@@ -132,6 +152,9 @@ async function handleChat(
     reservationId,
     reservedPicos,
     model,
+    abortController: upstreamAbortController,
+    isClientAborted: () => request.signal.aborted,
+    onFinalize: cleanupAbort,
   });
 
   return new Response(stream, {
@@ -172,30 +195,37 @@ export default {
       return errorResponse(503, "unavailable", "Model proxy is not configured.");
     }
 
-    const ip = requireCallerIp(request);
-    if (!ip) {
-      return errorResponse(400, "unauthenticated", "Missing caller network identity.");
+    const canonicalNetwork = requireCallerIp(request);
+    if (!canonicalNetwork) {
+      return errorResponse(400, "unauthenticated", "Missing or invalid caller network identity.");
     }
 
     const day = utcDay();
-    const callerHash = await hashCallerIp(ip, day, env.IP_HASH_SALT!.trim());
+    const callerHash = await hashCallerIp(canonicalNetwork, day, env.IP_HASH_SALT!.trim());
 
     const rateKey = path === "/v1/chat" ? `chat:${callerHash}` : `allowance:${callerHash}`;
-    const allowed = await checkRateLimit(env, rateKey);
-    if (!allowed) {
-      return errorResponse(
-        429,
-        "rate_limited",
-        "Rate limit exceeded (10 requests per minute).",
-        { retryAfterSeconds: RATE_LIMIT_RETRY_SECONDS },
-        { "retry-after": String(RATE_LIMIT_RETRY_SECONDS) },
-      );
-    }
+    try {
+      const rateOutcome = await checkRateLimit(env, rateKey);
+      if (rateOutcome === "unavailable") {
+        return errorResponse(503, "unavailable", "Model proxy is temporarily unavailable.");
+      }
+      if (rateOutcome === "limited") {
+        return errorResponse(
+          429,
+          "rate_limited",
+          "Rate limit exceeded (10 requests per minute).",
+          { retryAfterSeconds: RATE_LIMIT_RETRY_SECONDS },
+          { "retry-after": String(RATE_LIMIT_RETRY_SECONDS) },
+        );
+      }
 
-    if (path === "/v1/allowance") {
-      return handleAllowance(env, day, callerHash);
+      if (path === "/v1/allowance") {
+        return await handleAllowance(env, day, callerHash);
+      }
+      return await handleChat(request, env, ctx, day, callerHash);
+    } catch {
+      return errorResponse(503, "unavailable", "Model proxy is temporarily unavailable.");
     }
-    return handleChat(request, env, ctx, day, callerHash);
   },
 
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {

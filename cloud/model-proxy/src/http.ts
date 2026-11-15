@@ -2,12 +2,13 @@ import { ALLOWED_ORIGIN } from "./config";
 
 export interface Env {
   DB: D1Database;
-  RATE_LIMITER?: RateLimit;
+  RATE_LIMITER: RateLimit;
   CF_ACCOUNT_ID?: string;
   CF_AIG_GATEWAY_ID?: string;
   CF_AIG_TOKEN?: string;
   IP_HASH_SALT?: string;
   AIG_BASE_URL?: string;
+  ALLOW_TEST_UPSTREAM_OVERRIDE?: string;
   CALLER_DAILY_CAP_PICOS?: string;
   GLOBAL_DAILY_POOL_PICOS?: string;
 }
@@ -19,7 +20,11 @@ export const CORS_HEADERS: Record<string, string> = {
 
 export function checkOrigin(request: Request): Response | null {
   const origin = request.headers.get("origin");
-  if (origin !== ALLOWED_ORIGIN) {
+  const secFetchSite = request.headers.get("sec-fetch-site");
+  const badSecFetchSite =
+    secFetchSite !== null && secFetchSite !== "same-site" && secFetchSite !== "same-origin";
+
+  if (origin !== ALLOWED_ORIGIN || badSecFetchSite) {
     return new Response(
       JSON.stringify({
         error: "bad_origin",

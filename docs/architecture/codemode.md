@@ -1533,11 +1533,14 @@ A cold turn recurs whenever the provider's cache expires between messages. A fre
 tasks on the cheap model and less than one on the mid-tier model. None of this is measured.
 
 *As built (#402): the model proxy Worker.* `cloud/model-proxy/` (`ai.materione.com`) implements the free-allowance slice: an
-allowlist containing only `claude-haiku-5-5` (short-context, enforced by a price-tier ban test), `80,000` input / `4,000` output /
-`512 KiB` per-request ceilings, `https://editor.materione.com`-only CORS, `10 req/min` per-caller rate limiting, daily-salted
-SHA-256 IP caller identity (no raw IPs or prompt content logged or stored), `$0.05/day` caller cap + `$1.00/day` global D1 pool
-via single-statement atomic reserve/settle triggers in integer picodollars, and `cf-aig-collect-log-payload: false` on AI Gateway
-calls. `webui`'s live `ModelProvider` implementation will connect to `/v1/chat` once `#348` and `#402` both land on `main`.
+allowlist containing only `claude-haiku-5-5` (short-context, enforced by a price-tier ban test), an immutable server-owned
+system charter + `run_program({ text })` tool lock (wrapping only the caller's bounded SDK index in `<untrusted_server_sdk_index>`),
+mathematical `1 byte = 1 token + framing` upper-bound reservation under `80,000` input / `4,000` output / `512 KiB` per-request
+ceilings, `https://editor.materione.com`-only CORS + `Sec-Fetch-Site` check, fail-closed `10 req/min` per-caller rate limiting and
+D1 `503` error boundary, daily-salted SHA-256 canonical network identity (IPv4 `/32`, IPv4-mapped IPv6 normalized to IPv4, IPv6 `/64`
+prefix; no raw IPs or prompt content logged or stored), `$0.05/day` caller cap + `$1.00/day` global D1 pool (`GLOBAL_DAILY_POOL_PICOS=0`
+instant kill-switch) via single-statement atomic reserve/settle triggers in integer picodollars, and `cf-aig-collect-log-payload: false`
+on AI Gateway calls. `webui`'s live `ModelProvider` implementation will connect to `/v1/chat` once `#348` and `#402` both land on `main`.
 
 **Which model: measured, not chosen from public leaderboards.** The harness exists: the benchmark tasks (agent-benchmark.md), the
 type-check Worker (§3.10) and the server dry-run replay (§3.9). For each candidate model the run records the fraction of tasks

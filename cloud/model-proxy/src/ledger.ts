@@ -99,18 +99,17 @@ export async function getAllowanceStatus(
   callerCapPicos: number,
   poolCapPicos: number,
 ): Promise<AllowanceStatus> {
-  const callerRow = await db
-    .prepare("SELECT used_picos FROM daily_caller_usage WHERE day = ?1 AND caller_hash = ?2")
+  const row = await db
+    .prepare(
+      `SELECT
+         COALESCE((SELECT used_picos FROM daily_caller_usage WHERE day = ?1 AND caller_hash = ?2), 0) AS caller_used,
+         COALESCE((SELECT used_picos FROM daily_pool_usage WHERE day = ?1), 0) AS pool_used`,
+    )
     .bind(day, callerHash)
-    .first<{ used_picos: number }>();
+    .first<{ caller_used: number; pool_used: number }>();
 
-  const poolRow = await db
-    .prepare("SELECT used_picos FROM daily_pool_usage WHERE day = ?1")
-    .bind(day)
-    .first<{ used_picos: number }>();
-
-  const callerUsed = callerRow?.used_picos ?? 0;
-  const poolUsed = poolRow?.used_picos ?? 0;
+  const callerUsed = row?.caller_used ?? 0;
+  const poolUsed = row?.pool_used ?? 0;
   const remainingPicos = Math.max(0, callerCapPicos - callerUsed);
 
   return {

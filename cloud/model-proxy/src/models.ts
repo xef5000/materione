@@ -41,12 +41,12 @@ export function getDefaultModel(): ModelSpec {
 
 export function computeWorstCaseReservationPicos(
   model: ModelSpec,
-  estimatedInputTokens: number,
+  upperBoundInputTokens: number,
   maxOutputTokens: number,
 ): number {
-  const reservedInputTokens = Math.min(MAX_INPUT_TOKENS, Math.ceil(estimatedInputTokens * 1.15));
+  const boundedInputTokens = Math.min(MAX_INPUT_TOKENS, Math.max(0, Math.ceil(upperBoundInputTokens)));
   const worstCaseInputPrice = Math.max(model.inputPicosPerToken, model.cacheWritePicosPerToken);
-  return reservedInputTokens * worstCaseInputPrice + maxOutputTokens * model.outputPicosPerToken;
+  return boundedInputTokens * worstCaseInputPrice + maxOutputTokens * model.outputPicosPerToken;
 }
 
 export function computeSettledPicos(model: ModelSpec, usage: TokenUsage): number {

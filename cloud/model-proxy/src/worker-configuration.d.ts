@@ -2,12 +2,13 @@
 declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
-    RATE_LIMITER?: RateLimit;
+    RATE_LIMITER: RateLimit;
     CF_ACCOUNT_ID?: string;
     CF_AIG_GATEWAY_ID?: string;
     CF_AIG_TOKEN?: string;
     IP_HASH_SALT?: string;
     AIG_BASE_URL?: string;
+    ALLOW_TEST_UPSTREAM_OVERRIDE?: string;
     CALLER_DAILY_CAP_PICOS?: string;
     GLOBAL_DAILY_POOL_PICOS?: string;
     TEST_MIGRATIONS: { name: string; queries: string[] }[];

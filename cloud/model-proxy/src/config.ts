@@ -13,6 +13,8 @@ export const RETENTION_DAYS = 2;
 export const PICO_PER_USD = 1_000_000_000_000;
 export const DEFAULT_CALLER_DAILY_CAP_PICOS = 50_000_000_000; // $0.05 / day
 export const DEFAULT_GLOBAL_DAILY_POOL_PICOS = 1_000_000_000_000; // $1.00 / day
+export const MAX_CONFIGURABLE_CALLER_CAP_PICOS = 250_000_000_000; // $0.25 / day
+export const MAX_CONFIGURABLE_GLOBAL_POOL_PICOS = 10_000_000_000_000; // $10.00 / day
 
 export interface AllowanceCaps {
   callerDailyCapPicos: number;
@@ -30,7 +32,13 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
 
 export function resolveCaps(env: Env): AllowanceCaps {
   return {
-    callerDailyCapPicos: parsePositiveInt(env.CALLER_DAILY_CAP_PICOS, DEFAULT_CALLER_DAILY_CAP_PICOS),
-    globalDailyPoolPicos: parsePositiveInt(env.GLOBAL_DAILY_POOL_PICOS, DEFAULT_GLOBAL_DAILY_POOL_PICOS),
+    callerDailyCapPicos: Math.min(
+      parsePositiveInt(env.CALLER_DAILY_CAP_PICOS, DEFAULT_CALLER_DAILY_CAP_PICOS),
+      MAX_CONFIGURABLE_CALLER_CAP_PICOS,
+    ),
+    globalDailyPoolPicos: Math.min(
+      parsePositiveInt(env.GLOBAL_DAILY_POOL_PICOS, DEFAULT_GLOBAL_DAILY_POOL_PICOS),
+      MAX_CONFIGURABLE_GLOBAL_POOL_PICOS,
+    ),
   };
 }

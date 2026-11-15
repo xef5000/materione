@@ -10,15 +10,16 @@ The relay Worker (`cloud/editor-worker/`) stays separate and ciphertext-only.
 ## Layout
 
 ```
-src/index.ts      router, CORS/origin gate, hourly cron sweep (scheduled)
-src/http.ts       strict Origin gate, CORS/JSON response helpers, UTC day helpers
-src/config.ts     request/token ceilings, picodollar constants, cap env resolution
+src/index.ts      router, CORS/origin gate, D1/rate-limit 503 boundary, hourly cron sweep
+src/http.ts       strict Origin + Sec-Fetch-Site gate, CORS/JSON helpers, UTC day helpers
+src/config.ts     request/token ceilings, picodollar constants, clamped cap env resolution
 src/models.ts     model allowlist (claude-haiku-5-5), exact integer picodollar math
-src/identity.ts   proxy config check, CF-Connecting-IP extraction, daily-salted SHA-256
-src/validate.ts   streamed 512 KiB body limit, strict Anthropic schema, token estimate
-src/ledger.ts     single-statement atomic D1 reserve/settle, read-only allowance query
-src/upstream.ts   AI Gateway fetch (cf-aig-authorization, ZDR/no-payload-logging)
-src/sse.ts        Anthropic SSE parser + settlement event emitter
+src/identity.ts   fail-closed config & RATE_LIMITER, IPv6 /64 canonicalization, daily-salted SHA-256
+src/prompt.ts     immutable server-owned system charter & canonical run_program tool definition
+src/validate.ts   streamed 512 KiB body, strict prompt/tool lock, 1-byte=1-token upper bound
+src/ledger.ts     single-statement atomic D1 reserve/settle, single-query allowance status
+src/upstream.ts   AI Gateway fetch (cf-aig-authorization, ZDR/no-payload-logging, abort signal)
+src/sse.ts        per-stream UTF-8 + CRLF SSE parser, interrupted-stream settlement, event emitter
 migrations/       D1 schema + atomic BEFORE INSERT / AFTER UPDATE triggers
 test/             vitest on the real Workers runtime (@cloudflare/vitest-plugin)
 ```
@@ -66,16 +67,16 @@ All monetary arithmetic uses exact integer **picodollars** (`1 USD = 1_000_000_0
 
 | Component | Free / Prepaid Limit | Proxy Guard / Behavior |
 |---|---|---|
-| Workers Free | 100,000 req/day hard stop | `10 req/min` per caller on `/v1/chat` (`RATE_LIMITER`) |
-| D1 Free | 5M reads, 100k writes/day, 5 GB hard stop | 2 writes/turn (reserve + settle) = max ~50k turns/day; `$1.00/day` pool caps much earlier (~125–500 turns/day); hourly cron retains 2 UTC days |
-| Workers Rate Limiting | Free tier | Binding `RATE_LIMITER` (`10 req / 60s` per daily-salted caller hash) |
-| AI Gateway Unified Billing | Prepaid credits, auto top-up OFF, 5% top-up fee | `claude-haiku-5-5` short-context only (`$0.10` in / `$0.01` cache read / `$0.125` cache write / `$0.50` out per 1M); `$0.05/day` caller cap; `$1.00/day` global D1 pool; gateway spend limit |
+| Workers Free | 100,000 req/day hard stop | `10 req/min` per caller on `/v1/chat` (`RATE_LIMITER`, fail-closed `503` if missing or throwing) |
+| D1 Free | 5M reads, 100k writes/day, 5 GB hard stop | 2 writes/turn (reserve + settle) = max ~50k turns/day; `$1.00/day` pool caps much earlier (~125–500 turns/day); D1 errors fail closed to `503`; hourly cron retains 2 UTC days |
+| Workers Rate Limiting | Free tier | Binding `RATE_LIMITER` (`10 req / 60s` per daily-salted canonical network hash: IPv4 `/32`, IPv4-mapped IPv6 normalized to IPv4, IPv6 `/64` prefix) |
+| AI Gateway Unified Billing | Prepaid credits, auto top-up OFF, 5% top-up fee | `claude-haiku-5-5` short-context only (`$0.10` in / `$0.01` cache read / `$0.125` cache write / `$0.50` out per 1M); immutable server-owned system charter + `run_program` tool lock; mathematical `1 byte = 1 token + framing` upper-bound reservation; `$0.05/day` caller cap; `$1.00/day` global D1 pool (`GLOBAL_DAILY_POOL_PICOS=0` acts as an instant kill-switch; caps clamped to `$0.25`/`$10.00` ceilings); gateway spend limit |
 
 ## What the proxy sees vs never stores
 
-- **Stateless pass-through**: `system`, `messages`, `tools`, and SSE deltas are forwarded
-  to AI Gateway with `cf-aig-collect-log-payload: false` and never written to D1 or
-  `console.*`.
-- **D1 stores only**: daily-salted `SHA-256(ip + ":" + utcDay + ":" + IP_HASH_SALT)`
-  caller hashes and integer picodollar/token counters. Raw IP addresses are never stored
-  or logged.
+- **Stateless pass-through**: `messages`, bounded `<untrusted_server_sdk_index>`, and SSE
+  deltas are forwarded to AI Gateway with `cf-aig-collect-log-payload: false` and never
+  written to D1 or `console.*`.
+- **D1 stores only**: daily-salted `SHA-256(canonicalNetwork + ":" + utcDay + ":" + IP_HASH_SALT)`
+  caller hashes (IPv4 `/32`, IPv6 `/64` prefix) and integer picodollar/token counters.
+  Raw IP addresses are never stored or logged.

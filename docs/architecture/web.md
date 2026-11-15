@@ -230,9 +230,14 @@ browser while the relay Worker remains ciphertext-only:
 - **Endpoints**: `POST /v1/chat` (streams Anthropic SSE with `materione_settlement`
   summary) and `GET /v1/allowance` (read-only remaining daily allowance and pool status).
 - **Atomic ledger**: single-statement SQLite `BEFORE INSERT` / `AFTER UPDATE` triggers in
-  `model-proxy-allowance` reserve worst-case picodollars before calling AI Gateway and
-  settle exact reported token costs afterward (keeping the reservation if a stream fails
-  without completing). Hourly cron sweeps rows older than 2 UTC days.
+  `model-proxy-allowance` reserve mathematical `1 byte = 1 token + framing` worst-case
+  picodollars before calling AI Gateway and settle exact reported token costs afterward
+  (or bounded/kept reservations on interrupted streams). `RATE_LIMITER` and D1 failures
+  fail closed to `503 unavailable`; caller identities canonicalize IPv6 to `/64` and
+  IPv4-mapped IPv6 to IPv4 before daily-salted SHA-256 hashing; `GLOBAL_DAILY_POOL_PICOS=0`
+  acts as an instant kill-switch; and an immutable server-owned system charter +
+  `run_program` tool lock prevents general-purpose LLM abuse. Hourly cron sweeps rows older
+  than 2 UTC days.
 
 ---
 
