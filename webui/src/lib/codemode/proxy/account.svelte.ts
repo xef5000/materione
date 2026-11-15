@@ -6,8 +6,10 @@
  * this module never persists tokens or credentials in the browser and never touches editor
  * session keys or review actions.
  */
+import { untrack } from 'svelte';
 import type { RpcChannel } from '../../api';
 import type { EditorHost } from '../../host';
+import { reviewAvailable } from '../review/state.svelte';
 import { chat, installChatProvider } from '../chat/state.svelte';
 import { resolveCloudProxyBaseUrl } from './config';
 import { createProxyModelProvider } from './provider';
@@ -313,36 +315,38 @@ export function syncCloudAssistant(
   host: EditorHost | null | undefined,
   options: { force?: boolean } = {},
 ): void {
-  const baseUrl = channel !== null && chat.capable ? resolveCloudProxyBaseUrl(host) : null;
-  if (baseUrl === null) {
-    cleanupListeners();
-    syncGeneration++;
-    activeChannel = null;
-    activeBaseUrl = null;
-    pendingBillingRefresh = false;
-    cloudAccount.active = false;
-    cloudAccount.status = 'idle';
-    cloudAccount.account = null;
-    cloudAccount.credits = null;
-    cloudAccount.freeAllowance = null;
-    cloudAccount.notice = null;
-    cloudAccount.billingBusy = false;
-    if (chat.prompts.length === 0 && chat.provider?.id === 'materione-cloud') {
-      installChatProvider(null);
+  const baseUrl = channel !== null && reviewAvailable(channel) ? resolveCloudProxyBaseUrl(host) : null;
+  untrack(() => {
+    if (baseUrl === null) {
+      cleanupListeners();
+      syncGeneration++;
+      activeChannel = null;
+      activeBaseUrl = null;
+      pendingBillingRefresh = false;
+      cloudAccount.active = false;
+      cloudAccount.status = 'idle';
+      cloudAccount.account = null;
+      cloudAccount.credits = null;
+      cloudAccount.freeAllowance = null;
+      cloudAccount.notice = null;
+      cloudAccount.billingBusy = false;
+      if (chat.prompts.length === 0 && chat.provider?.id === 'materione-cloud') {
+        installChatProvider(null);
+      }
+      return;
     }
-    return;
-  }
 
-  if (!options.force && activeChannel === channel && activeBaseUrl === baseUrl) {
-    return;
-  }
+    if (!options.force && activeChannel === channel && activeBaseUrl === baseUrl) {
+      return;
+    }
 
-  activeChannel = channel;
-  activeBaseUrl = baseUrl;
-  cloudAccount.active = true;
-  cloudAccount.notice = null;
-  attachListeners(baseUrl);
-  void refreshMe();
+    activeChannel = channel;
+    activeBaseUrl = baseUrl;
+    cloudAccount.active = true;
+    cloudAccount.notice = null;
+    attachListeners(baseUrl);
+    void refreshMe();
+  });
 }
 
 export function disposeCloudAssistant(): void {
