@@ -17,6 +17,8 @@
   import type { IconName } from './icons';
   import ReviewPanel from '../codemode/review/ReviewPanel.svelte';
   import { connectReview, disposeReview, review } from '../codemode/review/state.svelte';
+  import ChatPanel from '../codemode/chat/ChatPanel.svelte';
+  import { chat, connectChat, disposeChat } from '../codemode/chat/state.svelte';
   import { activityLog, connection, diagnostics, session, ui } from '../state.svelte';
   import { onDestroy, tick } from 'svelte';
 
@@ -27,7 +29,7 @@
   let { onDisconnect }: Props = $props();
 
   type RailView = 'start' | 'content' | 'assets' | 'advanced' | 'diagnostics' | 'server';
-  type RailTarget = RailView | 'activity' | 'review';
+  type RailTarget = RailView | 'activity' | 'review' | 'assistant';
   type RailEntry = { id: RailTarget; label: string; icon: IconName };
 
   const authoringViews: RailEntry[] = [
@@ -43,16 +45,25 @@
     { id: 'server', label: 'Server', icon: 'server' },
   ];
   // Review (code-mode proposals and the change log) exists only when the connected server advertises code mode.
+  // The Assistant entry is always there: on a server without code mode its panel says, plainly, that there is no assistant.
+  const assistantEntry: RailEntry = { id: 'assistant', label: 'Assistant', icon: 'message-square' };
   const supportViews = $derived<RailEntry[]>(
-    review.ready ? [baseSupportViews[0]!, { id: 'review', label: 'Review', icon: 'file-diff' }, ...baseSupportViews.slice(1)] : baseSupportViews,
+    review.ready
+      ? [baseSupportViews[0]!, assistantEntry, { id: 'review', label: 'Review', icon: 'file-diff' }, ...baseSupportViews.slice(1)]
+      : [baseSupportViews[0]!, assistantEntry, ...baseSupportViews.slice(1)],
   );
 
   // One review session per connected channel; a different channel is a different session, and the old store ends.
   $effect(() => {
     void connection.connected;
     connectReview(session.channel);
+    // after the review session: the assistant proposes through that session's agent port
+    connectChat(session.channel);
   });
-  onDestroy(disposeReview);
+  onDestroy(() => {
+    disposeChat();
+    disposeReview();
+  });
 
   let initialized = $state<Record<RailView, boolean>>({
     start: false,
@@ -79,9 +90,18 @@
       ui.activityOpen = !ui.activityOpen;
       return;
     }
+    // The assistant and Review share the side column: opening one closes the other.
     if (target === 'review') {
-      review.focusOnOpen = !review.open;
-      review.open = !review.open;
+      const showing = review.open && !chat.open;
+      chat.open = false;
+      review.focusOnOpen = !showing;
+      review.open = !showing;
+      return;
+    }
+    if (target === 'assistant') {
+      chat.focusOnOpen = !chat.open;
+      chat.open = !chat.open;
+      if (chat.open) review.open = false;
       return;
     }
     ui.returnTo = null;
@@ -104,6 +124,28 @@
     void tick().then(() => document.getElementById('review-toggle')?.focus());
   }
 
+  function closeAssistant(): void {
+    chat.open = false;
+    void tick().then(() => document.getElementById('assistant-toggle')?.focus());
+  }
+
+  function openReviewFromAssistant(): void {
+    chat.open = false;
+    review.tab = 'log';
+    review.focusOnOpen = true;
+    review.open = true;
+  }
+
+  // Which side panel shows. The assistant wins while it is open: a proposal that needs the owner is inline in it.
+  const sidePanel = $derived<'assistant' | 'review' | null>(chat.open ? 'assistant' : review.ready && review.open ? 'review' : null);
+
+  function railState(entry: RailEntry): { active: boolean; expanded: boolean | undefined; controls: string | undefined; id: string | undefined } {
+    if (entry.id === 'activity') return { active: ui.activityOpen, expanded: ui.activityOpen, controls: ui.activityOpen ? 'activity-dock' : undefined, id: 'activity-toggle' };
+    if (entry.id === 'review') return { active: sidePanel === 'review', expanded: sidePanel === 'review', controls: sidePanel === 'review' ? 'review-panel' : undefined, id: 'review-toggle' };
+    if (entry.id === 'assistant') return { active: sidePanel === 'assistant', expanded: sidePanel === 'assistant', controls: sidePanel === 'assistant' ? 'assistant-panel' : undefined, id: 'assistant-toggle' };
+    return { active: ui.view === entry.id, expanded: undefined, controls: undefined, id: undefined };
+  }
+
   function errorCount(entry: RailEntry): number {
     if (entry.id === 'diagnostics') return problems;
     if (entry.id === 'activity') return activityErrors;
@@ -123,7 +165,7 @@
 <div class="workbench">
   <AppHeader />
 
-  <div class="main" class:rail-collapsed={ui.railCollapsed} class:with-review={review.ready && review.open}>
+  <div class="main" class:rail-collapsed={ui.railCollapsed} class:with-review={sidePanel !== null}>
     <nav class="rail" class:collapsed={ui.railCollapsed} aria-label="Workspace navigation">
       <div class="nav-group" role="group" aria-label="Authoring">
         <h2 class="group-label">Authoring</h2>
@@ -146,15 +188,16 @@
         <h2 class="group-label">Support</h2>
         {#each supportViews as entry (entry.id)}
           {@const count = errorCount(entry)}
+          {@const state = railState(entry)}
           <button
             type="button"
-            class:active={entry.id === 'activity' ? ui.activityOpen : entry.id === 'review' ? review.open : ui.view === entry.id}
+            class:active={state.active}
             title={accessibleLabel(entry)}
             aria-label={accessibleLabel(entry)}
-            aria-current={entry.id !== 'activity' && entry.id !== 'review' && ui.view === entry.id ? 'page' : undefined}
-            aria-controls={entry.id === 'activity' && ui.activityOpen ? 'activity-dock' : entry.id === 'review' && review.open ? 'review-panel' : undefined}
-            aria-expanded={entry.id === 'activity' ? ui.activityOpen : entry.id === 'review' ? review.open : undefined}
-            id={entry.id === 'activity' ? 'activity-toggle' : entry.id === 'review' ? 'review-toggle' : undefined}
+            aria-current={state.expanded === undefined && ui.view === entry.id ? 'page' : undefined}
+            aria-controls={state.controls}
+            aria-expanded={state.expanded}
+            id={state.id}
             onclick={() => activate(entry.id)}
           >
             <Icon name={entry.icon} size={19} />
@@ -249,7 +292,9 @@
       {/if}
     </main>
 
-    {#if review.ready && review.open}
+    {#if sidePanel === 'assistant'}
+      <ChatPanel onClose={closeAssistant} onOpenReview={openReviewFromAssistant} />
+    {:else if sidePanel === 'review'}
       <ReviewPanel onClose={closeReview} />
     {/if}
   </div>
@@ -448,7 +493,8 @@
     .main.with-review.rail-collapsed {
       grid-template-columns: 48px minmax(0, 1fr);
     }
-    .main.with-review :global(#review-panel) {
+    .main.with-review :global(#review-panel),
+    .main.with-review :global(#assistant-panel) {
       grid-column: 2;
       grid-row: 1;
       z-index: 2;
