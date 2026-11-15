@@ -299,8 +299,8 @@ SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are bu
 | **Fixed core types** | `generate/core.d.ts` | Hand-written declarations of what the generated text refers to (`Ref`, `MiniMessage`, `Expr`, `ActionStep`, `TriggerBinding`, `RuleSet`, `m`, ...), with **empty interfaces the generated text merges members into** (`PackWriter`, `RefFactory`, `ActionCatalog`, ...). Types only. #339 owns it and may reshape it; the generator needs only the names it declares. It is excluded from the editor's own `tsconfig.json`, because it declares globals. |
 | **Recorded registries** | `fixtures/codemode/registry/` | `plugin-current.json`, written by the JVM test `EditorDemoSnapshotTest` from the real `authoring.describe` op and `SessionBlob.CURRENT_CAPABILITIES` (so it cannot drift: a new action changes it there, and the generator golden then shows the SDK diff); `with-addon.json`, derived from it by a test helper (one fake addon's action, trigger and content type) and checked to equal that derivation. |
 | **Goldens** | `fixtures/golden/codemode/*.d.ts` | The generated text for each snapshot, compared byte for byte (`codemode-generate.spec.ts`). Regenerate with `MATERIONE_GOLDEN_REGEN=true` (the vitest counterpart of `-Dmaterione.golden.regen=true`), review, commit. |
-| **Program corpus** | `fixtures/codemode/corpus/` | `<task>.ts` with `<task>.expect.json` (registry, `pass` or `fail`, the diagnostics a failure must show). The first six: T04 (the daily kit, with `m.fn.now()`), T08, T11, T25 (pass), T27 (fails with TS2339 on `commands`) and T05 (fails with TS2322: the clock work added the `on_cooldown` rule option, but self-description describes it as a `raw` value, so a step list in it is rejected until a step-list parameter kind exists, #355). `codemode-compile.spec.ts` type-checks each with the real `typescript` package against the golden surface. |
-| **Ban tests** | `codemode-generator-bans.spec.ts` | The generator source holds no registry id as a string literal (every id of both snapshots is compared), imports only `./surface`, and touches no DOM, storage or network global. |
+| **Program corpus** | `fixtures/codemode/corpus/` | `<task>.ts` with `<task>.expect.json` (registry, `pass` or `fail`, the diagnostics a failure must show). T04 (the daily kit, with `m.fn.now()` and the variable interpolated as its handle), T05 (`on_cooldown` as a step list), T08 (a list-valued `click` filter), T11, T16 (typed `choose` and a typed expression value), T25, T29 and the corpus-only C01 pass; T27 fails with TS2339 on `commands`. `codemode-compile.spec.ts` type-checks each with the real `typescript` package against the golden surface. |
+| **Ban tests** | `codemode-generator-bans.spec.ts` | The generator source holds no registry id as a string literal (every id of both snapshots is compared, and since #355 every word of the engine's grammar: step kinds, composite conditions, the keys each is written with, the flow keys of a rule), imports only `./surface`, and touches no DOM, storage or network global. **`core.d.ts` is under the same ban**: no member and no literal of it is a grammar word, and the interfaces the generated text fills (`StepBuilders`, `RuleBody`, `RuleOptions`, `ConditionCatalog`) are declared empty. |
 
 **The mapping, as built** (§3.1's table with the real spellings):
 
@@ -313,6 +313,11 @@ SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are bu
 | `string` whose widget hint names a content type (`item`, `sound`, `variable`) | `string \| Ref<"that type">` (read from the registry, not listed) |
 | `list` with `nested` | An array of an object type; a list of `referenceKind` `mechanic` is `MechanicEntry[]` and one whose nested `type` references `gui-component` is `GuiLayerEntry[]` (the two reference kinds that name a polymorphic registry) |
 | `raw` | `JsonValue` |
+| `valueKind` `steps`, `condition`, `conditions`, `flow`, `arguments` (#355) | `readonly Step[]`, `ConditionValue` (a built condition or an `Expr<boolean>`), `readonly ConditionValue[]`, `string`, a mapping of names to values; the kind replaces the value type |
+| `expression: true` (#355) | The value type, `\| Expr`: the parameter also takes `m.expr` or an `m.fn` result |
+| `multiple: true` (#355) | The value type, `\| readonly (type)[]`: one value or a list (every trigger filter) |
+| `scope` on a parameter (#355) | A TSDoc line naming the variables the steps it holds can read (`cooldown.remaining` in `on_cooldown`) |
+| `supersededBy` on an entry (#355) | A TSDoc line `Superseded by: ...` (not `@deprecated`: the entry still loads and runs) |
 | A list whose widget hint is `behavior-rules` | Not a field: the resource's handle gets `rules` (below) |
 
 **Names.** The collection of a content type is its `directory` (`p.items`, `p.guis`, `p.currencies`); its record type is
@@ -330,7 +335,7 @@ when every other parameter is optional. Every action also takes the registry's `
 
 **Trigger-typed rules (benchmark S1, S7).** A trigger is a value built by calling its member, with its variant and filters:
 `m.triggers.click({ detail: "right" })`, `m.triggers.guiClick({ layer: "buy", click: "left" })`; filters are typed from the
-trigger's `filters` and are **not** widened to lists (the self-description does not say which accept one; §13). The result is a
+trigger's `filters`, each one value or a list of values (`click: ["left", "shift_left"]`: the engine reads every filter so, and `TriggerDescription` declares it, #355). The result is a
 `TriggerBinding<Id, Context>`, where `Context` is generated from the trigger's declared context schema **by the host that fires
 it**: `{ item: {...}, furniture: {...} }`, each host's entry holding the variables whose `hosts` list is empty or names it, as a
 tree of `ContextValue<T>` (`ctx.player.sneaking`). A resource handle's `rules` is a `RuleSet<"item">`, and
@@ -346,7 +351,7 @@ sword.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({
 takes the trigger first and types the rest from it: the callback receives the context for the rule's own host, so `ctx.player.health`
 is a type error on a furniture rule (the schema fills it for items only); a trigger no host of that type fires (`guiClick` on an
 item, or a trigger whose `firedBy` is empty) is a type error on the argument, naming the missing host; and a key the rule body
-does not carry is a type error (the registered `ruleOptions`, `cooldown` among them, are the only options). A context value
+does not carry is a type error (the registered `ruleOptions`, `cooldown` among them, and the `ruleBody` keys the engine describes, `if` and `do`, are the only keys). A context value
 interpolated into `m.expr` becomes its path, so a variable the trigger does not declare cannot be written by accident. What is not
 checked is the expression *text* itself: only its interpolations are typed; its syntax and its bare identifiers are the stage
 check's and the server's (§13).
@@ -354,14 +359,29 @@ check's and the server's (§13).
 `variadic` makes the last a rest parameter), accepting a literal, an `Expr` or a context value and returning `Expr<number>`,
 `Expr<string>` or `Expr<boolean>`. A function the server lacks (`m.fn.sqrt()` today) is TS2339, the same as every other gap.
 
+**The engine's grammar is generated too (#355).** The structural steps, the composite conditions and the flow keys of a rule
+are engine-owned and closed, not registry entries; they describe themselves on the wire and the generator reads them like a
+registry. `core.d.ts` declares `StepBuilders`, `RuleBody` and `ConditionCatalog` empty, and the generated text fills them:
+
+| On the wire (`authoring.describe`, `behavior`) | What it says | Generated |
+|---|---|---|
+| `steps[]`: `parameters`, `payload`, `siblings`, `oneOf`, `registry` | Each step kind: the parameter that is the value of its own key (`payload`), the parameters written as keys beside it (`siblings`), the siblings of which one is required (`oneOf`), and, for `action`, the registry its steps are drawn from | `m.steps.<id>(value, options)` for a kind with a payload (`if(condition, { then, else })`, `require(steps, { else })`, `choose(branches, { else })`, `wait(ticks)`, `call(flow, { with })`); `m.steps.<id>(options?)` for one without (`stop({ cancel })`). `oneOf` makes the options a union in which each named key is required in turn. A kind with a `registry` gets no builder: its steps are `m.actions.*`. |
+| `conditionForms[]`, same shape | `all`, `any`, `not`, `at_least` | Members of `m.conditions` beside the registered ones: `all([...])`, `any([...])`, `not(condition)`, `atLeast({ count, of })` |
+| `ruleBody[]` | The flow keys of a rule: `if` (a condition), `do` (steps, required) | `RuleBody`, which `rules.add` types its callback's result with |
+| `guardOptions[]` | The keys the step of an action that guards what follows (`takesElse`) may carry: `else` (steps) | `GuardOptions`, which the parameters of a `takesElse` action extend (`prompt`, `custody.consume`) |
+
+`choose` takes a plain list of branches (`rewards.map(...)` needs no cast, benchmark S19); that the list is not empty is checked
+when the program runs. The engine's set stays closed: `StepKinds` (the `behavior` module) is the one table, the step compiler
+reads its control keys and their companions from it, and the vocabulary publishes it.
+
 **Where the generated surface stops.** A registry the wire does not carry produces nothing, and this is the list of what that
-leaves out today (issue #355 tracks the self-description additions): presets (D12 layer 2: there is no preset registry yet); currencies and economy providers (a `currency` is a
-content type, so it is a collection, but there is no provider registry; an unavailable `give_money` shows through `available`);
-which action and condition parameters accept an `Expr` (every scalar is typed as its literal); that a trigger filter accepts a list;
-`supersededBy` (S5); the parameters of the structural steps (`if`, `require`, `choose`, `wait`, `call`), which `core.d.ts` types by
-hand because they are the flow model and not registry entries (`StepBuilders` follows logic.md §2.2 and the engine's step compiler: `require` takes steps, `if` takes a condition and a `then` or `else`; **this hand-typing is temporary until #355** puts the step grammar in self-description, after which the generator emits it); and the GUI layer rules (a layer's behavior is the GUI's own
-`gui.click` rules filtered by `layer`, so that is how a shop button is written). None of this needed a server change, and none was
-made.
+leaves out today: presets (D12 layer 2: there is no preset registry yet); currencies and economy providers (a `currency` is a
+content type, so it is a collection and, since #355, the kind the three `currency` parameters name, but there is no provider
+registry; an unavailable `give_money` shows through `available`); a `Ref<"template">` (the item `template` field is typed so,
+and the surface has no `m.ref.template`, because a template is not a content type with a collection: §13); per-slot selection
+for a `slots` layer (the engine has none to describe: §13); and the GUI layer rules (a layer's behavior is the GUI's own
+`gui.click` rules filtered by `layer`, so that is how a shop button is written). A jar that predates #355 sends no grammar, so
+its surface has no `m.steps` members and an empty `RuleBody`: a smaller surface, as §7 says, and no hand-typed fallback.
 
 ### 3.9 As built: the core (#339)
 
@@ -376,9 +396,9 @@ not part of it.
 | **Entry** | `core/index.ts`, `core/session.ts` | `createSession({ surface, port, limits?, programFile? })` returns `{ m, finish(outcome), late() }`. `m` is the program's one global; `finish` ends the run and returns a `ProgramResult`. |
 | **The port** | `core/types.ts` | `HostPort { read(op, payload): Promise<ReadReply>; resolve(request): Promise<ResolveReply>; stage?; log?; done? }`. Staging makes no call; `m.read.*` awaits `read`; the seal makes one `resolve`. The contract is below. |
 | **Operation table** | `core/ops.ts` | The one place that names editor ops: `READS` and `WRITES`, one row per SDK member and, for a write, per operation kind, with the capability that gates it. `scripts/compat/editor-compat.mjs` scans it as it scans the editor's `.call(...)` sites and fails when a supported release lacks an op named there, unless it is gated in `editor-op-gates.json` on a capability the row names (the core checks it before it exposes the member). |
-| **Step grammar** | `core/steps.ts` | `m.steps.*` and the two rule keys that are flow vocabulary (`if`, `do`). The only file that names engine vocabulary, temporary until #355 (§3.8, "Where the generated surface stops"); a ban test confines it. |
+| **Grammar builders** | `core/forms.ts` | `m.steps.*`, the composite conditions of `m.conditions` and the keys of a rule, each built from a form of the surface document (its `payload`, its `siblings`, the grammar kind of each parameter) the way every other member is built from a registry entry. No file of the core spells a step, a condition word or a rule key since #355; the ban test holds it. |
 | **Naming, context, capabilities** | `generate/names.ts`, `generate/context.ts`, `generate/capabilities.ts` | One implementation each, **imported by both the generator and the core**: how an id becomes a member name, how a trigger's context schema becomes a tree, and when a capability takes members away. The generator and the core cannot spell a member differently because there is one spelling. |
-| **Diagnostics** | `core/diagnostics.ts`; plugin.md §5 | `SDK-0001` to `SDK-0017`, stable API, documented with the `MTR` codes. |
+| **Diagnostics** | `core/diagnostics.ts`; plugin.md §5 | `SDK-0001` to `SDK-0017`, stable API, documented with the `MTR` codes. #355 added none: a grammar value of the wrong shape is SDK-0012, like every invalid argument. |
 
 **The mapping, as built** (SDK call to transaction operation; everything is `authoring.transaction`, capability `codemode`, and the
 list the program stages *is* the request's `operations`, untouched):
@@ -473,8 +493,18 @@ expression); an action is `{ id: params }` (or the bare id) with the registry's 
 mechanic is `{ id: params }`, a layer is `{ type: id, ...params }`. Parameters are checked against the registry entry's own
 parameter ids (the types already refuse a stray key; the core refuses it for a program that was not type-checked), a function's
 arity is checked against `minArguments` and `variadic`, and a value a document cannot hold (a function, a non-finite number,
-`undefined` in a list) is SDK-0009 with its field path. Two spellings the registry cannot yet settle are benchmark S12 (a
-variable inside an expression) and S14 (an asset in a field).
+`undefined` in a list) is SDK-0009 with its field path. Two spellings come from self-description since #355:
+
+- **A reference inside an expression** (benchmark S12) is written by the form its content type declares
+  (`expressionForm`, a template over `{pack}`, `{id}` and `{<field>}`): a variable reads `vars.{scope}.{pack}.{id}`, so
+  `${daily}` in `m.expr` is `vars.player.bench.kit_daily_at` while the same handle in `set_var`'s `var` stays `bench:kit_daily_at`.
+  A field of the form is read from what the program staged for a resource it creates (or the field's declared default). For a
+  **stored** resource the field is not known while staging, so interpolating one is SDK-0012 with a hint (read it and write the
+  path as text); resolving it at seal is a follow-up (§13). A type that declares no form reads as its id, as before.
+- **An asset in a field** (benchmark S14) is written by the server's convention (`assetReference` in `authoring.describe`:
+  the root, the kind directories, whether the extension stays): `m.ref.asset("textures/item/golden_berry.png")` is checked
+  to exist under the path the owner uploaded it to, and the field holds `item/golden_berry`. The plugin's asset index and the
+  wire read one definition (`AssetConvention`), so the SDK cannot drift from what the reference validator resolves.
 
 **The run.** `finish` (asynchronous: it seals the list with one `resolve`, then returns) gives the `ProgramResult` of §5.2: `ok`, `operations`, `sources` (the program line and column of each
 operation, from the stack frame of the call, parallel to `operations`), `diagnostics`, `summary`, `logs`, the bounded `returned`,
@@ -501,19 +531,20 @@ is `{ folder? }` (the transaction has no file parameter, benchmark S13); `Resour
 `ContentTypeFields` and `ContentTypeHandles` maps those are typed from, and leaves `PackWriter` and `rules` out of a surface whose
 jar lacks the `codemode` or `logic` capability (§7), which the core leaves off at run time by the same function.
 
-**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check (T04, T08, T11, T16, T25, T29, and the two corpus-only programs below) are executed and
+**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check (T04, T05, T08, T11, T16, T25, T29, and the two corpus-only programs below) are executed and
 their lists recorded as goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a
 `<task>.world.json` beside it that the fake port answers from), every kind of operation, every error.
+A third corpus-only program, **C03**, misspells a variable inside the *text* of an expression on purpose (only the interpolations of `m.expr` are typed, §13): it stages, and its replay is accepted with `MTR-0022` as a warning. It is the recorded frame that carries the wire's `warn` severity for `codemode-host-severity.spec.ts`, which T04 was until #355 made its replay clean.
 Two corpus-only programs (no benchmark task reads and then edits what it found) cover the async half end to end: **C01** awaits `m.read.resources` and edits each stored resource it found (read, then stage, then seal with `rev` on stored documents; it replays as accepted against the fixture pack), and **C02** reads and then names an id with a typo, pinned as SDK-0007 at the line that named it; a run that ends with an error has no list, so its golden is a `runs/` record and there is nothing to replay. A read the program never awaits is waited for at `finish`, so its bytes are in the stats and its failure in the diagnostics whatever order a slow host answers in (a read the host never answers is the host's deadline to end).
 **`CodemodeReplayTest` (JVM, `plugin` module) replays every golden through the real `authoring.transaction` with `dryRun=true`**
 over the real registries and the fixture packs, and pins which stages ran, the diagnostics and the documents beside it
 (`fixtures/golden/codemode/replay/`): the same fixtures test both sides, so a list the core stages and the server refuses fails
 there. A golden whose replay reports a problem stays in the corpus with its diagnostic pinned and a `replay.note` in its
-`expect.json` naming what flips it (T04: #355; T11: #355; T16: #355 and benchmark S18). `codemode-core-drift.spec.ts`: the declarations and the
+`expect.json` naming what flips it (T16: benchmark S18; T04 and T11 replay clean since #355). `codemode-core-drift.spec.ts`: the declarations and the
 bundled core are walked with the TypeScript checker and compared member by member (`m`, each catalog, the pack writer, each
 collection, each handle, each rule set) over both recorded registries, a jar without each capability, and a jar that predates the
 capability list. `codemode-core-bans.spec.ts`: the core holds no registry id as a literal (the generator's ban, applied here),
-names no content type, reaches no op outside the table, has no write op but the transaction and never reads it, asks the port
+spells no word of the engine's grammar (#355), names no content type, reaches no op outside the table, has no write op but the transaction and never reads it, asks the port
 for four things only, and touches no DOM, storage, network, timer, Node or clock global. The compat gate fails when the table
 names an op a supported release lacks (`editor-compat.test.mjs`).
 
@@ -1368,7 +1399,7 @@ report the same findings, the dry run against the operation that removed the con
 **What is a reference comes from self-description, not from a list of names.** `RegistryLogicVocabulary` reads each registered
 action's and condition's parameters: one drawn with the `item` widget, or a `REFERENCE` that declares its `referenceKind`
 (`gui.open`'s `gui` now does), names content of that kind. A parameter that names content and declares neither is invisible to
-the check and listed below as a gap for #355.
+the check; the audit below says which were closed by #355 and which remain.
 
 **Dynamic references stay run-time.** A value with a template (`${...}`) or a placeholder (`%...%`) is an expression; it is
 resolved when the rule runs and is not checked here. A step that fails at run time reports as it always did.
@@ -1379,10 +1410,10 @@ declare it, so the walker cannot see it):
 | Parameter | Names | Declared | At load | At level 3 (#363) | Otherwise |
 |---|---|---|---|---|---|
 | `give_item.item`, `take_item.item`, `has_item.item` | item | yes (`item` widget) | `minecraft:` form only | **yes** | rest at run time; templates are expressions |
-| `has_item_space.item`, `slot_has.item` | item | **gap** | none | no | run time |
+| `has_item_space.item`, `slot_has.item` | item | yes (`item` widget, #355) | none | **yes** | rest at run time |
 | `gui.open.gui` | GUI | yes (`REFERENCE`, kind `gui`, added in #363) | none | **yes** | run time (`no live GUI matches`) |
-| `in_gui.id` | GUI | **gap** | id format | no | run time |
-| `give_money.currency`, `take_money.currency`, `has_money.currency` | currency | **gap** | none | no | run time (`unknown currency`) |
+| `in_gui.id` | GUI | declared for the SDK (`reference` widget, kind `gui`, #355); still a `STRING`, so the level-3 walker does not read it | id format | no | run time |
+| `give_money.currency`, `take_money.currency`, `has_money.currency` | currency | declared for the SDK (`reference` widget, kind `currency`, #355); the validator resolves no `currency` kind yet | none | no | run time (`unknown currency`) |
 | `sound.sound`, `stop_sound.sound` | sound | yes (`sound` widget) | none | no: a key may name a resource-pack event no pack declares; not decided (see below) | run time |
 | `set_var.var`, `var.var`, `prompt.var` | variable | yes (`variable` widget) | **yes** (`MTR-0063`; the dry run resolves it against the staged pack, #378) | at load | run time for a templated name |
 | `page_gui.list` | list layer of the GUI | **gap** | none | no | run time |
@@ -1390,10 +1421,12 @@ declare it, so the walker cannot see it):
 | GUI item layer `item:` | item | n/a (a layer field) | none | **yes** (`MTR-0054`) | `MTR-0072` at render for a named source |
 | `materione:item` item source's `item`, a variable list source's `var` | item, variable | **gap** | none | no | run time (`MTR-0072`) |
 
-Self-description gaps for #355: `has_item_space.item`, `slot_has.item` (`item` widget missing), `in_gui.id` and
-`page_gui.list` (`REFERENCE` with a kind missing), the three `currency` parameters (no `currency` kind exists), the item
-source's `item` and the variable list source's `var`. `sound` is declared but not checked because the declaration cannot say
-whether a key outside any pack is legitimate.
+**What #355 closed and what remains.** `has_item_space.item` and `slot_has.item` carry the `item` widget and are checked at
+level 3 like `give_item.item`; the `materione:item` source's `item` carries it too. `in_gui.id` and the three `currency`
+parameters declare their kind, which types them in the SDK (`string | Ref<"gui">`, `string | Ref<"currency">`) and changes no
+validation. Still gaps: `page_gui.list` (it names a layer of the same GUI, not content: no reference kind fits), the variable
+list source's `var`, level-3 resolution of the `currency` and STRING-typed `gui` kinds, and `sound`, which is declared but not
+checked because the declaration cannot say whether a key outside any pack is legitimate (an owner call).
 
 **Warnings and apply.** A warning does not block an apply: the document already says "errors block, warnings are shown" (§5.6)
 and api.md §3.3.1 "a warning is reported and never refuses". A dry run that deletes an item a slot or step names is therefore
@@ -1552,6 +1585,19 @@ alone, under the hard cap above.
   registries. What stays open is the logic expression language (`m.expr`): only its *interpolations* are typed (a trigger's
   context values, handles, `m.fn` results); how much of the expression *text* TypeScript or the stage check can verify is not
   decided, and a bare identifier in the text is checked by neither today.
+- **After #355.** Self-description carries the step grammar, the composite conditions, the rule keys, which parameters
+  accept an expression, list-valued filters, `supersededBy`, the expression form of a content type and the asset path
+  convention, and the generator and the core consume all of it. What is **not** done, each a proposed follow-up: (1) a
+  **stored** resource interpolated into an expression (its fields are unknown while staging; the seal's `resolve` would have
+  to return them, a `HostPort` change); (2) **`m.ref.template`**: a template is not a content type with a collection or
+  catalog rows, so the seal cannot resolve one the way it resolves a resource; it needs a template listing on the wire;
+  (3) **per-slot selection on a `slots` layer** (T29): the engine has no such parameter, so there is nothing to describe;
+  it is an engine feature and an owner decision (gui.md); (4) a **registry recorded with providers present**: the snapshot
+  is still headless, so `give_money` and `take_money` read as unavailable in the golden; (5) that a parameter marked
+  `expression` is bound so is checked one way only: the flow compiler asserts (with assertions on, so in every test run)
+  that each key a parse bound with `ParamReader.template` or `expression` is declared; a parameter declared and never bound
+  is not detected; (6) the expression marker types a value as `T | Expr` without checking the expression's result type; (7)
+  the `scope` an option opens (`cooldown.remaining`) is documentation in the surface, not a typed context.
 - Not verified by #337: the generated surface was type-checked on the headless recording of today's plugin
   (`EditorDemoSnapshotTest`: no economy provider, so `give_money` and `take_money` are recorded as unavailable) and on a fake addon,
   never against a live server's `authoring.describe`; and that every `firedBy` entry of a trigger names a content type was read from

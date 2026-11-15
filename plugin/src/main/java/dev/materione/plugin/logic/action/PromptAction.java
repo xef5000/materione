@@ -100,7 +100,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
                         new ParameterSchema("method", ParameterType.STRING, false, "chat",
                                 "How the player answers", List.of("chat", "sign", "anvil"), null).withWidget("input-method", ""),
                         new ParameterSchema("text", ParameterType.STRING, true, null,
-                                "What the player is asked; a template may use variables", null, null),
+                                "What the player is asked; a template may use variables", null, null).acceptingExpression(),
                         new ParameterSchema("var", ParameterType.STRING, true, null,
                                 "Where the answer goes: a run-local name, or session.<name> for the open GUI",
                                 null, null).withWidget("variable", ""),

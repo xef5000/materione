@@ -65,7 +65,8 @@ public final class FoodMechanic implements Mechanic {
                         new ParameterSchema("effects", ParameterType.LIST, false, null,
                                 "Potion effects on consume: {type, amplifier?, duration_ticks?}", null, null)),
                 "2.0.0",
-                "When the player eats the item, its nutrition, saturation and effects apply");
+                "When the player eats the item, its nutrition, saturation and effects apply")
+                .supersededBy("a preset over the vanilla food and consumable components and a consume rule (planned, primitives.md section 4.2; until it ships this mechanic is the way)");
     }
 
     @Override

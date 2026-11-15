@@ -9,6 +9,21 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Self-description carries the engine's grammar and the markers the SDK generator needed (#355, D5, D13).**
+  `authoring.describe` gains, additively: on a parameter `valueKind` (`steps`, `condition`, `conditions`, `flow`,
+  `arguments`), `expression` (the entry binds the value as an expression), `multiple` (one value or a list: every trigger
+  filter) and `scope` (the variables an option's steps can read: `cooldown.remaining` in `on_cooldown`); on a step kind
+  `payload`, `siblings`, `oneOf` and `registry`; in the vocabulary `conditionForms` (`all`, `any`, `not`, `at_least`),
+  `ruleBody` (`if`, `do`) and `guardOptions` (`else`); on an entry `supersededBy` (set on the five class F mechanics); on a
+  content type `expressionForm` (a variable reads `vars.{scope}.{pack}.{id}`); and `assetReference`, the asset path
+  convention. API: `ParameterSchema.Semantics` with `ofKind`, `acceptingExpression`, `acceptingList` and `opening`;
+  `SelfDescription.supersededBy`; `ContentType.expressionForm()`; `AssetConvention`; `BehaviorVocabulary.Grammar`;
+  `ParamReader.expressionKeys()`. The code-mode SDK is generated from all of it: `core.d.ts` types no engine vocabulary,
+  `m.steps.choose` takes a plain list, `m.conditions` has `all`, `any`, `not` and `atLeast`, a trigger filter takes a
+  list, and a parameter that accepts an expression takes `m.expr`. **SDK signature changes:** `m.steps.choose(branches,
+  { else })` and `m.steps.call(flow, { with })` (the fallback and the arguments were positional). `has_item_space.item`
+  and `slot_has.item` are now checked at level 3 (`MTR-0105`, a warning) like `give_item.item`.
+
 - **The code-mode review panel and change log (#347, D13).** When the server advertises `codemode`, the editor rail has a Review entry: a side panel that shows each agent proposal as the dry run reports it (new content and changes to existing objects apart, a line diff per file, findings by operation, the program with the line that staged each step), with Approve, plan approval and Reject for changes to existing content, and a change log of applied transactions (this session and the server audit) with a previewed, confirmed Revert. Only a real click approves, applies or reverts. Fixed in the same change: a server warning (`"severity": "warn"`) was read as an error and blocked its proposal. See codemode.md section 5.6.
 - **Rules without a host, and the world triggers (#327, D12).** A new content type, `rule` (`rules/*.yml`), holds a `behavior:` list and `flows:`
   with the exact shape of an item's, owned by no item, block, furniture or GUI; the same compiler, interpreter, trace and `LogicEdit` edit it. Six

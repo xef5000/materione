@@ -31,7 +31,25 @@ export interface SurfaceParam {
   min?: number;
   max?: number;
   unit?: string;
+  /**
+   * What the value is beyond its type, when the registry says (`KIND_STEPS` and the others below): a list of steps, a
+   * condition, a list of conditions, the name of a flow, a mapping of arguments.
+   */
+  valueKind?: string;
+  /** The entry binds the value as an expression at parse time: it may be an `Expr` (`${...}`). */
+  expression?: boolean;
+  /** One value or a list of values is accepted (a trigger filter). */
+  multiple?: boolean;
+  /** The context variables the steps this value holds can read beside the trigger's own. */
+  scope?: SurfaceContextVar[];
 }
+
+/** The grammar kinds a parameter's `valueKind` names: schema vocabulary, the same words the wire carries. */
+export const KIND_STEPS = 'steps';
+export const KIND_CONDITION = 'condition';
+export const KIND_CONDITIONS = 'conditions';
+export const KIND_FLOW = 'flow';
+export const KIND_ARGUMENTS = 'arguments';
 
 /** The self-description every registry entry carries (`SelfDescription`, api registry). */
 export interface SurfaceEntry {
@@ -41,6 +59,8 @@ export interface SurfaceEntry {
   activation?: string;
   sinceVersion?: string;
   registeredBy?: string;
+  /** What replaces the entry, as the registry phrases it (a class F mechanic names its preset). */
+  supersededBy?: string;
   parameters: SurfaceParam[];
 }
 
@@ -66,6 +86,11 @@ export interface SurfaceContentType {
   directory?: string;
   displayName: string;
   description: string;
+  /**
+   * How a resource of this type is read inside an expression: a template over `{pack}`, `{id}` and `{<field>}`.
+   * Absent: an expression does not read one.
+   */
+  expressionForm?: string;
   parameters: SurfaceParam[];
 }
 
@@ -133,11 +158,29 @@ export interface SurfaceInputMethod extends SurfaceEntry, SurfaceAvailability {
   closesWindow: boolean;
 }
 
+/**
+ * One form of the engine's closed grammar: a step kind, or a composite condition. `payload` names the parameter
+ * written as the value of the form's own key; `siblings` the parameters written as keys beside it; the rest are
+ * the keys of a mapping under the form's key. `registry` marks a kind whose members are a registry's entries.
+ */
 export interface SurfaceStepKind {
   id: string;
   displayName: string;
   description: string;
   supported: boolean;
+  parameters: SurfaceParam[];
+  payload?: string;
+  siblings: string[];
+  /** Sibling parameters of which at least one must be written. */
+  oneOf: string[];
+  registry?: string;
+}
+
+/** How a field names an asset: relative to the directory of its kind under `root`, with or without its extension. */
+export interface SurfaceAssetReference {
+  root: string;
+  kindDirectories: string[];
+  extension: boolean;
 }
 
 export interface SurfaceCategory {
@@ -173,6 +216,12 @@ export interface SurfaceBehavior {
   ruleOptions: SurfaceParam[];
   /** The options any action may carry besides its own parameters. */
   actionOptions: SurfaceParam[];
+  /** The composite conditions, in the shape of a step kind. */
+  conditionForms: SurfaceStepKind[];
+  /** The flow keys of a rule: the condition that guards it and the steps it runs. */
+  ruleBody: SurfaceParam[];
+  /** The keys the step of a guarding action (`takesElse`) may carry besides the action options. */
+  guardOptions: SurfaceParam[];
 }
 
 export interface SurfaceDocument {
@@ -185,6 +234,8 @@ export interface SurfaceDocument {
   contentTypes: SurfaceContentType[];
   behavior: SurfaceBehavior;
   gui: { components: SurfaceGuiComponent[]; containers: SurfaceGuiContainer[] };
+  /** The asset path convention, or `null` when the server does not say (an asset path is then written as given). */
+  assets: SurfaceAssetReference | null;
 }
 
 type Dict = Record<string, unknown>;
@@ -240,6 +291,10 @@ function param(raw: Dict): SurfaceParam | undefined {
     min: num(raw.min),
     max: num(raw.max),
     unit: text(raw.unit),
+    valueKind: text(raw.valueKind),
+    expression: raw.expression === true ? true : undefined,
+    multiple: raw.multiple === true ? true : undefined,
+    scope: Array.isArray(raw.scope) ? context(raw.scope) : undefined,
   });
 }
 
@@ -257,6 +312,7 @@ function entry(raw: Dict): SurfaceEntry | undefined {
     activation: text(raw.activation),
     sinceVersion: text(raw.sinceVersion),
     registeredBy: text(raw.registeredBy),
+    supersededBy: text(raw.supersededBy),
     parameters: params(raw.parameters),
   });
 }
@@ -298,6 +354,7 @@ export function assembleSurface(describe: unknown, capabilities: readonly string
       directory: text(raw.directory),
       displayName: text(raw.displayName) ?? name,
       description: text(raw.description) ?? '',
+      expressionForm: text(raw.expressionForm),
       parameters: params(raw.parameters),
     });
   });
@@ -402,16 +459,28 @@ export function assembleSurface(describe: unknown, capabilities: readonly string
     return base === undefined ? undefined : clean<SurfaceInputMethod>({ ...base, ...availability(raw), closesWindow: flag(raw.closesWindow) });
   });
 
-  const steps = each<SurfaceStepKind>(behavior.steps, (raw) => {
+  const form = (raw: Dict): SurfaceStepKind | undefined => {
     const id = text(raw.id);
     if (id === undefined) return undefined;
-    return {
+    return clean<SurfaceStepKind>({
       id,
       displayName: text(raw.displayName) ?? id,
       description: text(raw.description) ?? '',
       supported: raw.supported !== false,
-    };
-  });
+      parameters: params(raw.parameters),
+      payload: text(raw.payload),
+      siblings: strings(raw.siblings),
+      oneOf: strings(raw.oneOf),
+      registry: text(raw.registry),
+    });
+  };
+  const steps = each<SurfaceStepKind>(behavior.steps, form);
+
+  const assetRoot = isDict(root.assetReference) ? root.assetReference : undefined;
+  const assets: SurfaceAssetReference | null =
+    assetRoot === undefined || text(assetRoot.root) === undefined
+      ? null
+      : { root: text(assetRoot.root) as string, kindDirectories: strings(assetRoot.kindDirectories), extension: assetRoot.extension !== false };
 
   const categories = each<SurfaceCategory>(behavior.categories, (raw) => {
     const id = text(raw.id);
@@ -452,7 +521,11 @@ export function assembleSurface(describe: unknown, capabilities: readonly string
       categories,
       ruleOptions: params(behavior.ruleOptions),
       actionOptions: params(behavior.actionOptions),
+      conditionForms: each(behavior.conditionForms, form),
+      ruleBody: params(behavior.ruleBody),
+      guardOptions: params(behavior.guardOptions),
     },
     gui: { components, containers },
+    assets,
   };
 }

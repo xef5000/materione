@@ -53,7 +53,8 @@ public final class BackpackMechanic implements Mechanic {
                         new ParameterSchema("title", ParameterType.STRING, false, "Backpack",
                                 "Inventory title", null, null)),
                 "2.0.0",
-                "Right-clicking with the item opens its storage; contents save when the inventory closes");
+                "Right-clicking with the item opens its storage; contents save when the inventory closes")
+                .supersededBy("the backpack preset: custody with a stack holder and the built-in backpack GUI (planned, primitives.md section 4.2; until it ships this mechanic is the way)");
     }
 
     @Override

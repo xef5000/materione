@@ -61,7 +61,7 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
                         new ParameterSchema("slot", ParameterType.INTEGER, true, null,
                                 "The container slot, from 0 at the top-left", null, null),
                         new ParameterSchema("item", ParameterType.STRING, false, null,
-                                "Materione item id, or minecraft:<material>; any item when absent", null, null),
+                                "Materione item id, or minecraft:<material>; any item when absent", null, null).withWidget("item", ""),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
                                 "How many the slot must hold at least", null, null)),
                 "1.0.0"), LogicCategory.GUI);

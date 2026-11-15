@@ -2,8 +2,5 @@
   "task": "T04",
   "title": "Daily kit",
   "registry": "plugin-current",
-  "result": "pass",
-  "replay": {
-    "note": "The dry run reports MTR-0022 on `${now() - bench:kit_daily_at >= 86400}`: a declared variable has no expression spelling (benchmark S12; #355 puts it in self-description, after which the core writes vars.player.bench.kit_daily_at). That warning is the only finding: the logic and GUI checks of a transaction resolve a variable against the pack as the list leaves it (#378), so the list is accepted. This golden flips when #355 lands."
-  }
+  "result": "pass"
 }

@@ -1,0 +1,53 @@
+{
+  "golden": "c03-server-warning",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "operation": 1,
+      "code": "MTR-0022",
+      "severity": "warn",
+      "message": "bench:stamp rule 'bench:stamp#0' at behavior.0.if: unexpected trailing input ':' in expression: now() - bench:stamped_at >= 60"
+    }
+  ],
+  "documents": [
+    {
+      "path": "items/stamp.yml",
+      "kind": "created",
+      "operations": [
+        0,
+        1
+      ]
+    }
+  ]
+}

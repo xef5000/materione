@@ -11,7 +11,7 @@ package dev.materione.behavior.flow;
 public record WaitStep(StepPath path, long ticks) implements Step {
 
     /** The longest wait an author may ask for: 24 hours of ticks. */
-    public static final long MAX_TICKS = 24L * 60 * 60 * 20;
+    public static final long MAX_TICKS = dev.materione.behavior.logic.StepKinds.MAX_TICKS;
 
     @Override
     public String kind() {

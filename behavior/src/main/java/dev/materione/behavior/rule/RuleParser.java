@@ -1,5 +1,6 @@
 package dev.materione.behavior.rule;
 
+import dev.materione.api.logic.ContextVariable;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.behavior.flow.ActionStep;
@@ -28,7 +29,23 @@ public final class RuleParser {
             option(RuleOptions.ON_COOLDOWN, ParameterType.RAW, null,
                     "Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the "
                             + "whole seconds left, rounded up",
-                    List.of()));
+                    List.of())
+                    .ofKind(ParameterSchema.KIND_STEPS)
+                    .opening(List.of(ContextVariable.of(RuleOptions.COOLDOWN_ROOT + "." + RuleOptions.REMAINING,
+                            ParameterType.INTEGER, "The whole seconds left in the cooldown window, rounded up"))));
+
+    /** Self-description of the flow keys of a rule: the condition that guards it and the steps it runs. */
+    public static final List<ParameterSchema> RULE_BODY = List.of(
+            option("if", ParameterType.RAW, null, "The condition that must hold for the rule to run", List.of())
+                    .ofKind(ParameterSchema.KIND_CONDITION),
+            new ParameterSchema("do", ParameterType.RAW, true, null, "The steps the rule runs", List.of(), List.of())
+                    .ofKind(ParameterSchema.KIND_STEPS));
+
+    /** Self-description of the keys the step of a guarding action (one that takes an else) may carry. */
+    public static final List<ParameterSchema> GUARD_OPTIONS = List.of(
+            option("else", ParameterType.RAW, null,
+                    "Steps that run when the action fails or goes unanswered; the flow then stops", List.of())
+                    .ofKind(ParameterSchema.KIND_STEPS));
 
     /** Self-description of the universal action keys. */
     public static final List<ParameterSchema> ACTION_OPTIONS = List.of(

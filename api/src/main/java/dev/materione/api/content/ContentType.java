@@ -26,6 +26,17 @@ public interface ContentType {
     SelfDescription describe();
 
     /**
+     * How a resource of this type is read inside a logic expression, as a template over {@code {pack}},
+     * {@code {id}} and {@code {<field>}} (a field of the resource), or {@code null} when a resource of this type
+     * is not something an expression reads. A declared variable reads as {@code vars.{scope}.{pack}.{id}}
+     * (logic.md section 3.3); a reference to it everywhere else is {@code pack:id}. Self-description, so a
+     * consumer that writes expressions does not keep the spelling by hand (issue 355).
+     */
+    default String expressionForm() {
+        return null;
+    }
+
+    /**
      * Parses one resource keyed in a file of this type into a typed
      * definition, resolving {@code template:} inheritance against the
      * passed template pool. Diamond inheritance is a parse failure (empty

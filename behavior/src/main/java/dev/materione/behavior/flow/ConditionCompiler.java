@@ -167,6 +167,9 @@ final class ConditionCompiler {
         if (params == null) {
             throw new IllegalArgumentException("the condition produced no parameters");
         }
+        assert Shapes.declaresExpressions(type.describe().self().parameters(), reader.expressionKeys())
+                : "condition '" + key + "' binds " + reader.expressionKeys()
+                        + " as expressions; its description must declare each with acceptingExpression()";
         recorder.check(unit, path);
         return new PredicateCond<>(key, type, params);
     }

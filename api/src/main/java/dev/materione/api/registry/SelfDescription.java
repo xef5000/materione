@@ -16,19 +16,34 @@ import java.util.Objects;
  * @param activation one sentence saying when the entry acts in game (the
  *        editor's "how does this activate?" answer), or {@code null} when the
  *        entry has not declared it — the editor then says so instead of guessing
+ * @param supersededBy what replaces this entry, as a phrase a reader is shown after "Superseded by"
+ *        (primitives.md section 4.2, class F), or {@code null}; the entry keeps loading and running
  */
 public record SelfDescription(
         String displayName,
         String description,
         List<ParameterSchema> parameters,
         String sinceVersion,
-        String activation) {
+        String activation,
+        String supersededBy) {
 
     public SelfDescription {
         Objects.requireNonNull(displayName, "displayName");
         Objects.requireNonNull(description, "description");
         parameters = parameters == null ? List.of() : List.copyOf(parameters);
         activation = activation == null || activation.isBlank() ? null : activation;
+        supersededBy = supersededBy == null || supersededBy.isBlank() ? null : supersededBy;
+    }
+
+    /** The shape before {@code supersededBy}. */
+    public SelfDescription(String displayName, String description, List<ParameterSchema> parameters,
+            String sinceVersion, String activation) {
+        this(displayName, description, parameters, sinceVersion, activation, null);
+    }
+
+    /** This description, naming what replaces the entry. */
+    public SelfDescription supersededBy(String replacement) {
+        return new SelfDescription(displayName, description, parameters, sinceVersion, activation, replacement);
     }
 
     /** Compatibility constructor for entries that do not declare their activation. */

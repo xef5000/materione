@@ -3,10 +3,10 @@
  * goodwill:
  *
  *  - the core is registry-agnostic: no registry id as a string literal (the generator's ban, applied here), so
- *    adding a content type or an addon action to a registry needs no change in it. Two files are the
- *    deliberate exceptions and are checked on their own terms: `ops.ts` (the operation table: wire op names and
- *    capability names, nothing else) and `steps.ts` (the engine's step grammar, temporary until issue 355: only
- *    step words);
+ *    adding a content type or an addon action to a registry needs no change in it. One file is the deliberate
+ *    exception and is checked on its own terms: `ops.ts` (the operation table: wire op names and capability
+ *    names, nothing else). The engine's grammar is no exception since issue 355: a step, a composite condition
+ *    and a rule key are words of the surface, and no file of the core spells one;
  *  - it reaches the server only through the table: no op name outside `ops.ts`, no call on the port but the
  *    four it declares, no apply (the table has no write op but `authoring.transaction`, and no read of it);
  *  - it is DOM-free, dependency-free and deterministic: imports only its own modules and the generator's pure
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { READS, WRITES } from '../src/lib/codemode/core/ops';
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION } from '../src/lib/codemode/generate/capabilities';
-import { readSnapshot, registryIds, surfaceNamed } from './helpers/codemode';
+import { grammarWords, readSnapshot, registryIds, surfaceNamed } from './helpers/codemode';
 
 const CORE_DIR = fileURLToPath(new URL('../src/lib/codemode/core', import.meta.url));
 const REPO = fileURLToPath(new URL('../..', import.meta.url));
@@ -28,6 +28,9 @@ const REPO = fileURLToPath(new URL('../..', import.meta.url));
 const SCHEMA_VOCABULARY: Record<string, string> = {
   number: 'the `typeof` word, which is also the id of an expression function',
 };
+
+/** The same allowance for the generator's files the core imports (the grammar kinds live in `generate/surface.ts`). */
+const GRAMMAR_KIND_WORDS = ['steps', 'condition', 'conditions', 'flow', 'arguments'];
 
 function files(): { name: string; text: string }[] {
   return readdirSync(CORE_DIR)
@@ -50,6 +53,21 @@ function literalsOf(text: string): string[] {
   visit(parse(text));
   return found;
 }
+
+/** Every name a file declares as a property, a method or an object-literal key. */
+function propertyNamesOf(text: string): string[] {
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if ((ts.isPropertyAssignment(node) || ts.isMethodDeclaration(node) || ts.isPropertySignature(node) || ts.isMethodSignature(node) || ts.isShorthandPropertyAssignment(node))
+      && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))) found.push(node.name.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(parse(text));
+  return found;
+}
+
+/** Grammar words that are also plain member names of the core's own objects (a reference's `id`...): none today. */
+const GENERIC_MEMBERS: ReadonlySet<string> = new Set<string>();
 
 function importsOf(text: string): string[] {
   const found: string[] = [];
@@ -105,13 +123,13 @@ describe('the SDK core is registry-agnostic', () => {
   const ids = registryIds();
 
   it('scans the core and the recorded registries, not nothing', () => {
-    expect(all.map((file) => file.name)).toEqual(expect.arrayContaining(['session.ts', 'ops.ts', 'steps.ts', 'values.ts', 'diagnostics.ts', 'types.ts', 'index.ts']));
+    expect(all.map((file) => file.name)).toEqual(expect.arrayContaining(['session.ts', 'ops.ts', 'forms.ts', 'values.ts', 'diagnostics.ts', 'types.ts', 'index.ts']));
     expect(ids.size).toBeGreaterThan(150);
   });
 
-  it('holds no registry id as a string literal (outside the two files checked below)', () => {
+  it('holds no registry id and no word of the engine\'s grammar as a string literal (outside the operation table)', () => {
     const offenders = all
-      .filter((file) => file.name !== 'ops.ts' && file.name !== 'steps.ts')
+      .filter((file) => file.name !== 'ops.ts')
       .flatMap((file) => literalsOf(file.text).filter((value) => ids.has(value) && !(value in SCHEMA_VOCABULARY)).map((value) => `${file.name}: "${value}"`));
     expect(offenders).toEqual([]);
   });
@@ -123,16 +141,20 @@ describe('the SDK core is registry-agnostic', () => {
     }
   });
 
-  it('steps.ts names only the flow model\'s step words, which are step kinds of the registry\'s own list', () => {
-    const steps = new Set(surfaceNamed('plugin-current').behavior.steps.map((step) => step.id));
-    const text = all.find((file) => file.name === 'steps.ts')?.text ?? '';
-    const literals = literalsOf(text).filter((value) => ids.has(value) && !(value in SCHEMA_VOCABULARY));
-    expect(literals.length).toBeGreaterThan(0);
-    for (const literal of literals) expect(steps.has(literal), `"${literal}" in steps.ts is a step kind`).toBe(true);
-    // and no other file spells a step: the grammar lives in one place
-    for (const file of all.filter((entry) => entry.name !== 'steps.ts' && entry.name !== 'ops.ts')) {
-      for (const word of steps) expect(literalsOf(file.text), `${file.name} spells the step "${word}"`).not.toContain(word);
+  it('spells no step, no composite condition and no rule key: the grammar is read from the surface (issue 355)', () => {
+    const words = grammarWords(surfaceNamed('plugin-current'));
+    // a sample of the words the ban is about, so an emptied grammar cannot pass it
+    for (const word of ['if', 'require', 'choose', 'wait', 'stop', 'call', 'then', 'else', 'with', 'all', 'any', 'not', 'at_least', 'do']) {
+      expect(words.has(word), word).toBe(true);
     }
+    for (const file of all.filter((entry) => entry.name !== 'ops.ts')) {
+      const spelled = literalsOf(file.text).filter((value) => words.has(value) && !(value in SCHEMA_VOCABULARY));
+      expect(spelled, `${file.name} spells a grammar word`).toEqual([]);
+      // nor as a member name: a builder is made from a form, never written as a method of that name
+      const members = propertyNamesOf(file.text).filter((name) => words.has(name) && !GENERIC_MEMBERS.has(name));
+      expect(members, `${file.name} declares a member named after a grammar word`).toEqual([]);
+    }
+    expect(GRAMMAR_KIND_WORDS.every((word) => !words.has(word) || word === 'flow')).toBe(true);
   });
 
   it('knows no content type: a type name is never a literal (the writers, refs and handles come from the surface)', () => {
@@ -227,7 +249,7 @@ describe('the SDK core is DOM-free, dependency-free and deterministic', () => {
   const all = files();
 
   it('imports only its own modules and the generator\'s pure ones', () => {
-    const allowed = ['./types', './diagnostics', './ops', './steps', './values', './session', '../generate/capabilities', '../generate/context', '../generate/names', '../generate/surface'];
+    const allowed = ['./types', './diagnostics', './ops', './forms', './values', './session', '../generate/capabilities', '../generate/context', '../generate/names', '../generate/surface'];
     for (const file of all) {
       for (const specifier of importsOf(file.text)) expect(allowed, `${file.name} imports ${specifier}`).toContain(specifier);
     }
@@ -241,8 +263,7 @@ describe('the SDK core is DOM-free, dependency-free and deterministic', () => {
     ];
     for (const file of all) {
       const used = identifiersOf(file.text);
-      // `require` is a property name in steps.ts (the step builder), not a module load
-      const offenders = banned.filter((name) => used.has(name) && !(file.name === 'steps.ts' && name === 'require'));
+      const offenders = banned.filter((name) => used.has(name));
       expect(offenders, file.name).toEqual([]);
     }
   });

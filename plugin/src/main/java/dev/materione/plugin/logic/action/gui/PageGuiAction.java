@@ -73,7 +73,7 @@ public final class PageGuiAction implements ActionType<PageGuiAction.Params> {
                         new ParameterSchema("list", ParameterType.STRING, true, null,
                                 "The list layer's id", null, null),
                         new ParameterSchema("to", ParameterType.STRING, true, null,
-                                "next, previous, first, last, or a page number; a template may give one", null, null)),
+                                "next, previous, first, last, or a page number; a template may give one", null, null).acceptingExpression()),
                 "1.0.0"), LogicCategory.GUI);
     }
 

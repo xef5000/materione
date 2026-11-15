@@ -140,10 +140,40 @@ describe('the structural steps follow the engine grammar (logic.md section 2.2)'
   });
 
   it('types choose, wait, stop and call as the engine reads them', () => {
-    expect(codes(rule('m.steps.choose([{ if: m.expr`1 > 0`, then: [m.actions.cancel()] }], [m.steps.stop({ cancel: true })])'))).toEqual([]);
-    expect(codes(rule('m.steps.choose([])')).length).toBeGreaterThan(0);
-    expect(codes(rule('m.steps.wait(20), m.steps.call("purchase", { price: 250 })'))).toEqual([]);
+    expect(codes(rule('m.steps.choose([{ if: m.expr`1 > 0`, then: [m.actions.cancel()] }], { else: [m.steps.stop({ cancel: true })] })'))).toEqual([]);
+    // a list of branches needs no tuple cast (benchmark S19); that it is not empty is checked when the program runs
+    expect(codes(rule('m.steps.choose([1, 2].map((n) => ({ if: m.expr`vars.roll <= ${n}`, then: [m.actions.cancel()] })))'))).toEqual([]);
+    expect(codes(rule('m.steps.choose([{ if: m.expr`1 > 0` }])')).length).toBeGreaterThan(0);
+    expect(codes(rule('m.steps.wait(20), m.steps.call("purchase", { with: { price: 250 } })'))).toEqual([]);
     expect(codes(rule('m.steps.stop({ cancel: "yes" })')).length).toBeGreaterThan(0);
+  });
+});
+
+describe('what self-description says beyond a value type is typed (issue 355)', () => {
+  const pack = 'const p = m.pack("bench"); ';
+  const rule = (steps: string): string => `${pack}const s = p.items.create("s", { material: "STICK" });
+    s.rules.add(m.triggers.click({ detail: "right" }), () => ({ do: [${steps}] }));`;
+
+  it('a parameter that accepts an expression takes m.expr and an m.fn result, and one that does not refuses them', () => {
+    expect(codes(rule('m.actions.setVar({ var: "roll", value: m.expr`${m.fn.random(1, 100)}` })'))).toEqual([]);
+    expect(codes(rule('m.actions.giveItem({ item: "minecraft:stone", amount: m.fn.random(1, 3) })'))).toEqual([]);
+    expect(codes(rule('m.actions.setVar({ var: "roll", op: m.expr`1` })')).length).toBeGreaterThan(0);
+  });
+
+  it('a trigger filter takes one value or a list of values', () => {
+    const gui = `${pack}const g = p.guis.create("g", { container: "chest_3", title: "t" }); `;
+    expect(codes(`${gui}g.rules.add(m.triggers.guiClick({ layer: "buy", click: ["left", "shift_left"] }), () => ({ do: [] }));`)).toEqual([]);
+    expect(codes(`${gui}g.rules.add(m.triggers.guiClick({ click: ["left", "sideways"] }), () => ({ do: [] }));`).length).toBeGreaterThan(0);
+  });
+
+  it('the composite conditions, the cooldown steps and the else of a guarding action are typed', () => {
+    expect(codes(rule('m.steps.if(m.conditions.all([m.conditions.hasItemSpace(1), m.conditions.not(m.expr`player.sneaking`)]), { then: [] })'))).toEqual([]);
+    expect(codes(rule('m.steps.if(m.conditions.atLeast({ count: 1, of: [m.expr`1 > 0`] }), { then: [] })'))).toEqual([]);
+    expect(codes(rule('m.steps.if(m.conditions.all([m.actions.cancel()]), { then: [] })')).length).toBeGreaterThan(0);
+    expect(codes(`${pack}const s = p.items.create("s", { material: "STICK" });
+      s.rules.add(m.triggers.click(), () => ({ cooldown: 1000, do: [], on_cooldown: [m.actions.actionbar("wait")] }));`)).toEqual([]);
+    expect(codes(rule('m.actions.custodyConsume({ slot: 1, else: [m.actions.cancel()] })'))).toEqual([]);
+    expect(codes(rule('m.actions.message({ text: "hi", else: [m.actions.cancel()] })')).length).toBeGreaterThan(0);
   });
 });
 

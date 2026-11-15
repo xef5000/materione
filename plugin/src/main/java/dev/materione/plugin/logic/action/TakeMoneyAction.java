@@ -60,7 +60,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
                         new ParameterSchema("amount", ParameterType.DECIMAL, true, null,
                                 "Amount to take; above 0", null, null),
                         new ParameterSchema("currency", ParameterType.STRING, false, null,
-                                "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null)),
+                                "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null).withWidget("reference", "currency")),
                 "2.0.0"), LogicCategory.ECONOMY, "amount");
     }
 

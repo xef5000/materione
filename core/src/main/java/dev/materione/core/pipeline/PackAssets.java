@@ -17,7 +17,7 @@ import java.util.Set;
 public final class PackAssets {
 
     /** Asset kinds whose files are referenced relative to the kind dir (vanilla convention). */
-    private static final List<String> ASSET_KIND_DIRS = List.of("textures", "models", "fonts", "sounds");
+    private static final List<String> ASSET_KIND_DIRS = dev.materione.api.content.AssetConvention.KIND_DIRECTORIES;
 
     private static final byte[] PNG_SIGNATURE = {
             (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};

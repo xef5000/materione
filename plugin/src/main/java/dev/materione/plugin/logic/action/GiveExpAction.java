@@ -39,7 +39,7 @@ public final class GiveExpAction implements ActionType<GiveExpAction.Params> {
                 "Grants the player experience points or levels",
                 List.of(
                         new ParameterSchema("amount", ParameterType.INTEGER, true, null,
-                                "How many points or levels", null, null),
+                                "How many points or levels", null, null).acceptingExpression(),
                         new ParameterSchema("unit", ParameterType.ENUM, false, "points",
                                 "What the amount counts", List.of("points", "levels"), null)),
                 "2.0.0"), LogicCategory.PLAYER, "amount");
