@@ -47,9 +47,9 @@ public final class TitleAction implements ActionType<TitleAction.Params> {
                 "Shows a title and optional subtitle on the player's screen",
                 List.of(
                         new ParameterSchema("title", ParameterType.STRING, true, null,
-                                "Main line; formatting and & colour codes allowed", null, null),
+                                "Main line; formatting and & colour codes allowed", null, null).acceptingExpression(),
                         new ParameterSchema("subtitle", ParameterType.STRING, false, null,
-                                "Second line", null, null),
+                                "Second line", null, null).acceptingExpression(),
                         new ParameterSchema("fade_in", ParameterType.INTEGER, false, "10",
                                 "Fade-in in ticks", null, null),
                         new ParameterSchema("stay", ParameterType.INTEGER, false, "70",

@@ -1,5 +1,6 @@
 package dev.materione.api.registry;
 
+import dev.materione.api.logic.ContextVariable;
 import java.util.List;
 import java.util.Objects;
 
@@ -13,6 +14,8 @@ import java.util.Objects;
  * @param allowedValues only meaningful for {@link ParameterType#ENUM}
  * @param nested only meaningful for {@link ParameterType#LIST}
  * @param editor declarative presentation metadata; it never weakens validation
+ * @param semantics what the value is beyond its type (a list of steps, a condition, a value that may be an
+ *        expression, a filter that takes a list): what a consumer that writes documents needs and a form does not
  */
 public record ParameterSchema(
         String id,
@@ -22,7 +25,19 @@ public record ParameterSchema(
         String description,
         List<String> allowedValues,
         List<ParameterSchema> nested,
-        EditorMetadata editor) {
+        EditorMetadata editor,
+        Semantics semantics) {
+
+    /** A value that is a list of steps of the flow model (logic.md section 2.2). */
+    public static final String KIND_STEPS = "steps";
+    /** A value that is one condition: a registered condition, a composite, or an expression. */
+    public static final String KIND_CONDITION = "condition";
+    /** A value that is a list of conditions. */
+    public static final String KIND_CONDITIONS = "conditions";
+    /** A value that names a flow of the same resource. */
+    public static final String KIND_FLOW = "flow";
+    /** A value that is a mapping of argument names to values. */
+    public static final String KIND_ARGUMENTS = "arguments";
 
     public ParameterSchema {
         Objects.requireNonNull(id, "id");
@@ -30,6 +45,13 @@ public record ParameterSchema(
         allowedValues = allowedValues == null ? List.of() : List.copyOf(allowedValues);
         nested = nested == null ? List.of() : List.copyOf(nested);
         editor = editor == null ? EditorMetadata.defaults(id, type) : editor;
+        semantics = semantics == null ? Semantics.NONE : semantics;
+    }
+
+    /** The shape before {@link Semantics}: the same members, without them. */
+    public ParameterSchema(String id, ParameterType type, boolean required, String defaultValue,
+            String description, List<String> allowedValues, List<ParameterSchema> nested, EditorMetadata editor) {
+        this(id, type, required, defaultValue, description, allowedValues, nested, editor, Semantics.NONE);
     }
 
     /** Compatibility constructor for existing content types and addons. */
@@ -47,7 +69,54 @@ public record ParameterSchema(
     /** Explicit presentation metadata for a field while retaining one schema source. */
     public ParameterSchema withEditor(EditorMetadata metadata) {
         return new ParameterSchema(id, type, required, defaultValue, description,
-                allowedValues, nested, metadata);
+                allowedValues, nested, metadata, semantics);
+    }
+
+    private ParameterSchema withSemantics(Semantics value) {
+        return new ParameterSchema(id, type, required, defaultValue, description,
+                allowedValues, nested, editor, value);
+    }
+
+    /** This parameter, holding a value of a grammar kind ({@link #KIND_STEPS}, {@link #KIND_CONDITION}, ...). */
+    public ParameterSchema ofKind(String valueKind) {
+        return withSemantics(new Semantics(valueKind, semantics.expression(), semantics.multiple(), semantics.scope()));
+    }
+
+    /**
+     * This parameter, declared to accept an expression: the entry binds it at parse time with
+     * {@code ParamReader.template} or {@code ParamReader.expression}, so its value may hold {@code ${...}}.
+     */
+    public ParameterSchema acceptingExpression() {
+        return withSemantics(new Semantics(semantics.valueKind(), true, semantics.multiple(), semantics.scope()));
+    }
+
+    /** This parameter, declared to take one value or a list of values. */
+    public ParameterSchema acceptingList() {
+        return withSemantics(new Semantics(semantics.valueKind(), semantics.expression(), true, semantics.scope()));
+    }
+
+    /** This parameter, declaring the context variables the steps it holds can read beside the trigger's own. */
+    public ParameterSchema opening(List<ContextVariable> variables) {
+        return withSemantics(new Semantics(semantics.valueKind(), semantics.expression(), semantics.multiple(), variables));
+    }
+
+    /**
+     * What a value is beyond its {@link ParameterType}. Additive and optional: an entry that declares none is
+     * read as before.
+     *
+     * @param valueKind a grammar kind ({@link #KIND_STEPS} and the others), or blank
+     * @param expression whether the value may be an expression ({@code ${...}}), bound at parse time
+     * @param multiple whether one value or a list of values is accepted (a trigger filter)
+     * @param scope the context variables the value's steps can read beside the trigger's own
+     */
+    public record Semantics(String valueKind, boolean expression, boolean multiple, List<ContextVariable> scope) {
+
+        public static final Semantics NONE = new Semantics("", false, false, List.of());
+
+        public Semantics {
+            valueKind = valueKind == null ? "" : valueKind;
+            scope = scope == null ? List.of() : List.copyOf(scope);
+        }
     }
 
     /**

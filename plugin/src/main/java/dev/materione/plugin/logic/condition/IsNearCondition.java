@@ -51,13 +51,13 @@ public final class IsNearCondition implements ConditionType<IsNearCondition.Para
                         new ParameterSchema("world", ParameterType.STRING, false, null,
                                 "World name; the player's own world when omitted", null, null),
                         new ParameterSchema("x", ParameterType.DECIMAL, true, null,
-                                "The point's x coordinate (a number or a template)", null, null),
+                                "The point's x coordinate (a number or a template)", null, null).acceptingExpression(),
                         new ParameterSchema("y", ParameterType.DECIMAL, true, null,
-                                "The point's y coordinate (a number or a template)", null, null),
+                                "The point's y coordinate (a number or a template)", null, null).acceptingExpression(),
                         new ParameterSchema("z", ParameterType.DECIMAL, true, null,
-                                "The point's z coordinate (a number or a template)", null, null),
+                                "The point's z coordinate (a number or a template)", null, null).acceptingExpression(),
                         new ParameterSchema("distance", ParameterType.DECIMAL, true, null,
-                                "Radius in blocks, from 0 (a number or a template)", null, null)),
+                                "Radius in blocks, from 0 (a number or a template)", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.WORLD, null);
     }
 

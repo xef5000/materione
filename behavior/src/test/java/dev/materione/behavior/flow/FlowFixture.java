@@ -67,7 +67,7 @@ public final class FlowFixture {
         @Override
         public ActionDescription describe() {
             return new ActionDescription(new SelfDescription("Say", "Records a rendered template",
-                    List.of(ParameterSchema.of("text", ParameterType.STRING, true)), "1.0.0"),
+                    List.of(ParameterSchema.of("text", ParameterType.STRING, true).acceptingExpression()), "1.0.0"),
                     LogicCategory.PLAYER, "text");
         }
 

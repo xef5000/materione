@@ -32,14 +32,7 @@
       "ran": false
     }
   ],
-  "diagnostics": [
-    {
-      "operation": 2,
-      "code": "MTR-0022",
-      "severity": "warn",
-      "message": "bench:kits rule 'bench:kits#0' at behavior.0.do.0.if: unexpected trailing input ':' in expression: now() - bench:kit_daily_at >= 86400"
-    }
-  ],
+  "diagnostics": [],
   "documents": [
     {
       "path": "variables/kit_daily_at.yml",

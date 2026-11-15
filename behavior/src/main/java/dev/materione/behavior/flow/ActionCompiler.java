@@ -86,6 +86,9 @@ final class ActionCompiler {
         var reader = Shapes.reader(
                 Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder, unit.context.environment);
         ActionStep<P> step = ActionStep.bind(path, key, type, reader, chance, delayTicks);
+        assert Shapes.declaresExpressions(type.describe().self().parameters(), reader.expressionKeys())
+                : "action '" + key + "' binds " + reader.expressionKeys()
+                        + " as expressions; its description must declare each with acceptingExpression()";
         recorder.check(unit, path);
         return step;
     }

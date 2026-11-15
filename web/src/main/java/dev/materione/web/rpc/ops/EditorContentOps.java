@@ -96,6 +96,7 @@ public final class EditorContentOps {
             payload.add("behavior", vocabularyJson(vocabulary.get()));
             payload.add("guiComponents", guiComponentsJson(guiComponents.get()));
             payload.add("guiContainers", guiContainersJson(guiContainers.get()));
+            payload.add("assetReference", assetReferenceJson());
             return Wire.Response.success(request, payload);
         });
 
@@ -896,6 +897,9 @@ public final class EditorContentOps {
         }
         object.addProperty("displayName", description.displayName());
         object.addProperty("description", description.description());
+        if (type.expressionForm() != null) {
+            object.addProperty("expressionForm", type.expressionForm());
+        }
         var params = new com.google.gson.JsonArray();
         description.parameters().forEach(param -> params.add(paramJson(param)));
         object.add("parameters", params);
@@ -997,15 +1001,22 @@ public final class EditorContentOps {
         object.add("conditions", conditions);
         var steps = new com.google.gson.JsonArray();
         for (var step : vocabulary.steps()) {
-            JsonObject json = new JsonObject();
-            json.addProperty("id", step.id());
-            json.addProperty("displayName", step.displayName());
-            json.addProperty("description", step.description());
-            json.add("parameters", params(step.parameters()));
-            json.addProperty("supported", step.supported());
-            steps.add(json);
+            steps.add(formJson(step));
         }
         object.add("steps", steps);
+        // the rest of the closed grammar as data (issue 355); absent from a vocabulary that declares none
+        var grammar = vocabulary.grammar();
+        if (!grammar.conditions().isEmpty()) {
+            var forms = new com.google.gson.JsonArray();
+            grammar.conditions().forEach(form -> forms.add(formJson(form)));
+            object.add("conditionForms", forms);
+        }
+        if (!grammar.ruleBody().isEmpty()) {
+            object.add("ruleBody", params(grammar.ruleBody()));
+        }
+        if (!grammar.guardOptions().isEmpty()) {
+            object.add("guardOptions", params(grammar.guardOptions()));
+        }
         var categories = new com.google.gson.JsonArray();
         for (var category : vocabulary.categories()) {
             JsonObject json = new JsonObject();
@@ -1153,6 +1164,9 @@ public final class EditorContentOps {
         if (description.sinceVersion() != null) {
             json.addProperty("sinceVersion", description.sinceVersion());
         }
+        if (description.supersededBy() != null) {
+            json.addProperty("supersededBy", description.supersededBy());
+        }
         json.add("parameters", params(description.parameters()));
     }
 
@@ -1242,7 +1256,57 @@ public final class EditorContentOps {
         if (!param.editor().unit().isBlank()) {
             object.addProperty("unit", param.editor().unit());
         }
+        // Value semantics (issue 355): additive, written only when declared, so an entry that declares none
+        // serializes as before.
+        var semantics = param.semantics();
+        if (!semantics.valueKind().isBlank()) {
+            object.addProperty("valueKind", semantics.valueKind());
+        }
+        if (semantics.expression()) {
+            object.addProperty("expression", true);
+        }
+        if (semantics.multiple()) {
+            object.addProperty("multiple", true);
+        }
+        if (!semantics.scope().isEmpty()) {
+            object.add("scope", contextJson(semantics.scope()));
+        }
         return object;
+    }
+
+    /**
+     * How a field names an asset (issue 355): relative to the directory of its kind, without the extension. Read
+     * from the one definition the asset index uses.
+     */
+    private static JsonObject assetReferenceJson() {
+        JsonObject json = new JsonObject();
+        json.addProperty("root", "assets");
+        json.add("kindDirectories", strings(dev.materione.api.content.AssetConvention.KIND_DIRECTORIES));
+        json.addProperty("extension", false);
+        return json;
+    }
+
+    /** One grammar form (a step kind or a composite condition): its parameters and how they are written. */
+    private static JsonObject formJson(dev.materione.api.registry.BehaviorVocabulary.StepKind step) {
+        JsonObject json = new JsonObject();
+        json.addProperty("id", step.id());
+        json.addProperty("displayName", step.displayName());
+        json.addProperty("description", step.description());
+        json.add("parameters", params(step.parameters()));
+        json.addProperty("supported", step.supported());
+        if (!step.payload().isBlank()) {
+            json.addProperty("payload", step.payload());
+        }
+        if (!step.siblings().isEmpty()) {
+            json.add("siblings", strings(step.siblings()));
+        }
+        if (!step.oneOf().isEmpty()) {
+            json.add("oneOf", strings(step.oneOf()));
+        }
+        if (!step.registry().isBlank()) {
+            json.addProperty("registry", step.registry());
+        }
+        return json;
     }
 
     /** Parses a wire {@code edits} array: set edits carry a value, removals {@code remove: true}. */

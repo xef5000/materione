@@ -1,7 +1,6 @@
 // T05 Healing wand (agent-benchmark.md section 3): right click heals, 30 s cooldown, and it says how long is left.
-// The rule options `cooldown` and `on_cooldown` exist now (the clock work), so the paper gap [TIME] is closed on the
-// server. The SDK does not follow yet: `on_cooldown` is a `raw` rule option in self-description, so the surface types it
-// JsonValue and its step list is a type error (see the expect file). This entry flips to a pass with a step-list kind (#355).
+// The rule options `cooldown` and `on_cooldown` exist (the clock work), and `on_cooldown` describes itself as a list of
+// steps that can read cooldown.remaining (#355), so the surface types it and the paper gap [TIME] is closed end to end.
 const p = m.pack("bench");
 const wand = p.items.create("healing_wand", {
   material: "BLAZE_ROD",

@@ -214,8 +214,8 @@ describe('every kind of operation, and what it stages', () => {
           m.actions.cancel(),
           m.actions.cancel({}, { chance: 0.5 }),
           m.steps.if(m.conditions.hasItemSpace(1), { then: [m.steps.wait(20)], else: [m.steps.stop({ cancel: true })] }),
-          m.steps.require([m.actions.takeMoney(1)], { else: [m.steps.call("again", { n: 1 })] }),
-          m.steps.choose([{ if: m.expr\`1 > 0\`, then: [m.actions.cancel()] }], [m.steps.stop()]),
+          m.steps.require([m.actions.takeMoney(1)], { else: [m.steps.call("again", { with: { n: 1 } })] }),
+          m.steps.choose([{ if: m.expr\`1 > 0\`, then: [m.actions.cancel()] }], { else: [m.steps.stop()] }),
         ],
       }));`);
     expect(errorsOf(result)).toEqual([]);
@@ -225,7 +225,7 @@ describe('every kind of operation, and what it stages', () => {
       layer: 'buy',
       click: 'left',
       id: 'buy_rule',
-      if: "${player.sneaking && max(1, 2) > 0 && bench:coins == 'x'}",
+      if: "${player.sneaking && max(1, 2) > 0 && vars.player.bench.coins == 'x'}",
       do: [
         { take_money: 5 },
         { give_item: { item: 'minecraft:stick', amount: 2 }, delay: 10 },

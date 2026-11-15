@@ -15,7 +15,8 @@ const shop = p.guis.create("shop", {
 });
 
 for (const s of stock) {
-  shop.rules.add(m.triggers.guiClick({ layer: `buy_${s.id}`, click: "left" }), () => ({
+  // a filter takes one value or a list: a plain or a shifted left click buys
+  shop.rules.add(m.triggers.guiClick({ layer: `buy_${s.id}`, click: ["left", "shift_left"] }), () => ({
     do: [
       // a condition guards with `if`; no room ends the run before any coin is taken
       m.steps.if(m.conditions.hasItemSpace(1), {

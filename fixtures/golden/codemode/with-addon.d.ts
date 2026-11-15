@@ -1322,10 +1322,16 @@ interface DropContext {
 
 /** The detail and the filters of the `entity.hit` trigger. */
 interface EntityHitTriggerArgs {
-  /** Only this entity type (a type, or a list of types), e.g. zombie. */
-  type?: string;
-  /** Only this damage cause (a cause, or a list of causes) */
-  cause?: EntityHitTriggerArgsCause;
+  /**
+   * Only this entity type (a type, or a list of types), e.g. zombie.
+   * One value or a list of values; a list matches any of them.
+   */
+  type?: string | readonly (string)[];
+  /**
+   * Only this damage cause (a cause, or a list of causes)
+   * One value or a list of values; a list matches any of them.
+   */
+  cause?: EntityHitTriggerArgsCause | readonly (EntityHitTriggerArgsCause)[];
 }
 
 /** The context of `entity.hit` rules, by the host that fires it. */
@@ -1490,8 +1496,11 @@ interface EntityHitContext {
 
 /** The detail and the filters of the `entity.kill` trigger. */
 interface EntityKillTriggerArgs {
-  /** Only this entity type (a type, or a list of types), e.g. zombie. */
-  type?: string;
+  /**
+   * Only this entity type (a type, or a list of types), e.g. zombie.
+   * One value or a list of values; a list matches any of them.
+   */
+  type?: string | readonly (string)[];
 }
 
 /** The context of `entity.kill` rules, by the host that fires it. */
@@ -1732,15 +1741,22 @@ interface PingContext {
 
 /** The detail and the filters of the `gui.click` trigger. */
 interface GuiClickTriggerArgs {
-  /** Only clicks on this layer (an id, or a list of ids) */
-  layer?: string;
+  /**
+   * Only clicks on this layer (an id, or a list of ids)
+   * One value or a list of values; a list matches any of them.
+   */
+  layer?: string | readonly (string)[];
   /**
    * Only clicks on this container slot (a number, or a list)
    * Minimum: 0.
+   * One value or a list of values; a list matches any of them.
    */
-  slot?: number;
-  /** Only this kind of click (a kind, or a list) */
-  click?: "left" | "right" | "shift_left" | "shift_right" | "middle" | "double" | "drop" | "ctrl_drop" | "number_key" | "swap_offhand";
+  slot?: number | readonly (number)[];
+  /**
+   * Only this kind of click (a kind, or a list)
+   * One value or a list of values; a list matches any of them.
+   */
+  click?: "left" | "right" | "shift_left" | "shift_right" | "middle" | "double" | "drop" | "ctrl_drop" | "number_key" | "swap_offhand" | readonly ("left" | "right" | "shift_left" | "shift_right" | "middle" | "double" | "drop" | "ctrl_drop" | "number_key" | "swap_offhand")[];
 }
 
 /** The context of `gui.click` rules, by the host that fires it. */
@@ -1795,8 +1811,11 @@ interface GuiClickContext {
 
 /** The detail and the filters of the `gui.click_inventory` trigger. */
 interface GuiClickInventoryTriggerArgs {
-  /** Only this kind of click (a kind, or a list) */
-  click?: "left" | "right" | "shift_left" | "shift_right" | "middle" | "double" | "drop" | "ctrl_drop" | "number_key" | "swap_offhand";
+  /**
+   * Only this kind of click (a kind, or a list)
+   * One value or a list of values; a list matches any of them.
+   */
+  click?: "left" | "right" | "shift_left" | "shift_right" | "middle" | "double" | "drop" | "ctrl_drop" | "number_key" | "swap_offhand" | readonly ("left" | "right" | "shift_left" | "shift_right" | "middle" | "double" | "drop" | "ctrl_drop" | "number_key" | "swap_offhand")[];
 }
 
 /** The context of `gui.click_inventory` rules, by the host that fires it. */
@@ -1850,8 +1869,11 @@ interface GuiClickInventoryContext {
 
 /** The detail and the filters of the `gui.click_outside` trigger. */
 interface GuiClickOutsideTriggerArgs {
-  /** Only this side's click. */
-  click?: "left" | "right";
+  /**
+   * Only this side's click.
+   * One value or a list of values; a list matches any of them.
+   */
+  click?: "left" | "right" | readonly ("left" | "right")[];
 }
 
 /** The context of `gui.click_outside` rules, by the host that fires it. */
@@ -1899,8 +1921,11 @@ interface GuiClickOutsideContext {
 
 /** The detail and the filters of the `gui.close` trigger. */
 interface GuiCloseTriggerArgs {
-  /** Only for this reason: player, action, replaced, quit. */
-  reason?: "player" | "action" | "replaced" | "quit";
+  /**
+   * Only for this reason: player, action, replaced, quit.
+   * One value or a list of values; a list matches any of them.
+   */
+  reason?: "player" | "action" | "replaced" | "quit" | readonly ("player" | "action" | "replaced" | "quit")[];
 }
 
 /** The context of `gui.close` rules, by the host that fires it. */
@@ -2028,8 +2053,11 @@ interface GuiOpeningContext {
 
 /** The detail and the filters of the `gui.page` trigger. */
 interface GuiPageTriggerArgs {
-  /** Only this list (an id, or a list of ids) */
-  layer?: string;
+  /**
+   * Only this list (an id, or a list of ids)
+   * One value or a list of values; a list matches any of them.
+   */
+  layer?: string | readonly (string)[];
 }
 
 /** The context of `gui.page` rules, by the host that fires it. */
@@ -2077,8 +2105,11 @@ interface GuiPageContext {
 
 /** The detail and the filters of the `gui.slot_change` trigger. */
 interface GuiSlotChangeTriggerArgs {
-  /** Only changes to this input layer (an id, or a list of ids) */
-  layer?: string;
+  /**
+   * Only changes to this input layer (an id, or a list of ids)
+   * One value or a list of values; a list matches any of them.
+   */
+  layer?: string | readonly (string)[];
 }
 
 /** The context of `gui.slot_change` rules, by the host that fires it. */
@@ -2133,8 +2164,9 @@ interface GuiTickTriggerArgs {
   /**
    * Run every this many ticks (20 is a second); at least 1.
    * Minimum: 1.
+   * One value or a list of values; a list matches any of them.
    */
-  every: number;
+  every: number | readonly (number)[];
 }
 
 /** The context of `gui.tick` rules, by the host that fires it. */
@@ -2410,8 +2442,11 @@ interface PlaceContext {
 
 /** The detail and the filters of the `player.hurt` trigger. */
 interface PlayerHurtTriggerArgs {
-  /** Only this damage cause (a cause, or a list of causes) */
-  cause?: PlayerHurtTriggerArgsCause;
+  /**
+   * Only this damage cause (a cause, or a list of causes)
+   * One value or a list of values; a list matches any of them.
+   */
+  cause?: PlayerHurtTriggerArgsCause | readonly (PlayerHurtTriggerArgsCause)[];
 }
 
 /** The context of `player.hurt` rules, by the host that fires it. */
@@ -3072,8 +3107,59 @@ interface RuleOptions {
    * @defaultValue player
    */
   per?: "player" | "global";
-  /** Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the whole seconds left, rounded up. */
-  on_cooldown?: JsonValue;
+  /**
+   * Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the whole seconds left, rounded up.
+   * Inside these steps: `cooldown.remaining` (integer), the whole seconds left in the cooldown window, rounded up.
+   */
+  on_cooldown?: readonly Step[];
+}
+
+/** What a rule's builder returns besides its options: the flow keys of a rule. */
+interface RuleBody {
+  /** The condition that must hold for the rule to run. */
+  if?: ConditionValue;
+  /** The steps the rule runs. */
+  do: readonly Step[];
+}
+
+/** The structural steps of the flow model: the engine's closed set, as the server describes it. */
+interface StepBuilders {
+  /**
+   * Runs a named flow of the same resource inline.
+   * @param value The name of a flow declared under flows:
+   * @param options `with`: Arguments the flow reads as args.*.
+   */
+  call(value: string, options?: { readonly with?: { readonly [name: string]: JsonValue | Expr } }): Step;
+  /**
+   * Runs the first branch whose condition holds.
+   * @param value The branches, each an if/then pair; at least one.
+   * @param options `else`: Steps run when no branch holds.
+   */
+  choose(value: Array<{
+      /** The branch's condition. */
+      if: ConditionValue;
+      /** Steps run when it is the first that holds. */
+      then: readonly Step[];
+    }>, options?: { readonly else?: readonly Step[] }): Step;
+  /**
+   * Runs one list of steps when a condition holds and another when it does not. At least one of then and else is written; the flow continues after it.
+   * @param value The condition.
+   * @param options `then`: Steps run when it holds. `else`: Steps run when it does not.
+   */
+  if(value: ConditionValue, options: { readonly then: readonly Step[]; readonly else?: readonly Step[] } | { readonly then?: readonly Step[]; readonly else: readonly Step[] }): Step;
+  /**
+   * Runs steps in order until one fails; then runs the else steps and stops the flow. It takes steps, not conditions: guard with if and stop for a condition.
+   * @param value Steps that must all succeed.
+   * @param options `else`: Steps run when one fails.
+   */
+  require(value: readonly Step[], options?: { readonly else?: readonly Step[] }): Step;
+  /** Ends this run, optionally cancelling the underlying event. */
+  stop(options?: { readonly cancel?: boolean; readonly cancel_session_runs?: boolean }): Step;
+  /**
+   * Suspends the flow for a number of ticks without blocking a thread.
+   * @param value Range: 0 to 1728000 ticks.
+   */
+  wait(value: number): Step;
 }
 
 /** The options any action may carry besides its own parameters. */
@@ -3090,23 +3176,38 @@ interface ActionOptions {
   delay?: number;
 }
 
+/** What the step of an action that guards what follows may carry besides the action options. */
+interface GuardOptions {
+  /** Steps that run when the action fails or goes unanswered; the flow then stops. */
+  else?: readonly Step[];
+}
+
 /** Parameters of `actionbar`. */
 interface ActionbarActionParams extends ActionOptions {
-  /** Message text; formatting and & colour codes allowed. */
-  text: string;
+  /**
+   * Message text; formatting and & colour codes allowed.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  text: string | Expr;
 }
 
 /** Parameters of `broadcast`. */
 interface BroadcastActionParams extends ActionOptions {
-  /** Message text; formatting and & colour codes allowed. */
-  text: string;
+  /**
+   * Message text; formatting and & colour codes allowed.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  text: string | Expr;
   /**
    * Who receives it.
    * @defaultValue server
    */
   scope?: "server" | "world" | "permission";
-  /** World name (world scope; default the player's world) or permission node (permission scope, required) */
-  target?: string;
+  /**
+   * World name (world scope; default the player's world) or permission node (permission scope, required)
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  target?: string | Expr;
 }
 
 /** Parameters of `cancel`. */
@@ -3120,8 +3221,11 @@ interface CancelActionParams extends ActionOptions {
 
 /** Parameters of `chat`. */
 interface ChatActionParams extends ActionOptions {
-  /** Chat text, or a command with a leading slash. */
-  text: string;
+  /**
+   * Chat text, or a command with a leading slash.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  text: string | Expr;
 }
 
 /** Parameters of `connect`. */
@@ -3131,9 +3235,12 @@ interface ConnectActionParams extends ActionOptions {
 }
 
 /** Parameters of `custody.consume`. */
-interface CustodyConsumeActionParams extends ActionOptions {
-  /** The container slot whose held stack is consumed; a template such as ${slot.index} names the slot of the event. */
-  slot: number;
+interface CustodyConsumeActionParams extends ActionOptions, GuardOptions {
+  /**
+   * The container slot whose held stack is consumed; a template such as ${slot.index} names the slot of the event.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  slot: number | Expr;
   /**
    * decided: continue once the consume is applied (no save is requested). saved: continue only once a saved snapshot containing it is read back.
    * @defaultValue decided
@@ -3154,8 +3261,11 @@ interface GreetActionParams extends ActionOptions {
 
 /** Parameters of `give_exp`. */
 interface GiveExpActionParams extends ActionOptions {
-  /** How many points or levels. */
-  amount: number;
+  /**
+   * How many points or levels.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  amount: number | Expr;
   /**
    * What the amount counts.
    * @defaultValue points
@@ -3165,13 +3275,17 @@ interface GiveExpActionParams extends ActionOptions {
 
 /** Parameters of `give_item`. */
 interface GiveItemActionParams extends ActionOptions {
-  /** Materione item id, or minecraft:<material>. */
-  item: string | Ref<"item">;
+  /**
+   * Materione item id, or minecraft:<material>.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  item: string | Ref<"item"> | Expr;
   /**
    * How many.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  amount?: number;
+  amount?: number | Expr;
 }
 
 /** Parameters of `give_money`. */
@@ -3179,7 +3293,7 @@ interface GiveMoneyActionParams extends ActionOptions {
   /** Amount to give; above 0. */
   amount: number;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
-  currency?: string;
+  currency?: string | Ref<"currency">;
 }
 
 /** Parameters of `give_permission`. */
@@ -3208,8 +3322,11 @@ interface GuiOpenActionParams extends ActionOptions {
 interface GuiPageActionParams extends ActionOptions {
   /** The list layer's id. */
   list: string;
-  /** next, previous, first, last, or a page number; a template may give one. */
-  to: string;
+  /**
+   * next, previous, first, last, or a page number; a template may give one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  to: string | Expr;
 }
 
 /** Parameters of `gui.refresh`. */
@@ -3235,8 +3352,11 @@ interface GuiSlotItemActionParams extends ActionOptions {
 
 /** Parameters of `message`. */
 interface MessageActionParams extends ActionOptions {
-  /** Message text; formatting and & colour codes allowed. */
-  text: string;
+  /**
+   * Message text; formatting and & colour codes allowed.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  text: string | Expr;
   /**
    * Where the text appears.
    * @defaultValue player
@@ -3261,14 +3381,17 @@ interface PotionActionParams extends ActionOptions {
 }
 
 /** Parameters of `prompt`. */
-interface PromptActionParams extends ActionOptions {
+interface PromptActionParams extends ActionOptions, GuardOptions {
   /**
    * How the player answers.
    * @defaultValue chat
    */
   method?: InputMethodId;
-  /** What the player is asked; a template may use variables. */
-  text: string;
+  /**
+   * What the player is asked; a template may use variables.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  text: string | Expr;
   /** Where the answer goes: a run-local name, or session.<name> for the open GUI. */
   var: string | Ref<"variable">;
   /**
@@ -3285,8 +3408,11 @@ interface PromptActionParams extends ActionOptions {
 
 /** Parameters of `run_command`. */
 interface RunCommandActionParams extends ActionOptions {
-  /** Command without the leading slash. */
-  command: string;
+  /**
+   * Command without the leading slash.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  command: string | Expr;
   /**
    * Who runs it.
    * @defaultValue console
@@ -3305,14 +3431,20 @@ interface SetVarActionParams extends ActionOptions {
    * @defaultValue set
    */
   op?: string;
-  /** Value or ${expression}; not used by toggle, remove and reset. */
-  value?: string;
+  /**
+   * Value or ${expression}; not used by toggle, remove and reset.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  value?: string | Expr;
 }
 
 /** Parameters of `sound`. */
 interface SoundActionParams extends ActionOptions {
-  /** Sound key, e.g. minecraft:block.note_block.pling. */
-  sound: string | Ref<"sound">;
+  /**
+   * Sound key, e.g. minecraft:block.note_block.pling.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  sound: string | Ref<"sound"> | Expr;
   /**
    * Volume.
    * @defaultValue 1
@@ -3332,16 +3464,22 @@ interface SoundActionParams extends ActionOptions {
 
 /** Parameters of `stop_sound`. */
 interface StopSoundActionParams extends ActionOptions {
-  /** Sound key to stop, e.g. minecraft:music.game. */
-  sound?: string | Ref<"sound">;
+  /**
+   * Sound key to stop, e.g. minecraft:music.game.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  sound?: string | Ref<"sound"> | Expr;
   /** Sound category to stop. */
   category?: "master" | "music" | "records" | "weather" | "blocks" | "hostile" | "neutral" | "players" | "ambient" | "voice";
 }
 
 /** Parameters of `take_exp`. */
 interface TakeExpActionParams extends ActionOptions {
-  /** How many points or levels. */
-  amount: number;
+  /**
+   * How many points or levels.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  amount: number | Expr;
   /**
    * What the amount counts.
    * @defaultValue points
@@ -3351,15 +3489,22 @@ interface TakeExpActionParams extends ActionOptions {
 
 /** Parameters of `take_item`. */
 interface TakeItemActionParams extends ActionOptions {
-  /** Materione item id, or minecraft:<material>. */
-  item: string | Ref<"item">;
+  /**
+   * Materione item id, or minecraft:<material>.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  item: string | Ref<"item"> | Expr;
   /**
    * How many to take.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  amount?: number;
-  /** Only items whose display name contains this text. */
-  name_contains?: string;
+  amount?: number | Expr;
+  /**
+   * Only items whose display name contains this text.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  name_contains?: string | Expr;
 }
 
 /** Parameters of `take_money`. */
@@ -3367,7 +3512,7 @@ interface TakeMoneyActionParams extends ActionOptions {
   /** Amount to take; above 0. */
   amount: number;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
-  currency?: string;
+  currency?: string | Ref<"currency">;
 }
 
 /** Parameters of `take_permission`. */
@@ -3378,26 +3523,50 @@ interface TakePermissionActionParams extends ActionOptions {
 
 /** Parameters of `teleport`. */
 interface TeleportActionParams extends ActionOptions {
-  /** X coordinate. */
-  x: number;
-  /** Y coordinate. */
-  y: number;
-  /** Z coordinate. */
-  z: number;
-  /** World name; default the player's world. */
-  world?: string;
-  /** Facing, degrees; default keeps the current facing. */
-  yaw?: number;
-  /** Look up or down, degrees; default keeps the current pitch. */
-  pitch?: number;
+  /**
+   * X coordinate.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  x: number | Expr;
+  /**
+   * Y coordinate.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  y: number | Expr;
+  /**
+   * Z coordinate.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  z: number | Expr;
+  /**
+   * World name; default the player's world.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  world?: string | Expr;
+  /**
+   * Facing, degrees; default keeps the current facing.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  yaw?: number | Expr;
+  /**
+   * Look up or down, degrees; default keeps the current pitch.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  pitch?: number | Expr;
 }
 
 /** Parameters of `title`. */
 interface TitleActionParams extends ActionOptions {
-  /** Main line; formatting and & colour codes allowed. */
-  title: string;
-  /** Second line. */
-  subtitle?: string;
+  /**
+   * Main line; formatting and & colour codes allowed.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  title: string | Expr;
+  /**
+   * Second line.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  subtitle?: string | Expr;
   /**
    * Fade-in in ticks.
    * @defaultValue 10
@@ -3422,14 +3591,14 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  actionbar(params: ActionbarActionParams | string, options?: ActionOptions): ActionStep<"actionbar">;
+  actionbar(params: ActionbarActionParams | string | Expr, options?: ActionOptions): ActionStep<"actionbar">;
   /**
    * Sends a message to the whole server, one world, or the holders of a permission.
    * @since 2.0.0
    * @registeredBy materione
    * @category server
    */
-  broadcast(params: BroadcastActionParams | string, options?: ActionOptions): ActionStep<"broadcast">;
+  broadcast(params: BroadcastActionParams | string | Expr, options?: ActionOptions): ActionStep<"broadcast">;
   /**
    * Cancels the underlying game event after the actions run.
    * @since 2.0.0
@@ -3443,7 +3612,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  chat(params: ChatActionParams | string, options?: ActionOptions): ActionStep<"chat">;
+  chat(params: ChatActionParams | string | Expr, options?: ActionOptions): ActionStep<"chat">;
   /**
    * Sends the player to another server; a proxy takes the name, the transfer packet uses its configured host.
    * Unavailable on the connected server: No server transfer is configured (set transfer_host, or install a proxy channel)
@@ -3454,12 +3623,12 @@ interface ActionCatalog {
   connect(params: ConnectActionParams | string, options?: ActionOptions): ActionStep<"connect">;
   /**
    * Consumes the items held in custody at a slot of this GUI (a durable: required input slot), atomically. The flow continues once the consume is decided, or, with await: saved, only once a saved snapshot is read back from disk, so an effect after it cannot outlive a rolled-back consume. A failure runs its else: and ends the run.
-   * The step may carry an `else` branch that runs when the action goes unanswered.
+   * It guards what follows: when it fails or goes unanswered the flow stops, after the steps its guard options name.
    * @since 1.0.0
    * @registeredBy materione
    * @category player
    */
-  custodyConsume(params: CustodyConsumeActionParams | number, options?: ActionOptions): ActionStep<"custody.consume">;
+  custodyConsume(params: CustodyConsumeActionParams | number | Expr, options?: ActionOptions & GuardOptions): ActionStep<"custody.consume">;
   /**
    * Greets a player by name in chat.
    * @since 1.2.0
@@ -3473,14 +3642,14 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  giveExp(params: GiveExpActionParams | number, options?: ActionOptions): ActionStep<"give_exp">;
+  giveExp(params: GiveExpActionParams | number | Expr, options?: ActionOptions): ActionStep<"give_exp">;
   /**
    * Gives the player a Materione item or a vanilla item; overflow drops at their feet.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
-  giveItem(params: GiveItemActionParams | string | Ref<"item">, options?: ActionOptions): ActionStep<"give_item">;
+  giveItem(params: GiveItemActionParams | string | Ref<"item"> | Expr, options?: ActionOptions): ActionStep<"give_item">;
   /**
    * Adds money to the player's balance of a currency (the default currency unless one is named)
    * Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used.
@@ -3544,7 +3713,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  message(params: MessageActionParams | string, options?: ActionOptions): ActionStep<"message">;
+  message(params: MessageActionParams | string | Expr, options?: ActionOptions): ActionStep<"message">;
   /**
    * Applies a potion effect to the player.
    * @since 2.0.0
@@ -3554,7 +3723,7 @@ interface ActionCatalog {
   potion(params: PotionActionParams): ActionStep<"potion">;
   /**
    * Asks the player for a line of text (in chat or in an anvil) and writes the answer to a variable; an unanswered question runs its else: and ends the run.
-   * The step may carry an `else` branch that runs when the action goes unanswered.
+   * It guards what follows: when it fails or goes unanswered the flow stops, after the steps its guard options name.
    * @since 1.0.0
    * @registeredBy materione
    * @category gui
@@ -3566,7 +3735,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category server
    */
-  runCommand(params: RunCommandActionParams | string, options?: ActionOptions): ActionStep<"run_command">;
+  runCommand(params: RunCommandActionParams | string | Expr, options?: ActionOptions): ActionStep<"run_command">;
   /**
    * Stores a value in a run-local, session or declared player or server variable.
    * @since 2.0.0
@@ -3580,28 +3749,28 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  sound(params: SoundActionParams | string | Ref<"sound">, options?: ActionOptions): ActionStep<"sound">;
+  sound(params: SoundActionParams | string | Ref<"sound"> | Expr, options?: ActionOptions): ActionStep<"sound">;
   /**
    * Stops a sound, a sound category, or everything playing for the player.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
-  stopSound(params?: StopSoundActionParams | string | Ref<"sound">, options?: ActionOptions): ActionStep<"stop_sound">;
+  stopSound(params?: StopSoundActionParams | string | Ref<"sound"> | Expr, options?: ActionOptions): ActionStep<"stop_sound">;
   /**
    * Removes experience points or levels; fails and takes nothing when the player has too few.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
-  takeExp(params: TakeExpActionParams | number, options?: ActionOptions): ActionStep<"take_exp">;
+  takeExp(params: TakeExpActionParams | number | Expr, options?: ActionOptions): ActionStep<"take_exp">;
   /**
    * Removes items from the player; fails and takes nothing when they hold too few.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
-  takeItem(params: TakeItemActionParams | string | Ref<"item">, options?: ActionOptions): ActionStep<"take_item">;
+  takeItem(params: TakeItemActionParams | string | Ref<"item"> | Expr, options?: ActionOptions): ActionStep<"take_item">;
   /**
    * Removes money from the player's balance of a currency; fails when the balance is too low.
    * Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used.
@@ -3630,13 +3799,16 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  title(params: TitleActionParams | string, options?: ActionOptions): ActionStep<"title">;
+  title(params: TitleActionParams | string | Expr, options?: ActionOptions): ActionStep<"title">;
 }
 
 /** Parameters of the `has_exp` condition. */
 interface HasExpConditionParams {
-  /** How many points or levels, from 1. */
-  amount: number;
+  /**
+   * How many points or levels, from 1.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  amount: number | Expr;
   /**
    * What the amount counts.
    * @defaultValue points
@@ -3646,17 +3818,27 @@ interface HasExpConditionParams {
 
 /** Parameters of the `has_item` condition. */
 interface HasItemConditionParams {
-  /** Materione item id, or minecraft:<material>. */
-  item: string | Ref<"item">;
+  /**
+   * Materione item id, or minecraft:<material>.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  item: string | Ref<"item"> | Expr;
   /**
    * How many must be held, across stacks.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  amount?: number;
-  /** Only items whose display name contains this text. */
-  name_contains?: string;
-  /** Only items with a lore line containing this text. */
-  lore_contains?: string;
+  amount?: number | Expr;
+  /**
+   * Only items whose display name contains this text.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  name_contains?: string | Expr;
+  /**
+   * Only items with a lore line containing this text.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  lore_contains?: string | Expr;
   /**
    * Compare the name and lore text without case.
    * @defaultValue true
@@ -3681,15 +3863,22 @@ interface HasItemConditionParams {
 
 /** Parameters of the `has_item_space` condition. */
 interface HasItemSpaceConditionParams {
-  /** How many empty storage slots (0 to 36) */
-  slots?: number;
-  /** Materione item id, or minecraft:<material>; room for amount of it. */
-  item?: string;
+  /**
+   * How many empty storage slots (0 to 36)
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  slots?: number | Expr;
+  /**
+   * Materione item id, or minecraft:<material>; room for amount of it.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  item?: string | Ref<"item"> | Expr;
   /**
    * With item: how many of it there must be room for.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  amount?: number;
+  amount?: number | Expr;
 }
 
 /** Parameters of the `has_money` condition. */
@@ -3697,7 +3886,7 @@ interface HasMoneyConditionParams {
   /** Amount the balance must reach; above 0. */
   amount: number;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
-  currency?: string;
+  currency?: string | Ref<"currency">;
 }
 
 /** Parameters of the `has_permission` condition. */
@@ -3713,7 +3902,7 @@ interface HasPermissionConditionParams {
 /** Parameters of the `in_gui` condition. */
 interface InGuiConditionParams {
   /** GUI id, e.g. shop:menu; any open GUI when omitted. */
-  id?: string;
+  id?: string | Ref<"gui">;
 }
 
 /** Parameters of the `in_world` condition. */
@@ -3726,14 +3915,26 @@ interface InWorldConditionParams {
 interface IsNearConditionParams {
   /** World name; the player's own world when omitted. */
   world?: string;
-  /** The point's x coordinate (a number or a template) */
-  x: number;
-  /** The point's y coordinate (a number or a template) */
-  y: number;
-  /** The point's z coordinate (a number or a template) */
-  z: number;
-  /** Radius in blocks, from 0 (a number or a template) */
-  distance: number;
+  /**
+   * The point's x coordinate (a number or a template)
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  x: number | Expr;
+  /**
+   * The point's y coordinate (a number or a template)
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  y: number | Expr;
+  /**
+   * The point's z coordinate (a number or a template)
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  z: number | Expr;
+  /**
+   * Radius in blocks, from 0 (a number or a template)
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  distance: number | Expr;
 }
 
 /** Parameters of the `slot_has` condition. */
@@ -3741,7 +3942,7 @@ interface SlotHasConditionParams {
   /** The container slot, from 0 at the top-left. */
   slot: number;
   /** Materione item id, or minecraft:<material>; any item when absent. */
-  item?: string;
+  item?: string | Ref<"item">;
   /**
    * How many the slot must hold at least.
    * @defaultValue 1
@@ -3758,8 +3959,11 @@ interface VarConditionParams {
    * @defaultValue ==
    */
   op?: "==" | "!=" | ">" | ">=" | "<" | "<=";
-  /** Value to compare with, or ${expression}. */
-  value: string;
+  /**
+   * Value to compare with, or ${expression}.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  value: string | Expr;
 }
 
 interface ConditionCatalog {
@@ -3769,21 +3973,21 @@ interface ConditionCatalog {
    * @registeredBy materione
    * @category player
    */
-  hasExp(params: HasExpConditionParams | number): Condition<"has_exp">;
+  hasExp(params: HasExpConditionParams | number | Expr): Condition<"has_exp">;
   /**
    * True when the player holds at least the amount of an item, matching by id or material, name and lore.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
-  hasItem(params: HasItemConditionParams | string | Ref<"item">): Condition<"has_item">;
+  hasItem(params: HasItemConditionParams | string | Ref<"item"> | Expr): Condition<"has_item">;
   /**
    * True when the inventory has that many free slots, or room for that many of an item.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
-  hasItemSpace(params?: HasItemSpaceConditionParams | number): Condition<"has_item_space">;
+  hasItemSpace(params?: HasItemSpaceConditionParams | number | Expr): Condition<"has_item_space">;
   /**
    * True when the player's balance of a currency is at least the amount.
    * Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used.
@@ -3805,7 +4009,7 @@ interface ConditionCatalog {
    * @registeredBy materione
    * @category gui
    */
-  inGui(params?: InGuiConditionParams | string): Condition<"in_gui">;
+  inGui(params?: InGuiConditionParams | string | Ref<"gui">): Condition<"in_gui">;
   /**
    * True when the player is in one of the named worlds.
    * @since 2.0.0
@@ -3834,6 +4038,26 @@ interface ConditionCatalog {
    * @category data
    */
   var(params: VarConditionParams): Condition<"var">;
+  /**
+   * Holds when every condition of the list holds.
+   * @param value The conditions.
+   */
+  all(value: readonly ConditionValue[]): Condition<"all">;
+  /**
+   * Holds when at least one condition of the list holds.
+   * @param value The conditions.
+   */
+  any(value: readonly ConditionValue[]): Condition<"any">;
+  /**
+   * Holds when at least count conditions of the list hold.
+   * @param options `of`: The conditions.
+   */
+  atLeast(options: { readonly count: number; readonly of: readonly ConditionValue[] }): Condition<"at_least">;
+  /**
+   * Holds when the condition does not.
+   * @param value The condition.
+   */
+  not(value: ConditionValue): Condition<"not">;
 }
 
 /** Parameters of the `materione:backpack` mechanic. */
@@ -3889,6 +4113,7 @@ interface MechanicCatalog {
   /**
    * A container that travels inside the item.
    * Activation: Right-clicking with the item opens its storage; contents save when the inventory closes.
+   * Superseded by: the backpack preset: custody with a stack holder and the built-in backpack GUI (planned, primitives.md section 4.2; until it ships this mechanic is the way)
    * At most once per item.
    * @since 2.0.0
    * @registeredBy Materione
@@ -3897,6 +4122,7 @@ interface MechanicCatalog {
   /**
    * Run commands when the item is clicked.
    * Activation: When the holder right- or left-clicks with the item, its commands for that click run.
+   * Superseded by: a rule: a click trigger with the run_command action.
    * May appear more than once on one item.
    * @since 2.0.0
    * @registeredBy Materione
@@ -3905,6 +4131,7 @@ interface MechanicCatalog {
   /**
    * Custom durability independent of the base material.
    * Activation: Each time the item takes durability damage, one use is counted against max; it breaks at zero.
+   * Superseded by: keyed state held on the stack with the damage trigger, as a preset (planned, primitives.md section 4.2; until it ships this mechanic is the way)
    * At most once per item.
    * @since 2.0.0
    * @registeredBy Materione
@@ -3913,6 +4140,7 @@ interface MechanicCatalog {
   /**
    * Custom nutrition, saturation and consume effects.
    * Activation: When the player eats the item, its nutrition, saturation and effects apply.
+   * Superseded by: a preset over the vanilla food and consumable components and a consume rule (planned, primitives.md section 4.2; until it ships this mechanic is the way)
    * At most once per item.
    * @since 2.0.0
    * @registeredBy Materione
@@ -3921,6 +4149,7 @@ interface MechanicCatalog {
   /**
    * The item stays with its owner through death.
    * Activation: When the owner dies the item is kept back and returned on respawn or next join.
+   * Superseded by: custody of items across a death, as a preset (planned, primitives.md section 4.2; until it ships this mechanic is the way)
    * At most once per item.
    * @since 2.0.0
    * @registeredBy Materione
@@ -4331,18 +4560,30 @@ interface RecipeCatalog {
 
 /** Parameters of the `head` item source. */
 interface HeadItemParams {
-  /** A player's name, or ${player.name} for the viewer. */
-  player?: string;
-  /** A skin hash, or its textures.minecraft.net URL. */
-  texture?: string;
-  /** A base64 textures value, as a server stores it. */
-  base64?: string;
+  /**
+   * A player's name, or ${player.name} for the viewer.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  player?: string | Expr;
+  /**
+   * A skin hash, or its textures.minecraft.net URL.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  texture?: string | Expr;
+  /**
+   * A base64 textures value, as a server stores it.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  base64?: string | Expr;
 }
 
 /** Parameters of the `item` item source. */
 interface ItemItemParams {
-  /** ns:id, minecraft:material, or a template such as ${entry.item}. */
-  item: string;
+  /**
+   * ns:id, minecraft:material, or a template such as ${entry.item}.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  item: string | Ref<"item"> | Expr;
 }
 
 /** Parameters of the `player_slot` item source. */
@@ -4363,7 +4604,7 @@ interface ItemSourceCatalog {
    * @since 1.0.0
    * @registeredBy materione
    */
-  item(params: ItemItemParams | string): ItemSourceSpec<"item">;
+  item(params: ItemItemParams | string | Ref<"item"> | Expr): ItemSourceSpec<"item">;
   /**
    * The viewer's own item in a hand or armour slot, shown as it is.
    * @since 1.0.0

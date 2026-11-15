@@ -64,11 +64,11 @@ public final class HasItemSpaceCondition implements ConditionType<HasItemSpaceCo
                 "True when the inventory has that many free slots, or room for that many of an item",
                 List.of(
                         new ParameterSchema("slots", ParameterType.INTEGER, false, null,
-                                "How many empty storage slots (0 to 36)", null, null),
+                                "How many empty storage slots (0 to 36)", null, null).acceptingExpression(),
                         new ParameterSchema("item", ParameterType.STRING, false, null,
-                                "Materione item id, or minecraft:<material>; room for amount of it", null, null),
+                                "Materione item id, or minecraft:<material>; room for amount of it", null, null).withWidget("item", "").acceptingExpression(),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
-                                "With item: how many of it there must be room for", null, null)),
+                                "With item: how many of it there must be room for", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.PLAYER, "slots");
     }
 

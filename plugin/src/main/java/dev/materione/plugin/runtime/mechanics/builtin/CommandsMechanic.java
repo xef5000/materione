@@ -70,7 +70,8 @@ public final class CommandsMechanic implements Mechanic {
                         new ParameterSchema("as_player", ParameterType.BOOLEAN, false, "false",
                                 "Run as the clicking player instead of the console", null, null)),
                 "2.0.0",
-                "When the holder right- or left-clicks with the item, its commands for that click run");
+                "When the holder right- or left-clicks with the item, its commands for that click run")
+                .supersededBy("a rule: a click trigger with the run_command action");
     }
 
     @Override

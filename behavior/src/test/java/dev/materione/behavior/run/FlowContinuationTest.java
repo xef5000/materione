@@ -58,7 +58,7 @@ class FlowContinuationTest {
             @Override public String id() { return "async_say"; }
             @Override public ActionDescription describe() {
                 return new ActionDescription(new SelfDescription("Async say", "",
-                        List.of(ParameterSchema.of("text", ParameterType.STRING, true)), "1"),
+                        List.of(ParameterSchema.of("text", ParameterType.STRING, true).acceptingExpression()), "1"),
                         LogicCategory.PLAYER, "text");
             }
             @Override public Threading threading() { return Threading.PLAYER_REGION; }

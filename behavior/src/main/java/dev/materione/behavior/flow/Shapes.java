@@ -58,6 +58,20 @@ final class Shapes {
         return ParamReader.of(params, recorder, env);
     }
 
+    /**
+     * Whether every key a parse bound as an expression is declared so by the entry's description (issue 355). A
+     * key the description does not list at all (an undocumented spelling) is not judged.
+     */
+    static boolean declaresExpressions(
+            List<dev.materione.api.registry.ParameterSchema> declared, java.util.Set<String> bound) {
+        for (var schema : declared) {
+            if (bound.contains(schema.id()) && !schema.semantics().expression()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** A deeply immutable copy of a YAML value (lists and maps copied, scalars shared). */
     static Object freeze(Object value) {
         if (value instanceof Map<?, ?> mapping) {

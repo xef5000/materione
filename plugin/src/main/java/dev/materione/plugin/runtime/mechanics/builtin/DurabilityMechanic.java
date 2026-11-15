@@ -39,7 +39,8 @@ public final class DurabilityMechanic implements Mechanic {
                 "Custom durability independent of the base material",
                 List.of(new ParameterSchema("max", ParameterType.INTEGER, true, null,
                         "Uses before the item breaks", null, null)), "2.0.0",
-                "Each time the item takes durability damage, one use is counted against max; it breaks at zero");
+                "Each time the item takes durability damage, one use is counted against max; it breaks at zero")
+                .supersededBy("keyed state held on the stack with the damage trigger, as a preset (planned, primitives.md section 4.2; until it ships this mechanic is the way)");
     }
 
     @Override

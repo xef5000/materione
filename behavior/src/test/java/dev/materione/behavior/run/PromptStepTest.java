@@ -55,7 +55,7 @@ class PromptStepTest {
         @Override
         public ActionDescription describe() {
             return new ActionDescription(new SelfDescription("Ask", "", List.of(
-                    ParameterSchema.of("text", ParameterType.STRING, true)), "1"), LogicCategory.GUI, "text");
+                    ParameterSchema.of("text", ParameterType.STRING, true).acceptingExpression()), "1"), LogicCategory.GUI, "text");
         }
 
         @Override

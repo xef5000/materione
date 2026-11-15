@@ -7,8 +7,11 @@
  *    `MechanicEntry`, `TriggerBinding`, `Expr`, ...);
  *  - the empty interfaces the generated `.d.ts` fills by declaration merging (`PackWriter`, `RefFactory`,
  *    `ActionCatalog`, `ConditionCatalog`, `MechanicCatalog`, `TriggerCatalog`, `FunctionCatalog`,
- *    `RecipeCatalog`, `GuiComponentCatalog`, `ItemSourceCatalog`, `ListSourceCatalog`, `RuleOptions`), so a
- *    member a server does not register is absent and using it is TS2339 (codemode.md section 9.2).
+ *    `RecipeCatalog`, `GuiComponentCatalog`, `ItemSourceCatalog`, `ListSourceCatalog`, `RuleOptions`, `RuleBody`,
+ *    `StepBuilders`), so a member a server does not register is absent and using it is TS2339 (codemode.md
+ *    section 9.2).
+ *
+ * It types no engine vocabulary (issue 355): no step, no rule key, no condition word. A ban test keeps it so.
  *
  * Both files are global scripts (no top-level import or export) and are loaded together.
  */
@@ -81,14 +84,14 @@ type ExprOperand = string | number | boolean | Expr | ContextValue | Ref;
 
 // ---- behavior ---------------------------------------------------------------------------------------
 
-/** One step of a flow: an action, or a structural step from `m.steps`. */
+/** One step of a flow: an action, or a structural step built by `m.steps`. */
 interface Step {
   readonly __step: true;
 }
 
 /** An action step built by `m.actions.*`. `I` is the registry id. */
 interface ActionStep<I extends string = string> extends Step {
-  readonly kind: "action";
+  readonly __action: true;
   readonly id: I;
 }
 
@@ -97,6 +100,9 @@ interface Condition<I extends string = string> {
   readonly __condition: true;
   readonly id: I;
 }
+
+/** What a condition is written as: a built condition, or an expression. */
+type ConditionValue = Condition | Expr<boolean>;
 
 /** A mechanic entry built by `m.mechanics.*`. */
 interface MechanicEntry<I extends string = string> {
@@ -139,14 +145,11 @@ interface TriggerBinding<I extends string = string, C = unknown> {
   readonly __context?: C;
 }
 
-/** The registered options a rule may carry besides `on`, `if` and `do` (filled by the generated surface). */
+/** The registered options a rule may carry (filled by the generated surface). */
 interface RuleOptions {}
 
-/** What a rule's builder returns. */
-interface RuleBody extends RuleOptions {
-  readonly if?: Condition | Expr<boolean>;
-  readonly do: readonly Step[];
-}
+/** What a rule's builder returns: the rule options and the flow keys of a rule, both filled by the generated surface. */
+interface RuleBody extends RuleOptions {}
 
 interface RuleHandle {
   readonly __rule: true;
@@ -157,7 +160,7 @@ interface RuleSet<H extends string> {
   /**
    * Adds a rule. The trigger comes first and types the rest: `build` receives the context the trigger
    * guarantees on host `H`, and a trigger no `H` fires is a type error. A key the body may not carry (the
-   * registered rule options are `RuleOptions`) is a type error too: the `never` mapping stands in for the
+   * rule's keys are `RuleBody`) is a type error too: the `never` mapping stands in for the
    * excess-property check TypeScript does not make on an arrow function's return value.
    */
   add<C extends { [P in H]: object }, B extends RuleBody>(
@@ -165,40 +168,6 @@ interface RuleSet<H extends string> {
     build: (ctx: C[H]) => B & { readonly [K in Exclude<keyof B, keyof RuleBody>]: never },
   ): RuleHandle;
   instantiate(recipe: RecipeInstance): RuleHandle;
-}
-
-/**
- * The structural steps of the flow model, typed by hand from logic.md section 2.2 and the engine's step compiler
- * (`StepCompiler`): they are engine-owned and closed, not registry entries, and self-description does not carry
- * their grammar. TEMPORARY: issue 355 puts the step grammar in self-description, and this interface is then generated.
- */
-interface StepBuilders {
-  /** A branch on a condition; at least one of `then` and `else` is required. Execution continues after it. */
-  if(
-    condition: Condition | Expr<boolean>,
-    branches:
-      | { readonly then: readonly Step[]; readonly else?: readonly Step[] }
-      | { readonly then?: readonly Step[]; readonly else: readonly Step[] },
-  ): Step;
-  /**
-   * Runs the **steps** in order until one fails; on a failure it runs `else` and stops the flow (the atomic
-   * paywall: a take, then a give). It takes steps, not conditions: guard with `if` and `stop` for a condition.
-   */
-  require(steps: readonly Step[], options?: { readonly else?: readonly Step[] }): Step;
-  /** Suspends the run for whole `ticks` (0 to 1,728,000, one day). */
-  wait(ticks: number): Step;
-  /** Ends this run; `cancel` also cancels the underlying game event. */
-  stop(options?: { readonly cancel?: boolean; readonly cancel_session_runs?: boolean }): Step;
-  /** The first branch whose condition holds runs; `otherwise` is the step's own `else`. At least one branch. */
-  choose(
-    branches: readonly [
-      { readonly if: Condition | Expr<boolean>; readonly then: readonly Step[] },
-      ...{ readonly if: Condition | Expr<boolean>; readonly then: readonly Step[] }[],
-    ],
-    otherwise?: readonly Step[],
-  ): Step;
-  /** Runs a named flow of the same resource inline; `args` arrive as `args.*` in the flow. */
-  call(flow: string, args?: { readonly [name: string]: JsonValue }): Step;
 }
 
 // ---- extension points: the generated surface merges its members into these -------------------------
@@ -218,6 +187,9 @@ interface RefFactory {
 interface ContentTypeFields {}
 /** Generated: the handle type of each content type, by name. */
 interface ContentTypeHandles {}
+
+/** `m.steps`. Generated: one builder per step kind the server's engine describes. */
+interface StepBuilders {}
 
 interface ActionCatalog {}
 interface ConditionCatalog {}

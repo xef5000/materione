@@ -63,7 +63,7 @@ public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params>
                         new ParameterSchema("amount", ParameterType.DECIMAL, true, null,
                                 "Amount to give; above 0", null, null),
                         new ParameterSchema("currency", ParameterType.STRING, false, null,
-                                "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null)),
+                                "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null).withWidget("reference", "currency")),
                 "2.0.0"), LogicCategory.ECONOMY, "amount");
     }
 

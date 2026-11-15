@@ -389,7 +389,7 @@ public final class GuiFixture {
         @Override
         public ActionDescription describe() {
             return new ActionDescription(new SelfDescription("Mark", "Records a rendered template",
-                    List.of(ParameterSchema.of("text", ParameterType.STRING, true)), "1.0.0"),
+                    List.of(ParameterSchema.of("text", ParameterType.STRING, true).acceptingExpression()), "1.0.0"),
                     LogicCategory.DATA, "text");
         }
 

@@ -37,12 +37,6 @@
       "operation": 2,
       "code": "MTR-0009",
       "severity": "error",
-      "message": "unresolved model 'models/crate.json'"
-    },
-    {
-      "operation": 2,
-      "code": "MTR-0009",
-      "severity": "error",
       "message": "unresolved texture 'block/crate'"
     }
   ],

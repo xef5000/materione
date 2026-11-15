@@ -16,7 +16,9 @@ import java.util.Objects;
  *        later gui); an empty list means the trigger is part of the vocabulary but nothing fires it
  *        yet, so the editor must not offer it as a working trigger
  * @param filters the extra rule-level keys a rule may set on this trigger ({@code layer},
- *        {@code click}, {@code slot}, {@code every}), as a parameter schema
+ *        {@code click}, {@code slot}, {@code every}), as a parameter schema. The engine reads every
+ *        filter as one value or a list of values, so each is declared {@code multiple} here, whatever
+ *        the registration wrote: the description cannot disagree with the compiler
  * @param context the variables the trigger guarantees (always includes the universal roots the
  *        host documents), checked against {@code ${...}} paths and used for autocomplete
  * @param cancellable whether a rule may cancel the underlying event ({@code gui.opening} can,
@@ -35,7 +37,8 @@ public record TriggerDescription(
         Objects.requireNonNull(self, "self");
         details = details == null ? List.of() : List.copyOf(details);
         firedBy = firedBy == null ? List.of() : List.copyOf(firedBy);
-        filters = filters == null ? List.of() : List.copyOf(filters);
+        filters = filters == null ? List.of()
+                : filters.stream().map(ParameterSchema::acceptingList).toList();
         context = context == null ? List.of() : List.copyOf(context);
     }
 

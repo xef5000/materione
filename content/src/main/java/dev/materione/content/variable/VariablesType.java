@@ -42,6 +42,12 @@ public final class VariablesType implements ContentType {
         return "variables";
     }
 
+    /** A declared variable is read as {@code vars.<scope>.<pack>.<key>} (logic.md section 3.3, section 20 decision 4). */
+    @Override
+    public String expressionForm() {
+        return "vars.{scope}.{pack}.{id}";
+    }
+
     @Override
     public SelfDescription describe() {
         return new SelfDescription(

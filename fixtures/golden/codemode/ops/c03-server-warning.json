@@ -1,0 +1,66 @@
+{
+  "task": "C03",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a stamp item whose rule condition is misspelled on purpose.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "stamp",
+      "edits": [
+        {
+          "field": [
+            "stamp",
+            "material"
+          ],
+          "value": "PAPER"
+        },
+        {
+          "field": [
+            "stamp",
+            "display_name"
+          ],
+          "value": "<gray>Stamp"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/stamp.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "click:right",
+            "if": "${now() - bench:stamped_at >= 60}",
+            "do": [
+              {
+                "message": "<gray>Stamped."
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 6,
+      "column": 23
+    },
+    {
+      "line": 8,
+      "column": 13
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

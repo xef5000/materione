@@ -35,6 +35,7 @@ public final class ParamReader {
     private final Map<String, Object> params;
     private final ExpressionCompiler compiler;
     private final CompileEnvironment environment;
+    private final Set<String> expressionKeys = new java.util.LinkedHashSet<>();
 
     private ParamReader(Map<String, Object> params, ExpressionCompiler compiler, CompileEnvironment environment) {
         this.params = params;
@@ -201,12 +202,23 @@ public final class ParamReader {
 
     /** A required bare expression (no {@code ${}} wrapper) whose value is typed, not text. */
     public ValueExpression expression(String key) {
+        expressionKeys.add(key);
         String source = string(key, true);
         try {
             return compiler.expression(source);
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException(key + ": " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * The keys this reader bound as a template or an expression so far: what the type's parse treats as a value
+     * that may hold {@code ${...}}. A type declares the same keys in its description
+     * ({@code ParameterSchema.acceptingExpression()}); the engine compares the two when assertions are on, so a
+     * description cannot fall behind its parse (issue 355).
+     */
+    public Set<String> expressionKeys() {
+        return Collections.unmodifiableSet(expressionKeys);
     }
 
     // --- collections ------------------------------------------------------------
@@ -276,6 +288,7 @@ public final class ParamReader {
     }
 
     private TemplateText compileTemplate(String key, String source) {
+        expressionKeys.add(key);
         try {
             return compiler.template(source);
         } catch (IllegalArgumentException e) {

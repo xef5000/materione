@@ -62,7 +62,8 @@ public final class VocabularyBuilder {
                 recipes(registries),
                 listSources(registries),
                 itemSources(registries),
-                inputMethods(registries));
+                inputMethods(registries),
+                StepKinds.grammar());
     }
 
     /** The registered list sources, sorted by id (logic.md §28, §31). A source whose description throws is left out. */

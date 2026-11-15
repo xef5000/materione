@@ -64,11 +64,11 @@ public final class HeadItemSource implements ItemSource<HeadItemSource.Head> {
                 "A player head: a player's skin, a texture hash or URL, or a base64 textures value. Give exactly one",
                 List.of(
                         new ParameterSchema("player", ParameterType.STRING, false, null,
-                                "A player's name, or ${player.name} for the viewer", null, null),
+                                "A player's name, or ${player.name} for the viewer", null, null).acceptingExpression(),
                         new ParameterSchema("texture", ParameterType.STRING, false, null,
-                                "A skin hash, or its textures.minecraft.net URL", null, null),
+                                "A skin hash, or its textures.minecraft.net URL", null, null).acceptingExpression(),
                         new ParameterSchema("base64", ParameterType.STRING, false, null,
-                                "A base64 textures value, as a server stores it", null, null)),
+                                "A base64 textures value, as a server stores it", null, null).acceptingExpression()),
                 "1.0.0"),
                 null);
     }

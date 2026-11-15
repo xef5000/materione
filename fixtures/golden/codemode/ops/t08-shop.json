@@ -79,7 +79,10 @@
           "rule": {
             "on": "gui.click",
             "layer": "buy_diamond",
-            "click": "left",
+            "click": [
+              "left",
+              "shift_left"
+            ],
             "do": [
               {
                 "if": {
@@ -160,7 +163,10 @@
           "rule": {
             "on": "gui.click",
             "layer": "buy_iron_ingot",
-            "click": "left",
+            "click": [
+              "left",
+              "shift_left"
+            ],
             "do": [
               {
                 "if": {
@@ -241,7 +247,10 @@
           "rule": {
             "on": "gui.click",
             "layer": "buy_bread",
-            "click": "left",
+            "click": [
+              "left",
+              "shift_left"
+            ],
             "do": [
               {
                 "if": {
@@ -319,27 +328,27 @@
       "column": 21
     },
     {
-      "line": 18,
+      "line": 19,
       "column": 14
     },
     {
-      "line": 30,
+      "line": 31,
       "column": 14
     },
     {
-      "line": 18,
+      "line": 19,
       "column": 14
     },
     {
-      "line": 30,
+      "line": 31,
       "column": 14
     },
     {
-      "line": 18,
+      "line": 19,
       "column": 14
     },
     {
-      "line": 30,
+      "line": 31,
       "column": 14
     }
   ],
@@ -349,7 +358,7 @@
       "severity": "warning",
       "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
       "source": {
-        "line": 25,
+        "line": 26,
         "column": 34
       }
     },
@@ -358,7 +367,7 @@
       "severity": "warning",
       "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
       "source": {
-        "line": 35,
+        "line": 36,
         "column": 17
       }
     },
@@ -367,7 +376,7 @@
       "severity": "warning",
       "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
       "source": {
-        "line": 25,
+        "line": 26,
         "column": 34
       }
     },
@@ -376,7 +385,7 @@
       "severity": "warning",
       "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
       "source": {
-        "line": 35,
+        "line": 36,
         "column": 17
       }
     },
@@ -385,7 +394,7 @@
       "severity": "warning",
       "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
       "source": {
-        "line": 25,
+        "line": 26,
         "column": 34
       }
     },
@@ -394,7 +403,7 @@
       "severity": "warning",
       "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
       "source": {
-        "line": 35,
+        "line": 36,
         "column": 17
       }
     }

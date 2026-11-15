@@ -7,8 +7,9 @@
  * a mechanic: every member of `m` is built from a registry entry of the surface document, spelled with the
  * generator's own naming functions, so adding an entry to a registry changes the object without changing this
  * file, and the object and the generated declarations cannot disagree. The only vocabulary the core knows is
- * the schema's (value kinds and widget hints), the wire's (operation kinds, in `ops.ts`) and the step grammar
- * (`steps.ts`, temporary until issue 355).
+ * the schema's (value kinds, widget hints and the grammar kinds of a parameter) and the wire's (operation kinds,
+ * in `ops.ts`). The engine's closed grammar (steps, composite conditions, the flow keys of a rule) is read from the
+ * surface like a registry (`forms.ts`, issue 355).
  *
  * It never writes and never talks to the server: reads go through the injected port, everything else is
  * recorded. Dependency-free, DOM-free, plain ES2020: it runs unchanged inside the sandbox.
@@ -25,7 +26,7 @@ import type {
 } from '../generate/surface';
 import { SDK_CODES, SdkError, isSdkError, type SdkCode } from './diagnostics';
 import { readEntry, writeEntry, type OpEntry } from './ops';
-import { FLOW, stepBuilders } from './steps';
+import { formBuilders, writeMembers, writeParam, type FormContext } from './forms';
 import {
   DEFAULT_LIMITS,
   type HostPort,
@@ -66,6 +67,8 @@ interface Doc {
   source?: SourcePosition;
   /** A stored document: whether an operation needs its path and revision (a reference used only as a value does not). */
   needsDocument: boolean;
+  /** A created document: the field values the program staged, latest first-hand (what an expression form reads). */
+  fields?: Record<string, unknown>;
 }
 
 /** What building a staged operation needs from the host's answers; every member is filled at seal. */
@@ -318,13 +321,40 @@ export function createSession(config: SessionConfig): Session {
     return fail('SDK-0012', `${where}: not a condition; build one with m.conditions or m.expr`);
   }
 
+  /**
+   * How a reference reads inside an expression: by the form its content type declares (a template over the pack,
+   * the id and the resource's fields), or as its id when the type declares none. A field of the form is read from
+   * what this program staged, or from the type's default; a stored resource's fields are not known while staging.
+   */
+  function refOperand(kind: string, id: string, where: string): string {
+    const type = typeByName.get(kind);
+    const form = type?.expressionForm;
+    if (type === undefined || form === undefined) return id;
+    const at = id.indexOf(':');
+    const pack = id.slice(0, at);
+    const local = id.slice(at + 1);
+    const staged = created.get(`${kind}\u0000${id}`);
+    const fields = staged === undefined ? undefined : docs.get(staged)?.fields;
+    return form.replace(/\{([A-Za-z0-9_-]+)\}/g, (_, name: string) => {
+      if (name === 'pack') return pack;
+      if (name === 'id') return local;
+      const value = fields?.[name] ?? (fields === undefined ? undefined : type.parameters.find((param) => param.id === name)?.default);
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+      return fail('SDK-0012', `${where}: a ${kind} reads as ${form} in an expression, and the "${name}" of "${id}" is not known here`, {
+        hint: fields === undefined
+          ? `only a ${kind} this program creates can be interpolated; for a stored one read it (m.read.get) and write the path as text`
+          : `set "${name}" when creating it`,
+      });
+    });
+  }
+
   /** The text an expression gets for an operand. */
   function operand(value: unknown, where: string): string {
     const info = tagOf(value);
     if (info !== undefined) {
       if (info.tag === 'expr') return info.source;
       if (info.tag === 'context') return info.path;
-      if (info.tag === 'ref') return info.id;
+      if (info.tag === 'ref') return refOperand(info.kind, info.id, where);
       return fail('SDK-0009', `${where}: this value cannot be part of an expression`);
     }
     if (typeof value === 'string') return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
@@ -336,6 +366,16 @@ export function createSession(config: SessionConfig): Session {
   function wrapNode(value: JsonValue): unknown {
     return tagged({ __node: true }, { tag: 'node', node: value });
   }
+
+  /** What the grammar's builders (`forms.ts`) write with: this run's serialization and its diagnostics. */
+  const formContext: FormContext = {
+    node,
+    condition,
+    steps,
+    plain: isPlain,
+    invalid: (message) => fail('SDK-0012', message),
+    wrap: wrapNode,
+  };
 
   // ---- builders: one per registry entry, generic --------------------------------------------------
 
@@ -359,11 +399,14 @@ export function createSession(config: SessionConfig): Session {
   }
 
   function actionBuilders(): Dict {
-    const optionIds = new Set(surface.behavior.actionOptions.map((option) => option.id));
     const names = memberMap(surface.behavior.actions);
     const catalog: Dict = {};
     for (const action of sortedBy(surface.behavior.actions, (entry) => entry.id)) {
       const member = names.get(action.id) ?? camel(action.id);
+      // an action that guards what follows also takes the guard options the registry describes
+      const stepOptions = action.takesElse ? [...surface.behavior.actionOptions, ...surface.behavior.guardOptions] : surface.behavior.actionOptions;
+      const optionById = new Map(stepOptions.map((option) => [option.id, option]));
+      const optionIds = new Set(optionById.keys());
       const own = paramIds(action);
       const allowed = new Set([...own, ...optionIds]);
       catalog[member] = (params?: unknown, options?: unknown): unknown => {
@@ -392,9 +435,12 @@ export function createSession(config: SessionConfig): Session {
         } else if (params !== undefined) {
           fail('SDK-0012', `${owner}: parameters must be a mapping or the one bare value`);
         }
-        if (body === undefined && Object.keys(extra).length === 0) return wrapNode(action.id);
+        if (body === undefined && Object.keys(extra).filter((key) => extra[key] !== undefined).length === 0) return wrapNode(action.id);
         step[action.id] = body === undefined ? {} : node(body, `${owner} parameters`);
-        for (const key of Object.keys(extra)) step[key] = node(extra[key], `${owner} ${key}`);
+        for (const key of Object.keys(extra)) {
+          const option = optionById.get(key);
+          step[key] = option === undefined ? node(extra[key], `${owner} ${key}`) : writeParam(formContext, option, extra[key], `${owner} ${key}`, false);
+        }
         return wrapNode(step as JsonValue);
       };
     }
@@ -561,7 +607,8 @@ export function createSession(config: SessionConfig): Session {
   }
 
   const triggerById = new Map(surface.behavior.triggers.map((trigger) => [trigger.id, trigger]));
-  const ruleOptionIds = new Set(surface.behavior.ruleOptions.map((option) => option.id));
+  /** The keys of a rule, as the registry describes them: its options first, then its flow keys, in the order a rule is written. */
+  const ruleKeys = [...surface.behavior.ruleOptions, ...surface.behavior.ruleBody];
 
   // ---- staging: records, never reads --------------------------------------------------------------
   //
@@ -655,16 +702,13 @@ export function createSession(config: SessionConfig): Session {
         const body = (build as (context: unknown) => unknown)(contextOf(registered, doc.kind));
         if (!isPlain(body)) return fail('SDK-0012', `${owner}: the function returns a mapping with a "do" list`);
         const given = body as Dict;
-        if (!Array.isArray(given[FLOW.body])) fail('SDK-0012', `${owner}: the rule needs a "${FLOW.body}" list of steps`);
         const rule: Record<string, JsonValue> = { on: info.detail === null ? info.id : `${info.id}:${info.detail}` };
         for (const [key, value] of info.filters) rule[key] = value;
-        for (const key of Object.keys(given)) {
-          if (key === FLOW.body || key === FLOW.condition || given[key] === undefined) continue;
-          if (!ruleOptionIds.has(key)) fail('SDK-0012', `${owner}: a rule has no option "${key}"`, { hint: `options: ${[...ruleOptionIds].sort().join(', ')}` });
-          rule[key] = node(given[key], `${owner} ${key}`);
-        }
-        if (given[FLOW.condition] !== undefined) rule[FLOW.condition] = condition(given[FLOW.condition], `${owner} ${FLOW.condition}`);
-        rule[FLOW.body] = steps(given[FLOW.body], `${owner} ${FLOW.body}`);
+        // the options in the order the program wrote them, then the flow keys in the registry's order
+        const written = writeMembers(formContext, ruleKeys, given, `${owner}: a rule`, false);
+        const flowIds = new Set(surface.behavior.ruleBody.map((param) => param.id));
+        for (const key of Object.keys(given)) if (written[key] !== undefined && !flowIds.has(key)) rule[key] = written[key] as JsonValue;
+        for (const key of flowIds) if (written[key] !== undefined) rule[key] = written[key] as JsonValue;
         prepare(doc, owner);
         // the rule's index is the number of rules the document holds when this one lands: known at seal
         stage('rules.add', 'logicEdit', [docKey(doc)], 1, doc, (view) => ({
@@ -702,6 +746,7 @@ export function createSession(config: SessionConfig): Session {
       const edits = fieldEdits(doc, fields, owner);
       if (edits.length === 0) fail('SDK-0012', `${owner}: no field to set`);
       prepare(doc, owner);
+      if (doc.fields !== undefined) doc.fields = { ...doc.fields, ...(fields as Dict) };
       stage('handle.set', 'setFields', [docKey(doc)], edits.length, doc, (view) => ({ kind: 'setFields', path: view.path(doc), ...view.rev(doc), edits }));
     };
     handle.unset = (...keys: unknown[]): void => {
@@ -840,9 +885,25 @@ export function createSession(config: SessionConfig): Session {
       open();
       if (typeof path !== 'string' || path === '') fail('SDK-0012', 'm.ref.asset: an asset is the path the owner uploaded it to');
       assetRefs.push({ path: path as string, source: locate() });
-      return refValue('asset', path as string);
+      // the program names the file; a field holds the reference the server's convention makes of it
+      return refValue('asset', assetReference(path as string));
     };
     return factory;
+  }
+
+  /**
+   * The value a field holds for the uploaded file at `path`, by the convention the server describes: relative to
+   * the directory of its kind, with or without the extension. A server that does not describe one gets the path.
+   */
+  function assetReference(path: string): string {
+    const convention = surface.assets;
+    if (convention === null) return path;
+    let relative = path.replace(/\\/g, '/');
+    if (relative.indexOf(`${convention.root}/`) === 0) relative = relative.slice(convention.root.length + 1);
+    const slash = relative.indexOf('/');
+    if (slash > 0 && convention.kindDirectories.includes(relative.slice(0, slash))) relative = relative.slice(slash + 1);
+    const dot = relative.lastIndexOf('.');
+    return !convention.extension && dot > 0 ? relative.slice(0, dot) : relative;
   }
 
   // ---- the writer and the editor of an existing resource ------------------------------------------
@@ -861,6 +922,7 @@ export function createSession(config: SessionConfig): Session {
           const checked = checkId(id, owner);
           const doc = newDocument(pack, type, checked, given.folder, owner);
           const edits = fieldEdits(doc, fields === undefined ? {} : fields, owner);
+          doc.fields = isPlain(fields) ? { ...(fields as Dict) } : {};
           claimPack(pack);
           stage('collection.create', 'create', [docKey(doc)], edits.length, undefined, () => {
             const op: StagedOperation = { kind: 'create', type: doc.directory, id: checked };
@@ -1155,13 +1217,6 @@ export function createSession(config: SessionConfig): Session {
     port.log?.(line);
   }
 
-  const builders = stepBuilders({
-    node,
-    condition,
-    steps,
-    invalid: (message) => fail('SDK-0012', message),
-    step: wrapNode,
-  });
 
   const pack = (id: unknown): unknown => {
     open();
@@ -1173,7 +1228,8 @@ export function createSession(config: SessionConfig): Session {
     pack,
     ref: Object.freeze(refFactory()),
     actions: Object.freeze(actionBuilders()),
-    conditions: Object.freeze(entryBuilders(surface.behavior.conditions, 'm.conditions', true)),
+    // the composite conditions are members of the same catalog; a registered condition of the same name keeps its own
+    conditions: Object.freeze({ ...formBuilders(surface.behavior.conditionForms, 'm.conditions', formContext), ...entryBuilders(surface.behavior.conditions, 'm.conditions', true) }),
     mechanics: Object.freeze(entryBuilders(surface.behavior.mechanics, 'm.mechanics', true)),
     triggers: Object.freeze(triggerBuilders()),
     fn: Object.freeze(functionBuilders()),
@@ -1181,7 +1237,7 @@ export function createSession(config: SessionConfig): Session {
     guiComponents: Object.freeze(layerBuilders()),
     itemSources: Object.freeze(entryBuilders(surface.behavior.itemSources, 'm.itemSources', false)),
     listSources: Object.freeze(entryBuilders(surface.behavior.listSources, 'm.listSources', false)),
-    steps: Object.freeze(builders),
+    steps: Object.freeze(formBuilders(surface.behavior.steps, 'm.steps', formContext)),
     mm,
     expr,
     summary,

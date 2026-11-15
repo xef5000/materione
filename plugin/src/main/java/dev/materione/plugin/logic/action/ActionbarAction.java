@@ -36,7 +36,7 @@ public final class ActionbarAction implements ActionType<ActionbarAction.Params>
         return new ActionDescription(new SelfDescription("Action bar",
                 "Shows text above the player's hotbar",
                 List.of(new ParameterSchema("text", ParameterType.STRING, true, null,
-                        "Message text; formatting and & colour codes allowed", null, null)),
+                        "Message text; formatting and & colour codes allowed", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.PLAYER, "text");
     }
 

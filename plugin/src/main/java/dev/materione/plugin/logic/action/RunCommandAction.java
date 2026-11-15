@@ -46,7 +46,7 @@ public final class RunCommandAction implements ActionType<RunCommandAction.Param
                 "Runs a server command; %player% and ${...} are filled in",
                 List.of(
                         new ParameterSchema("command", ParameterType.STRING, true, null,
-                                "Command without the leading slash", null, null),
+                                "Command without the leading slash", null, null).acceptingExpression(),
                         new ParameterSchema("as", ParameterType.ENUM, false, "console", "Who runs it",
                                 List.of("console", "player", "op"), null)),
                 "2.0.0"), LogicCategory.SERVER, "command");

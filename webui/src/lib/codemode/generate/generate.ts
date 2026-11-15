@@ -8,7 +8,8 @@
  * What it does know is the *schema vocabulary*, which is not registry content: the value kinds of a
  * parameter (`string`, `integer`, ...), the widget hints that carry meaning (`formatted-text`,
  * `behavior-rules`, `input-method`), and the two reference kinds that name a polymorphic registry
- * (`mechanic`, `gui-component`).
+ * (`mechanic`, `gui-component`). The engine's closed grammar (the step kinds, the composite conditions, the flow
+ * keys of a rule) is not known here either: it is read from the surface document like a registry (issue 355).
  *
  * The output is a global script (no top-level import or export) that merges into the fixed core's empty
  * interfaces (`core.d.ts`). It is deterministic: entries are sorted by id, parameters keep the order the
@@ -27,8 +28,10 @@ import type {
   SurfaceParam,
   SurfaceRecipe,
   SurfaceSource,
+  SurfaceStepKind,
   SurfaceTrigger,
 } from './surface';
+import { KIND_ARGUMENTS, KIND_CONDITION, KIND_CONDITIONS, KIND_FLOW, KIND_STEPS } from './surface';
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from './capabilities';
 import { contextFor, contextTree, type ContextNode } from './context';
 import { camel, compare, memberNames, pascal, refMembers, sortedBy, writerMembers } from './names';
@@ -115,6 +118,11 @@ function paramDoc(param: SurfaceParam): string[] {
   else if (param.min !== undefined) lines.push(`Minimum: ${param.min}${param.unit ? ` ${param.unit}` : ''}.`);
   else if (param.max !== undefined) lines.push(`Maximum: ${param.max}${param.unit ? ` ${param.unit}` : ''}.`);
   else if (param.unit) lines.push(`Unit: ${param.unit}.`);
+  if (param.expression === true) lines.push('Accepts an expression: `m.expr` or an `m.fn` result.');
+  if (param.multiple === true) lines.push('One value or a list of values; a list matches any of them.');
+  if (param.scope !== undefined && param.scope.length > 0) {
+    lines.push(`Inside these steps: ${param.scope.map((variable) => `\`${variable.path}\` (${variable.type})${variable.description ? `, ${oneLine(variable.description).toLowerCase()}` : ''}`).join('; ')}.`);
+  }
   if (param.default !== undefined && param.default !== '') lines.push(`@defaultValue ${param.default}`);
   if (param.example !== undefined) lines.push(`@example ${param.example}`);
   return lines.flatMap((line) => (line === undefined ? [] : [line]));
@@ -126,6 +134,8 @@ function entryDoc(entry: SurfaceEntry, extra: readonly (string | undefined)[] = 
     entry.activation ? `Activation: ${sentence(entry.activation)}` : undefined,
     // a fact about the server recorded, not a deprecation: a missing provider is a configuration, not a verdict
     unavailable === undefined ? undefined : `Unavailable on the connected server: ${sentence(unavailable)}`,
+    // the registry's own word for what replaces the entry (a class F mechanic): it still loads and runs
+    entry.supersededBy ? `Superseded by: ${sentence(entry.supersededBy)}` : undefined,
     ...extra,
     entry.sinceVersion ? `@since ${entry.sinceVersion}` : undefined,
     entry.registeredBy ? `@registeredBy ${entry.registeredBy}` : undefined,
@@ -163,11 +173,39 @@ function nestedLayerKind(param: SurfaceParam): boolean {
   return (param.nested ?? []).some((child) => child.referenceKind === KIND_GUI_COMPONENT);
 }
 
+/** The type of a value whose grammar kind the registry names, or undefined when it names none the generator maps. */
+function typeOfKind(kind: string | undefined): string | undefined {
+  switch (kind) {
+    case KIND_STEPS:
+      return 'readonly Step[]';
+    case KIND_CONDITION:
+      return 'ConditionValue';
+    case KIND_CONDITIONS:
+      return 'readonly ConditionValue[]';
+    case KIND_FLOW:
+      return 'string';
+    case KIND_ARGUMENTS:
+      return '{ readonly [name: string]: JsonValue | Expr }';
+    default:
+      return undefined;
+  }
+}
+
 /**
  * The TypeScript type of one parameter (the mapping table of codemode.md section 3.1). `owner` names the
- * enclosing declaration, so a large enum alias is named after the field it belongs to.
+ * enclosing declaration, so a large enum alias is named after the field it belongs to. The value's own type
+ * comes first; the registry's markers then widen it: a value that accepts an expression also takes an `Expr`,
+ * a value that accepts a list also takes an array of itself.
  */
 function typeOfParam(param: SurfaceParam, owner: string, level: number, ctx: Context): string {
+  const kind = typeOfKind(param.valueKind);
+  let type = kind ?? baseTypeOfParam(param, owner, level, ctx);
+  if (param.expression === true && kind === undefined) type = `${type} | Expr`;
+  if (param.multiple === true && kind === undefined) type = `${type} | readonly (${type})[]`;
+  return type;
+}
+
+function baseTypeOfParam(param: SurfaceParam, owner: string, level: number, ctx: Context): string {
   switch (param.type) {
     case 'enum': {
       const values = param.allowedValues ?? [];
@@ -230,6 +268,10 @@ function allParams(surface: SurfaceDocument): SurfaceParam[] {
     ...b.inputMethods.flatMap((entry) => entry.parameters),
     ...b.ruleOptions,
     ...b.actionOptions,
+    ...b.ruleBody,
+    ...b.guardOptions,
+    ...b.steps.flatMap((entry) => entry.parameters),
+    ...b.conditionForms.flatMap((entry) => entry.parameters),
     ...surface.gui.components.flatMap((entry) => entry.parameters),
   ];
 }
@@ -414,22 +456,33 @@ function actions(ctx: Context): string[] {
     ...propertyLines(b.actionOptions, 'ActionOptions', 1, ctx),
     '}',
   );
+  const guarded = b.guardOptions.length > 0;
+  if (guarded) {
+    lines.push(
+      '',
+      ...doc(['What the step of an action that guards what follows may carry besides the action options.'], 0),
+      'interface GuardOptions {',
+      ...propertyLines(b.guardOptions, 'GuardOptions', 1, ctx),
+      '}',
+    );
+  }
   const entries = sortedBy(b.actions, (action) => action.id);
   const names = memberNames(entries.map((action) => action.id));
   const signatures: string[][] = [];
   for (const action of entries) {
     const member = names.get(action.id) ?? camel(action.id);
     const paramsName = `${pascal(member)}ActionParams`;
+    const guards = guarded && action.takesElse;
     const input: BuilderInput = {
       member,
       paramsName,
       params: action.parameters,
-      extendsTypes: ['ActionOptions'],
+      extendsTypes: guards ? ['ActionOptions', 'GuardOptions'] : ['ActionOptions'],
       shorthand: shorthandOf(action),
-      shorthandOptions: 'ActionOptions',
+      shorthandOptions: guards ? 'ActionOptions & GuardOptions' : 'ActionOptions',
       returns: `ActionStep<${literal(action.id)}>`,
       docLines: [
-        ...entryDoc(action, [action.takesElse ? 'The step may carry an `else` branch that runs when the action goes unanswered.' : undefined],
+        ...entryDoc(action, [action.takesElse ? 'It guards what follows: when it fails or goes unanswered the flow stops, after the steps its guard options name.' : undefined],
           action.available ? undefined : (action.unavailableReason ?? 'not available')),
         action.category ? `@category ${action.category}` : undefined,
       ],
@@ -439,6 +492,50 @@ function actions(ctx: Context): string[] {
   }
   lines.push('', ...catalogInterface('ActionCatalog', signatures));
   return lines;
+}
+
+// ---- the closed grammar: step kinds and composite conditions, from the surface like any registry ----
+
+/**
+ * The signature of one grammar form. A form with a `payload` takes that parameter's value first and its sibling
+ * keys as a mapping after it; a form without one takes a mapping of its parameters. `oneOf` makes the mapping a
+ * union in which each named key is required in turn.
+ */
+function formSignature(form: SurfaceStepKind, member: string, returns: string, owner: string, ctx: Context): string[] {
+  const byId = new Map(form.parameters.map((param) => [param.id, param]));
+  const payload = form.payload === undefined ? undefined : byId.get(form.payload);
+  const members = (payload === undefined ? form.parameters : form.siblings.flatMap((id) => byId.get(id) ?? []));
+  const object = (required: ReadonlySet<string>): string => {
+    const props = members.map((param) => `readonly ${key(param.id)}${param.required || required.has(param.id) ? '' : '?'}: ${typeOfParam(param, owner, 2, ctx)}`);
+    return `{ ${props.join('; ')} }`;
+  };
+  const oneOf = form.oneOf.filter((id) => members.some((param) => param.id === id));
+  const optionsType = oneOf.length > 0 ? oneOf.map((id) => object(new Set([id]))).join(' | ') : object(new Set());
+  const optional = oneOf.length === 0 && members.every((param) => !param.required);
+  const memberDocs = members.map((param) => (param.description ? `\`${param.id}\`: ${sentence(param.description)}` : undefined));
+  const args: string[] = [];
+  if (payload !== undefined) args.push(`value: ${typeOfParam(payload, owner, 2, ctx)}`);
+  if (members.length > 0) args.push(`options${optional ? '?' : ''}: ${optionsType}`);
+  return [
+    ...doc([
+      sentence(form.description) ?? sentence(form.displayName),
+      payload === undefined ? undefined : `@param value ${paramDoc(payload).join(' ')}`,
+      memberDocs.some((line) => line !== undefined) ? `@param options ${memberDocs.flatMap((line) => (line === undefined ? [] : [line])).join(' ')}` : undefined,
+    ], 1),
+    `  ${key(member)}(${args.join(', ')}): ${returns};`,
+  ];
+}
+
+/** The forms a builder is generated for: the ones the engine runs, written by their own key (not drawn from a registry). */
+function ownForms(forms: readonly SurfaceStepKind[]): SurfaceStepKind[] {
+  return sortedBy(forms.filter((form) => form.supported && form.registry === undefined), (form) => form.id);
+}
+
+function stepForms(ctx: Context): string[] {
+  const forms = ownForms(ctx.surface.behavior.steps);
+  if (forms.length === 0) return [];
+  const signatures = forms.map((form) => formSignature(form, camel(form.id), 'Step', `${pascal(camel(form.id))}Step`, ctx));
+  return ['', ...doc(['The structural steps of the flow model: the engine\'s closed set, as the server describes it.'], 0), ...catalogInterface('StepBuilders', signatures)];
 }
 
 function shorthandOf(entry: { shorthand?: string; parameters: readonly SurfaceParam[] }): SurfaceParam | undefined {
@@ -467,6 +564,12 @@ function conditions(ctx: Context): string[] {
     };
     lines.push('', ...doc([`Parameters of the \`${condition.id}\` condition.`], 0), ...paramsInterface(input, ctx));
     signatures.push(builderSignature(input, ctx));
+  }
+  // the composite conditions are members of the same catalog: a registered condition of the same name keeps its own
+  const taken = new Set(entries.map((condition) => names.get(condition.id) ?? camel(condition.id)));
+  for (const form of ownForms(ctx.surface.behavior.conditionForms)) {
+    if (taken.has(camel(form.id))) continue;
+    signatures.push(formSignature(form, camel(form.id), `Condition<${literal(form.id)}>`, `${pascal(camel(form.id))}Condition`, ctx));
   }
   if (signatures.length > 0) lines.push('', ...catalogInterface('ConditionCatalog', signatures));
   return lines;
@@ -590,6 +693,16 @@ function triggers(ctx: Context): string[] {
     ...propertyLines(ruleOptions, 'RuleOptions', 1, ctx),
     '}',
   );
+  const ruleBody = ctx.surface.behavior.ruleBody;
+  if (ruleBody.length > 0) {
+    lines.push(
+      '',
+      ...doc(['What a rule\'s builder returns besides its options: the flow keys of a rule.'], 0),
+      'interface RuleBody {',
+      ...propertyLines(ruleBody, 'RuleBody', 1, ctx),
+      '}',
+    );
+  }
   return lines;
 }
 
@@ -778,6 +891,7 @@ export function generateSdk(surface: SurfaceDocument): string {
     idUnions(ctx),
     contentTypes(ctx),
     triggers(ctx),
+    stepForms(ctx),
     actions(ctx),
     conditions(ctx),
     mechanics(ctx),

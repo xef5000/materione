@@ -40,7 +40,7 @@ public final class TakeExpAction implements ActionType<TakeExpAction.Params> {
                 "Removes experience points or levels; fails and takes nothing when the player has too few",
                 List.of(
                         new ParameterSchema("amount", ParameterType.INTEGER, true, null,
-                                "How many points or levels", null, null),
+                                "How many points or levels", null, null).acceptingExpression(),
                         new ParameterSchema("unit", ParameterType.ENUM, false, "points",
                                 "What the amount counts", List.of("points", "levels"), null)),
                 "2.0.0"), LogicCategory.PLAYER, "amount");
