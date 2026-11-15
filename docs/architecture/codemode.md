@@ -1562,16 +1562,20 @@ per-canonical-subnet free allowance under a `$1.00/day` global pool). The ledger
 
 **Still open.** The model allowlist and the routing rule (#385); the #386 design in [`ai-credits.md`](ai-credits.md) is ready for implementation.
 
-*As built (#348): the agent loop, context assembly, and `editor.materione.com` boundary.* The SPA side (`webui/src/lib/codemode/chat/`) is wired
-and verified with a scripted provider (`scripted.ts`, `scripts/bloodfang.ts`):
+*As built (#348, #410): the agent loop, context assembly, `editor.materione.com` boundary, and live cloud proxy client.* The SPA side (`webui/src/lib/codemode/chat/`
+and `webui/src/lib/codemode/proxy/`) is wired and verified with both the scripted Bloodfang provider (`scripted.ts`, `scripts/bloodfang.ts`) and the live
+`https://ai.materione.com` SSE `ModelProvider`:
 - **Loop bounds**: `REPAIR_BUDGET = 3` consecutive failed programs per user request and `MAX_MODEL_TURNS = 12` model turns per request (`loop.ts`).
 - **Context assembly**: `agentContext` (`context.ts`) builds the system prompt and SDK index from the connected server's generated `m.sdk.d.ts`,
   so the model only sees the registries and primitives the server actually advertises.
 - **Bounded tool outputs & missing primitives**: `run_program` (`tool.ts`) caps serialized results and diagnostics at `TOOL_RESULT_MAX_CHARS = 24_000`
   and surfaces structured `missingPrimitives` diagnostics when a program references a catalog member absent from the generated SDK.
-- **Cloud-only boundary**: remote model calls are restricted to `editor.materione.com` (`EditorHost === 'cloud'`). On the embedded local editor
-  (`/materione editor local`), the Assistant panel shows a plain notice pointing to `editor.materione.com` and makes zero external requests;
-  the model proxy Worker (#402, #386) remains separate and unattached in this build.
+- **Strict `https://editor.materione.com` proxy gate**: `webui/src/lib/codemode/proxy/` (kept outside `chat/` so `chat/` stays 100% network- and storage-free,
+  enforced by `codemode-chat-bans.spec.ts`) connects the `ModelProvider` (`POST /v1/chat`, Anthropic Messages wire translation, SSE streaming, settlement refresh),
+  Google/Discord popup OAuth (`GET /v1/me`, `GET /v1/allowance`, `POST /v1/auth/logout`), and Polar `$10–$200` top-up / invoice portal (`POST /v1/checkout`,
+  `POST /v1/portal`) strictly when `EditorHost === 'cloud'` and `location.origin === 'https://editor.materione.com'` (never automatically on `localhost` or on
+  the embedded local editor). Auth uses `HttpOnly` cookies (`credentials: 'include'`) with zero browser storage (`codemode-proxy-bans.spec.ts`), and `ChatPanel`
+  receives `cloudSignIn` and `accountBar` purely as Svelte 5 `Snippet` props from `Workbench.svelte`.
 
 
 ### 12.2 Permissions, approval and old errors (decided 2026-11-14, #358, #372)

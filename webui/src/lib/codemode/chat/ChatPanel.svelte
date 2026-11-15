@@ -8,7 +8,7 @@
    * Before the first message it states what leaves the page, written from the provider in use (disclosure.ts). A server that
    * does not advertise code mode has no assistant, and the panel says so.
    */
-  import { onMount, tick } from 'svelte';
+  import { onMount, tick, type Snippet } from 'svelte';
   import type { EditorHost } from '../../host';
   import Button from '../../ui/Button.svelte';
   import Chip from '../../ui/Chip.svelte';
@@ -28,9 +28,13 @@
     onClose: () => void;
     /** Opens the Review panel (the full list of proposals and the server's audit). */
     onOpenReview: () => void;
+    /** Optional cloud sign-in card rendered when no model provider is connected. */
+    cloudSignIn?: Snippet;
+    /** Optional cloud account and credits bar rendered above the conversation. */
+    accountBar?: Snippet;
   }
 
-  let { host = 'plugin', onClose, onOpenReview }: Props = $props();
+  let { host = 'plugin', onClose, onOpenReview, cloudSignIn, accountBar }: Props = $props();
 
   let heading = $state<HTMLElement | null>(null);
   let scroller = $state<HTMLElement | null>(null);
@@ -127,7 +131,7 @@
   <div class="head">
     <h2 id="assistant-title" tabindex="-1" bind:this={heading}>Assistant</h2>
     {#if chat.capable}
-      <Chip tone="neutral">{chat.provider !== null ? (recorded ? 'Recorded demonstration' : chat.provider.label) : host !== 'cloud' ? 'editor.materione.com only' : 'No model connected'}</Chip>
+      <Chip tone="neutral">{chat.provider !== null ? (recorded ? 'Recorded demonstration' : chat.provider.label) : host !== 'cloud' ? 'editor.materione.com only' : cloudSignIn !== undefined ? 'Sign in required' : 'No model connected'}</Chip>
     {/if}
     <span class="spacer"></span>
     {#if chat.items.length > 0}
@@ -174,6 +178,7 @@
 
     {#if chat.tab === 'conversation'}
       <div id="assistant-tabpanel" class="content" role="tabpanel" aria-labelledby="assistant-tab-conversation" bind:this={scroller}>
+        {@render accountBar?.()}
         {#if chat.provider === null}
           {#if host !== 'cloud'}
             <div class="box" role="note" aria-label="Available on editor.materione.com">
@@ -181,6 +186,8 @@
               <p>The local editor stays entirely between your browser and your server and makes no external requests.</p>
               <p>Run <code>/materione editor</code> in game to open this server on editor.materione.com when you want the assistant. Everything else in the editor works the same here.</p>
             </div>
+          {:else if cloudSignIn !== undefined}
+            {@render cloudSignIn()}
           {:else}
             <div class="box" role="note" aria-label="No model connected">
               <p class="lead">No model is connected in this version of the editor.</p>

@@ -19,6 +19,9 @@
   import { connectReview, disposeReview, review } from '../codemode/review/state.svelte';
   import ChatPanel from '../codemode/chat/ChatPanel.svelte';
   import { chat, connectChat, disposeChat } from '../codemode/chat/state.svelte';
+  import CloudAccountBar from '../codemode/proxy/CloudAccountBar.svelte';
+  import CloudSignInCard from '../codemode/proxy/CloudSignInCard.svelte';
+  import { cloudAccount, disposeCloudAssistant, syncCloudAssistant } from '../codemode/proxy/account.svelte';
   import type { EditorHost } from '../host';
   import { activityLog, connection, diagnostics, session, ui } from '../state.svelte';
   import { onDestroy, tick } from 'svelte';
@@ -61,8 +64,10 @@
     connectReview(session.channel);
     // after the review session: the assistant proposes through that session's agent port
     connectChat(session.channel);
+    syncCloudAssistant(session.channel, host);
   });
   onDestroy(() => {
+    disposeCloudAssistant();
     disposeChat();
     disposeReview();
   });
@@ -295,7 +300,19 @@
     </main>
 
     {#if sidePanel === 'assistant'}
-      <ChatPanel host={host ?? 'plugin'} onClose={closeAssistant} onOpenReview={openReviewFromAssistant} />
+      {#snippet cloudSignInPanel()}
+        <CloudSignInCard />
+      {/snippet}
+      {#snippet cloudAccountBar()}
+        <CloudAccountBar />
+      {/snippet}
+      <ChatPanel
+        host={host ?? 'plugin'}
+        onClose={closeAssistant}
+        onOpenReview={openReviewFromAssistant}
+        cloudSignIn={cloudAccount.active ? cloudSignInPanel : undefined}
+        accountBar={cloudAccount.active && cloudAccount.status === 'signed-in' && !cloudAccount.account?.suspended ? cloudAccountBar : undefined}
+      />
     {:else if sidePanel === 'review'}
       <ReviewPanel onClose={closeReview} />
     {/if}
