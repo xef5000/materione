@@ -1006,13 +1006,7 @@ export async function handleMe(
     {
       authenticated: true,
       day,
-      account: {
-        id: session.account.id,
-        displayName: session.account.displayName,
-        emailHint: maskEmail(session.account.email),
-        suspended: session.account.suspended !== 0,
-        freeEligible: session.account.freeEligible === 1,
-      },
+      account: status.account,
       credits: status.credits,
       freeAllowance: status.freeAllowance,
     },

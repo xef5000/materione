@@ -1,5 +1,5 @@
 import { PICO_PER_USD, PICOS_PER_CREDIT } from "./config";
-import type { AuthenticatedAccount } from "./auth";
+import { maskEmail, type AuthenticatedAccount } from "./auth";
 
 export interface ReserveParams {
   id: string;
@@ -39,6 +39,13 @@ export interface SettleParams {
 
 export interface AccountAllowanceStatus {
   day: string;
+  account: {
+    id: string;
+    displayName: string | null;
+    emailHint: string;
+    suspended: boolean;
+    freeEligible: boolean;
+  };
   remainingPicos: number;
   dailyCapPicos: number;
   remainingUsd: number;
@@ -198,7 +205,7 @@ export async function settleReservation(db: D1Database, params: SettleParams): P
 export async function getAccountAllowanceStatus(
   db: D1Database,
   day: string,
-  account: Pick<AuthenticatedAccount, "id" | "creditBalancePicos" | "freeEligible" | "suspended">,
+  account: Pick<AuthenticatedAccount, "id" | "email" | "displayName" | "creditBalancePicos" | "freeEligible" | "suspended">,
   subnetHash: string,
   accountCapPicos: number,
   subnetCapPicos: number,
@@ -207,6 +214,8 @@ export async function getAccountAllowanceStatus(
   const row = await db
     .prepare(
       `SELECT
+         a.email,
+         a.display_name,
          a.credit_balance_picos,
          a.free_eligible,
          a.suspended,
@@ -218,6 +227,8 @@ export async function getAccountAllowanceStatus(
     )
     .bind(day, subnetHash, account.id)
     .first<{
+      email: string;
+      display_name: string | null;
       credit_balance_picos: number;
       free_eligible: number;
       suspended: number;
@@ -227,9 +238,10 @@ export async function getAccountAllowanceStatus(
     }>();
 
   const balancePicos = row?.credit_balance_picos ?? account.creditBalancePicos;
+  const suspended = (row?.suspended ?? account.suspended) !== 0;
   const eligible =
     (row?.free_eligible ?? account.freeEligible) === 1 &&
-    (row?.suspended ?? account.suspended) === 0 &&
+    !suspended &&
     balancePicos >= 0;
   const accountRemaining = Math.max(0, accountCapPicos - (row?.account_used ?? 0));
   const subnetRemaining = Math.max(0, subnetCapPicos - (row?.subnet_used ?? 0));
@@ -241,6 +253,13 @@ export async function getAccountAllowanceStatus(
 
   return {
     day,
+    account: {
+      id: account.id,
+      displayName: row !== null ? row.display_name : account.displayName,
+      emailHint: maskEmail(row?.email ?? account.email),
+      suspended,
+      freeEligible: eligible,
+    },
     remainingPicos: freeRemainingPicos,
     dailyCapPicos: accountCapPicos,
     remainingUsd: freeRemainingPicos / PICO_PER_USD,
