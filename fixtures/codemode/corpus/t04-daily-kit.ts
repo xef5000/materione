@@ -1,5 +1,7 @@
 // T04 Kits, the daily kit (agent-benchmark.md section 3): once every 24 hours per player.
-// `now()` is an expression function now (the clock work), so the paper gap [TIME] is closed.
+// `now()` is an expression function now (the clock work), so the paper gap [TIME] is closed. The variable is
+// interpolated as its handle: a declared variable reads as vars.<scope>.<pack>.<key> in an expression, a spelling
+// the content type describes and the core writes (#355).
 const p = m.pack("bench");
 const daily = p.variables.create("kit_daily_at", { scope: "player", type: "number", default: 0 });
 
@@ -17,7 +19,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "daily_kit" }), () => ({
     }),
     m.actions.giveItem({ item: "minecraft:golden_apple", amount: 1 }),
     m.actions.giveItem({ item: "minecraft:experience_bottle", amount: 1 }),
-    m.actions.setVar({ var: daily, op: "set", value: "${now()}" }),
+    m.actions.setVar({ var: daily, op: "set", value: m.expr`${m.fn.now()}` }),
   ],
 }));
 

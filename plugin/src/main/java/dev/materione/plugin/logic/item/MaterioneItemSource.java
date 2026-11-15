@@ -43,7 +43,7 @@ public final class MaterioneItemSource implements ItemSource<TemplateText> {
                 "Item",
                 "A Materione item or a vanilla material, by id, or a template that renders one",
                 List.of(new ParameterSchema("item", ParameterType.STRING, true, null,
-                        "ns:id, minecraft:material, or a template such as ${entry.item}", null, null)),
+                        "ns:id, minecraft:material, or a template such as ${entry.item}", null, null).withWidget("item", "").acceptingExpression()),
                 "1.0.0"),
                 "item");
     }

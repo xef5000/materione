@@ -94,7 +94,7 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("op", ParameterType.ENUM, false, "==", "How to compare", SYMBOLS, null),
                         new ParameterSchema("value", ParameterType.STRING, true, null,
-                                "Value to compare with, or ${expression}", null, null)),
+                                "Value to compare with, or ${expression}", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.DATA, "var");
     }
 

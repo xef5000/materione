@@ -63,7 +63,7 @@ public final class OptionalItemSource implements ItemSource<TemplateText> {
                 "An item from " + pluginName + "'s catalogue, by its id; shown as a barrier when " + pluginName
                         + " is not installed",
                 List.of(new ParameterSchema("id", ParameterType.STRING, true, null,
-                        "The item's id in " + pluginName, null, null)),
+                        "The item's id in " + pluginName, null, null).acceptingExpression()),
                 "1.0.0"),
                 "id");
     }

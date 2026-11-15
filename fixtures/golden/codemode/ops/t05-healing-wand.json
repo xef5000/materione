@@ -1,0 +1,77 @@
+{
+  "task": "T05",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a healing wand: right click heals, with a 30 second cooldown that says how long is left.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "healing_wand",
+      "edits": [
+        {
+          "field": [
+            "healing_wand",
+            "material"
+          ],
+          "value": "BLAZE_ROD"
+        },
+        {
+          "field": [
+            "healing_wand",
+            "display_name"
+          ],
+          "value": "<green>Healing Wand"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/healing_wand.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "click:right",
+            "cooldown": 30000,
+            "on_cooldown": [
+              {
+                "actionbar": "<yellow>Ready in ${cooldown.remaining}s"
+              }
+            ],
+            "do": [
+              {
+                "potion": {
+                  "type": "instant_health",
+                  "amplifier": 1
+                }
+              },
+              {
+                "sound": "entity.player.levelup"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 5,
+      "column": 22
+    },
+    {
+      "line": 10,
+      "column": 12
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

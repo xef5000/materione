@@ -38,7 +38,7 @@ public final class ChatAction implements ActionType<ChatAction.Params> {
         return new ActionDescription(new SelfDescription("Chat as player",
                 "Makes the player say a chat message, or run a command as themselves",
                 List.of(new ParameterSchema("text", ParameterType.STRING, true, null,
-                        "Chat text, or a command with a leading slash", null, null)),
+                        "Chat text, or a command with a leading slash", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.PLAYER, "text");
     }
 

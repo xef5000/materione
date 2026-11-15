@@ -43,6 +43,8 @@ import java.util.Objects;
  * @param listSources registered list sources, sorted by id (logic.md §4.5, §28, §31)
  * @param itemSources registered item sources, sorted by id (logic.md §4.4, §31)
  * @param inputMethods registered input methods of the {@code prompt} step, sorted by id (logic.md §4.5, §29, §31)
+ * @param grammar     the rest of the engine's closed grammar as data: the composite conditions, the flow keys of a
+ *                    rule and the keys of a guarding action's step (issue 355)
  */
 public record BehaviorVocabulary(
         List<Event> events,
@@ -58,7 +60,8 @@ public record BehaviorVocabulary(
         List<Recipe> recipes,
         List<ListSourceEntry> listSources,
         List<ItemSourceEntry> itemSources,
-        List<InputMethodEntry> inputMethods) {
+        List<InputMethodEntry> inputMethods,
+        Grammar grammar) {
 
     /** The vocabulary schema version this record models. */
     public static final int VERSION = 2;
@@ -78,6 +81,27 @@ public record BehaviorVocabulary(
         listSources = listSources == null ? List.of() : List.copyOf(listSources);
         itemSources = itemSources == null ? List.of() : List.copyOf(itemSources);
         inputMethods = inputMethods == null ? List.of() : List.copyOf(inputMethods);
+        grammar = grammar == null ? Grammar.NONE : grammar;
+    }
+
+    /** The shape before {@link Grammar} (issue 355): the same members, without it. */
+    public BehaviorVocabulary(
+            List<Event> events,
+            List<Action> actions,
+            List<ParameterSchema> ruleOptions,
+            List<ParameterSchema> actionOptions,
+            List<Mechanic> mechanics,
+            List<Trigger> triggers,
+            List<Condition> conditions,
+            List<StepKind> steps,
+            List<LogicCategory> categories,
+            List<Function> functions,
+            List<Recipe> recipes,
+            List<ListSourceEntry> listSources,
+            List<ItemSourceEntry> itemSources,
+            List<InputMethodEntry> inputMethods) {
+        this(events, actions, ruleOptions, actionOptions, mechanics, triggers, conditions, steps, categories,
+                functions, recipes, listSources, itemSources, inputMethods, Grammar.NONE);
     }
 
     /** The shape before the source and method registries (logic.md §31): the same members, without them. */
@@ -130,7 +154,29 @@ public record BehaviorVocabulary(
 
     public BehaviorVocabulary withMechanics(List<Mechanic> registered) {
         return new BehaviorVocabulary(events, actions, ruleOptions, actionOptions, registered,
-                triggers, conditions, steps, categories, functions, recipes, listSources, itemSources, inputMethods);
+                triggers, conditions, steps, categories, functions, recipes, listSources, itemSources, inputMethods,
+                grammar);
+    }
+
+    /**
+     * The parts of the engine's closed grammar that are neither step kinds nor registry entries, as data, so a
+     * consumer that writes documents (the code-mode SDK) types them from here and not by hand.
+     *
+     * @param conditions   the composite conditions ({@code all}, {@code any}, {@code not}, {@code at_least}), in the
+     *                     shape of a {@link StepKind}
+     * @param ruleBody     the flow keys of a rule: the condition that guards it and the steps it runs
+     * @param guardOptions the keys the step of an action that guards what follows ({@code takesElse}) may carry
+     *                     besides the action options
+     */
+    public record Grammar(List<StepKind> conditions, List<ParameterSchema> ruleBody, List<ParameterSchema> guardOptions) {
+
+        public static final Grammar NONE = new Grammar(List.of(), List.of(), List.of());
+
+        public Grammar {
+            conditions = conditions == null ? List.of() : List.copyOf(conditions);
+            ruleBody = ruleBody == null ? List.of() : List.copyOf(ruleBody);
+            guardOptions = guardOptions == null ? List.of() : List.copyOf(guardOptions);
+        }
     }
 
     /**
@@ -309,14 +355,32 @@ public record BehaviorVocabulary(
      * @param parameters  the keys the step takes besides its own, as a schema
      * @param supported   true when this server's engine runs the step today; an unsupported kind is
      *                    part of the grammar but the editor must not offer it yet
+     * @param payload     the parameter written as the value of the step's own key ({@code if: <condition>},
+     *                    {@code wait: 20}), or blank when the key holds a mapping of the parameters (or nothing)
+     * @param siblings    the parameters written as keys beside the step's own ({@code then}, {@code else},
+     *                    {@code with})
+     * @param oneOf       sibling parameters of which at least one must be written, or empty
+     * @param registry    the open registry the kind's steps are drawn from ({@code actions}), or blank for a
+     *                    kind that is written by its own key
      */
     public record StepKind(String id, String displayName, String description,
-            List<ParameterSchema> parameters, boolean supported) {
+            List<ParameterSchema> parameters, boolean supported,
+            String payload, List<String> siblings, List<String> oneOf, String registry) {
         public StepKind {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(displayName, "displayName");
             description = description == null ? "" : description;
             parameters = parameters == null ? List.of() : List.copyOf(parameters);
+            payload = payload == null ? "" : payload;
+            siblings = siblings == null ? List.of() : List.copyOf(siblings);
+            oneOf = oneOf == null ? List.of() : List.copyOf(oneOf);
+            registry = registry == null ? "" : registry;
+        }
+
+        /** The shape before the grammar was data (issue 355): a kind with its parameters only. */
+        public StepKind(String id, String displayName, String description,
+                List<ParameterSchema> parameters, boolean supported) {
+            this(id, displayName, description, parameters, supported, "", List.of(), List.of(), "");
         }
     }
 

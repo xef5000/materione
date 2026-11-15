@@ -102,7 +102,7 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
                         new ParameterSchema("op", ParameterType.STRING, false, "set",
                                 "What to do with the value", OP_OPTIONS, null),
                         new ParameterSchema("value", ParameterType.STRING, false, null,
-                                "Value or ${expression}; not used by toggle, remove and reset", null, null)),
+                                "Value or ${expression}; not used by toggle, remove and reset", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.DATA);
     }
 

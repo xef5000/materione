@@ -42,7 +42,7 @@ public final class MessageAction implements ActionType<MessageAction.Params> {
                 "Shows text to the player, on the action bar, or to everyone",
                 List.of(
                         new ParameterSchema("text", ParameterType.STRING, true, null,
-                                "Message text; formatting and & colour codes allowed", null, null),
+                                "Message text; formatting and & colour codes allowed", null, null).acceptingExpression(),
                         new ParameterSchema("target", ParameterType.ENUM, false, "player", "Where the text appears",
                                 List.of("player", "actionbar", "broadcast"), null)),
                 "2.0.0"), LogicCategory.PLAYER, "text");

@@ -1,6 +1,6 @@
 {
   "golden": "t11-golden-berry",
-  "accepted": false,
+  "accepted": true,
   "applied": false,
   "stages": [
     {
@@ -32,14 +32,7 @@
       "ran": false
     }
   ],
-  "diagnostics": [
-    {
-      "operation": 1,
-      "code": "MTR-0009",
-      "severity": "error",
-      "message": "unresolved texture 'textures/item/golden_berry.png'"
-    }
-  ],
+  "diagnostics": [],
   "documents": [
     {
       "path": "items/golden_berry.yml",

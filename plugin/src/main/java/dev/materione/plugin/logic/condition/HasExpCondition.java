@@ -40,7 +40,7 @@ public final class HasExpCondition implements ConditionType<HasExpCondition.Para
                 "True when the player holds at least the amount of experience points or levels",
                 List.of(
                         new ParameterSchema("amount", ParameterType.INTEGER, true, null,
-                                "How many points or levels, from 1", null, null),
+                                "How many points or levels, from 1", null, null).acceptingExpression(),
                         new ParameterSchema("unit", ParameterType.ENUM, false, "points",
                                 "What the amount counts", List.of("points", "levels"), null)),
                 "2.0.0"), LogicCategory.PLAYER, "amount");

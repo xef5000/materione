@@ -49,15 +49,15 @@ public final class TeleportAction implements ActionType<TeleportAction.Params> {
         return new ActionDescription(new SelfDescription("Teleport",
                 "Moves the player to coordinates, optionally in another world",
                 List.of(
-                        new ParameterSchema("x", ParameterType.DECIMAL, true, null, "X coordinate", null, null),
-                        new ParameterSchema("y", ParameterType.DECIMAL, true, null, "Y coordinate", null, null),
-                        new ParameterSchema("z", ParameterType.DECIMAL, true, null, "Z coordinate", null, null),
+                        new ParameterSchema("x", ParameterType.DECIMAL, true, null, "X coordinate", null, null).acceptingExpression(),
+                        new ParameterSchema("y", ParameterType.DECIMAL, true, null, "Y coordinate", null, null).acceptingExpression(),
+                        new ParameterSchema("z", ParameterType.DECIMAL, true, null, "Z coordinate", null, null).acceptingExpression(),
                         new ParameterSchema("world", ParameterType.STRING, false, null,
-                                "World name; default the player's world", null, null),
+                                "World name; default the player's world", null, null).acceptingExpression(),
                         new ParameterSchema("yaw", ParameterType.DECIMAL, false, null,
-                                "Facing, degrees; default keeps the current facing", null, null),
+                                "Facing, degrees; default keeps the current facing", null, null).acceptingExpression(),
                         new ParameterSchema("pitch", ParameterType.DECIMAL, false, null,
-                                "Look up or down, degrees; default keeps the current pitch", null, null)),
+                                "Look up or down, degrees; default keeps the current pitch", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.WORLD, null);
     }
 

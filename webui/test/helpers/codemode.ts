@@ -141,6 +141,27 @@ export function registryIds(): Set<string> {
       for (const entry of group) ids.add(entry.id);
     }
     for (const capability of surface.capabilities ?? []) ids.add(capability);
+    for (const word of grammarWords(surface)) ids.add(word);
   }
   return ids;
+}
+
+/**
+ * Every word of the engine's closed grammar the surface carries (issue 355): the step kinds and the composite
+ * conditions, the keys each is written with, the flow keys of a rule and the keys of a guarding action's step.
+ * They are data of the surface like any registry id, so neither the generator, the core nor `core.d.ts` may spell one.
+ */
+export function grammarWords(surface: SurfaceDocument): Set<string> {
+  const b = surface.behavior;
+  const words = new Set<string>();
+  for (const form of [...b.steps, ...b.conditionForms]) {
+    words.add(form.id);
+    if (form.registry !== undefined) continue;
+    for (const param of form.parameters) {
+      words.add(param.id);
+      for (const nested of param.nested ?? []) words.add(nested.id);
+    }
+  }
+  for (const param of [...b.ruleBody, ...b.guardOptions]) words.add(param.id);
+  return words;
 }

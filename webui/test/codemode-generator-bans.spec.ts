@@ -13,7 +13,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { registryIds } from './helpers/codemode';
+import { grammarWords, registryIds, surfaceNamed } from './helpers/codemode';
 
 const GENERATE_DIR = fileURLToPath(new URL('../src/lib/codemode/generate', import.meta.url));
 
@@ -26,6 +26,7 @@ const SCHEMA_VOCABULARY: Record<string, string> = {
   number: 'the recipe-parameter value kind; also the id of an expression function',
   codemode: 'the session capability of the transaction op: protocol vocabulary (capabilities.ts), not a registry entry',
   logic: 'the session capability of the logic ops: protocol vocabulary (capabilities.ts), not a registry entry',
+  flow: 'the grammar kind of a value that names a flow (surface.ts): schema vocabulary; the call step also names its parameter so',
 };
 
 function sourceFiles(): { name: string; text: string }[] {
@@ -111,6 +112,26 @@ describe('the SDK generator is registry-agnostic', () => {
     for (const file of files) {
       const used = identifiersOf(file.text);
       expect(banned.filter((name) => used.has(name)), file.name).toEqual([]);
+    }
+  });
+
+  it('core.d.ts types no engine vocabulary: no step, composite condition or rule key is a member or a literal of it (issue 355)', () => {
+    const text = readFileSync(join(GENERATE_DIR, 'core.d.ts'), 'utf8');
+    const words = grammarWords(surfaceNamed('plugin-current'));
+    for (const word of ['if', 'require', 'choose', 'wait', 'stop', 'call', 'then', 'else', 'all', 'any', 'not', 'do']) expect(words.has(word), word).toBe(true);
+    const source = ts.createSourceFile('core.d.ts', text, ts.ScriptTarget.ES2022, true);
+    const named: string[] = [];
+    const visit = (node: ts.Node): void => {
+      if ((ts.isPropertySignature(node) || ts.isMethodSignature(node)) && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))) named.push(node.name.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    expect(named.length).toBeGreaterThan(50);
+    expect(named.filter((name) => words.has(name))).toEqual([]);
+    expect(literalsOf(text).filter((value) => words.has(value))).toEqual([]);
+    // the interfaces the generated text fills are declared empty here
+    for (const name of ['StepBuilders', 'RuleBody', 'RuleOptions', 'ConditionCatalog']) {
+      expect(new RegExp(`interface ${name}( extends [A-Za-z]+)? \\{\\}`).test(text), name).toBe(true);
     }
   });
 

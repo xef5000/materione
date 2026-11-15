@@ -4,6 +4,7 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.ValueExpression;
+import dev.materione.behavior.logic.StepKinds;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,15 +24,10 @@ import java.util.regex.Pattern;
  */
 final class StepCompiler {
 
-    private static final Set<String> CONTROL = Set.of("if", "require", "choose", "wait", "stop", "call");
+    /** The control keys, read from the grammar the vocabulary publishes: one table (issue 355). */
+    private static final Set<String> CONTROL = StepKinds.controlKeys();
     /** The keys each control step may carry beside its own (the editor hint {@code node} is stripped first). */
-    private static final Map<String, Set<String>> COMPANIONS = Map.of(
-            "if", Set.of("then", "else"),
-            "require", Set.of("else"),
-            "choose", Set.of("else"),
-            "wait", Set.of(),
-            "stop", Set.of(),
-            "call", Set.of("with"));
+    private static final Map<String, Set<String>> COMPANIONS = StepKinds.companions();
     private static final Pattern ARG_NAME = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     private final CompileUnit unit;

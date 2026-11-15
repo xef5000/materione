@@ -16,6 +16,16 @@
     "text-effects"
   ],
   "describe": {
+    "assetReference": {
+      "extension": false,
+      "kindDirectories": [
+        "textures",
+        "models",
+        "fonts",
+        "sounds"
+      ],
+      "root": "assets"
+    },
     "behavior": {
       "actionOptions": [
         {
@@ -55,6 +65,7 @@
             {
               "advanced": false,
               "description": "Message text; formatting and & colour codes allowed",
+              "expression": true,
               "id": "text",
               "label": "Text",
               "order": 0,
@@ -80,6 +91,7 @@
             {
               "advanced": false,
               "description": "Message text; formatting and & colour codes allowed",
+              "expression": true,
               "id": "text",
               "label": "Text",
               "order": 0,
@@ -108,6 +120,7 @@
             {
               "advanced": false,
               "description": "World name (world scope; default the player's world) or permission node (permission scope, required)",
+              "expression": true,
               "id": "target",
               "label": "Target",
               "order": 0,
@@ -159,6 +172,7 @@
             {
               "advanced": false,
               "description": "Chat text, or a command with a leading slash",
+              "expression": true,
               "id": "text",
               "label": "Text",
               "order": 0,
@@ -252,6 +266,7 @@
             {
               "advanced": false,
               "description": "How many points or levels",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -293,6 +308,7 @@
             {
               "advanced": false,
               "description": "Materione item id, or minecraft:<material>",
+              "expression": true,
               "id": "item",
               "label": "Item",
               "order": 0,
@@ -305,6 +321,7 @@
               "advanced": false,
               "default": "1",
               "description": "How many",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -344,10 +361,11 @@
               "id": "currency",
               "label": "Currency",
               "order": 0,
+              "referenceKind": "currency",
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "reference"
             }
           ],
           "registeredBy": "materione",
@@ -464,6 +482,7 @@
             {
               "advanced": false,
               "description": "next, previous, first, last, or a page number; a template may give one",
+              "expression": true,
               "id": "to",
               "label": "To",
               "order": 0,
@@ -576,6 +595,7 @@
             {
               "advanced": false,
               "description": "Message text; formatting and & colour codes allowed",
+              "expression": true,
               "id": "text",
               "label": "Text",
               "order": 0,
@@ -683,6 +703,7 @@
             {
               "advanced": false,
               "description": "What the player is asked; a template may use variables",
+              "expression": true,
               "id": "text",
               "label": "Text",
               "order": 0,
@@ -743,6 +764,7 @@
             {
               "advanced": false,
               "description": "Command without the leading slash",
+              "expression": true,
               "id": "command",
               "label": "Command",
               "order": 0,
@@ -828,6 +850,7 @@
             {
               "advanced": false,
               "description": "Value or ${expression}; not used by toggle, remove and reset",
+              "expression": true,
               "id": "value",
               "label": "Value",
               "order": 0,
@@ -852,6 +875,7 @@
             {
               "advanced": false,
               "description": "Sound key, e.g. minecraft:block.note_block.pling",
+              "expression": true,
               "id": "sound",
               "label": "Sound",
               "order": 0,
@@ -918,6 +942,7 @@
             {
               "advanced": false,
               "description": "Sound key to stop, e.g. minecraft:music.game",
+              "expression": true,
               "id": "sound",
               "label": "Sound",
               "order": 0,
@@ -966,6 +991,7 @@
             {
               "advanced": false,
               "description": "How many points or levels",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -1007,6 +1033,7 @@
             {
               "advanced": false,
               "description": "Materione item id, or minecraft:<material>",
+              "expression": true,
               "id": "item",
               "label": "Item",
               "order": 0,
@@ -1019,6 +1046,7 @@
               "advanced": false,
               "default": "1",
               "description": "How many to take",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -1030,6 +1058,7 @@
             {
               "advanced": false,
               "description": "Only items whose display name contains this text",
+              "expression": true,
               "id": "name_contains",
               "label": "Name Contains",
               "order": 0,
@@ -1069,10 +1098,11 @@
               "id": "currency",
               "label": "Currency",
               "order": 0,
+              "referenceKind": "currency",
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "reference"
             }
           ],
           "registeredBy": "materione",
@@ -1117,6 +1147,7 @@
             {
               "advanced": false,
               "description": "X coordinate",
+              "expression": true,
               "id": "x",
               "label": "X",
               "order": 0,
@@ -1128,6 +1159,7 @@
             {
               "advanced": false,
               "description": "Y coordinate",
+              "expression": true,
               "id": "y",
               "label": "Y",
               "order": 0,
@@ -1139,6 +1171,7 @@
             {
               "advanced": false,
               "description": "Z coordinate",
+              "expression": true,
               "id": "z",
               "label": "Z",
               "order": 0,
@@ -1150,6 +1183,7 @@
             {
               "advanced": false,
               "description": "World name; default the player's world",
+              "expression": true,
               "id": "world",
               "label": "World",
               "order": 0,
@@ -1161,6 +1195,7 @@
             {
               "advanced": false,
               "description": "Facing, degrees; default keeps the current facing",
+              "expression": true,
               "id": "yaw",
               "label": "Yaw",
               "order": 0,
@@ -1172,6 +1207,7 @@
             {
               "advanced": false,
               "description": "Look up or down, degrees; default keeps the current pitch",
+              "expression": true,
               "id": "pitch",
               "label": "Pitch",
               "order": 0,
@@ -1196,6 +1232,7 @@
             {
               "advanced": false,
               "description": "Main line; formatting and & colour codes allowed",
+              "expression": true,
               "id": "title",
               "label": "Title",
               "order": 0,
@@ -1207,6 +1244,7 @@
             {
               "advanced": false,
               "description": "Second line",
+              "expression": true,
               "id": "subtitle",
               "label": "Subtitle",
               "order": 0,
@@ -1337,6 +1375,102 @@
           "id": "integration"
         }
       ],
+      "conditionForms": [
+        {
+          "description": "Holds when every condition of the list holds.",
+          "displayName": "All",
+          "id": "all",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "The conditions",
+              "id": "all",
+              "label": "All",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "conditions"
+            }
+          ],
+          "payload": "all",
+          "supported": true
+        },
+        {
+          "description": "Holds when at least one condition of the list holds.",
+          "displayName": "Any",
+          "id": "any",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "The conditions",
+              "id": "any",
+              "label": "Any",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "conditions"
+            }
+          ],
+          "payload": "any",
+          "supported": true
+        },
+        {
+          "description": "Holds when the condition does not.",
+          "displayName": "Not",
+          "id": "not",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "The condition",
+              "id": "not",
+              "label": "Not",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "condition"
+            }
+          ],
+          "payload": "not",
+          "supported": true
+        },
+        {
+          "description": "Holds when at least count conditions of the list hold.",
+          "displayName": "At least",
+          "id": "at_least",
+          "parameters": [
+            {
+              "advanced": false,
+              "id": "count",
+              "label": "Count",
+              "min": 0,
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "description": "The conditions",
+              "id": "of",
+              "label": "Of",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "conditions"
+            }
+          ],
+          "supported": true
+        }
+      ],
       "conditions": [
         {
           "available": true,
@@ -1348,6 +1482,7 @@
             {
               "advanced": false,
               "description": "How many points or levels, from 1",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -1387,6 +1522,7 @@
             {
               "advanced": false,
               "description": "Materione item id, or minecraft:<material>",
+              "expression": true,
               "id": "item",
               "label": "Item",
               "order": 0,
@@ -1399,6 +1535,7 @@
               "advanced": false,
               "default": "1",
               "description": "How many must be held, across stacks",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -1410,6 +1547,7 @@
             {
               "advanced": false,
               "description": "Only items whose display name contains this text",
+              "expression": true,
               "id": "name_contains",
               "label": "Name Contains",
               "order": 0,
@@ -1421,6 +1559,7 @@
             {
               "advanced": false,
               "description": "Only items with a lore line containing this text",
+              "expression": true,
               "id": "lore_contains",
               "label": "Lore Contains",
               "order": 0,
@@ -1492,6 +1631,7 @@
             {
               "advanced": false,
               "description": "How many empty storage slots (0 to 36)",
+              "expression": true,
               "id": "slots",
               "label": "Slots",
               "order": 0,
@@ -1503,18 +1643,20 @@
             {
               "advanced": false,
               "description": "Materione item id, or minecraft:<material>; room for amount of it",
+              "expression": true,
               "id": "item",
               "label": "Item",
               "order": 0,
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "item"
             },
             {
               "advanced": false,
               "default": "1",
               "description": "With item: how many of it there must be room for",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -1552,10 +1694,11 @@
               "id": "currency",
               "label": "Currency",
               "order": 0,
+              "referenceKind": "currency",
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "reference"
             }
           ],
           "registeredBy": "materione",
@@ -1621,10 +1764,11 @@
               "id": "id",
               "label": "Id",
               "order": 0,
+              "referenceKind": "gui",
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "reference"
             }
           ],
           "registeredBy": "materione",
@@ -1675,6 +1819,7 @@
             {
               "advanced": false,
               "description": "The point's x coordinate (a number or a template)",
+              "expression": true,
               "id": "x",
               "label": "X",
               "order": 0,
@@ -1686,6 +1831,7 @@
             {
               "advanced": false,
               "description": "The point's y coordinate (a number or a template)",
+              "expression": true,
               "id": "y",
               "label": "Y",
               "order": 0,
@@ -1697,6 +1843,7 @@
             {
               "advanced": false,
               "description": "The point's z coordinate (a number or a template)",
+              "expression": true,
               "id": "z",
               "label": "Z",
               "order": 0,
@@ -1708,6 +1855,7 @@
             {
               "advanced": false,
               "description": "Radius in blocks, from 0 (a number or a template)",
+              "expression": true,
               "id": "distance",
               "label": "Distance",
               "order": 0,
@@ -1747,7 +1895,7 @@
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "item"
             },
             {
               "advanced": false,
@@ -1806,6 +1954,7 @@
             {
               "advanced": false,
               "description": "Value to compare with, or ${expression}",
+              "expression": true,
               "id": "value",
               "label": "Value",
               "order": 0,
@@ -2790,6 +2939,20 @@
           "variadic": false
         }
       ],
+      "guardOptions": [
+        {
+          "advanced": true,
+          "description": "Steps that run when the action fails or goes unanswered; the flow then stops",
+          "id": "else",
+          "label": "Else",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "raw",
+          "uiHint": "advanced",
+          "valueKind": "steps"
+        }
+      ],
       "inputMethods": [
         {
           "available": true,
@@ -2832,6 +2995,7 @@
             {
               "advanced": false,
               "description": "A player's name, or ${player.name} for the viewer",
+              "expression": true,
               "id": "player",
               "label": "Player",
               "order": 0,
@@ -2843,6 +3007,7 @@
             {
               "advanced": false,
               "description": "A skin hash, or its textures.minecraft.net URL",
+              "expression": true,
               "id": "texture",
               "label": "Texture",
               "order": 0,
@@ -2854,6 +3019,7 @@
             {
               "advanced": false,
               "description": "A base64 textures value, as a server stores it",
+              "expression": true,
               "id": "base64",
               "label": "Base64",
               "order": 0,
@@ -2874,13 +3040,14 @@
             {
               "advanced": false,
               "description": "ns:id, minecraft:material, or a template such as ${entry.item}",
+              "expression": true,
               "id": "item",
               "label": "Item",
               "order": 0,
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "item"
             }
           ],
           "registeredBy": "materione",
@@ -3184,7 +3351,8 @@
           ],
           "registeredBy": "Materione",
           "repeatable": false,
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "supersededBy": "the backpack preset: custody with a stack holder and the built-in backpack GUI (planned, primitives.md section 4.2; until it ships this mechanic is the way)"
         },
         {
           "activation": "When the holder right- or left-clicks with the item, its commands for that click run",
@@ -3229,7 +3397,8 @@
           ],
           "registeredBy": "Materione",
           "repeatable": true,
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "supersededBy": "a rule: a click trigger with the run_command action"
         },
         {
           "activation": "Each time the item takes durability damage, one use is counted against max; it breaks at zero",
@@ -3251,7 +3420,8 @@
           ],
           "registeredBy": "Materione",
           "repeatable": false,
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "supersededBy": "keyed state held on the stack with the damage trigger, as a preset (planned, primitives.md section 4.2; until it ships this mechanic is the way)"
         },
         {
           "activation": "When the player eats the item, its nutrition, saturation and effects apply",
@@ -3307,7 +3477,8 @@
           ],
           "registeredBy": "Materione",
           "repeatable": false,
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "supersededBy": "a preset over the vanilla food and consumable components and a consume rule (planned, primitives.md section 4.2; until it ships this mechanic is the way)"
         },
         {
           "activation": "When the owner dies the item is kept back and returned on respawn or next join",
@@ -3317,7 +3488,8 @@
           "parameters": [],
           "registeredBy": "Materione",
           "repeatable": false,
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "supersededBy": "custody of items across a death, as a preset (planned, primitives.md section 4.2; until it ships this mechanic is the way)"
         }
       ],
       "recipes": [
@@ -3595,6 +3767,32 @@
           "registeredBy": "materione"
         }
       ],
+      "ruleBody": [
+        {
+          "advanced": true,
+          "description": "The condition that must hold for the rule to run",
+          "id": "if",
+          "label": "If",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "raw",
+          "uiHint": "advanced",
+          "valueKind": "condition"
+        },
+        {
+          "advanced": true,
+          "description": "The steps the rule runs",
+          "id": "do",
+          "label": "Do",
+          "order": 0,
+          "required": true,
+          "section": "general",
+          "type": "raw",
+          "uiHint": "advanced",
+          "valueKind": "steps"
+        }
+      ],
       "ruleOptions": [
         {
           "advanced": false,
@@ -3653,9 +3851,18 @@
           "label": "On Cooldown",
           "order": 0,
           "required": false,
+          "scope": [
+            {
+              "description": "The whole seconds left in the cooldown window, rounded up",
+              "hosts": [],
+              "path": "cooldown.remaining",
+              "type": "integer"
+            }
+          ],
           "section": "general",
           "type": "raw",
-          "uiHint": "advanced"
+          "uiHint": "advanced",
+          "valueKind": "steps"
         }
       ],
       "steps": [
@@ -3689,12 +3896,17 @@
               "uiHint": "number"
             }
           ],
+          "registry": "actions",
           "supported": true
         },
         {
-          "description": "Runs one list of steps when a condition holds and another when it does not.",
+          "description": "Runs one list of steps when a condition holds and another when it does not. At least one of then and else is written; the flow continues after it.",
           "displayName": "If",
           "id": "if",
+          "oneOf": [
+            "then",
+            "else"
+          ],
           "parameters": [
             {
               "advanced": true,
@@ -3702,10 +3914,11 @@
               "id": "if",
               "label": "If",
               "order": 0,
-              "required": false,
+              "required": true,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "condition"
             },
             {
               "advanced": true,
@@ -3716,7 +3929,8 @@
               "required": false,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "steps"
             },
             {
               "advanced": true,
@@ -3727,13 +3941,19 @@
               "required": false,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "steps"
             }
+          ],
+          "payload": "if",
+          "siblings": [
+            "then",
+            "else"
           ],
           "supported": true
         },
         {
-          "description": "Runs steps in order until one fails; then runs the else steps and stops the flow.",
+          "description": "Runs steps in order until one fails; then runs the else steps and stops the flow. It takes steps, not conditions: guard with if and stop for a condition.",
           "displayName": "Require",
           "id": "require",
           "parameters": [
@@ -3743,10 +3963,11 @@
               "id": "require",
               "label": "Require",
               "order": 0,
-              "required": false,
+              "required": true,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "steps"
             },
             {
               "advanced": true,
@@ -3757,8 +3978,13 @@
               "required": false,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "steps"
             }
+          ],
+          "payload": "require",
+          "siblings": [
+            "else"
           ],
           "supported": true
         },
@@ -3771,13 +3997,17 @@
               "advanced": false,
               "id": "ticks",
               "label": "Ticks",
+              "max": 1728000,
+              "min": 0,
               "order": 0,
               "required": true,
               "section": "general",
               "type": "integer",
-              "uiHint": "number"
+              "uiHint": "number",
+              "unit": "ticks"
             }
           ],
+          "payload": "ticks",
           "supported": true
         },
         {
@@ -3815,13 +4045,15 @@
           "parameters": [
             {
               "advanced": false,
+              "description": "The name of a flow declared under flows:",
               "id": "flow",
               "label": "Flow",
               "order": 0,
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "text",
+              "valueKind": "flow"
             },
             {
               "advanced": true,
@@ -3832,8 +4064,13 @@
               "required": false,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "arguments"
             }
+          ],
+          "payload": "flow",
+          "siblings": [
+            "with"
           ],
           "supported": true
         },
@@ -3843,15 +4080,41 @@
           "id": "choose",
           "parameters": [
             {
-              "advanced": true,
-              "description": "The branches, each an if/then pair",
+              "advanced": false,
+              "description": "The branches, each an if/then pair; at least one",
               "id": "choose",
               "label": "Choose",
+              "nested": [
+                {
+                  "advanced": true,
+                  "description": "The branch's condition",
+                  "id": "if",
+                  "label": "If",
+                  "order": 0,
+                  "required": true,
+                  "section": "general",
+                  "type": "raw",
+                  "uiHint": "advanced",
+                  "valueKind": "condition"
+                },
+                {
+                  "advanced": true,
+                  "description": "Steps run when it is the first that holds",
+                  "id": "then",
+                  "label": "Then",
+                  "order": 0,
+                  "required": true,
+                  "section": "general",
+                  "type": "raw",
+                  "uiHint": "advanced",
+                  "valueKind": "steps"
+                }
+              ],
               "order": 0,
-              "required": false,
+              "required": true,
               "section": "general",
-              "type": "raw",
-              "uiHint": "advanced"
+              "type": "list",
+              "uiHint": "list"
             },
             {
               "advanced": true,
@@ -3862,8 +4125,13 @@
               "required": false,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "steps"
             }
+          ],
+          "payload": "choose",
+          "siblings": [
+            "else"
           ],
           "supported": true
         }
@@ -6500,6 +6768,7 @@
               "description": "Only for this reason: player, action, replaced, quit",
               "id": "reason",
               "label": "Reason",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -6642,6 +6911,7 @@
               "description": "Only clicks on this layer (an id, or a list of ids)",
               "id": "layer",
               "label": "Layer",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -6654,6 +6924,7 @@
               "id": "slot",
               "label": "Slot",
               "min": 0,
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -6677,6 +6948,7 @@
               "description": "Only this kind of click (a kind, or a list)",
               "id": "click",
               "label": "Click",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -6805,6 +7077,7 @@
               "description": "Only this side's click",
               "id": "click",
               "label": "Click",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -6918,6 +7191,7 @@
               "id": "every",
               "label": "Every",
               "min": 1,
+              "multiple": true,
               "order": 0,
               "required": true,
               "section": "general",
@@ -7042,6 +7316,7 @@
               "description": "Only this list (an id, or a list of ids)",
               "id": "layer",
               "label": "Layer",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -7178,6 +7453,7 @@
               "description": "Only changes to this input layer (an id, or a list of ids)",
               "id": "layer",
               "label": "Layer",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -7326,6 +7602,7 @@
               "description": "Only this kind of click (a kind, or a list)",
               "id": "click",
               "label": "Click",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -7540,6 +7817,7 @@
               "description": "Only this entity type (a type, or a list of types), e.g. zombie",
               "id": "type",
               "label": "Type",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -7586,6 +7864,7 @@
               "description": "Only this damage cause (a cause, or a list of causes)",
               "id": "cause",
               "label": "Cause",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -7777,6 +8056,7 @@
               "description": "Only this entity type (a type, or a list of types), e.g. zombie",
               "id": "type",
               "label": "Type",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -8009,6 +8289,7 @@
               "description": "Only this damage cause (a cause, or a list of causes)",
               "id": "cause",
               "label": "Cause",
+              "multiple": true,
               "order": 0,
               "required": false,
               "section": "general",
@@ -12051,6 +12332,7 @@
         "description": "A declared persistent variable: stored per player or on the server, typed, with a default",
         "directory": "variables",
         "displayName": "Variable",
+        "expressionForm": "vars.{scope}.{pack}.{id}",
         "name": "variable",
         "parameters": [
           {

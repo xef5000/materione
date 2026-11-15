@@ -15,7 +15,7 @@ let floor = 0;
 crate.rules.add(m.triggers.click({ detail: "right" }), () => ({
   do: [
     m.steps.require([m.actions.takeItem({ item: key, amount: 1 })], { else: [m.actions.message("<red>You need a Crate Key.")] }),
-    m.actions.setVar({ var: "roll", op: "set", value: "${random(1, 100)}" }),
+    m.actions.setVar({ var: "roll", op: "set", value: m.expr`${m.fn.random(1, 100)}` }),
     m.steps.choose(
       rewards.map((r) => {
         floor += r.w;
@@ -26,7 +26,7 @@ crate.rules.add(m.triggers.click({ detail: "right" }), () => ({
             ...(r.rare ? [m.actions.broadcast("<gold>${player.name} found a Nether Star!")] : []),
           ],
         };
-      }) as [any, ...any[]],
+      }),
     ),
   ],
 }));

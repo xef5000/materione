@@ -36,7 +36,8 @@ public final class SoulboundMechanic implements Mechanic {
     public SelfDescription describe() {
         return new SelfDescription(
                 "Soulbound", "The item stays with its owner through death", List.of(), "2.0.0",
-                "When the owner dies the item is kept back and returned on respawn or next join");
+                "When the owner dies the item is kept back and returned on respawn or next join")
+                .supersededBy("custody of items across a death, as a preset (planned, primitives.md section 4.2; until it ships this mechanic is the way)");
     }
 
     @Override

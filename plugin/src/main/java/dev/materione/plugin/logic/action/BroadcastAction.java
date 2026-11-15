@@ -48,12 +48,12 @@ public final class BroadcastAction implements ActionType<BroadcastAction.Params>
                 "Sends a message to the whole server, one world, or the holders of a permission",
                 List.of(
                         new ParameterSchema("text", ParameterType.STRING, true, null,
-                                "Message text; formatting and & colour codes allowed", null, null),
+                                "Message text; formatting and & colour codes allowed", null, null).acceptingExpression(),
                         new ParameterSchema("scope", ParameterType.ENUM, false, "server",
                                 "Who receives it", List.of("server", "world", "permission"), null),
                         new ParameterSchema("target", ParameterType.STRING, false, null,
                                 "World name (world scope; default the player's world) or permission node "
-                                        + "(permission scope, required)", null, null)),
+                                        + "(permission scope, required)", null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.SERVER, "text");
     }
 

@@ -48,7 +48,7 @@ public final class InGuiCondition implements ConditionType<InGuiCondition.Params
         return new ConditionDescription(new SelfDescription("In GUI",
                 "True when the player has a Materione GUI open, or the GUI with this id",
                 List.of(new ParameterSchema("id", ParameterType.STRING, false, null,
-                        "GUI id, e.g. shop:menu; any open GUI when omitted", null, null)),
+                        "GUI id, e.g. shop:menu; any open GUI when omitted", null, null).withWidget("reference", "gui")),
                 "2.0.0"), LogicCategory.GUI, "id");
     }
 
