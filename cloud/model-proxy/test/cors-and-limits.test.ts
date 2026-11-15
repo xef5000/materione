@@ -8,6 +8,7 @@ import {
 import worker from "../src/index";
 import { SDK_INDEX_HEADER } from "../src/prompt";
 import { resolveUpstreamUrl } from "../src/upstream";
+import { clearAllTables, createTestAccountSession } from "./helpers";
 
 const VALID_BODY = {
   system: `${SDK_INDEX_HEADER}\n\n## Content types (1)\n- item`,
@@ -29,6 +30,7 @@ function makeRequest(
     secFetchSite?: string | null;
     ip?: string | null;
     contentType?: string | null;
+    cookie?: string | null;
     body?: string;
   } = {},
 ): Request {
@@ -42,6 +44,9 @@ function makeRequest(
   if (options.ip !== null) {
     headers.set("cf-connecting-ip", options.ip ?? "203.0.113.10");
   }
+  if (options.cookie) {
+    headers.set("cookie", options.cookie);
+  }
   if (options.contentType !== null && (options.method ?? "POST") === "POST") {
     headers.set("content-type", options.contentType ?? "application/json");
   }
@@ -54,11 +59,7 @@ function makeRequest(
 
 describe("CORS, origin boundary, schema validation, and limits", () => {
   beforeEach(async () => {
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM reservations"),
-      env.DB.prepare("DELETE FROM daily_caller_usage"),
-      env.DB.prepare("DELETE FROM daily_pool_usage"),
-    ]);
+    await clearAllTables(env.DB);
   });
 
   it("rejects missing, localhost, 127.0.0.1, and arbitrary origins with 403 bad_origin before rate limiter or D1", async () => {
@@ -97,13 +98,14 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     }
   });
 
-  it("answers OPTIONS preflight for /v1/chat and /v1/allowance from https://editor.materione.com with 204", async () => {
-    for (const path of ["/v1/chat", "/v1/allowance"]) {
+  it("answers OPTIONS preflight for SPA endpoints from https://editor.materione.com with 204 and Allow-Credentials", async () => {
+    for (const path of ["/v1/chat", "/v1/allowance", "/v1/me", "/v1/auth/logout", "/v1/checkout", "/v1/portal"]) {
       const ctx = createExecutionContext();
       const res = await worker.fetch(makeRequest(path, { method: "OPTIONS" }), env, ctx);
       await waitOnExecutionContext(ctx);
       expect(res.status).toBe(204);
       expect(res.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
+      expect(res.headers.get("access-control-allow-credentials")).toBe("true");
       expect(res.headers.get("access-control-allow-methods")).toBe("GET, POST, OPTIONS");
       expect(res.headers.get("access-control-allow-headers")).toBe("content-type");
       expect(res.headers.get("access-control-max-age")).toBe("86400");
@@ -111,18 +113,20 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     }
   });
 
-  it("returns 404 for unknown routes and 405 for wrong methods with CORS headers", async () => {
+  it("returns 404 for unknown routes and 405 for wrong methods with CORS credentials headers", async () => {
     const ctx1 = createExecutionContext();
     const r404 = await worker.fetch(makeRequest("/v1/unknown", { method: "GET" }), env, ctx1);
     await waitOnExecutionContext(ctx1);
     expect(r404.status).toBe(404);
     expect(r404.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
+    expect(r404.headers.get("access-control-allow-credentials")).toBe("true");
 
     const ctx2 = createExecutionContext();
     const r405 = await worker.fetch(makeRequest("/v1/chat", { method: "GET" }), env, ctx2);
     await waitOnExecutionContext(ctx2);
     expect(r405.status).toBe(405);
     expect(r405.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
+    expect(r405.headers.get("access-control-allow-credentials")).toBe("true");
   });
 
   it("fails closed with 503 when proxy config is missing and 400 when CF-Connecting-IP is missing", async () => {
@@ -148,11 +152,15 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("rejects extra top-level fields, disallowed tools, and disallowed content blocks with 400", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const disallowedTopLevel = ["model", "max_tokens", "api_key", "stream", "temperature", "thinking"];
     for (const key of disallowedTopLevel) {
       const ctx = createExecutionContext();
       const res = await worker.fetch(
-        makeRequest("/v1/chat", { body: JSON.stringify({ ...VALID_BODY, [key]: "bad" }) }),
+        makeRequest("/v1/chat", {
+          cookie: sess.cookieHeader,
+          body: JSON.stringify({ ...VALID_BODY, [key]: "bad" }),
+        }),
         env,
         ctx,
       );
@@ -161,10 +169,11 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
       expect(((await res.json()) as { error: string }).error).toBe("invalid_request");
     }
 
-      const badToolCtx = createExecutionContext();
+    const badToolCtx = createExecutionContext();
     const badToolRes = await worker.fetch(
       makeRequest("/v1/chat", {
         ip: "203.0.113.21",
+        cookie: sess.cookieHeader,
         body: JSON.stringify({
           ...VALID_BODY,
           tools: [{ name: "write_file", description: "bad", input_schema: { type: "object" } }],
@@ -180,6 +189,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     const tooManyToolsRes = await worker.fetch(
       makeRequest("/v1/chat", {
         ip: "203.0.113.22",
+        cookie: sess.cookieHeader,
         body: JSON.stringify({
           ...VALID_BODY,
           tools: [VALID_BODY.tools[0], VALID_BODY.tools[0]],
@@ -195,6 +205,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     const badBlockRes = await worker.fetch(
       makeRequest("/v1/chat", {
         ip: "203.0.113.23",
+        cookie: sess.cookieHeader,
         body: JSON.stringify({
           ...VALID_BODY,
           messages: [{ role: "user", content: [{ type: "image", source: {} }] }],
@@ -208,6 +219,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("rejects body > 512 KiB and estimated input > 80,000 tokens with 413 without debiting D1 or calling upstream", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     try {
       const oversizedBody = JSON.stringify({
@@ -215,7 +227,11 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
         system: "x".repeat(MAX_BODY_BYTES + 100),
       });
       const ctx1 = createExecutionContext();
-      const res1 = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.31", body: oversizedBody }), env, ctx1);
+      const res1 = await worker.fetch(
+        makeRequest("/v1/chat", { ip: "203.0.113.31", cookie: sess.cookieHeader, body: oversizedBody }),
+        env,
+        ctx1,
+      );
       await waitOnExecutionContext(ctx1);
       expect(res1.status).toBe(413);
       expect(((await res1.json()) as { code: string }).code).toBe("too_large");
@@ -226,7 +242,11 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
         messages: [{ role: "user", content: ",1".repeat(42_500) }],
       });
       const ctx2 = createExecutionContext();
-      const res2 = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.32", body: tooManyTokensBody }), env, ctx2);
+      const res2 = await worker.fetch(
+        makeRequest("/v1/chat", { ip: "203.0.113.32", cookie: sess.cookieHeader, body: tooManyTokensBody }),
+        env,
+        ctx2,
+      );
       await waitOnExecutionContext(ctx2);
       expect(res2.status).toBe(413);
       expect(((await res2.json()) as { code: string }).code).toBe("too_large");
@@ -240,11 +260,16 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("fails closed with 503 unavailable when RATE_LIMITER is missing or throws", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     try {
       const envMissing = { ...env, RATE_LIMITER: undefined } as unknown as typeof env;
       const ctx1 = createExecutionContext();
-      const r1 = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.41" }), envMissing, ctx1);
+      const r1 = await worker.fetch(
+        makeRequest("/v1/chat", { ip: "203.0.113.41", cookie: sess.cookieHeader }),
+        envMissing,
+        ctx1,
+      );
       await waitOnExecutionContext(ctx1);
       expect(r1.status).toBe(503);
       expect(r1.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
@@ -259,7 +284,11 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
         } as unknown as RateLimit,
       };
       const ctx2 = createExecutionContext();
-      const r2 = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.42" }), envThrowing, ctx2);
+      const r2 = await worker.fetch(
+        makeRequest("/v1/chat", { ip: "203.0.113.42", cookie: sess.cookieHeader }),
+        envThrowing,
+        ctx2,
+      );
       await waitOnExecutionContext(ctx2);
       expect(r2.status).toBe(503);
       expect(r2.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
@@ -273,7 +302,8 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     }
   });
 
-  it("returns 503 unavailable with CORS when D1 throws on /v1/allowance or /v1/chat", async () => {
+  it("returns 503 unavailable with CORS credentials when D1 throws on /v1/allowance or /v1/chat", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const brokenDb = {
       prepare: () => {
@@ -284,17 +314,27 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
 
     try {
       const ctx1 = createExecutionContext();
-      const r1 = await worker.fetch(makeRequest("/v1/allowance", { method: "GET" }), brokenEnv, ctx1);
+      const r1 = await worker.fetch(
+        makeRequest("/v1/allowance", { method: "GET", cookie: sess.cookieHeader }),
+        brokenEnv,
+        ctx1,
+      );
       await waitOnExecutionContext(ctx1);
       expect(r1.status).toBe(503);
       expect(r1.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
+      expect(r1.headers.get("access-control-allow-credentials")).toBe("true");
       expect(((await r1.json()) as { code: string }).code).toBe("unavailable");
 
       const ctx2 = createExecutionContext();
-      const r2 = await worker.fetch(makeRequest("/v1/chat"), brokenEnv, ctx2);
+      const r2 = await worker.fetch(
+        makeRequest("/v1/chat", { cookie: sess.cookieHeader }),
+        brokenEnv,
+        ctx2,
+      );
       await waitOnExecutionContext(ctx2);
       expect(r2.status).toBe(503);
       expect(r2.headers.get("access-control-allow-origin")).toBe(ALLOWED_ORIGIN);
+      expect(r2.headers.get("access-control-allow-credentials")).toBe("true");
       expect(((await r2.json()) as { code: string }).code).toBe("unavailable");
 
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -334,6 +374,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("blocks general-purpose LLM abuse: arbitrary system, tools:[], custom schemas, boundary break, __proto__", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     try {
       const abuseBodies = [
@@ -376,7 +417,11 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
 
       for (const body of abuseBodies) {
         const ctx = createExecutionContext();
-        const res = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.55", body }), env, ctx);
+        const res = await worker.fetch(
+          makeRequest("/v1/chat", { ip: "203.0.113.55", cookie: sess.cookieHeader, body }),
+          env,
+          ctx,
+        );
         await waitOnExecutionContext(ctx);
         expect(res.status).toBe(400);
         expect(((await res.json()) as { error: string }).error).toBe("invalid_request");
@@ -388,10 +433,12 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("clamps oversized GLOBAL_DAILY_POOL_PICOS to $10/day and treats 0 as an instant kill-switch", async () => {
+    const sess = await createTestAccountSession(env.DB);
+
     // Clamp test
     const ctxClamped = createExecutionContext();
     const resClamped = await worker.fetch(
-      makeRequest("/v1/allowance", { method: "GET", ip: "203.0.113.60" }),
+      makeRequest("/v1/allowance", { method: "GET", ip: "203.0.113.60", cookie: sess.cookieHeader }),
       { ...env, GLOBAL_DAILY_POOL_PICOS: "999000000000000000" },
       ctxClamped,
     );
@@ -403,13 +450,21 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     // Kill-switch test: GLOBAL_DAILY_POOL_PICOS = "0"
     const killEnv = { ...env, GLOBAL_DAILY_POOL_PICOS: "0" };
     const ctxAllow = createExecutionContext();
-    const resAllow = await worker.fetch(makeRequest("/v1/allowance", { method: "GET", ip: "203.0.113.61" }), killEnv, ctxAllow);
+    const resAllow = await worker.fetch(
+      makeRequest("/v1/allowance", { method: "GET", ip: "203.0.113.61", cookie: sess.cookieHeader }),
+      killEnv,
+      ctxAllow,
+    );
     await waitOnExecutionContext(ctxAllow);
     expect(resAllow.status).toBe(200);
     expect(((await resAllow.json()) as { poolOpen: boolean }).poolOpen).toBe(false);
 
     const ctxChat = createExecutionContext();
-    const resChat = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.61" }), killEnv, ctxChat);
+    const resChat = await worker.fetch(
+      makeRequest("/v1/chat", { ip: "203.0.113.61", cookie: sess.cookieHeader }),
+      killEnv,
+      ctxChat,
+    );
     await waitOnExecutionContext(ctxChat);
     expect(resChat.status).toBe(429);
     const chatJson = (await resChat.json()) as { error: string; reason: string };
@@ -437,6 +492,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("accepts the exact multi-section agentContext + RUN_PROGRAM_TOOL format emitted by webui", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       const sse =
         `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 200, output_tokens: 1 } } })}\n\n` +
@@ -473,10 +529,15 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
       });
 
       const ctx = createExecutionContext();
-      const res = await worker.fetch(makeRequest("/v1/chat", { ip: "203.0.113.99", body: realWebuiBody }), env, ctx);
+      const res = await worker.fetch(
+        makeRequest("/v1/chat", { ip: "203.0.113.99", cookie: sess.cookieHeader, body: realWebuiBody }),
+        env,
+        ctx,
+      );
       const text = await res.text();
       await waitOnExecutionContext(ctx);
       expect(res.status).toBe(200);
+      expect(res.headers.get("access-control-allow-credentials")).toBe("true");
       expect(text).toContain("event: materione_settlement");
     } finally {
       fetchSpy.mockRestore();
@@ -484,6 +545,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   });
 
   it("enforces RATE_LIMITER and returns 429 rate_limited with Retry-After: 60 on the 11th request", async () => {
+    const sess = await createTestAccountSession(env.DB);
     const counts = new Map<string, number>();
     const testEnv = {
       ...env,
@@ -507,14 +569,14 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     try {
       for (let i = 0; i < 10; i++) {
         const ctx = createExecutionContext();
-        const res = await worker.fetch(makeRequest("/v1/chat"), testEnv, ctx);
+        const res = await worker.fetch(makeRequest("/v1/chat", { cookie: sess.cookieHeader }), testEnv, ctx);
         await res.text();
         await waitOnExecutionContext(ctx);
         expect(res.status).toBe(200);
       }
 
       const ctx11 = createExecutionContext();
-      const res11 = await worker.fetch(makeRequest("/v1/chat"), testEnv, ctx11);
+      const res11 = await worker.fetch(makeRequest("/v1/chat", { cookie: sess.cookieHeader }), testEnv, ctx11);
       await waitOnExecutionContext(ctx11);
       expect(res11.status).toBe(429);
       expect(res11.headers.get("retry-after")).toBe("60");

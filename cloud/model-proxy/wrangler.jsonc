@@ -33,6 +33,9 @@
   "triggers": {
     "crons": ["17 * * * *"]
   },
+  "vars": {
+    "POLAR_CREDITS_PRODUCT_ID": "06c6939d-72a3-4bef-8ded-5c6543811a28"
+  },
   "observability": {
     "enabled": true
   }

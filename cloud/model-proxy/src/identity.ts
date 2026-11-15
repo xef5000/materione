@@ -1,3 +1,4 @@
+import { resolvePolarApiBase, resolvePublicBaseUrl } from "./config";
 import type { Env } from "./http";
 
 const textEncoder = new TextEncoder();
@@ -5,9 +6,66 @@ const GATEWAY_ID_REGEX = /^[a-zA-Z0-9_-]{1,100}$/;
 
 export type RateLimitOutcome = "allowed" | "limited" | "unavailable";
 
-export function isProxyConfigured(env: Env): boolean {
+export function isCoreConfigured(env: Env): boolean {
   const hasRateLimiter = Boolean(env.RATE_LIMITER && typeof env.RATE_LIMITER.limit === "function");
   const hasSalt = typeof env.IP_HASH_SALT === "string" && env.IP_HASH_SALT.trim().length >= 16;
+  return hasRateLimiter && hasSalt;
+}
+
+export function isSessionSecretConfigured(env: Env): boolean {
+  return typeof env.SESSION_HMAC_SECRET === "string" && env.SESSION_HMAC_SECRET.trim().length >= 32;
+}
+
+export function isAuthConfigured(env: Env, provider: "google" | "discord"): boolean {
+  if (!isCoreConfigured(env) || !isSessionSecretConfigured(env)) {
+    return false;
+  }
+  if (!resolvePublicBaseUrl(env)) {
+    return false;
+  }
+  if (provider === "google") {
+    return (
+      typeof env.GOOGLE_CLIENT_ID === "string" &&
+      env.GOOGLE_CLIENT_ID.trim().length > 0 &&
+      typeof env.GOOGLE_CLIENT_SECRET === "string" &&
+      env.GOOGLE_CLIENT_SECRET.trim().length > 0
+    );
+  }
+  return (
+    typeof env.DISCORD_CLIENT_ID === "string" &&
+    env.DISCORD_CLIENT_ID.trim().length > 0 &&
+    typeof env.DISCORD_CLIENT_SECRET === "string" &&
+    env.DISCORD_CLIENT_SECRET.trim().length > 0
+  );
+}
+
+export function isPolarCheckoutConfigured(env: Env): boolean {
+  return (
+    isCoreConfigured(env) &&
+    isSessionSecretConfigured(env) &&
+    Boolean(resolvePublicBaseUrl(env)) &&
+    Boolean(resolvePolarApiBase(env)) &&
+    typeof env.POLAR_ACCESS_TOKEN === "string" &&
+    env.POLAR_ACCESS_TOKEN.trim().length > 0 &&
+    typeof env.POLAR_CREDITS_PRODUCT_ID === "string" &&
+    env.POLAR_CREDITS_PRODUCT_ID.trim().length > 0
+  );
+}
+
+export function isPolarWebhookConfigured(env: Env): boolean {
+  return (
+    isCoreConfigured(env) &&
+    typeof env.POLAR_WEBHOOK_SECRET === "string" &&
+    env.POLAR_WEBHOOK_SECRET.trim().length > 0 &&
+    typeof env.POLAR_CREDITS_PRODUCT_ID === "string" &&
+    env.POLAR_CREDITS_PRODUCT_ID.trim().length > 0
+  );
+}
+
+export function isProxyConfigured(env: Env): boolean {
+  if (!isCoreConfigured(env) || !isSessionSecretConfigured(env)) {
+    return false;
+  }
   const hasToken = typeof env.CF_AIG_TOKEN === "string" && env.CF_AIG_TOKEN.trim().length > 0;
   const hasBaseUrl =
     env.ALLOW_TEST_UPSTREAM_OVERRIDE === "true" &&
@@ -19,7 +77,7 @@ export function isProxyConfigured(env: Env): boolean {
     typeof env.CF_AIG_GATEWAY_ID === "string" &&
     GATEWAY_ID_REGEX.test(env.CF_AIG_GATEWAY_ID.trim());
 
-  return hasRateLimiter && hasSalt && hasToken && (hasBaseUrl || hasGateway);
+  return hasToken && (hasBaseUrl || hasGateway);
 }
 
 function parseStrictIpv4(input: string): [number, number, number, number] | null {
