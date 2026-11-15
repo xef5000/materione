@@ -48,6 +48,36 @@ export const PRESET_MODELS: Readonly<Record<string, BenchmarkModelSpec>> = {
     maxOutputTokens: 8192,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
+  'claude-haiku-5-5-medium': {
+    id: 'claude-haiku-5-5-medium',
+    catalogId: 'anthropic/claude-haiku-5.5',
+    tier: 'cheap',
+    transport: 'anthropic',
+    upstreamModel: 'claude-haiku-5-5',
+    reasoningEffort: 'medium',
+    anthropicAdaptiveThinking: true,
+    inputPicosPerToken: 100_000, // $0.10 / 1M
+    cacheReadPicosPerToken: 10_000, // $0.01 / 1M
+    cacheWritePicosPerToken: 125_000, // $0.125 / 1M
+    outputPicosPerToken: 500_000, // $0.50 / 1M
+    maxOutputTokens: 12288,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
+  'claude-haiku-5-5-high': {
+    id: 'claude-haiku-5-5-high',
+    catalogId: 'anthropic/claude-haiku-5.5',
+    tier: 'cheap',
+    transport: 'anthropic',
+    upstreamModel: 'claude-haiku-5-5',
+    reasoningEffort: 'high',
+    anthropicAdaptiveThinking: true,
+    inputPicosPerToken: 100_000, // $0.10 / 1M
+    cacheReadPicosPerToken: 10_000, // $0.01 / 1M
+    cacheWritePicosPerToken: 125_000, // $0.125 / 1M
+    outputPicosPerToken: 500_000, // $0.50 / 1M
+    maxOutputTokens: 16384,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
   'claude-haiku-5-5-xhigh': {
     id: 'claude-haiku-5-5-xhigh',
     catalogId: 'anthropic/claude-haiku-5.5',
@@ -63,18 +93,18 @@ export const PRESET_MODELS: Readonly<Record<string, BenchmarkModelSpec>> = {
     maxOutputTokens: 24576,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
-  'gpt-6-luna-xhigh': {
-    id: 'gpt-6-luna-xhigh',
+  'gpt-6-luna-low': {
+    id: 'gpt-6-luna-low',
     catalogId: 'openai/gpt-6-luna',
     tier: 'cheap',
     transport: 'openai-responses',
     upstreamModel: 'gpt-6-luna',
-    reasoningEffort: 'xhigh',
+    reasoningEffort: 'low',
     inputPicosPerToken: 100_000, // $0.10 / 1M
     cacheReadPicosPerToken: 10_000, // $0.01 / 1M
     cacheWritePicosPerToken: 125_000, // $0.125 / 1M
     outputPicosPerToken: 500_000, // $0.50 / 1M
-    maxOutputTokens: 24576,
+    maxOutputTokens: 8192,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
   'gpt-6-luna-medium': {
@@ -89,6 +119,34 @@ export const PRESET_MODELS: Readonly<Record<string, BenchmarkModelSpec>> = {
     cacheWritePicosPerToken: 125_000, // $0.125 / 1M
     outputPicosPerToken: 500_000, // $0.50 / 1M
     maxOutputTokens: 12288,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
+  'gpt-6-luna-high': {
+    id: 'gpt-6-luna-high',
+    catalogId: 'openai/gpt-6-luna',
+    tier: 'cheap',
+    transport: 'openai-responses',
+    upstreamModel: 'gpt-6-luna',
+    reasoningEffort: 'high',
+    inputPicosPerToken: 100_000, // $0.10 / 1M
+    cacheReadPicosPerToken: 10_000, // $0.01 / 1M
+    cacheWritePicosPerToken: 125_000, // $0.125 / 1M
+    outputPicosPerToken: 500_000, // $0.50 / 1M
+    maxOutputTokens: 16384,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
+  'gpt-6-luna-xhigh': {
+    id: 'gpt-6-luna-xhigh',
+    catalogId: 'openai/gpt-6-luna',
+    tier: 'cheap',
+    transport: 'openai-responses',
+    upstreamModel: 'gpt-6-luna',
+    reasoningEffort: 'xhigh',
+    inputPicosPerToken: 100_000, // $0.10 / 1M
+    cacheReadPicosPerToken: 10_000, // $0.01 / 1M
+    cacheWritePicosPerToken: 125_000, // $0.125 / 1M
+    outputPicosPerToken: 500_000, // $0.50 / 1M
+    maxOutputTokens: 24576,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
   'deepseek-v4.1-flash-1017': {
@@ -146,6 +204,20 @@ export const PRESET_MODELS: Readonly<Record<string, BenchmarkModelSpec>> = {
     maxOutputTokens: 16384,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
+  'gpt-6.1-terra-low': {
+    id: 'gpt-6.1-terra-low',
+    catalogId: 'openai/gpt-6.1-terra',
+    tier: 'cheap',
+    transport: 'openai-responses',
+    upstreamModel: 'gpt-6.1-terra',
+    reasoningEffort: 'low',
+    inputPicosPerToken: 1_000_000, // $1.00 / 1M
+    cacheReadPicosPerToken: 50_000, // $0.05 / 1M
+    cacheWritePicosPerToken: 1_250_000, // $1.25 / 1M
+    outputPicosPerToken: 5_000_000, // $5.00 / 1M
+    maxOutputTokens: 12288,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
   'gpt-6.1-terra-medium': {
     id: 'gpt-6.1-terra-medium',
     catalogId: 'openai/gpt-6.1-terra',
@@ -172,6 +244,20 @@ export const PRESET_MODELS: Readonly<Record<string, BenchmarkModelSpec>> = {
     cacheWritePicosPerToken: 1_250_000, // $1.25 / 1M
     outputPicosPerToken: 5_000_000, // $5.00 / 1M
     maxOutputTokens: 24576,
+    longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
+  },
+  'gpt-6.1-sol-low': {
+    id: 'gpt-6.1-sol-low',
+    catalogId: 'openai/gpt-6.1-sol',
+    tier: 'cheap',
+    transport: 'openai-responses',
+    upstreamModel: 'gpt-6.1-sol',
+    reasoningEffort: 'low',
+    inputPicosPerToken: 2_000_000, // $2.00 / 1M
+    cacheReadPicosPerToken: 100_000, // $0.10 / 1M
+    cacheWritePicosPerToken: 2_500_000, // $2.50 / 1M
+    outputPicosPerToken: 10_000_000, // $10.00 / 1M
+    maxOutputTokens: 12288,
     longContextThresholdTokens: DEFAULT_LONG_CONTEXT_THRESHOLD_TOKENS,
   },
   'gpt-6.1-sol-medium': {

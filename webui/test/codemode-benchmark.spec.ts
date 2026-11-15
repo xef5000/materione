@@ -24,8 +24,8 @@ import { surfaceNamed } from './helpers/codemode';
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('benchmark models and non-frontier guard', () => {
-  it('accepts all 16 preset models and rejects frontier-priced or named models', () => {
-    expect(Object.keys(PRESET_MODELS)).toHaveLength(16);
+  it('accepts all 22 preset models and rejects frontier-priced or named models', () => {
+    expect(Object.keys(PRESET_MODELS)).toHaveLength(22);
     for (const id of Object.keys(PRESET_MODELS)) {
       expect(() => assertNonFrontierModel(resolveModelSpec(id))).not.toThrow();
     }
@@ -735,12 +735,13 @@ describe('audit regression guards', () => {
     expect(noEscMid.map((c) => c.midModel.id)).toEqual(['gpt-6.1-terra-medium', 'gpt-6.1-sol-high']);
 
     const cfgs = buildDefaultConfigs({
-      models: ['claude-haiku-5-5'],
+      models: ['gpt-6.1-sol-low'],
       strategy: 'escalate',
       contextMode: 'index',
       mode: 'codemode',
     });
-    expect(cfgs[0]!.midModel.id).toBe('gpt-6.1-terra-high');
+    expect(cfgs[0]!.cheapModel.id).toBe('gpt-6.1-sol-low');
+    expect(cfgs[0]!.midModel.id).toBe('gpt-6.1-sol-medium');
 
     const oracle = new MemoryBenchmarkOracle(defaultRegistrySnapshotPath(REPO_ROOT));
     const results = await runBenchmarkSuite({

@@ -807,8 +807,8 @@ export function buildDefaultConfigs(options: {
   midModelId?: string;
   overrides?: Readonly<Record<string, Partial<BenchmarkModelSpec>>>;
 }): RunConfigSpec[] {
-  const midSpec = resolveModelSpec(options.midModelId ?? 'gpt-6.1-terra-high', options.overrides);
-  const haikuSpec = resolveModelSpec('claude-haiku-5-5', options.overrides);
+  const midSpec = resolveModelSpec(options.midModelId ?? 'gpt-6.1-sol-medium', options.overrides);
+  const defaultCheapSpec = resolveModelSpec('gpt-6.1-sol-low', options.overrides);
   return options.models.map((modelId) => {
     const spec = resolveModelSpec(modelId, options.overrides);
     let cheapModel: BenchmarkModelSpec;
@@ -817,7 +817,7 @@ export function buildDefaultConfigs(options: {
       cheapModel = spec;
       midModel = spec.tier === 'mid' ? spec : midSpec;
     } else if (options.strategy === 'always-mid') {
-      cheapModel = spec.tier === 'cheap' ? spec : haikuSpec;
+      cheapModel = spec.tier === 'cheap' ? spec : defaultCheapSpec;
       midModel = spec;
     } else {
       cheapModel = spec;
