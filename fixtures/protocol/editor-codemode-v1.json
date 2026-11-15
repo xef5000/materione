@@ -418,6 +418,7 @@
             "code": "MTR-0008",
             "message": "unknown component 'nosuchcomponent'",
             "operation": 1,
+            "preexisting": false,
             "severity": "error"
           }
         ],
@@ -667,6 +668,7 @@
             "hint": "reload the affected documents and write the list again against the new state",
             "message": "items/ruby_blade.yml: document was deleted after tx-fixture; the transaction cannot be reverted over it",
             "operation": 0,
+            "preexisting": false,
             "severity": "error"
           },
           {
@@ -674,6 +676,7 @@
             "hint": "reload the affected documents and write the list again against the new state",
             "message": "guis/shop.yml: document was deleted after tx-fixture; the transaction cannot be reverted over it",
             "operation": 1,
+            "preexisting": false,
             "severity": "error"
           },
           {
@@ -681,6 +684,7 @@
             "hint": "reload the affected documents and write the list again against the new state",
             "message": "items/sword.yml: document changed after tx-fixture: it was left at rev 2, it is at rev 3; the transaction cannot be reverted over it",
             "operation": 2,
+            "preexisting": false,
             "severity": "error"
           }
         ],
@@ -750,6 +754,7 @@
             "hint": "a transaction can be reverted only while its before-images are kept (codemode.md section 10); make the change again by hand",
             "message": "there is no record of tx-00000000-0000-0000-0000-000000000000: it was not applied by this server, or it is past the retention limit (the last 100 transactions are kept, at most 32 MiB in all and 4 MiB for one)",
             "operation": -1,
+            "preexisting": false,
             "severity": "error"
           }
         ],
@@ -834,6 +839,7 @@
             "hint": "reload the affected documents and write the list again against the new state",
             "message": "items/sword.yml: document changed elsewhere: expected rev 1, current rev 2",
             "operation": 0,
+            "preexisting": false,
             "severity": "error"
           }
         ],

@@ -365,6 +365,83 @@ class AuthoringTransactionReferencesTest {
     }
 
     // ------------------------------------------------------------------
+    // findings the document already had (#372): a warning marked pre-existing, not a refusal
+
+    /** A document that was already broken before any transaction (a hand edit): its template names nothing. */
+    private int seedBroken() {
+        return seed("items/broken.yml", "broken:\n  material: STICK\n  template: nowhere\n");
+    }
+
+    @Test
+    void aFindingTheTouchedDocumentAlreadyHadIsAPreexistingWarningAndTheEditApplies() throws Exception {
+        int revision = seedBroken();
+        TransactionOperation edit = new SetFields("items/broken.yml", revision, List.of(set("broken", "material", "BONE")));
+
+        TransactionResult dry = run(true, edit).value();
+
+        assertThat(dry.accepted()).as(String.valueOf(dry.diagnostics())).isTrue();
+        List<OperationDiagnostic> found = unresolved(dry);
+        assertThat(found).hasSize(1);
+        assertThat(found.get(0).preexisting()).isTrue();
+        assertThat(found.get(0).diagnostic().severity()).isEqualTo(dev.materione.api.diagnostics.Severity.WARN);
+        assertThat(found.get(0).operation()).isEqualTo(0);
+
+        TransactionResult applied = run(false, edit).value();
+        assertThat(applied.applied()).isTrue();
+        assertThat(Files.readString(temp.resolve("packs").resolve(PACK).resolve("items/broken.yml")))
+                .contains("material: BONE").contains("template: nowhere");
+    }
+
+    @Test
+    void aFindingTheEditAddsRefusesEvenInADocumentThatWasAlreadyBroken() throws Exception {
+        int revision = seedBroken();
+        // the template it names still resolves to nothing, but a new, different finding appears too
+        TransactionResult dry = run(true, new SetFields("items/broken.yml", revision,
+                List.of(set("broken", "texture", "nowhere_texture")))).value();
+
+        assertThat(dry.accepted()).isFalse();
+        assertThat(unresolved(dry)).anyMatch(found -> !found.preexisting()
+                && found.diagnostic().severity() == dev.materione.api.diagnostics.Severity.ERROR
+                && found.diagnostic().message().contains("nowhere_texture"));
+        assertThat(unresolved(dry)).anyMatch(found -> found.preexisting()
+                && found.diagnostic().message().contains("nowhere'"));
+    }
+
+    @Test
+    void aRevertStaysStrictWhenTheRestoredStateFailsValidation() throws Exception {
+        api.transactionJournal(temp.resolve("transactions"));
+        int revision = seedBroken();
+        TransactionResult edit = run(false, new SetFields("items/broken.yml", revision,
+                List.of(set("broken", "material", "BONE")))).value();
+        assertThat(edit.applied()).isTrue();
+        List<String> before = snapshot();
+
+        ApiResult<TransactionResult> reverted = api.revertTransaction(editor(), edit.transactionId());
+
+        // the restored document has the finding the edit tolerated: a revert has no baseline and does not apply it
+        assertThat(reverted.value().accepted()).as(String.valueOf(reverted.value().diagnostics())).isFalse();
+        assertThat(reverted.value().applied()).isFalse();
+        assertThat(unresolved(reverted.value())).isNotEmpty().allMatch(found -> !found.preexisting()
+                && found.diagnostic().severity() == dev.materione.api.diagnostics.Severity.ERROR);
+        assertThat(snapshot()).as("a refused revert writes nothing").isEqualTo(before);
+    }
+
+    @Test
+    void aDocumentThatDoesNotParseCannotBePatchedOnlyDeletedOrMoved() throws Exception {
+        // a hand edit: the store refuses to put a document that does not parse, the disk does not
+        Files.writeString(temp.resolve("packs").resolve(PACK).resolve("items/garbled.yml"),
+                "garbled: [unclosed\n  material: STICK\n");
+        int revision = 0;
+
+        TransactionResult patch = run(true, new SetFields("items/garbled.yml", revision,
+                List.of(set("garbled", "material", "BONE")))).value();
+        assertThat(patch.accepted()).isFalse();
+
+        TransactionResult delete = run(true, new Delete("items/garbled.yml", revision)).value();
+        assertThat(delete.accepted()).as(String.valueOf(delete.diagnostics())).isTrue();
+    }
+
+    // ------------------------------------------------------------------
 
     private static TransactionResult value(ApiResult<TransactionResult> result) {
         assertThat(result.value()).as(String.valueOf(result.diagnostics())).isNotNull();
