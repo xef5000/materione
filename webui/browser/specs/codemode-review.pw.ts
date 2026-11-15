@@ -57,7 +57,7 @@ test('content that only creates applies on its own, is listed, and offers nothin
   expect(await documentRaw(page, 'items/golden_berry.yml')).toContain('golden_berry');
   // the agent's summary is shown apart and labelled as its own words
   await proposal.getByRole('button', { name: /^Expand/ }).click();
-  await expect(proposal.getByLabel("The agent's summary")).toContainText("The agent's words, not checked by the editor");
+  await expect(proposal.getByLabel("The agent's summary")).toContainText(/The agent.s words, not checked by the editor/);
   await page.getByRole('tab', { name: /^Change log/ }).click();
   const entry = page.getByRole('article', { name: /^Applied tx-/ });
   await expect(entry).toContainText('No approval needed: new content only');
