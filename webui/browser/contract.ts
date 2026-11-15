@@ -72,9 +72,14 @@ export interface CodemodeHarness {
   disconnectChatProvider(): void;
 }
 
+export interface BrowserTestHarness {
+  enableCloudAiProxy(baseUrl: string | null): void;
+}
+
 declare global {
   interface Window {
     __materioneTestControls?: BrowserTestControls;
     __materioneCodemode?: CodemodeHarness;
+    __materioneTest?: BrowserTestHarness;
   }
 }

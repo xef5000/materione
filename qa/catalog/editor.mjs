@@ -429,6 +429,13 @@ const CHAT_COVERS = [
   'webui/browser/specs/codemode-chat.pw.ts',
 ];
 
+// The cloud assistant proxy client, OAuth sign-in, and Polar top-up UI (issue 410, ai-credits.md section 8.2).
+const PROXY_COVERS = [
+  ...CHAT_COVERS,
+  'webui/src/lib/codemode/proxy/**',
+  'webui/browser/specs/codemode-cloud-proxy.pw.ts',
+];
+
 /**
  * Serves the browser harness (`webui/browser`, the same App and Workbench over a fixture channel) on a free loopback port for
  * the duration of `run`, and points this test's browser page at it with `query` (default `?codemode`). The harness is a dev
@@ -2091,6 +2098,117 @@ export default [
           'codemode-chat-local-notice: the live local editor with the Assistant column on the right showing the editor.materione.com only chip and notice, no demo button and no composer; codemode-chat-disclosure: the Assistant panel in the cloud harness before any message, showing the What leaves this page section and composer; codemode-chat-bloodfang-applied: the Bloodfang conversation after turn 2 showing Read only, Type error with missing primitives (holder, target), repaired Dry run clean, and the auto-applied ProposalCard with Applied and no approve button; codemode-chat-needs-approval: turn 3 showing the inline Needs your approval ProposalCard with ruby_sword diff and Approve and apply / Reject buttons. Every state is named in words, tokens only, WCAG AA contrast, nothing clipped' + IDENTITY_EYES,
         );
       }, '?codemode&host=cloud');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-cloud-proxy',
+    title: 'in the cloud browser harness the Assistant wires Google/Discord sign-in, live SSE streaming with allowance refresh, Polar $10-$200 top-up, and stays inert on local plugin host',
+    covers: PROXY_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const proxyOrigin = 'https://ai.materione.com';
+      await withReviewHarness(ctx, async (page) => {
+        let signedIn = false;
+        let freeRemainingCredits = 6.66;
+        let allowanceCalls = 0;
+        let checkoutBody = null;
+
+        await page.addInitScript(() => {
+          window.__openedWindows = [];
+          window.open = (url) => {
+            window.__openedWindows.push(String(url ?? ''));
+            return { closed: false, focus() {}, close() {} };
+          };
+        });
+        await page.route(`${proxyOrigin}/v1/**`, async (route) => {
+          const pathname = new URL(route.request().url()).pathname;
+          if (pathname === '/v1/me') {
+            if (!signedIn) {
+              await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authenticated: false }) });
+              return;
+            }
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                authenticated: true,
+                account: { id: 'acc_1', displayName: 'Alex', emailHint: 'a***@example.com', suspended: false, freeEligible: true },
+                credits: { balancePicos: 7_500_000_000_000, balanceCredits: 1000, picosPerCredit: 7_500_000_000 },
+                freeAllowance: { remainingPicos: Math.round(freeRemainingCredits * 7_500_000_000), dailyCapPicos: 50_000_000_000, remainingCredits: freeRemainingCredits, dailyCapCredits: 6.66, poolOpen: true },
+              }),
+            });
+            return;
+          }
+          if (pathname === '/v1/allowance') {
+            allowanceCalls++;
+            await route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: JSON.stringify({
+                day: '2026-11-15',
+                account: { id: 'acc_1', displayName: 'Alex', emailHint: 'a***@example.com', suspended: false, freeEligible: true },
+                credits: { balancePicos: 7_500_000_000_000, balanceCredits: 1000, picosPerCredit: 7_500_000_000 },
+                freeAllowance: { remainingPicos: Math.round(freeRemainingCredits * 7_500_000_000), dailyCapPicos: 50_000_000_000, remainingCredits: freeRemainingCredits, dailyCapCredits: 6.66, poolOpen: true },
+              }),
+            });
+            return;
+          }
+          if (pathname === '/v1/chat') {
+            freeRemainingCredits = 6.41;
+            const sse = [
+              'event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":150,"cache_read_input_tokens":100,"output_tokens":0}}}\n\n',
+              'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+              'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello from Materione AI."}}\n\n',
+              'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+              'event: message_delta\ndata: {"type":"message_delta","usage":{"output_tokens":12}}\n\n',
+              'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+              'event: materione_settlement\ndata: {"settledCredits":0.25,"usage":{"inputTokens":150,"outputTokens":12,"cachedInputTokens":100}}\n\n',
+            ].join('');
+            await route.fulfill({ status: 200, contentType: 'text/event-stream; charset=utf-8', body: sse });
+            return;
+          }
+          if (pathname === '/v1/checkout') {
+            checkoutBody = route.request().postDataJSON();
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ checkoutUrl: 'https://checkout.polar.sh/test-session-15' }) });
+            return;
+          }
+          await route.abort();
+        });
+
+        await page.reload();
+        await page.waitForFunction(() => document.documentElement.dataset.fixtureReady === 'true');
+        await page.getByRole('button', { name: /^Assistant/ }).click();
+        const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+        await panel.getByTestId('ai-signin-google').waitFor({ state: 'visible' });
+        await panel.getByTestId('ai-signin-discord').click();
+
+        signedIn = true;
+        await page.evaluate((origin) => {
+          window.dispatchEvent(new MessageEvent('message', { origin, data: { type: 'materione-ai-auth-complete', ok: true } }));
+        }, proxyOrigin);
+
+        const accountBar = panel.getByRole('region', { name: 'Materione AI account and credits' });
+        await accountBar.waitFor({ state: 'visible' });
+        ctx.expect(await accountBar.innerText()).toContain('6.66');
+        ctx.expect(await accountBar.innerText()).toContain('1,000');
+
+        const composer = panel.locator('#assistant-input');
+        await composer.fill('Say hello');
+        await composer.press('Enter');
+        await panel.getByRole('log', { name: 'Conversation' }).getByText('Hello from Materione AI.').waitFor({ state: 'visible' });
+        ctx.expect(allowanceCalls).toBeGreaterThanOrEqual(1);
+        ctx.expect(await accountBar.innerText()).toContain('6.41');
+
+        await accountBar.getByTestId('ai-buy-credits-toggle').click();
+        await accountBar.getByTestId('ai-topup-usd').fill('9');
+        ctx.expect(await accountBar.getByTestId('ai-checkout-submit').isDisabled()).toBe(true);
+        await accountBar.getByTestId('ai-topup-usd').fill('15');
+        ctx.expect(await accountBar.getByTestId('ai-checkout-submit').isEnabled()).toBe(true);
+        await accountBar.getByTestId('ai-checkout-submit').click();
+        await accountBar.getByTestId('ai-topup-usd').waitFor({ state: 'hidden' });
+        ctx.expect(checkoutBody).toEqual({ amountCents: 1500 });
+      }, '?codemode=cloud-proxy&host=cloud');
     },
   }),
 ];

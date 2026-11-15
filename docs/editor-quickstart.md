@@ -278,6 +278,10 @@ The **Assistant** rail entry (in the Support group, beside **Review**) opens an 
 On `/materione editor local`, the local editor stays strictly between your browser and your server with zero external requests — the Assistant panel
 shows a plain notice directing you to run `/materione editor` when you want the assistant.
 
+- **Signing in & AI credits**: on `https://editor.materione.com` (`EditorHost === 'cloud'`), sign in with **Google** or **Discord** in a pop-up
+  against `https://ai.materione.com` (`HttpOnly` cookie session; your server's `?s=...#...` session keys never leave your browser tab). Eligible
+  accounts receive a **`$0.05/day` free allowance** (resetting at `00:00 UTC`), and you can top up prepaid credits (**`$10–$200`**, `100 credits / $1 USD`,
+  never expire) or view invoices via Polar Merchant of Record directly from the account bar above the conversation.
 - **Before your first message**: the panel displays a **"What leaves this page"** disclosure listing exactly what is sent (your conversation, the
   server's generated SDK index, and bounded outputs/diagnostics of programs the assistant runs — never your session key or unrequested pack files).
 - **New content vs existing content**: the assistant's only tool runs a TypeScript program in a browser sandbox and asks the server for a dry run.

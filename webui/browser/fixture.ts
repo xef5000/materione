@@ -1,6 +1,8 @@
 import { mount } from 'svelte';
 import { confirmDisconnect, connection, handlePush, loadWorkspace, markConnectionLost, refreshDelivery, resetWorkspace, session } from '../src/lib/state.svelte';
 import Workbench from '../src/lib/components/Workbench.svelte';
+import { syncCloudAssistant } from '../src/lib/codemode/proxy/account.svelte';
+import { DEFAULT_MODEL_PROXY_BASE_URL, setTestProxyBaseOverride } from '../src/lib/codemode/proxy/config';
 import '../src/app.css';
 import { DeterministicRpcAdapter } from './rpc-adapter';
 import { createCodemodeHarness } from './codemode-feed';
@@ -33,6 +35,7 @@ async function startFixture(): Promise<void> {
   await loadWorkspace();
   await refreshDelivery();
   const host = params.get('host') === 'cloud' ? 'cloud' : 'plugin';
+  setTestProxyBaseOverride(params.get('codemode') === 'cloud-proxy' ? DEFAULT_MODEL_PROXY_BASE_URL : null);
   mount(Workbench, {
     target,
     props: {
@@ -44,6 +47,12 @@ async function startFixture(): Promise<void> {
     },
   });
   window.__materioneTestControls = adapter;
+  window.__materioneTest = {
+    enableCloudAiProxy(baseUrl: string | null) {
+      setTestProxyBaseOverride(baseUrl);
+      syncCloudAssistant(session.channel, host, { force: true });
+    },
+  };
   // `?codemode`: the seam that feeds a recorded corpus program in as a proposal (the product has no producer until the chat exists)
   if (params.has('codemode')) window.__materioneCodemode = createCodemodeHarness('fixture_pack');
   document.documentElement.dataset.fixtureReady = 'true';
