@@ -212,6 +212,7 @@
             {
               "advanced": false,
               "description": "The container slot whose held stack is consumed; a template such as ${slot.index} names the slot of the event",
+              "expression": true,
               "id": "slot",
               "label": "Slot",
               "order": 0,

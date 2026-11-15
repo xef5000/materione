@@ -431,6 +431,11 @@ actions in a run whose session has ended are skipped with outcome `FAILED("no op
 - The six built-in executors become `ActionType`s, in their own classes.
 - `BehaviorVocabulary` grows the following: conditions, triggers (with filters and context
   schema), step kinds, categories, expression functions, recipes and provider availability.
+  Since #355 the grammar is data there too, additively: each step kind says which parameter is the value of its own key and
+  which are keys beside it, a parameter says when it holds steps, a condition or a flow name, when it accepts an
+  expression and when it takes a list; `conditionForms`, `ruleBody` and `guardOptions` describe the composite conditions,
+  the flow keys of a rule and a guarding action's `else` (codemode.md §3.8). `StepKinds` is the one table: the step
+  compiler reads its control keys from it.
 - Item, block and furniture rules run through the interpreter unchanged. The golden behaviour
   tests and the `behavior.*` QA catalog entries are the regression net, and they must pass
   untouched.

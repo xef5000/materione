@@ -66,7 +66,8 @@ describe('the corpus through the checker', () => {
       // the helper does not wrap the program as a module, and the gap diagnostics are the same ones
       expect(ours.sort(), entry.name).toEqual(theirs.sort());
     }
-  });
+    // two full checks per corpus program: the corpus grows (roadmap rule 2), so the default five seconds does not hold under load
+  }, 30_000);
 });
 
 describe('a gap is reported as a missing primitive (codemode.md section 6, 9.2)', () => {

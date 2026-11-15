@@ -3236,8 +3236,11 @@ interface ConnectActionParams extends ActionOptions {
 
 /** Parameters of `custody.consume`. */
 interface CustodyConsumeActionParams extends ActionOptions, GuardOptions {
-  /** The container slot whose held stack is consumed; a template such as ${slot.index} names the slot of the event. */
-  slot: number;
+  /**
+   * The container slot whose held stack is consumed; a template such as ${slot.index} names the slot of the event.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  slot: number | Expr;
   /**
    * decided: continue once the consume is applied (no save is requested). saved: continue only once a saved snapshot containing it is read back.
    * @defaultValue decided
@@ -3625,7 +3628,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category player
    */
-  custodyConsume(params: CustodyConsumeActionParams | number, options?: ActionOptions & GuardOptions): ActionStep<"custody.consume">;
+  custodyConsume(params: CustodyConsumeActionParams | number | Expr, options?: ActionOptions & GuardOptions): ActionStep<"custody.consume">;
   /**
    * Greets a player by name in chat.
    * @since 1.2.0

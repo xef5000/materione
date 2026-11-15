@@ -94,7 +94,7 @@ public final class ConsumeCustodyAction implements ActionType<ConsumeCustodyActi
                 List.of(
                         new ParameterSchema("slot", ParameterType.INTEGER, true, null,
                                 "The container slot whose held stack is consumed; a template such as ${slot.index} "
-                                        + "names the slot of the event", null, null),
+                                        + "names the slot of the event", null, null).acceptingExpression(),
                         new ParameterSchema("await", ParameterType.ENUM, false, "decided",
                                 "decided: continue once the consume is applied (no save is requested). "
                                         + "saved: continue only once a saved snapshot containing it is read back",

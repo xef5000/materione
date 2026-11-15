@@ -534,6 +534,7 @@ jar lacks the `codemode` or `logic` capability (§7), which the core leaves off 
 **How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check (T04, T05, T08, T11, T16, T25, T29, and the two corpus-only programs below) are executed and
 their lists recorded as goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a
 `<task>.world.json` beside it that the fake port answers from), every kind of operation, every error.
+A third corpus-only program, **C03**, misspells a variable inside the *text* of an expression on purpose (only the interpolations of `m.expr` are typed, §13): it stages, and its replay is accepted with `MTR-0022` as a warning. It is the recorded frame that carries the wire's `warn` severity for `codemode-host-severity.spec.ts`, which T04 was until #355 made its replay clean.
 Two corpus-only programs (no benchmark task reads and then edits what it found) cover the async half end to end: **C01** awaits `m.read.resources` and edits each stored resource it found (read, then stage, then seal with `rev` on stored documents; it replays as accepted against the fixture pack), and **C02** reads and then names an id with a typo, pinned as SDK-0007 at the line that named it; a run that ends with an error has no list, so its golden is a `runs/` record and there is nothing to replay. A read the program never awaits is waited for at `finish`, so its bytes are in the stats and its failure in the diagnostics whatever order a slow host answers in (a read the host never answers is the host's deadline to end).
 **`CodemodeReplayTest` (JVM, `plugin` module) replays every golden through the real `authoring.transaction` with `dryRun=true`**
 over the real registries and the fixture packs, and pins which stages ran, the diagnostics and the documents beside it
@@ -1409,7 +1410,7 @@ declare it, so the walker cannot see it):
 | Parameter | Names | Declared | At load | At level 3 (#363) | Otherwise |
 |---|---|---|---|---|---|
 | `give_item.item`, `take_item.item`, `has_item.item` | item | yes (`item` widget) | `minecraft:` form only | **yes** | rest at run time; templates are expressions |
-| `has_item_space.item`, `slot_has.item` | item | yes (`item` widget, #355) | `minecraft:` form only | **yes** | rest at run time |
+| `has_item_space.item`, `slot_has.item` | item | yes (`item` widget, #355) | none | **yes** | rest at run time |
 | `gui.open.gui` | GUI | yes (`REFERENCE`, kind `gui`, added in #363) | none | **yes** | run time (`no live GUI matches`) |
 | `in_gui.id` | GUI | declared for the SDK (`reference` widget, kind `gui`, #355); still a `STRING`, so the level-3 walker does not read it | id format | no | run time |
 | `give_money.currency`, `take_money.currency`, `has_money.currency` | currency | declared for the SDK (`reference` widget, kind `currency`, #355); the validator resolves no `currency` kind yet | none | no | run time (`unknown currency`) |

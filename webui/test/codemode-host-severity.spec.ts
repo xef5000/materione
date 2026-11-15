@@ -1,7 +1,7 @@
 /**
  * Severity on the wire: the server sends the lowercased `Severity` enum (`info`, `warn`, `error`; api/diagnostics/Severity.java),
  * not "warning". Reading it wrongly turned every ordinary server warning into a blocking error, so these tests use a recorded
- * frame (`fixtures/golden/codemode/replay/t04-daily-kit.json`, which carries `"severity": "warn"`) and not hand-built ones.
+ * frame (`fixtures/golden/codemode/replay/c03-server-warning.json`, which carries `"severity": "warn"`) and not hand-built ones.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,7 @@ import type { Response } from '../src/lib/protocol/wire';
 import { op, sealed } from './helpers/host';
 
 const replay = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../fixtures/golden/codemode/replay/t04-daily-kit.json', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../../fixtures/golden/codemode/replay/c03-server-warning.json', import.meta.url)), 'utf8'),
 ) as Record<string, unknown> & { diagnostics: { severity: string; code: string; operation: number }[] };
 
 describe('severity on the wire', () => {
@@ -46,8 +46,8 @@ describe('severity on the wire', () => {
       },
     };
     const store = createProposalStore({ transport: createRpcTransport(wire) });
-    const proposal = await store.propose(sealed([op('create', { type: 'variables', id: 'kit_daily_at' }) as StagedOperation]), { program: 'p' });
+    const proposal = await store.propose(sealed([op('create', { type: 'items', id: 'stamp' }) as StagedOperation]), { program: 'p' });
     expect(proposal.state).toBe('applied');
-    expect(proposal.problems.find((problem) => problem.code === 'MTR-0022')).toMatchObject({ severity: 'warning', phase: 'dry-run', operation: 2 });
+    expect(proposal.problems.find((problem) => problem.code === 'MTR-0022')).toMatchObject({ severity: 'warning', phase: 'dry-run', operation: 1 });
   });
 });
