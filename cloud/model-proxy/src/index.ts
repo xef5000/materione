@@ -315,6 +315,27 @@ export default {
       if (request.method !== "GET") {
         return plainErrorResponse(405, "method_not_allowed", "Method not allowed.");
       }
+      if (!isCoreConfigured(env)) {
+        return plainErrorResponse(503, "unavailable", "Checkout service is not configured.");
+      }
+      const canonicalNetwork = requireCallerIp(request);
+      if (!canonicalNetwork) {
+        return plainErrorResponse(400, "unauthenticated", "Missing or invalid caller network identity.");
+      }
+      const subnetHash = await hashCallerIp(canonicalNetwork, day, env.IP_HASH_SALT!.trim());
+      const rateOutcome = await checkRateLimit(env, `complete:${subnetHash}`);
+      if (rateOutcome === "unavailable") {
+        return plainErrorResponse(503, "unavailable", "Checkout service is temporarily unavailable.");
+      }
+      if (rateOutcome === "limited") {
+        return plainErrorResponse(
+          429,
+          "rate_limited",
+          "Rate limit exceeded (10 requests per minute).",
+          { retryAfterSeconds: RATE_LIMIT_RETRY_SECONDS },
+          { "retry-after": String(RATE_LIMIT_RETRY_SECONDS) },
+        );
+      }
       return handleCheckoutComplete();
     }
 

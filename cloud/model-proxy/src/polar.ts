@@ -111,10 +111,9 @@ function decodeBase64(b64: string): Uint8Array | null {
 function decodeWebhookSecret(rawSecret: string): Uint8Array | null {
   const trimmed = rawSecret.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith("whsec_")) {
-    return decodeBase64(trimmed.slice(6));
-  }
-  return textEncoder.encode(trimmed);
+  const b64 = trimmed.startsWith("whsec_") ? trimmed.slice(6) : trimmed;
+  if (!b64) return null;
+  return decodeBase64(b64);
 }
 
 async function verifyStandardWebhookSignature(
@@ -708,34 +707,71 @@ export async function handlePolarWebhook(
       );
     }
 
-    const isWon = isSafePlainObject(data.dispute) && data.dispute.status === "won";
+    const disputeObj = isSafePlainObject(data.dispute) ? data.dispute : null;
+    const disputeId =
+      disputeObj && typeof disputeObj.id === "string" && disputeObj.id.length > 0
+        ? disputeObj.id
+        : typeof data.id === "string" && data.id.length > 0
+          ? `refund:${data.id}`
+          : `order:${order.order_id}`;
+
+    const rawIsoTs =
+      (disputeObj && (disputeObj.modified_at ?? disputeObj.created_at)) ??
+      data.modified_at ??
+      data.created_at ??
+      event.timestamp;
+    const parsedTsMs = typeof rawIsoTs === "string" ? Date.parse(rawIsoTs) : Number.NaN;
+    const eventTsMs = Number.isFinite(parsedTsMs) ? Math.trunc(parsedTsMs) : now * 1_000;
+
+    const isWon = disputeObj !== null && disputeObj.status === "won";
+    const nextDisputeStatus = isWon ? "won" : "open";
     const kind = isWon ? "dispute_release" : "dispute_hold";
     const disputeStatus =
-      isSafePlainObject(data.dispute) && typeof data.dispute.status === "string"
-        ? data.dispute.status
+      disputeObj !== null && typeof disputeObj.status === "string"
+        ? disputeObj.status
         : "dispute";
     const ledgerId = crypto.randomUUID();
 
     try {
-      await env.DB
-        .prepare(
-          `INSERT INTO credit_ledger_entries (
-             id, account_id, kind, delta_picos, balance_after_picos, polar_order_id, webhook_id, note, created_at
-           )
-           SELECT ?1, a.id, ?2, 0, a.credit_balance_picos, ?3, ?4, ?5, ?6
-           FROM accounts a
-           WHERE a.id = ?7`,
-        )
-        .bind(
-          ledgerId,
-          kind,
-          order.order_id,
-          webhookId,
-          `${event.type}:${disputeStatus}`,
-          now,
-          order.account_id,
-        )
-        .run();
+      const results = await env.DB.batch([
+        env.DB
+          .prepare(
+            `INSERT INTO polar_disputes (
+               dispute_id, order_id, account_id, status, event_ts_ms, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(dispute_id) DO UPDATE SET
+               status = excluded.status,
+               event_ts_ms = MAX(polar_disputes.event_ts_ms, excluded.event_ts_ms),
+               updated_at = excluded.updated_at
+             WHERE polar_disputes.status != 'won'
+               AND (excluded.status = 'won' OR excluded.event_ts_ms >= polar_disputes.event_ts_ms)
+               AND (polar_disputes.status != excluded.status)`,
+          )
+          .bind(disputeId, order.order_id, order.account_id, nextDisputeStatus, eventTsMs, now),
+        env.DB
+          .prepare(
+            `INSERT INTO credit_ledger_entries (
+               id, account_id, kind, delta_picos, balance_after_picos, polar_order_id, webhook_id, note, created_at
+             )
+             SELECT ?1, a.id, ?2, 0, a.credit_balance_picos, ?3, ?4, ?5, ?6
+             FROM accounts a
+             WHERE a.id = ?7
+               AND changes() > 0`,
+          )
+          .bind(
+            ledgerId,
+            kind,
+            order.order_id,
+            webhookId,
+            `${event.type}:${disputeStatus}`,
+            now,
+            order.account_id,
+          ),
+      ]);
+
+      if ((results[0]?.meta.changes ?? 0) === 0) {
+        return plainJsonResponse({ ok: true, ignored: true }, 202);
+      }
     } catch (err) {
       if (isUniqueConstraintError(err)) {
         return plainJsonResponse({ ok: true, deduplicated: true }, 202);

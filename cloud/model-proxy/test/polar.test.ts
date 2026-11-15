@@ -134,11 +134,32 @@ describe("Polar checkout, Standard Webhooks, refunds, and customer portal", () =
       success_url: "https://ai.materione.com/v1/checkout/complete",
     });
 
-    // Verify GET /v1/checkout/complete CSP-locked HTML
-    const compCtx = createExecutionContext();
-    const compRes = await worker.fetch(
+    // Verify GET /v1/checkout/complete CSP-locked HTML + CF-Connecting-IP + subnet rate limiting
+    const compMissingIpCtx = createExecutionContext();
+    const compMissingIpRes = await worker.fetch(
       new Request("https://ai.materione.com/v1/checkout/complete", { method: "GET" }),
       env,
+      compMissingIpCtx,
+    );
+    await waitOnExecutionContext(compMissingIpCtx);
+    expect(compMissingIpRes.status).toBe(400);
+
+    let compCalls = 0;
+    const compLimitedEnv = {
+      ...env,
+      POLAR_API_BASE: "https://api.polar.sh",
+      RATE_LIMITER: {
+        limit: async () => ({ success: ++compCalls <= 2 }),
+      } as unknown as RateLimit,
+    };
+
+    const compCtx = createExecutionContext();
+    const compRes = await worker.fetch(
+      new Request("https://ai.materione.com/v1/checkout/complete", {
+        method: "GET",
+        headers: { "cf-connecting-ip": "198.51.100.50" },
+      }),
+      compLimitedEnv,
       compCtx,
     );
     const compHtml = await compRes.text();
@@ -148,6 +169,30 @@ describe("Polar checkout, Standard Webhooks, refunds, and customer portal", () =
     const digest = await computeScriptSha256Base64(script);
     expect(compRes.headers.get("content-security-policy")).toBe(`default-src 'none'; script-src 'sha256-${digest}'`);
     expect(compHtml).toContain("materione-ai-checkout-complete");
+
+    const compCtx2 = createExecutionContext();
+    const compRes2 = await worker.fetch(
+      new Request("https://ai.materione.com/v1/checkout/complete", {
+        method: "GET",
+        headers: { "cf-connecting-ip": "198.51.100.50" },
+      }),
+      compLimitedEnv,
+      compCtx2,
+    );
+    await waitOnExecutionContext(compCtx2);
+    expect(compRes2.status).toBe(200);
+
+    const compCtx3 = createExecutionContext();
+    const compRes3 = await worker.fetch(
+      new Request("https://ai.materione.com/v1/checkout/complete", {
+        method: "GET",
+        headers: { "cf-connecting-ip": "198.51.100.50" },
+      }),
+      compLimitedEnv,
+      compCtx3,
+    );
+    await waitOnExecutionContext(compCtx3);
+    expect(compRes3.status).toBe(429);
   });
 
   it("verifies Standard Webhooks HMAC signature, rejects tampering/replay with 403, and enforces 256 KiB cap", async () => {
@@ -207,6 +252,27 @@ describe("Polar checkout, Standard Webhooks, refunds, and customer portal", () =
     );
     await waitOnExecutionContext(c3);
     expect(r3.status).toBe(403);
+
+    // Unprefixed base64 Standard Webhooks secret succeeds
+    const unprefixedSecret = "dGVzdC1wb2xhci13ZWJob29rLXNlY3JldC0wMTIzNDU=";
+    const unprefixedSig = await signPolarWebhook("wh_unprefixed", now, body, unprefixedSecret);
+    const cUnprefixed = createExecutionContext();
+    const rUnprefixed = await worker.fetch(
+      new Request("https://ai.materione.com/v1/webhooks/polar", {
+        method: "POST",
+        headers: {
+          "cf-connecting-ip": "198.51.100.60",
+          "webhook-id": "wh_unprefixed",
+          "webhook-timestamp": String(now),
+          "webhook-signature": unprefixedSig,
+        },
+        body,
+      }),
+      { ...env, POLAR_WEBHOOK_SECRET: unprefixedSecret },
+      cUnprefixed,
+    );
+    await waitOnExecutionContext(cUnprefixed);
+    expect(rUnprefixed.status).toBe(202);
 
     // Replay timestamp (> 300s old)
     const oldTs = now - 301;
@@ -769,7 +835,7 @@ describe("Polar checkout, Standard Webhooks, refunds, and customer portal", () =
     expect(acctReleased?.suspended).toBe(0);
     expect(acctReleased?.suspend_reason).toBeNull();
 
-    // /v1/checkout succeeds again after dispute won
+    // /v1/checkout succeeds again after dispute won (including with explicit POLAR_API_BASE=https://api.polar.sh)
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ url: "https://checkout.polar.sh/cs_after_won" }), { status: 201 }),
     );
@@ -785,11 +851,49 @@ describe("Polar checkout, Standard Webhooks, refunds, and customer portal", () =
         },
         body: JSON.stringify({ amountCents: 1000 }),
       }),
-      env,
+      { ...env, POLAR_API_BASE: "https://api.polar.sh" },
       cCoOk,
     );
     await waitOnExecutionContext(cCoOk);
     expect(rCoOk.status).toBe(200);
+
+    // Delayed out-of-order under_review webhook for the SAME won dispute (even with a newer webhook-timestamp)
+    // is rejected as stale and does NOT re-suspend the account!
+    const staleHoldBody = JSON.stringify({
+      type: "refund.created",
+      timestamp: "2026-11-15T10:00:00Z",
+      data: {
+        id: "ref_dp_1",
+        order_id: "ord_disp_1",
+        reason: "dispute",
+        dispute: { id: "dp_1", status: "under_review", modified_at: "2026-11-15T10:00:00Z" },
+      },
+    });
+    const staleSig = await signPolarWebhook("wh_disp_stale_hold", now + 5, staleHoldBody, env.POLAR_WEBHOOK_SECRET!);
+    const cStale = createExecutionContext();
+    const rStale = await worker.fetch(
+      new Request("https://ai.materione.com/v1/webhooks/polar", {
+        method: "POST",
+        headers: {
+          "cf-connecting-ip": "198.51.100.91",
+          "webhook-id": "wh_disp_stale_hold",
+          "webhook-timestamp": String(now + 5),
+          "webhook-signature": staleSig,
+        },
+        body: staleHoldBody,
+      }),
+      env,
+      cStale,
+    );
+    await waitOnExecutionContext(cStale);
+    expect(rStale.status).toBe(202);
+    expect(await rStale.json()).toEqual({ ok: true, ignored: true });
+
+    const acctStillActive = await env.DB
+      .prepare("SELECT suspended, suspend_reason FROM accounts WHERE id = 'acct-dispute-1'")
+      .first<{ suspended: number; suspend_reason: string | null }>();
+    expect(acctStillActive?.suspended).toBe(0);
+    expect(acctStillActive?.suspend_reason).toBeNull();
   });
 
   it("reverses granted credits on order.updated with status='void'", async () => {

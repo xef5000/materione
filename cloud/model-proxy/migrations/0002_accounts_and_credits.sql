@@ -78,6 +78,17 @@ CREATE TABLE IF NOT EXISTS polar_orders (
 
 CREATE INDEX IF NOT EXISTS idx_polar_orders_account ON polar_orders(account_id);
 
+CREATE TABLE IF NOT EXISTS polar_disputes (
+  dispute_id TEXT PRIMARY KEY,
+  order_id TEXT NOT NULL REFERENCES polar_orders(order_id),
+  account_id TEXT NOT NULL REFERENCES accounts(id),
+  status TEXT NOT NULL CHECK (status IN ('open', 'won')),
+  event_ts_ms INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_polar_disputes_account ON polar_disputes(account_id, status);
+
 CREATE TABLE IF NOT EXISTS daily_account_free_usage (
   day TEXT NOT NULL,
   account_id TEXT NOT NULL,
@@ -149,16 +160,9 @@ BEGIN
         WHEN NEW.kind = 'dispute_release'
           AND suspend_reason = 'chargeback_dispute'
           AND NOT EXISTS (
-            SELECT 1 FROM credit_ledger_entries h
-            WHERE h.account_id = NEW.account_id
-              AND h.kind = 'dispute_hold'
-              AND NOT EXISTS (
-                SELECT 1 FROM credit_ledger_entries r
-                WHERE r.account_id = NEW.account_id
-                  AND r.kind = 'dispute_release'
-                  AND COALESCE(r.polar_order_id, '') = COALESCE(h.polar_order_id, '')
-                  AND r.rowid > h.rowid
-              )
+            SELECT 1 FROM polar_disputes d
+            WHERE d.account_id = NEW.account_id
+              AND d.status = 'open'
           ) THEN 0
         ELSE suspended
       END,
@@ -167,16 +171,9 @@ BEGIN
         WHEN NEW.kind = 'dispute_release'
           AND suspend_reason = 'chargeback_dispute'
           AND NOT EXISTS (
-            SELECT 1 FROM credit_ledger_entries h
-            WHERE h.account_id = NEW.account_id
-              AND h.kind = 'dispute_hold'
-              AND NOT EXISTS (
-                SELECT 1 FROM credit_ledger_entries r
-                WHERE r.account_id = NEW.account_id
-                  AND r.kind = 'dispute_release'
-                  AND COALESCE(r.polar_order_id, '') = COALESCE(h.polar_order_id, '')
-                  AND r.rowid > h.rowid
-              )
+            SELECT 1 FROM polar_disputes d
+            WHERE d.account_id = NEW.account_id
+              AND d.status = 'open'
           ) THEN NULL
         ELSE suspend_reason
       END,

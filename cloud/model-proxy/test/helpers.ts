@@ -8,6 +8,7 @@ export async function clearAllTables(db: D1Database): Promise<void> {
     db.prepare("DELETE FROM daily_subnet_free_usage"),
     db.prepare("DELETE FROM daily_pool_free_usage"),
     db.prepare("DELETE FROM credit_ledger_entries"),
+    db.prepare("DELETE FROM polar_disputes"),
     db.prepare("DELETE FROM polar_orders"),
     db.prepare("DELETE FROM sessions"),
     db.prepare("DELETE FROM account_identities"),
@@ -100,9 +101,8 @@ export async function signPolarWebhook(
   rawBody: string,
   secret: string,
 ): Promise<string> {
-  const keyBytes = secret.startsWith("whsec_")
-    ? Uint8Array.from(atob(secret.slice(6)), (c) => c.charCodeAt(0))
-    : new TextEncoder().encode(secret);
+  const b64 = secret.startsWith("whsec_") ? secret.slice(6) : secret;
+  const keyBytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 
   const key = await crypto.subtle.importKey(
     "raw",

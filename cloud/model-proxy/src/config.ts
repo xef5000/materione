@@ -80,7 +80,11 @@ export function resolvePolarApiBase(env: Env): string | null {
   if (!raw) return DEFAULT_POLAR_API_BASE;
   const normalized = raw.replace(/\/+$/, "");
   const allowOverride = env.ALLOW_TEST_UPSTREAM_OVERRIDE === "true";
-  if (!allowOverride && normalized !== SANDBOX_POLAR_API_BASE) {
+  if (
+    !allowOverride &&
+    normalized !== DEFAULT_POLAR_API_BASE &&
+    normalized !== SANDBOX_POLAR_API_BASE
+  ) {
     return null;
   }
   try {
