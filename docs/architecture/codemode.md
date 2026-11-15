@@ -1468,6 +1468,9 @@ Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`)
   tool-per-operation baseline built on the same operations. Measured: first-attempt success, fix iterations, human
   interventions, tokens and steps, regressions after follow-up changes, and **the count of tasks that fail on a missing
   primitive**. That second run is what turns §2.4's borrowed evidence into this project's own.
+  *Harness built (#349, #385):* `npm --prefix webui run benchmark` (`scripts/benchmark/README.md`) runs both `codemode` and
+  `tool-baseline` over the real type-checker, QuickJS sandbox, and JVM `authoring.transaction` oracle (`:plugin:benchmarkOracle`),
+  verified offline with `--mock` for `$0.00` and ready for the owner's budgeted live run.
 - **QA catalog entries** for the user-visible part (proposal, diff, approve, refusal), with `visual` tests for the review UI
   (`qa/catalog/`, `qa/README.md`).
 
@@ -1545,8 +1548,10 @@ on AI Gateway calls. `webui`'s live `ModelProvider` implementation will connect 
 **Which model: measured, not chosen from public leaderboards.** The harness exists: the benchmark tasks (agent-benchmark.md), the
 type-check Worker (§3.10) and the server dry-run replay (§3.9). For each candidate model the run records the fraction of tasks
 that reach an accepted dry run within a fixed number of repair turns, the turns used, and the dollars per accepted task. A second
-set of deliberately vague requests is scored on whether the plan covers the sub-features and whether the model asks instead of
-guessing. Issue #385.
+set of deliberately vague requests (`fixtures/codemode/vague-requests.json`) is scored on whether the plan covers the sub-features
+and whether the model asks instead of guessing. The CLI harness (`npm --prefix webui run benchmark`, `scripts/benchmark/README.md`)
+enforces non-frontier pricing, hard `--max-dollars` pre-turn budget caps, `index` vs `full-dts` context ablation, and the
+`always-cheap` / `always-mid` / `escalate` routing strategies. Issue #385.
 
 **Routing (recommended, not decided).** The proxy picks the model from signals it already has, not from a second model call: start
 on the cheap model; move to the mid-tier model for the rest of the request after two failed type-checks or one refused dry run.

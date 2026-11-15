@@ -1,0 +1,19 @@
+{
+  "task": "T13",
+  "kind": "task",
+  "title": "Excavator pickaxe",
+  "area": "tool",
+  "prompt": "Create an Excavator pickaxe that mines a 3x3 area.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["VERB"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 8,
+      "gap": "VERB",
+      "messageContains": ["breakBlocks", "ActionCatalog"],
+      "missingPrimitive": { "member": "breakBlocks", "catalog": "ActionCatalog" }
+    }
+  ]
+}

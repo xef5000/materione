@@ -1,0 +1,10 @@
+{
+  "task": "T23",
+  "kind": "task",
+  "title": "Rank-up",
+  "area": "GUI, economy",
+  "prompt": "Create a /rankup menu where clicking pays coins to advance to the next rank and broadcasts the promotion.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

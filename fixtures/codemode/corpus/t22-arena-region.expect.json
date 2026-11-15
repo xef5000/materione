@@ -1,0 +1,19 @@
+{
+  "task": "T22",
+  "kind": "task",
+  "title": "Arena region",
+  "area": "integration",
+  "prompt": "Entering the arena region gives the PvP kit and leaving removes it.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["PROVIDER"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 4,
+      "gap": "PROVIDER",
+      "messageContains": ["regionEnter", "TriggerCatalog"],
+      "missingPrimitive": { "member": "regionEnter", "catalog": "TriggerCatalog" }
+    }
+  ]
+}

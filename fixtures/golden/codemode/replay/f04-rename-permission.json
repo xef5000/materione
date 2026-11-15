@@ -1,0 +1,45 @@
+{
+  "golden": "f04-rename-permission",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": false
+    },
+    {
+      "id": "build",
+      "ran": false
+    },
+    {
+      "id": "behavior",
+      "ran": false
+    },
+    {
+      "id": "gui",
+      "ran": true
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "guis/bloodfang_menu.yml",
+      "kind": "changed",
+      "operations": [
+        0
+      ]
+    }
+  ]
+}

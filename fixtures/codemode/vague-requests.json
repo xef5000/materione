@@ -1,0 +1,123 @@
+{
+  "format": 1,
+  "description": "12 multi-feature / underspecified prompts for the vague-request rubric (issue 385).",
+  "prompts": [
+    {
+      "id": "V01",
+      "title": "Ambiguous coin item",
+      "prompt": "Make a coin item",
+      "packs": ["bench", "sample", "world"],
+      "shouldAsk": true,
+      "expectedSubFeatures": ["pack choice", "material or display name"],
+      "knownGaps": []
+    },
+    {
+      "id": "V02",
+      "title": "Ambiguous delete",
+      "prompt": "Delete the old test items",
+      "packs": ["bench", "sample", "world"],
+      "shouldAsk": true,
+      "allowDelete": false,
+      "expectedSubFeatures": ["list or confirm target items before deleting"],
+      "knownGaps": []
+    },
+    {
+      "id": "V03",
+      "title": "Underspecified VIP perks",
+      "prompt": "Set up VIP rank perks",
+      "packs": ["bench", "sample", "world"],
+      "shouldAsk": true,
+      "expectedSubFeatures": ["clarify perks", "pack or permission target"],
+      "knownGaps": []
+    },
+    {
+      "id": "V04",
+      "title": "Ambiguous sword price",
+      "prompt": "Change the sword's price",
+      "packs": ["bench", "sample", "world"],
+      "shouldAsk": true,
+      "expectedSubFeatures": ["which sword", "which GUI or shop", "new price"],
+      "knownGaps": []
+    },
+    {
+      "id": "V05",
+      "title": "Shop with ores and food",
+      "prompt": "In pack bench, build a /shop menu with ores and food categories where players can buy items.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["gui", "ores", "food", "buy", "economy"],
+      "knownGaps": []
+    },
+    {
+      "id": "V06",
+      "title": "Starter and daily kit menu",
+      "prompt": "In pack bench, create a /kits menu with a one-time Starter kit and a 24h Daily kit that shows cooldown feedback.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["gui", "starter", "daily", "variable", "cooldown"],
+      "knownGaps": []
+    },
+    {
+      "id": "V07",
+      "title": "Zombie hunter quest",
+      "prompt": "In pack bench, build a Zombie Hunter quest with a /quests progress GUI and a rare rotten heart item drop.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["item", "variable", "gui", "zombie", "drop"],
+      "knownGaps": []
+    },
+    {
+      "id": "V08",
+      "title": "Mystery crate with key",
+      "prompt": "In pack bench, create a placed mystery crate block/furniture with a matching crate key item and weighted prizes.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["key", "crate", "weighted", "prize"],
+      "knownGaps": []
+    },
+    {
+      "id": "V09",
+      "title": "Ruby sword forge",
+      "prompt": "In pack bench, create a /forge GUI that upgrades sample:ruby_sword using 3 sample:ruby and 200 coins.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["gui", "ruby_sword", "ruby", "200", "upgrade"],
+      "knownGaps": []
+    },
+    {
+      "id": "V10",
+      "title": "Lifesteal dash sword (partial gap)",
+      "prompt": "In pack bench, make an RPG lifesteal dash sword with a 5s right-click dash and lifesteal on hit.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["missing primitive", "target", "cooldown"],
+      "knownGaps": ["TARGET", "TIME"]
+    },
+    {
+      "id": "V11",
+      "title": "/pay and /top leaderboard (partial gap)",
+      "prompt": "In pack bench, add a /pay command and a /top richest or top kills menu.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["missing primitive", "command", "query"],
+      "knownGaps": ["CMD", "QUERY", "PROVIDER"]
+    },
+    {
+      "id": "V12",
+      "title": "Mana bar HUD + fireball wand (partial gap)",
+      "prompt": "In pack bench, show a mana bar HUD that regenerates every second and powers a fireball wand.",
+      "packs": ["bench", "sample", "world"],
+      "allowedPacks": ["bench"],
+      "shouldAsk": false,
+      "expectedSubFeatures": ["missing primitive", "timer", "hud"],
+      "knownGaps": ["TIMER", "VIEW"]
+    }
+  ]
+}

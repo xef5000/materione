@@ -1,0 +1,237 @@
+{
+  "task": "T06",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds the zombie slayer quest rule, trophy item, and /quests progress menu.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "quest_zombies",
+      "edits": [
+        {
+          "field": [
+            "quest_zombies",
+            "scope"
+          ],
+          "value": "player"
+        },
+        {
+          "field": [
+            "quest_zombies",
+            "type"
+          ],
+          "value": "number"
+        },
+        {
+          "field": [
+            "quest_zombies",
+            "default"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "quest_zombies_done",
+      "edits": [
+        {
+          "field": [
+            "quest_zombies_done",
+            "scope"
+          ],
+          "value": "player"
+        },
+        {
+          "field": [
+            "quest_zombies_done",
+            "type"
+          ],
+          "value": "boolean"
+        },
+        {
+          "field": [
+            "quest_zombies_done",
+            "default"
+          ],
+          "value": false
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "zombie_trophy",
+      "edits": [
+        {
+          "field": [
+            "zombie_trophy",
+            "material"
+          ],
+          "value": "ZOMBIE_HEAD"
+        },
+        {
+          "field": [
+            "zombie_trophy",
+            "display_name"
+          ],
+          "value": "<gold>Zombie Slayer"
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "rules",
+      "id": "quest_zombies",
+      "edits": [
+        {
+          "field": [
+            "quest_zombies",
+            "description"
+          ],
+          "value": "Kill 10 zombies for 100 coins and a trophy"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "rules/quest_zombies.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "entity.kill",
+            "type": "zombie",
+            "if": "${!vars.player.bench.quest_zombies_done}",
+            "do": [
+              {
+                "set_var": {
+                  "var": "bench:quest_zombies",
+                  "op": "add",
+                  "value": "${1}"
+                }
+              },
+              {
+                "if": "${vars.player.bench.quest_zombies >= 10}",
+                "then": [
+                  {
+                    "give_money": 100
+                  },
+                  {
+                    "give_item": {
+                      "item": "bench:zombie_trophy",
+                      "amount": 1
+                    }
+                  },
+                  {
+                    "set_var": {
+                      "var": "bench:quest_zombies_done",
+                      "op": "toggle"
+                    }
+                  },
+                  {
+                    "title": "<gold>Quest complete"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "quests",
+      "edits": [
+        {
+          "field": [
+            "quests",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "quests",
+            "title"
+          ],
+          "value": "Quests"
+        },
+        {
+          "field": [
+            "quests",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "quests"
+            ]
+          }
+        },
+        {
+          "field": [
+            "quests",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:text",
+              "id": "zombie_progress",
+              "x": 8,
+              "y": 6,
+              "text": "Zombies: ${min(vars.player.bench.quest_zombies, 10)} / 10"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 27
+    },
+    {
+      "line": 4,
+      "column": 26
+    },
+    {
+      "line": 5,
+      "column": 24
+    },
+    {
+      "line": 10,
+      "column": 23
+    },
+    {
+      "line": 11,
+      "column": 13
+    },
+    {
+      "line": 26,
+      "column": 8
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 17,
+        "column": 19
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 6,
+    "documents": 5
+  }
+}

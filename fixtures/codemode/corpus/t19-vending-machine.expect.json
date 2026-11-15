@@ -1,0 +1,13 @@
+{
+  "task": "T19",
+  "kind": "task",
+  "title": "Vending machine",
+  "area": "furniture",
+  "prompt": "Create a vending machine furniture that opens the shop GUI when right-clicked.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": [],
+  "replay": {
+    "note": "The dry run reports MTR-0009 for texture 'block/vending_machine', a default the furniture scaffold writes beside a model that resolves to nothing in the pack (benchmark S18). The list is otherwise accepted: the model and bench:shop GUI reference resolve, and the click rule on furnitures/vending_machine.yml compiles."
+  }
+}

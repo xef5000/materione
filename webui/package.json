@@ -10,6 +10,7 @@
     "build": "vite build",
     "check": "svelte-check",
     "test": "vitest run",
+    "benchmark": "node ../scripts/benchmark/run.mjs",
     "test:browser": "playwright test --config=playwright.config.ts",
     "browser:install": "playwright install chromium",
     "browser:install:ci": "playwright install --with-deps chromium",

@@ -98,7 +98,7 @@ class CodemodeReplayTest {
         }
     }
 
-    /** One dry run on a fresh server: the sample and world packs, the golden's own pack if it is not one of them, the world file's assets. */
+    /** One dry run on a fresh server: the sample and world packs, the golden's own pack if it is not one of them, the world file's files and assets. */
     private JsonObject replay(String pack, JsonArray operations, Path worldFile) throws IOException {
         Path root = Files.createTempDirectory(temp, "server");
         StorageService.StorageState storage = new StorageService().init(root);
@@ -106,13 +106,33 @@ class CodemodeReplayTest {
             EditorDemoSnapshotTest.copyTree(GoldenFiles.fixturesRoot().resolve("packs").resolve(fixturePack),
                     storage.contentPacksDir().resolve(fixturePack));
         }
+        JsonObject world = Files.exists(worldFile)
+                ? JsonParser.parseString(Files.readString(worldFile, StandardCharsets.UTF_8)).getAsJsonObject()
+                : null;
+        if (world != null && world.has("files")) {
+            JsonObject files = world.getAsJsonObject("files");
+            for (String rel : files.keySet()) {
+                Path target = storage.contentPacksDir().resolve(rel).normalize();
+                if (!target.startsWith(storage.contentPacksDir())) {
+                    throw new IllegalArgumentException("world file escapes content packs dir: " + rel);
+                }
+                Files.createDirectories(target.getParent());
+                Files.writeString(target, files.get(rel).getAsString(), StandardCharsets.UTF_8);
+            }
+            if (!EditorDemoSnapshotTest.PACKS.contains(pack)) {
+                Path packDir = storage.contentPacksDir().resolve(pack);
+                Path packYml = packDir.resolve("pack.yml");
+                if (Files.exists(packDir) && !Files.exists(packYml)) {
+                    Files.writeString(packYml, "id: " + pack + "\n", StandardCharsets.UTF_8);
+                }
+            }
+        }
         RpcDispatcher dispatcher = EditorDemoSnapshotTest.realOps(root, storage, true);
-        if (!EditorDemoSnapshotTest.PACKS.contains(pack)) {
+        if (!EditorDemoSnapshotTest.PACKS.contains(pack)
+                && !Files.exists(storage.contentPacksDir().resolve(pack))) {
             call(dispatcher, "edit.createPack", object("pack", pack));
         }
-        if (Files.exists(worldFile)) {
-            JsonObject world =
-                    JsonParser.parseString(Files.readString(worldFile, StandardCharsets.UTF_8)).getAsJsonObject();
+        if (world != null) {
             JsonObject assets = world.has("assets") ? world.getAsJsonObject("assets") : new JsonObject();
             for (String assetPack : assets.keySet()) {
                 for (JsonElement path : assets.getAsJsonArray(assetPack)) {

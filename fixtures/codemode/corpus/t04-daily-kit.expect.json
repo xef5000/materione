@@ -1,6 +1,10 @@
 {
   "task": "T04",
-  "title": "Daily kit",
+  "kind": "task",
+  "title": "Kits",
+  "area": "GUI, items",
+  "prompt": "Create a /kits menu with a Starter kit (claimable once per player) and a Daily kit (claimable once every 24 hours).",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

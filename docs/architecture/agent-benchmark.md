@@ -8,12 +8,12 @@
 > primitive and the ranking that follows (§4), the answer to "is a separate logic DSL still needed" (§5), what writing 29 programs
 > taught about the SDK itself (§6), and the sequence of M6.5 (§7).
 >
-> **Status.** **Design, docs only.** No SDK exists yet, so nothing here was type-checked by a machine. "Fails" means: the member the
-> line uses is not in a registry today, so a generator that reads only self-description (codemode.md §3.1) cannot emit it. The
-> evidence for "not in a registry" is [`primitives.md`](primitives.md) §4 plus the registration code it cites
-> (`BuiltinTriggers`, `BuiltinLogic`, `VariableType`); §8 lists what was not verified. Code is **shape, not syntax**, as in
-> codemode.md. When the SDK generator lands (#337), these programs become the corpus of codemode.md §11 and the tally of §4 is
-> recomputed by CI instead of by hand.
+> **Status.** **Machine-verified corpus in CI (#349).** All 29 benchmark tasks (`T01`–`T29`), 5 follow-ups (`F1`–`F5`), and 3
+> corpus-only programs (`C01`–`C03`) live in `fixtures/codemode/corpus/`, compiled by the real TypeScript checker against the
+> generated SDK (`webui/test/codemode-compile.spec.ts`, `codemode-typecheck.spec.ts`), executed to staged operation lists
+> (`webui/test/codemode-core.spec.ts`), replayed through the real server's `authoring.transaction` dry run (`CodemodeReplayTest`),
+> and tallied against this document by `scripts/benchmark/corpus-report.mjs --check`. The live measured model run (§8, #385) is
+> the remaining part of #349.
 >
 > **Traceability.**
 >
@@ -64,10 +64,10 @@
 | T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Fail | STATE, TARGET |
 | T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | CMD, STATE, VIEW, TARGET, CUSTODY |
 | T03 | **Backpack**: a 3-row backpack item that keeps its contents | item | Pass (preset route) | by-hand route: CUSTODY |
-| T04 | **Kits**: `/kits` menu with Starter (once) and Daily (every 24 h) | GUI, items | Partial | TIME |
-| T05 | **Healing wand**: right-click heals 4 hearts, 30 s cooldown, tells the time left | ability | Partial | TIME |
+| T04 | **Kits**: `/kits` menu with Starter (once) and Daily (every 24 h) | GUI, items | Pass (#328) | |
+| T05 | **Healing wand**: right-click heals 4 hearts, 30 s cooldown, tells the time left | ability | Pass (#328) | |
 | T06 | **Quest**: kill 10 zombies, get 100 coins and a trophy; progress in `/quests` | progression | Pass (#327) | |
-| T07 | **Daily reward**: `/daily`, one claim per day, a streak that resets if a day is missed | GUI, progression | Fail | TIME |
+| T07 | **Daily reward**: `/daily`, one claim per day, a streak that resets if a day is missed | GUI, progression | Pass (#328) | |
 | T08 | **Shop**: `/shop` with buy and sell for coins | GUI, economy | Pass | |
 | T09 | **Warp menu**: `/warps` with spawn, mines, arena, and a link to the survival server | GUI | Pass | |
 | T10 | **Welcome**: greet players on join; first join gets the starter kit and a broadcast | server | Pass (#327) | |
@@ -91,13 +91,13 @@
 | T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**13 pass, 2 are partial, 14 fail** after #327 (rules without a host and the entity and player triggers, logic.md §37): T06, T10
-and T15 flipped from Fail, and the gaps RULE, TRIG-ENTITY and TRIG-PLAYER left the "Fails on" column of the eight other tasks that
-listed them (T01, T12, T17, T20, T22, T26, T28, and T06's own). The count was 10, 2 and 17 when the page was written. The clock of
-#328 is not re-checked here: T04, T05 and T07 keep the verdicts they had until that issue's author re-runs them against the real
-shapes. "Fails on" lists what the honest program needs, not everything that would be nice.
+**16 pass, 0 partial, 13 fail** after #327 (rules without a host and entity/player triggers, logic.md §37) and #328 (the clock:
+`now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`): T04, T05 and T07 flipped to Pass alongside T06, T10 and T15.
+The count was 10, 2 and 17 when the page was written, and 13, 2 and 14 after #327. "Fails on" lists what the honest program
+needs, not everything that would be nice.
 
-**The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built:
+**The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built (and
+verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-seeded on a player-scoped Bloodfang world):
 
 | # | Follow-up | Program shape | Verdict |
 |---|---|---|---|
@@ -161,7 +161,7 @@ const store = p.custody.create("pack_store", { holder: "item", slots: 27 });
 //              ^^^^^^^ ✗ TS2339 'custody' does not exist on type 'PackWriter'                                   [CUSTODY]
 ```
 
-### T04 Kits — Partial (TIME)
+### T04 Kits — Pass (#328)
 
 ```ts
 const claimed = p.variables.create("kit_starter_claimed", { scope: "player", type: "boolean", default: false });
@@ -188,7 +188,7 @@ The menu, the once-only kit and the item loop pass. "Every 24 hours" cannot be s
 milliseconds held in memory, not a persistent timestamp, and no expression function reads a clock. `/kit starter` as a direct
 command (no menu) would add CMD; the prompt asked for a menu, and a GUI's `open:` block covers it.
 
-### T05 Healing wand — Partial (TIME)
+### T05 Healing wand — Pass (#328)
 
 ```ts
 const wand = p.items.create("healing_wand", { material: "blaze_rod", display_name: "<green>Healing Wand" });
@@ -227,7 +227,7 @@ only line that changed from the paper version is the finish test: a variable is 
 scenario (`PaperWorldEventsIT`) runs for a two-kill quest on Paper, rather than by an expression. The player is the killer;
 a zombie that dies of fall damage fires nothing, and neither does a kill by a mob, which is correct for this task.
 
-### T07 Daily reward — Fail (TIME)
+### T07 Daily reward — Pass (#328)
 
 ```ts
 const last   = p.variables.create("daily_day", { scope: "player", type: "number", default: 0 });
@@ -559,7 +559,7 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **TRIG-ENTITY** | Triggers for entity events with the entity and the damage in context: hit, hurt, kill | §4.3, §5.5 | T01 T06 T12 T15 T17 (5) | **Closed by #327** (`entity.hit`, `entity.kill`, `player.hurt`); T06 T15 pass, the rest keep other gaps |
 | **TRIG-PLAYER** | Triggers for a player's lifecycle: join, quit, respawn, death | §5.5 | T10 T28 (2) | **Closed by #327** (`player.join`, `player.quit`, `player.respawn`, `player.death`); T10 passes, T28 keeps VIEW |
 | **VERB** | Entity and world verbs: heal, damage, velocity, particle, launch, break or set a block, edit a stack | §5.7 | T12 T13 T14 T20, F2 F5 (4) | T13 T14 |
-| **TIME** | A clock in expressions (`now()`), durations, and a cooldown that persists and can be read | new | T04 T05 T07 (3) | T04 T05 T07 |
+| **TIME** | A clock in expressions (`now()`), durations, and a cooldown that persists and can be read | new | T04 T05 T07 (3) | **Closed by #328** (`now()`, `today()`, `on_cooldown` with `${cooldown.remaining}`); T04 T05 T07 pass |
 | **CMD** | Commands as content | §5.4 | T02 T21 T27 (3) | T27 |
 | **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | with CMD: T21 |
 | **VIEW** | Views over state: more than one viewer; the dialog and HUD view kinds | §5.3 | T02 T20 T28 (3) | none alone |
@@ -581,7 +581,7 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 |---|---|---|---|---|---|
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
-| 2 | **A clock: time in expressions, persistent cooldowns** (#328) | TIME | 16 | T04 T05 T07 | Small: expression functions and one rule option |
+| 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 16 | T04 T05 T07 | Small: expression functions and one rule option |
 | 3 | **Entity and world verbs** (#329) | VERB | 19 | T12 T13 T14 | Medium: about eight actions, each small; protection checks |
 | 4 | **Commands as content** (#330) | CMD | 20 | T27 | Small to medium: lift the `open:` block |
 | 5 | **Target addressing** (#331) | TARGET | 21 | T21 | Medium: a cross-cutting parameter on the actions that admit it |
@@ -662,10 +662,11 @@ Findings for the SDK's design (#337, #339), none of them a primitive. **Status a
 | S15 | The ids of built-in namespaced entries are written in full (`materione:food`, `type: materione:button`), where the hand-written packs write the bare name. Both parse (`MechanicsResolver`, `GuiLayerParser`: a name without `:` gets the built-in namespace), so this is valid, only wordier than a person would write. | None needed. The short spelling would need the registry to report a default namespace so the core can strip it without naming it. |
 | S16 | The read side the design lists is wider than the wire: **traces and runtime variable reads** (codemode.md §10 item 5), **the graph** (`queryGraph`) and **a source excerpt** have no editor op, and `m.read.diagnostics()` is the server-wide recent list, not a resource's. The core exposes what exists (`packs`, `resources`, `get`, `references`, `history`, `diagnostics`) and nothing it would have to fake. | #345 for traces and variables; the graph and the excerpt need ops (findings for issues). |
 | S17 | `authoring.references` reports where a resource is used with a coverage object that says what it did not scan. A program that reads "no hits" as "unused" is wrong when the scan was truncated. | Resolved in the core: `m.read.references` returns `{ hits, coverage }`, and the type says so. |
-| S18 | The furniture scaffold writes a default `texture` (`block/<id>`) beside a program's `model`, and it resolves to nothing in the pack: the replay of T16 reports `MTR-0009` for it. A program that gives a furniture only a model cannot avoid it. | A finding for an issue: the scaffold should not write a texture reference that does not exist, or a transaction `create` should not keep the scaffold's defaults for a field the program sets. |
+| S18 | The furniture scaffold writes a default `texture` (`block/<id>`) beside a program's `model`, and it resolves to nothing in the pack: the replays of T16 and T19 report `MTR-0009` for it. A program that gives a furniture only a model cannot avoid it. | A finding for an issue: the scaffold should not write a texture reference that does not exist, or a transaction `create` should not keep the scaffold's defaults for a field the program sets. |
 | S19 | **T16 as the corpus holds it deviates from the paper program**, and the paper overstates what passes. (a) `m.actions.setVar(m.local("roll"), { value: m.expr... })` does not exist: the surface has `setVar({ var: "roll", op, value })` and `value` is typed `string`, because self-description does not say which parameters accept an expression (S11, #355), so the corpus writes the string `"${random(1, 100)}"`. (b) `rules.add({ on, do })` is `rules.add(trigger, build)` (S1). (c) The broadcast text is a template string, not `m.expr`, for the same reason as (a). (d) `m.steps.choose(rewards.map(...))` needs a cast, `as [any, ...any[]]`, a **type hole**: `StepBuilders.choose` takes a non-empty tuple and `Array.prototype.map` returns an array. Removing it: type `choose(branches: readonly Branch[])` and keep the non-empty check at run time (the core already refuses an empty list), at the cost of the compile-time check. (e) `model: m.ref.asset("models/crate.json")` passes the type check and the dry run refuses it (S14). | **After #355:** (a) `value` is typed `string \| Expr` and the corpus writes `m.expr\`${m.fn.random(1, 100)}\``; (c) stays a template string (a `message` text accepts an expression, and a template is the natural spelling); (d) the cast is gone: `choose` takes a list and the core refuses an empty one at run time; (e) the model resolves. What is left in T16's replay is S18. |
 | S20 | **T29 as the corpus holds it deviates from the paper program.** (a) No `template: m.ref.item("sample:ruby_sword")`: `template` is `Ref<"template">` and no `m.ref.template` exists, so a program cannot name a template (an item may inherit an item, plugin.md section 3.1, but the type says template); removing it: let `template` take `Ref<"template" \| "item">` or add `m.ref.template`. (b) No `accept: [...]`: the field is `JsonValue` (a condition on `slot.item`) and a `Ref` is not one; a program would have to write the expression by hand. (c) No per-slot selection: a `slots` layer has `region`, `input`, `durable` and no list of slots, so `input: true` makes every container slot an input and slots 11 and 13 are a convention the player must follow, not something the GUI enforces. Removing it needs a `slots` parameter on the layer. (d) `addButton({ slot: 15 })` is a `button` layer with pixel geometry (S10). (e) `m.conditions.all([...])` is absent: two `if` steps with a `stop` each. (f) `slotHas` and `custodyConsume` address a slot number, not a layer id. | (a) a surface change as stated; (b) and (c) are self-description additions to the `slots` component; (e) is the composite conditions of logic.md section 2.3, not in self-description. |
 | S21 | A program that reads the stored state waits for the host: `m.read.*` returns a promise and the program `await`s it (`const view = await m.read.get(ref)`), while every staging call is synchronous and makes no call at all (#381). None of the corpus programs reads, so none changed; a benchmark task that does (T10-style "every item that uses this recipe") is written `await m.read.references(...)`. | The programs of section 3 that read are the ones whose paper spelling gains an `await`; the program entry is async, which the sandbox (#343) provides. |
+| S22 | `set_var` and the `var` condition declare `value` as `string \| Expr` in self-description, so passing a bare YAML string `"1"` or `"true"` for a `number` or `boolean` variable is accepted by TypeScript and rejected at replay (`MTR-0064` / `MTR-0057`). Writing `m.expr\`1\`` (which serializes as `${1}`), `m.expr\`!${flag}\``, or `op: "toggle"` passes both TypeScript and replay (T04, T06, F3). | A small self-description improvement: `value` could accept `string \| number \| boolean \| Expr` (or type-aware `setVar`). |
 
 ---
 
@@ -712,19 +713,14 @@ and is tested by the harness as today; it appears in the SDK by itself when the 
 
 ## 8. Not verified
 
-- **Almost nothing was compiled.** The verdicts are a reading of the registries, not a checker's output. #349 replaces this section.
-  Since #337 six programs are compiled by the real TypeScript checker (`webui/test/codemode-compile.spec.ts`) against the recorded
-  registry of today's plugin (`fixtures/codemode/registry/plugin-current.json`, which includes the clock): T04 (its daily kit, with
-  `now()`), T05, T08, T11 and T25 type-check cleanly (T05 since #355 described `on_cooldown` as a list of steps), and T27 fails with
-  TS2339 on `commands`. They are in the spellings
-  the generated surface really has (they differ from the paper ones: S10), kept in `fixtures/codemode/corpus/`. The other 23
-  programs are still on paper. The step shapes of §3 were corrected to the engine's
-  grammar (logic.md §2.2, `StepCompiler`): `require` takes steps, a condition guards with `if` and `stop`.
-- Parameter names in the programs (`amplifier`, `seconds`, `points`, `detail`) are illustrative; the real ones are the
-  registries'. A verdict depends on a member *existing*, not on its spelling.
-- That a rule's `cooldown` is in memory and not persisted was read from logic.md §16, not from a restart test.
-- That `potion` with `instant_health` heals in fixed steps is vanilla behavior, not tested here.
-- T24 assumes the block type exposes `hardness` and that `break` on a block host gives to the breaker; T16 and T19 assume the
-  furniture `click` trigger carries the player, as `BuiltinTriggers` declares.
-- T29 assumes `slot_has` and `custody.consume` address a layer by id as logic.md §36 describes; the showcase has no forge.
-- Costs in §4.2 are estimates from the audit, not from designs. Each issue's design may move its rank.
+- **The live measured model run (#385, codemode.md §11).** All 29 benchmark tasks, 5 follow-ups, and 3 corpus-only programs are
+  now machine-verified in CI: compiled by the real TypeScript checker (`codemode-compile.spec.ts`, `codemode-typecheck.spec.ts`),
+  executed to staged operation lists (`codemode-core.spec.ts`), replayed against the real Java server (`CodemodeReplayTest`),
+  and checked for tally consistency (`scripts/benchmark/corpus-report.mjs --check`). The offline-verified CLI harness
+  (`npm --prefix webui run benchmark`, `scripts/benchmark/README.md`) with real JVM oracle (`:plugin:benchmarkOracle`),
+  tool-per-operation baseline, context ablation (`index` vs `full-dts`), escalation routing, vague-request rubric (`V01`–`V12`),
+  and hard picodollar budget guard is ready for the owner's budgeted live AI Gateway run (#385, #349).
+- **Live runtime execution of all 16 passing tasks on Paper.** `CodemodeReplayTest` proves that every staged transaction
+  validates and compiles cleanly through `authoring.transaction(dryRun=true)` (except T16 and T19 which hit S18 `MTR-0009` on the
+  furniture scaffold's default texture); end-to-end in-game execution is covered by the harness and QA catalog.
+- **Costs in §4.2** are estimates from the audit, not from designs. Each issue's design may move its rank.

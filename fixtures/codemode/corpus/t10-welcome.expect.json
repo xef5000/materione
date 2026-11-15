@@ -1,0 +1,10 @@
+{
+  "task": "T10",
+  "kind": "task",
+  "title": "Welcome",
+  "area": "server",
+  "prompt": "Greet players when they join; on their first join, broadcast a welcome message and give them a starter stone sword.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

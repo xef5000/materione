@@ -1,8 +1,10 @@
 {
   "task": "C03",
+  "kind": "corpus",
   "title": "A server warning does not refuse",
   "registry": "plugin-current",
   "result": "pass",
+  "gaps": [],
   "replay": {
     "note": "Deliberate: the expression text spells a variable as its reference (bench:stamped_at), which the type surface cannot see (only interpolations are typed, codemode.md section 13). The dry run reports MTR-0022 as a warning and accepts the list; the frame is the recorded source of the wire's \"warn\" severity. It does not flip."
   }

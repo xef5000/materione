@@ -25,7 +25,7 @@ interface Expectation {
   task: string;
   registry: string;
   result: 'pass' | 'fail';
-  diagnostics?: { code: number; messageContains?: string[]; missingPrimitive?: { member: string; catalog: string } }[];
+  diagnostics?: { code: number; line?: number; messageContains?: string[]; missingPrimitive?: { member: string; catalog: string } }[];
 }
 
 const corpus = readdirSync(CORPUS_DIR)
@@ -49,9 +49,16 @@ describe('the corpus through the checker', () => {
     }
     expect(result.ok).toBe(false);
     expect(result.js, 'a failing program is never handed back as runnable text').toBeUndefined();
-    for (const wanted of entry.expect.diagnostics ?? []) {
-      const hit = result.diagnostics.find((entry2) => entry2.code === `TS${wanted.code}` && (wanted.messageContains ?? []).every((part) => entry2.message.includes(part)));
-      expect(hit, `expected TS${wanted.code}, got ${JSON.stringify(result.diagnostics)}`).toBeDefined();
+    const wantedList = entry.expect.diagnostics ?? [];
+    expect(result.diagnostics).toHaveLength(wantedList.length);
+    for (const wanted of wantedList) {
+      const hit = result.diagnostics.find(
+        (entry2) =>
+          entry2.code === `TS${wanted.code}` &&
+          (wanted.line === undefined || entry2.line === wanted.line) &&
+          (wanted.messageContains ?? []).every((part) => entry2.message.includes(part)),
+      );
+      expect(hit, `expected TS${wanted.code} at line ${wanted.line}, got ${JSON.stringify(result.diagnostics)}`).toBeDefined();
       if (wanted.missingPrimitive !== undefined) expect(hit?.missingPrimitive).toMatchObject(wanted.missingPrimitive);
       else expect(hit?.missingPrimitive).toBeUndefined();
     }

@@ -1,0 +1,10 @@
+{
+  "task": "T15",
+  "kind": "task",
+  "title": "Mob drop",
+  "area": "mobs",
+  "prompt": "Give zombies a 5% chance on kill to drop a Rotten Heart custom item.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

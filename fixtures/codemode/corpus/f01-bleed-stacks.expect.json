@@ -1,0 +1,19 @@
+{
+  "task": "F1",
+  "kind": "followup",
+  "title": "Bleed stacks",
+  "area": "weapon, state",
+  "prompt": "Make bleed stack up to 3 times on the struck entity.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["STATE"],
+  "diagnostics": [
+    {
+      "code": 2353,
+      "line": 8,
+      "gap": "STATE",
+      "messageContains": ["holder", "VariableFields"],
+      "missingPrimitive": { "member": "holder", "catalog": "VariableFields" }
+    }
+  ]
+}

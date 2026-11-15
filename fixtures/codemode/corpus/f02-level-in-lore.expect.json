@@ -1,0 +1,19 @@
+{
+  "task": "F2",
+  "kind": "followup",
+  "title": "Level in lore",
+  "area": "weapon, verb",
+  "prompt": "Show the sword's level in its lore.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["VERB"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 5,
+      "gap": "VERB",
+      "messageContains": ["setItemLore", "ActionCatalog"],
+      "missingPrimitive": { "member": "setItemLore", "catalog": "ActionCatalog" }
+    }
+  ]
+}

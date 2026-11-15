@@ -3,8 +3,36 @@
   "registry": "plugin-current",
   "ok": true,
   "pack": "bench",
-  "summary": "Adds a daily kit button: a golden apple and an experience bottle, once every 24 hours per player.",
+  "summary": "Adds a /kits GUI with a one-time starter kit and a 24-hour daily kit.",
   "operations": [
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "kit_starter_claimed",
+      "edits": [
+        {
+          "field": [
+            "kit_starter_claimed",
+            "scope"
+          ],
+          "value": "player"
+        },
+        {
+          "field": [
+            "kit_starter_claimed",
+            "type"
+          ],
+          "value": "boolean"
+        },
+        {
+          "field": [
+            "kit_starter_claimed",
+            "default"
+          ],
+          "value": false
+        }
+      ]
+    },
     {
       "kind": "create",
       "type": "variables",
@@ -71,8 +99,16 @@
           "value": [
             {
               "type": "materione:button",
+              "id": "starter_kit",
+              "x": 34,
+              "y": 30,
+              "width": 36,
+              "height": 20
+            },
+            {
+              "type": "materione:button",
               "id": "daily_kit",
-              "x": 70,
+              "x": 98,
               "y": 30,
               "width": 36,
               "height": 20
@@ -88,6 +124,49 @@
         {
           "op": "addRule",
           "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "starter_kit",
+            "do": [
+              {
+                "if": "${!vars.player.bench.kit_starter_claimed}",
+                "else": [
+                  {
+                    "message": "<red>Already claimed."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "give_item": {
+                  "item": "minecraft:stone_sword",
+                  "amount": 1
+                }
+              },
+              {
+                "give_item": {
+                  "item": "minecraft:bread",
+                  "amount": 1
+                }
+              },
+              {
+                "set_var": {
+                  "var": "bench:kit_starter_claimed",
+                  "op": "toggle"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/kits.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 1,
           "rule": {
             "on": "gui.click",
             "layer": "daily_kit",
@@ -128,15 +207,23 @@
   ],
   "sources": [
     {
-      "line": 6,
+      "line": 4,
+      "column": 29
+    },
+    {
+      "line": 5,
       "column": 27
     },
     {
-      "line": 8,
+      "line": 11,
       "column": 21
     },
     {
-      "line": 15,
+      "line": 21,
+      "column": 12
+    },
+    {
+      "line": 31,
       "column": 12
     }
   ],
@@ -144,7 +231,7 @@
   "stats": {
     "reads": 0,
     "readBytes": 0,
-    "staged": 3,
-    "documents": 2
+    "staged": 5,
+    "documents": 3
   }
 }

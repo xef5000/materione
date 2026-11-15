@@ -1,0 +1,46 @@
+{
+  "task": "T02",
+  "kind": "task",
+  "title": "/trade <player>",
+  "area": "command, GUI, custody",
+  "prompt": "Create /trade <player>: request, accept, shared two-player window, atomic swap, expiry.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["CMD", "CUSTODY", "STATE", "TARGET", "VIEW"],
+  "diagnostics": [
+    {
+      "code": 2353,
+      "line": 6,
+      "gap": "STATE",
+      "messageContains": ["ttl", "VariableFields"],
+      "missingPrimitive": { "member": "ttl", "catalog": "VariableFields" }
+    },
+    {
+      "code": 2353,
+      "line": 11,
+      "gap": "VIEW",
+      "messageContains": ["viewers", "GuiFields"],
+      "missingPrimitive": { "member": "viewers", "catalog": "GuiFields" }
+    },
+    {
+      "code": 2339,
+      "line": 15,
+      "gap": "CMD",
+      "messageContains": ["commands", "PackWriter"],
+      "missingPrimitive": { "member": "commands", "catalog": "PackWriter" }
+    },
+    {
+      "code": 2322,
+      "line": 19,
+      "gap": "TARGET",
+      "messageContains": ["arg:target"]
+    },
+    {
+      "code": 2339,
+      "line": 20,
+      "gap": "CUSTODY",
+      "messageContains": ["custodyTransfer", "ActionCatalog"],
+      "missingPrimitive": { "member": "custodyTransfer", "catalog": "ActionCatalog" }
+    }
+  ]
+}

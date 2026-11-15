@@ -1,0 +1,74 @@
+{
+  "task": "T10",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a player join welcome rule with a first-join broadcast and stone sword.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "rules",
+      "id": "welcome",
+      "edits": [
+        {
+          "field": [
+            "welcome",
+            "description"
+          ],
+          "value": "Greet players on join and give first-join starter kit"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "rules/welcome.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "player.join",
+            "do": [
+              {
+                "if": "${player.first_join}",
+                "then": [
+                  {
+                    "broadcast": "${\"<yellow>Welcome \" + player.name + \" to the server!\"}"
+                  },
+                  {
+                    "give_item": {
+                      "item": "minecraft:stone_sword",
+                      "amount": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "${\"<gray>Welcome back, \" + player.name}"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 25
+    },
+    {
+      "line": 4,
+      "column": 15
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

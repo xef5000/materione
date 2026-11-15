@@ -1,0 +1,309 @@
+{
+  "task": "T07",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a /daily reward GUI with one claim per day and a streak up to 7 days.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "daily_day",
+      "edits": [
+        {
+          "field": [
+            "daily_day",
+            "scope"
+          ],
+          "value": "player"
+        },
+        {
+          "field": [
+            "daily_day",
+            "type"
+          ],
+          "value": "number"
+        },
+        {
+          "field": [
+            "daily_day",
+            "default"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "daily_streak",
+      "edits": [
+        {
+          "field": [
+            "daily_streak",
+            "scope"
+          ],
+          "value": "player"
+        },
+        {
+          "field": [
+            "daily_streak",
+            "type"
+          ],
+          "value": "number"
+        },
+        {
+          "field": [
+            "daily_streak",
+            "default"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "daily",
+      "edits": [
+        {
+          "field": [
+            "daily",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "daily",
+            "title"
+          ],
+          "value": "Daily reward"
+        },
+        {
+          "field": [
+            "daily",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "daily"
+            ]
+          }
+        },
+        {
+          "field": [
+            "daily",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:button",
+              "id": "claim",
+              "x": 70,
+              "y": 30,
+              "width": 36,
+              "height": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/daily.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "claim",
+            "do": [
+              {
+                "set_var": {
+                  "var": "today",
+                  "op": "set",
+                  "value": "${floor(now() / 86400)}"
+                }
+              },
+              {
+                "if": "${vars.today > vars.player.bench.daily_day}",
+                "else": [
+                  {
+                    "message": "<red>Come back tomorrow."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "set_var": {
+                  "var": "bench:daily_streak",
+                  "op": "set",
+                  "value": "${vars.today == vars.player.bench.daily_day + 1 ? min(vars.player.bench.daily_streak + 1, 7) : 1}"
+                }
+              },
+              {
+                "set_var": {
+                  "var": "bench:daily_day",
+                  "op": "set",
+                  "value": "${vars.today}"
+                }
+              },
+              {
+                "choose": [
+                  {
+                    "if": "${vars.player.bench.daily_streak == 1}",
+                    "then": [
+                      {
+                        "give_money": 100
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.daily_streak == 2}",
+                    "then": [
+                      {
+                        "give_money": 200
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.daily_streak == 3}",
+                    "then": [
+                      {
+                        "give_money": 300
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.daily_streak == 4}",
+                    "then": [
+                      {
+                        "give_money": 400
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.daily_streak == 5}",
+                    "then": [
+                      {
+                        "give_money": 500
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.daily_streak == 6}",
+                    "then": [
+                      {
+                        "give_money": 600
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.daily_streak == 7}",
+                    "then": [
+                      {
+                        "give_money": 700
+                      }
+                    ]
+                  }
+                ]
+              },
+              "gui.refresh"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 26
+    },
+    {
+      "line": 5,
+      "column": 28
+    },
+    {
+      "line": 7,
+      "column": 21
+    },
+    {
+      "line": 14,
+      "column": 12
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 25,
+        "column": 26
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 4,
+    "documents": 3
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "task": "F5",
+  "kind": "followup",
+  "title": "Level 5 particles",
+  "area": "weapon, timer, verb",
+  "prompt": "Level 5 swords emit red particles when held.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["TIMER", "VERB"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 5,
+      "gap": "TIMER",
+      "messageContains": ["every", "TriggerCatalog"],
+      "missingPrimitive": { "member": "every", "catalog": "TriggerCatalog" }
+    },
+    {
+      "code": 2339,
+      "line": 7,
+      "gap": "VERB",
+      "messageContains": ["particle", "ActionCatalog"],
+      "missingPrimitive": { "member": "particle", "catalog": "ActionCatalog" }
+    }
+  ]
+}

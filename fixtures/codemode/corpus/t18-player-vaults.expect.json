@@ -1,0 +1,19 @@
+{
+  "task": "T18",
+  "kind": "task",
+  "title": "Player vaults",
+  "area": "GUI, custody",
+  "prompt": "Create /pv <1-3> that opens persistent private player storage.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["CUSTODY"],
+  "diagnostics": [
+    {
+      "code": 2353,
+      "line": 13,
+      "gap": "CUSTODY",
+      "messageContains": ["keep", "SlotsLayerParams"],
+      "missingPrimitive": { "member": "keep", "catalog": "SlotsLayerParams" }
+    }
+  ]
+}

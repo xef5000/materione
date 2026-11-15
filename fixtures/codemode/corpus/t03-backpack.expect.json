@@ -1,0 +1,11 @@
+{
+  "task": "T03",
+  "kind": "task",
+  "title": "Backpack",
+  "area": "item",
+  "prompt": "Create a 3-row backpack item that keeps its contents.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": [],
+  "note": "Passes via the registered backpack mechanic (preset route); the by-hand route requires CUSTODY (stack-held custody)."
+}

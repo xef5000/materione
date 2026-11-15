@@ -1,0 +1,10 @@
+{
+  "task": "T06",
+  "kind": "task",
+  "title": "Quest",
+  "area": "progression",
+  "prompt": "Create a quest to kill 10 zombies for 100 coins and a Zombie Slayer trophy, with progress shown in /quests.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

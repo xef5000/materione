@@ -1,0 +1,23 @@
+{
+  "packs": ["bench"],
+  "assets": { "bench": ["assets/models/vending_machine.json"] },
+  "resources": {
+    "bench": [
+      { "type": "guis", "path": "guis/shop.yml", "id": "shop", "name": "shop" }
+    ]
+  },
+  "documents": {
+    "bench/guis/shop.yml": {
+      "rev": 0,
+      "parsed": {
+        "shop": {
+          "title": "Shop",
+          "container": "chest_3"
+        }
+      }
+    }
+  },
+  "files": {
+    "bench/guis/shop.yml": "shop:\n  title: Shop\n  container: chest_3\n"
+  }
+}

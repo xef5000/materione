@@ -1,0 +1,185 @@
+{
+  "task": "F3",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Scales the Bloodfang upgrade cost to 500 coins times the current level.",
+  "operations": [
+    {
+      "kind": "logicEdit",
+      "path": "guis/bloodfang_menu.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "upgrade",
+            "do": [
+              {
+                "choose": [
+                  {
+                    "if": "${vars.player.bench.bloodfang_level == 1}",
+                    "then": [
+                      {
+                        "require": [
+                          {
+                            "take_money": 500
+                          }
+                        ],
+                        "else": [
+                          {
+                            "message": "<red>You need 500 coins."
+                          }
+                        ]
+                      },
+                      {
+                        "set_var": {
+                          "var": "bench:bloodfang_level",
+                          "op": "add",
+                          "value": "${1}"
+                        }
+                      },
+                      "gui.refresh"
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.bloodfang_level == 2}",
+                    "then": [
+                      {
+                        "require": [
+                          {
+                            "take_money": 1000
+                          }
+                        ],
+                        "else": [
+                          {
+                            "message": "<red>You need 1000 coins."
+                          }
+                        ]
+                      },
+                      {
+                        "set_var": {
+                          "var": "bench:bloodfang_level",
+                          "op": "add",
+                          "value": "${1}"
+                        }
+                      },
+                      "gui.refresh"
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.bloodfang_level == 3}",
+                    "then": [
+                      {
+                        "require": [
+                          {
+                            "take_money": 1500
+                          }
+                        ],
+                        "else": [
+                          {
+                            "message": "<red>You need 1500 coins."
+                          }
+                        ]
+                      },
+                      {
+                        "set_var": {
+                          "var": "bench:bloodfang_level",
+                          "op": "add",
+                          "value": "${1}"
+                        }
+                      },
+                      "gui.refresh"
+                    ]
+                  },
+                  {
+                    "if": "${vars.player.bench.bloodfang_level == 4}",
+                    "then": [
+                      {
+                        "require": [
+                          {
+                            "take_money": 2000
+                          }
+                        ],
+                        "else": [
+                          {
+                            "message": "<red>You need 2000 coins."
+                          }
+                        ]
+                      },
+                      {
+                        "set_var": {
+                          "var": "bench:bloodfang_level",
+                          "op": "add",
+                          "value": "${1}"
+                        }
+                      },
+                      "gui.refresh"
+                    ]
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<gold>Bloodfang is already at max level."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 12
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 10,
+        "column": 38
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 10,
+        "column": 38
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 10,
+        "column": 38
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 10,
+        "column": 38
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 1,
+    "documents": 1
+  }
+}

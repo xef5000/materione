@@ -77,6 +77,13 @@ jobs:
           node --test scripts/compat/editor-compat.test.mjs
           node scripts/compat/editor-compat.mjs check
 
+      # Benchmark corpus tally & doc-drift check (issue #349) — pure Node, no
+      # install. Verifies fixtures/codemode/corpus/ against agent-benchmark.md.
+      - name: Benchmark corpus report check
+        run: |
+          node --test scripts/benchmark/corpus-report.test.mjs
+          node scripts/benchmark/corpus-report.mjs --check
+
       # Artifacts bill against the Actions storage quota (500 MB on the
       # free plan). The jar is reproducible from any commit; two days of
       # history keeps a testable build around while several runs per day

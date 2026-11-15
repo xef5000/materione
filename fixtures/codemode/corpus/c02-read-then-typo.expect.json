@@ -1,8 +1,10 @@
 {
   "task": "C02",
+  "kind": "corpus",
   "title": "Read, then an id with a typo",
   "registry": "plugin-current",
   "result": "pass",
+  "gaps": [],
   "run": {
     "ok": false,
     "diagnostics": [{ "code": "SDK-0007", "line": 5 }],
