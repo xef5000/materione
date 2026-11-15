@@ -1,0 +1,88 @@
+{
+  "task": "T15",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds the Rotten Heart item and a 5% drop rule on zombie kills.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "rotten_heart",
+      "edits": [
+        {
+          "field": [
+            "rotten_heart",
+            "material"
+          ],
+          "value": "ROTTEN_FLESH"
+        },
+        {
+          "field": [
+            "rotten_heart",
+            "display_name"
+          ],
+          "value": "<dark_green>Rotten Heart"
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "rules",
+      "id": "zombie_heart",
+      "edits": [
+        {
+          "field": [
+            "zombie_heart",
+            "description"
+          ],
+          "value": "5% chance for zombie kills to grant a Rotten Heart"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "rules/zombie_heart.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "entity.kill",
+            "type": "zombie",
+            "do": [
+              {
+                "give_item": {
+                  "item": "bench:rotten_heart",
+                  "amount": 1
+                },
+                "chance": 0.05
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 23
+    },
+    {
+      "line": 7,
+      "column": 22
+    },
+    {
+      "line": 8,
+      "column": 12
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 3,
+    "documents": 2
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "packs": ["bench", "sample"],
+  "assets": { "bench": ["assets/textures/block/ruby_ore.png"] },
+  "resources": {
+    "sample": [
+      { "type": "items", "path": "items/ruby.yml", "id": "ruby", "name": "ruby" }
+    ]
+  },
+  "documents": {
+    "sample/items/ruby.yml": {
+      "rev": 0,
+      "parsed": {
+        "ruby": {}
+      }
+    }
+  }
+}

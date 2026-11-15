@@ -1,0 +1,26 @@
+{
+  "task": "T14",
+  "kind": "task",
+  "title": "Dash blade",
+  "area": "ability",
+  "prompt": "Create a Dash Blade that launches the player forward with a particle trail on right-click, with a 5-second cooldown.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["VERB"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 10,
+      "gap": "VERB",
+      "messageContains": ["velocity", "ActionCatalog"],
+      "missingPrimitive": { "member": "velocity", "catalog": "ActionCatalog" }
+    },
+    {
+      "code": 2339,
+      "line": 11,
+      "gap": "VERB",
+      "messageContains": ["particle", "ActionCatalog"],
+      "missingPrimitive": { "member": "particle", "catalog": "ActionCatalog" }
+    }
+  ]
+}

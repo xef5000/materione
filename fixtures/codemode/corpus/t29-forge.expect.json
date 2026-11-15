@@ -1,6 +1,10 @@
 {
   "task": "T29",
+  "kind": "task",
   "title": "Forge",
+  "area": "GUI, custody",
+  "prompt": "Create a /forge GUI where placing a ruby sword and 3 rubies and paying 200 coins crafts a refined ruby sword.",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

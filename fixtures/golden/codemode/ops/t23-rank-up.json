@@ -1,0 +1,188 @@
+{
+  "task": "T23",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a /rankup GUI that promotes players through the rank ladder for coins.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "rankup",
+      "edits": [
+        {
+          "field": [
+            "rankup",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "rankup",
+            "title"
+          ],
+          "value": "Rank up"
+        },
+        {
+          "field": [
+            "rankup",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "rankup"
+            ]
+          }
+        },
+        {
+          "field": [
+            "rankup",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:button",
+              "id": "rankup_btn",
+              "x": 70,
+              "y": 30,
+              "width": 36,
+              "height": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/rankup.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "rankup_btn",
+            "do": [
+              {
+                "choose": [
+                  {
+                    "if": {
+                      "all": [
+                        {
+                          "has_permission": "rank.member"
+                        },
+                        {
+                          "not": {
+                            "has_permission": "rank.knight"
+                          }
+                        }
+                      ]
+                    },
+                    "then": [
+                      {
+                        "require": [
+                          {
+                            "take_money": 10000
+                          }
+                        ],
+                        "else": [
+                          {
+                            "message": "<red>You need 10000 coins."
+                          }
+                        ]
+                      },
+                      {
+                        "give_permission": "rank.knight"
+                      },
+                      {
+                        "broadcast": "${\"<gold>\" + player.name + ' is now a knight!'}"
+                      },
+                      "gui.close"
+                    ]
+                  },
+                  {
+                    "if": {
+                      "all": [
+                        {
+                          "has_permission": "rank.knight"
+                        },
+                        {
+                          "not": {
+                            "has_permission": "rank.lord"
+                          }
+                        }
+                      ]
+                    },
+                    "then": [
+                      {
+                        "require": [
+                          {
+                            "take_money": 50000
+                          }
+                        ],
+                        "else": [
+                          {
+                            "message": "<red>You need 50000 coins."
+                          }
+                        ]
+                      },
+                      {
+                        "give_permission": "rank.lord"
+                      },
+                      {
+                        "broadcast": "${\"<gold>\" + player.name + ' is now a lord!'}"
+                      },
+                      "gui.close"
+                    ]
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<gray>You are at the highest rank."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 8,
+      "column": 21
+    },
+    {
+      "line": 15,
+      "column": 12
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 24,
+        "column": 38
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 24,
+        "column": 38
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

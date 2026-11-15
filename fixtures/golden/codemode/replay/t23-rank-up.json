@@ -1,0 +1,46 @@
+{
+  "golden": "t23-rank-up",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": false
+    },
+    {
+      "id": "build",
+      "ran": false
+    },
+    {
+      "id": "behavior",
+      "ran": false
+    },
+    {
+      "id": "gui",
+      "ran": true
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "guis/rankup.yml",
+      "kind": "created",
+      "operations": [
+        0,
+        1
+      ]
+    }
+  ]
+}

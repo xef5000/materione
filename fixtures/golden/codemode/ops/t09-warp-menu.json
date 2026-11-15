@@ -1,0 +1,215 @@
+{
+  "task": "T09",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a /warps menu with Spawn, Mines, Arena, and a Survival server transfer button.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "warps",
+      "edits": [
+        {
+          "field": [
+            "warps",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "warps",
+            "title"
+          ],
+          "value": "Warps"
+        },
+        {
+          "field": [
+            "warps",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "warps",
+              "warp"
+            ]
+          }
+        },
+        {
+          "field": [
+            "warps",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:button",
+              "id": "warp_spawn",
+              "x": 8,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            },
+            {
+              "type": "materione:button",
+              "id": "warp_mines",
+              "x": 44,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            },
+            {
+              "type": "materione:button",
+              "id": "warp_arena",
+              "x": 80,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            },
+            {
+              "type": "materione:button",
+              "id": "survival_server",
+              "x": 116,
+              "y": 20,
+              "width": 32,
+              "height": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/warps.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "warp_spawn",
+            "do": [
+              "gui.close",
+              {
+                "teleport": {
+                  "x": 0,
+                  "y": 64,
+                  "z": 0,
+                  "world": "world"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/warps.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 1,
+          "rule": {
+            "on": "gui.click",
+            "layer": "warp_mines",
+            "do": [
+              "gui.close",
+              {
+                "teleport": {
+                  "x": 120,
+                  "y": 64,
+                  "z": -40,
+                  "world": "world"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/warps.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 2,
+          "rule": {
+            "on": "gui.click",
+            "layer": "warp_arena",
+            "do": [
+              "gui.close",
+              {
+                "teleport": {
+                  "x": -300,
+                  "y": 70,
+                  "z": 220,
+                  "world": "world"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/warps.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 3,
+          "rule": {
+            "on": "gui.click",
+            "layer": "survival_server",
+            "do": [
+              {
+                "connect": "survival"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 9,
+      "column": 21
+    },
+    {
+      "line": 20,
+      "column": 14
+    },
+    {
+      "line": 20,
+      "column": 14
+    },
+    {
+      "line": 20,
+      "column": 14
+    },
+    {
+      "line": 25,
+      "column": 12
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.connect is not available on the connected server: No server transfer is configured (set transfer_host, or install a proxy channel)",
+      "source": {
+        "line": 26,
+        "column": 18
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 5,
+    "documents": 1
+  }
+}

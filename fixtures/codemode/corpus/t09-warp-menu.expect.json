@@ -1,0 +1,10 @@
+{
+  "task": "T09",
+  "kind": "task",
+  "title": "Warp menu",
+  "area": "GUI",
+  "prompt": "Create a /warps menu with Spawn, Mines, Arena warps and a button connecting to the survival server.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

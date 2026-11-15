@@ -1,0 +1,19 @@
+{
+  "task": "T17",
+  "kind": "task",
+  "title": "Leaderboard",
+  "area": "GUI, progression",
+  "prompt": "Create a /top leaderboard GUI showing the ten players with the most kills.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["QUERY"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 17,
+      "gap": "QUERY",
+      "messageContains": ["ranking", "ListSourceCatalog"],
+      "missingPrimitive": { "member": "ranking", "catalog": "ListSourceCatalog" }
+    }
+  ]
+}

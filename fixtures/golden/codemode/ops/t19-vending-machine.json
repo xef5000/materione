@@ -1,0 +1,61 @@
+{
+  "task": "T19",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a vending machine furniture that opens the shop GUI on right-click.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "furnitures",
+      "id": "vending_machine",
+      "edits": [
+        {
+          "field": [
+            "vending_machine",
+            "model"
+          ],
+          "value": "vending_machine"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "furnitures/vending_machine.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "click:right",
+            "do": [
+              {
+                "gui.open": "bench:shop"
+              },
+              {
+                "sound": "block.note_block.chime"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 30
+    },
+    {
+      "line": 5,
+      "column": 15
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

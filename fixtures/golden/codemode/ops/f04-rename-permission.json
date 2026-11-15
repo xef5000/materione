@@ -1,0 +1,38 @@
+{
+  "task": "F4",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Renamed rpg.weapons to rpg.bloodfang on 1 resource(s).",
+  "operations": [
+    {
+      "kind": "setFields",
+      "path": "guis/bloodfang_menu.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "field": [
+            "bloodfang_menu",
+            "open"
+          ],
+          "value": {
+            "permission": "rpg.bloodfang"
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 9,
+      "column": 21
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 3,
+    "readBytes": 445,
+    "staged": 1,
+    "documents": 1
+  }
+}

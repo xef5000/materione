@@ -1,6 +1,10 @@
 {
   "task": "T11",
+  "kind": "task",
   "title": "Golden berry",
+  "area": "item",
+  "prompt": "Create a Golden Berry food item with texture textures/item/golden_berry.png that grants regeneration and speed for 5 seconds when eaten.",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

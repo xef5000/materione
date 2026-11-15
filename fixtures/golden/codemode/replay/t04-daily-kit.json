@@ -35,18 +35,26 @@
   "diagnostics": [],
   "documents": [
     {
-      "path": "variables/kit_daily_at.yml",
+      "path": "variables/kit_starter_claimed.yml",
       "kind": "created",
       "operations": [
         0
       ]
     },
     {
+      "path": "variables/kit_daily_at.yml",
+      "kind": "created",
+      "operations": [
+        1
+      ]
+    },
+    {
       "path": "guis/kits.yml",
       "kind": "created",
       "operations": [
-        1,
-        2
+        2,
+        3,
+        4
       ]
     }
   ]

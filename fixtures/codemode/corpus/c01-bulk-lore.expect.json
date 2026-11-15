@@ -1,6 +1,8 @@
 {
   "task": "C01",
+  "kind": "corpus",
   "title": "Bulk edit after a read",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

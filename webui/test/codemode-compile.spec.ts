@@ -8,22 +8,52 @@
  * generator's golden test pins.
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CORPUS_DIR, GOLDEN_DIR } from './helpers/codemode';
+import { generateSdk } from '../src/lib/codemode/generate/generate';
+import { CORPUS_DIR, FIXTURES, GOLDEN_DIR, REGISTRY_DIR, surfaceOf, type RegistrySnapshot } from './helpers/codemode';
 import { checkDeclarations, checkProgram, type Problem } from './helpers/typecheck';
 
 const golden = (name: string): string => readFileSync(join(GOLDEN_DIR, `${name}.d.ts`), 'utf8');
 const current = golden('plugin-current');
 const withAddon = golden('with-addon');
 
+const RELEASED_PROTOCOL_DIR = join(FIXTURES, 'protocol', 'released');
+const RELEASED_REGISTRY_DIR = join(REGISTRY_DIR, 'released');
+
+interface ReleasedManifest {
+  version: string;
+  capabilities?: string[];
+}
+
+function discoverRegistrySnapshots(): { name: string; sdk: string; capabilities: string[] }[] {
+  const out: { name: string; sdk: string; capabilities: string[] }[] = [];
+  for (const file of readdirSync(REGISTRY_DIR).filter((n) => n.endsWith('.json')).sort()) {
+    const stem = file.replace(/\.json$/, '');
+    const snap = JSON.parse(readFileSync(join(REGISTRY_DIR, file), 'utf8')) as RegistrySnapshot;
+    const sdk = stem === 'plugin-current' || stem === 'with-addon' ? golden(stem) : generateSdk(surfaceOf(snap));
+    out.push({ name: stem, sdk, capabilities: snap.capabilities ?? [] });
+  }
+  if (existsSync(RELEASED_REGISTRY_DIR)) {
+    for (const file of readdirSync(RELEASED_REGISTRY_DIR).filter((n) => n.endsWith('.json')).sort()) {
+      const snap = JSON.parse(readFileSync(join(RELEASED_REGISTRY_DIR, file), 'utf8')) as RegistrySnapshot;
+      out.push({ name: `released/${file.replace(/\.json$/, '')}`, sdk: generateSdk(surfaceOf(snap)), capabilities: snap.capabilities ?? [] });
+    }
+  }
+  return out;
+}
+
+const allSnapshots = discoverRegistrySnapshots();
+
 interface Expectation {
   task: string;
+  kind: 'task' | 'followup' | 'corpus';
   title: string;
   registry: string;
   result: 'pass' | 'fail';
+  gaps?: string[];
   note?: string;
-  diagnostics?: { code: number; messageContains?: string[] }[];
+  diagnostics?: { code: number; line?: number; gap?: string; messageContains?: string[] }[];
 }
 
 const corpus = readdirSync(CORPUS_DIR)
@@ -45,31 +75,61 @@ function codes(program: string, sdk = current): number[] {
 }
 
 describe('the generated declarations', () => {
-  it.each([['plugin-current', current], ['with-addon', withAddon]])('%s compiles with the core, nothing skipped', (_name, sdk) => {
+  it.each(allSnapshots.map((s) => [s.name, s.sdk] as const))('%s compiles with the core, nothing skipped', (_name, sdk) => {
     const problems = checkDeclarations(sdk);
     expect(show(problems)).toBe('');
+  });
+
+  it('released plugin manifests advertising codemode have a recorded registry snapshot (codemode.md section 7)', () => {
+    const manifests = readdirSync(RELEASED_PROTOCOL_DIR)
+      .filter((name) => name.endsWith('.json'))
+      .sort()
+      .map((name) => JSON.parse(readFileSync(join(RELEASED_PROTOCOL_DIR, name), 'utf8')) as ReleasedManifest);
+    expect(manifests.length).toBeGreaterThan(0);
+    for (const manifest of manifests) {
+      const hasCodemode = (manifest.capabilities ?? []).includes('codemode');
+      if (manifest.version === '0.1.0') expect(hasCodemode).toBe(false);
+      if (hasCodemode) {
+        expect(existsSync(join(RELEASED_REGISTRY_DIR, `${manifest.version}.json`)), `missing released registry snapshot for ${manifest.version}`).toBe(true);
+      }
+    }
   });
 });
 
 describe('the program corpus', () => {
-  it('holds the first benchmark programs', () => {
-    expect(corpus.map((entry) => entry.expect.task)).toEqual(expect.arrayContaining(['T08', 'T11', 'T25', 'T27']));
+  it('holds all 29 benchmark tasks, 5 follow-ups, and 3 corpus programs', () => {
+    const tasks = corpus.filter((e) => e.expect.kind === 'task').map((e) => e.expect.task);
+    const followups = corpus.filter((e) => e.expect.kind === 'followup').map((e) => e.expect.task);
+    const extra = corpus.filter((e) => e.expect.kind === 'corpus').map((e) => e.expect.task);
+    expect(tasks).toEqual(Array.from({ length: 29 }, (_, i) => `T${String(i + 1).padStart(2, '0')}`));
+    expect(followups).toEqual(['F1', 'F2', 'F3', 'F4', 'F5']);
+    expect(extra).toEqual(['C01', 'C02', 'C03']);
   });
 
   it.each(corpus.map((entry) => [entry.expect.task + ' ' + entry.expect.title, entry] as const))('%s', (_label, entry) => {
-    const registry = entry.expect.registry === 'with-addon' ? withAddon : current;
-    // the host runs a program as the body of an async function, so the checker sees it as one (top-level await is not allowed in a script)
-    const problems = checkProgram(`(async () => {
-${entry.program}
-})();`, registry);
-    if (entry.expect.result === 'pass') {
-      expect(show(problems)).toBe('');
-      return;
-    }
-    expect(problems.length).toBeGreaterThan(0);
-    for (const wanted of entry.expect.diagnostics ?? []) {
-      const hit = problems.find((problem) => problem.code === wanted.code && (wanted.messageContains ?? []).every((part) => problem.message.includes(part)));
-      expect(hit, `expected TS${wanted.code} with ${JSON.stringify(wanted.messageContains)}, got:\n${show(problems)}`).toBeDefined();
+    const targets = allSnapshots.filter((s) => {
+      if (entry.expect.registry === 'with-addon') return s.name === 'with-addon';
+      if (s.name === 'plugin-current' || s.name === 'with-addon') return true;
+      return s.capabilities.includes('codemode');
+    });
+    expect(targets.length).toBeGreaterThan(0);
+    for (const target of targets) {
+      const problems = checkProgram(entry.program, target.sdk);
+      if (entry.expect.result === 'pass') {
+        expect(show(problems), target.name).toBe('');
+        continue;
+      }
+      const wantedList = entry.expect.diagnostics ?? [];
+      expect(problems.length, `${target.name}: unexpected diagnostic count:\n${show(problems)}`).toBe(wantedList.length);
+      for (const wanted of wantedList) {
+        const hit = problems.find(
+          (problem) =>
+            problem.code === wanted.code &&
+            (wanted.line === undefined || problem.line === wanted.line) &&
+            (wanted.messageContains ?? []).every((part) => problem.message.includes(part)),
+        );
+        expect(hit, `${target.name}: expected TS${wanted.code} at line ${wanted.line} with ${JSON.stringify(wanted.messageContains)}, got:\n${show(problems)}`).toBeDefined();
+      }
     }
   });
 });

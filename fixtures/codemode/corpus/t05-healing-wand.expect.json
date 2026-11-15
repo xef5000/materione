@@ -1,6 +1,10 @@
 {
   "task": "T05",
+  "kind": "task",
   "title": "Healing wand",
+  "area": "ability",
+  "prompt": "Make a healing wand item: right-clicking heals 4 hearts with a 30-second cooldown and tells the player how many seconds are left when on cooldown.",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

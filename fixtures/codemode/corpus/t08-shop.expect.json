@@ -1,6 +1,10 @@
 {
   "task": "T08",
+  "kind": "task",
   "title": "Shop",
+  "area": "GUI, economy",
+  "prompt": "Create a /shop menu where players can left-click to buy and right-click to sell diamonds, iron ingots, and bread for coins.",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

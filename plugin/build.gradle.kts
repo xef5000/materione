@@ -78,3 +78,15 @@ tasks.named<ProcessResources>("processResources") {
         into("webui")
     }
 }
+
+// Long-lived JSON-Lines dry-run/apply oracle for the code-mode benchmark (issues 385, 349).
+// Uses test runtimeClasspath only so zero benchmark classes enter the production plugin jar.
+tasks.register<JavaExec>("benchmarkOracle") {
+    description = "Runs the JSON-Lines JVM dry-run/apply oracle for code-mode benchmarks."
+    group = "verification"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.materione.plugin.runtime.CodemodeBenchmarkOracleMain")
+    standardInput = System.`in`
+    workingDir = rootProject.projectDir
+    systemProperty("materione.fixtures.root", rootProject.layout.projectDirectory.dir("fixtures").asFile.absolutePath)
+}

@@ -1,0 +1,10 @@
+{
+  "task": "F4",
+  "kind": "followup",
+  "title": "Rename permission",
+  "area": "read, edit",
+  "prompt": "Rename the permission rpg.weapons to rpg.bloodfang across the pack.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

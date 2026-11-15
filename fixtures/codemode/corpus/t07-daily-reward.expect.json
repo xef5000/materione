@@ -1,0 +1,10 @@
+{
+  "task": "T07",
+  "kind": "task",
+  "title": "Daily reward",
+  "area": "GUI, progression",
+  "prompt": "Create a /daily reward menu with one claim per day and a streak that resets if a day is missed.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}

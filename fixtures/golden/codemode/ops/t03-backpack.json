@@ -1,0 +1,57 @@
+{
+  "task": "T03",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a 3-row Traveler's Pack backpack item.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "traveler_pack",
+      "edits": [
+        {
+          "field": [
+            "traveler_pack",
+            "material"
+          ],
+          "value": "LEATHER"
+        },
+        {
+          "field": [
+            "traveler_pack",
+            "display_name"
+          ],
+          "value": "Traveler's Pack"
+        },
+        {
+          "field": [
+            "traveler_pack",
+            "mechanics"
+          ],
+          "value": [
+            {
+              "materione:backpack": {
+                "rows": 3,
+                "title": "Traveler's Pack"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 9
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 1,
+    "documents": 1
+  }
+}

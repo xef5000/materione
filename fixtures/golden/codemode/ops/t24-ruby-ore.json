@@ -1,0 +1,109 @@
+{
+  "task": "T24",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a Ruby Ore custom block that gives a ruby, 5 XP, and a 10% chance for a second ruby.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "blocks",
+      "id": "ruby_ore",
+      "edits": [
+        {
+          "field": [
+            "ruby_ore",
+            "display_name"
+          ],
+          "value": "<red>Ruby Ore"
+        },
+        {
+          "field": [
+            "ruby_ore",
+            "texture"
+          ],
+          "value": "block/ruby_ore"
+        },
+        {
+          "field": [
+            "ruby_ore",
+            "drops"
+          ],
+          "value": [
+            "sample:ruby"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "blocks/ruby_ore.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "break",
+            "do": [
+              {
+                "give_item": {
+                  "item": "sample:ruby",
+                  "amount": 1
+                }
+              },
+              {
+                "give_exp": {
+                  "amount": 5,
+                  "unit": "points"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "blocks/ruby_ore.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 1,
+          "rule": {
+            "on": "break",
+            "do": [
+              {
+                "give_item": {
+                  "item": "sample:ruby",
+                  "amount": 1
+                },
+                "chance": 0.1
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 22
+    },
+    {
+      "line": 10,
+      "column": 11
+    },
+    {
+      "line": 13,
+      "column": 11
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 3,
+    "documents": 1
+  }
+}

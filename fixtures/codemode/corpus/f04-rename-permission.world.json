@@ -1,0 +1,31 @@
+{
+  "packs": ["bench"],
+  "resources": {
+    "bench": [
+      { "type": "items", "path": "items/bloodfang.yml", "id": "bloodfang", "name": "bloodfang" },
+      { "type": "guis", "path": "guis/bloodfang_menu.yml", "id": "bloodfang_menu", "name": "bloodfang_menu" }
+    ]
+  },
+  "documents": {
+    "bench/items/bloodfang.yml": {
+      "rev": 0,
+      "parsed": {
+        "bloodfang": { "material": "DIAMOND_SWORD" }
+      }
+    },
+    "bench/guis/bloodfang_menu.yml": {
+      "rev": 0,
+      "parsed": {
+        "bloodfang_menu": {
+          "title": "Bloodfang Upgrade",
+          "container": "chest_3",
+          "open": { "permission": "rpg.weapons" }
+        }
+      }
+    }
+  },
+  "files": {
+    "bench/items/bloodfang.yml": "bloodfang:\n  material: DIAMOND_SWORD\n",
+    "bench/guis/bloodfang_menu.yml": "bloodfang_menu:\n  title: Bloodfang Upgrade\n  container: chest_3\n  open:\n    permission: rpg.weapons\n"
+  }
+}

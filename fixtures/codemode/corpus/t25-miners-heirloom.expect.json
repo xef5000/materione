@@ -1,6 +1,10 @@
 {
   "task": "T25",
+  "kind": "task",
   "title": "Miner's heirloom",
+  "area": "item",
+  "prompt": "Create a Miner's Heirloom netherite pickaxe with 2000 custom durability that is kept on death.",
   "registry": "plugin-current",
-  "result": "pass"
+  "result": "pass",
+  "gaps": []
 }

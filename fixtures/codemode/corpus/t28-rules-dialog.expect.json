@@ -1,0 +1,26 @@
+{
+  "task": "T28",
+  "kind": "task",
+  "title": "Rules on first join",
+  "area": "dialog",
+  "prompt": "Show a rules dialog on first join with an Accept button; players cannot play until they accept.",
+  "registry": "plugin-current",
+  "result": "fail",
+  "gaps": ["VIEW"],
+  "diagnostics": [
+    {
+      "code": 2339,
+      "line": 4,
+      "gap": "VIEW",
+      "messageContains": ["dialogs", "PackWriter"],
+      "missingPrimitive": { "member": "dialogs", "catalog": "PackWriter" }
+    },
+    {
+      "code": 2339,
+      "line": 15,
+      "gap": "VIEW",
+      "messageContains": ["dialogOpen", "ActionCatalog"],
+      "missingPrimitive": { "member": "dialogOpen", "catalog": "ActionCatalog" }
+    }
+  ]
+}

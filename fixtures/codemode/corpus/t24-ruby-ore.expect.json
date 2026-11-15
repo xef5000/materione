@@ -1,0 +1,10 @@
+{
+  "task": "T24",
+  "kind": "task",
+  "title": "Ruby ore",
+  "area": "block",
+  "prompt": "Create a Ruby Ore custom block that drops a ruby, grants 5 XP, and has a 10% chance to give a second ruby.",
+  "registry": "plugin-current",
+  "result": "pass",
+  "gaps": []
+}
