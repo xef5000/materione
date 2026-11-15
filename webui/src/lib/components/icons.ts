@@ -105,6 +105,7 @@ import Scan from '@lucide/svelte/icons/scan';
 import RectangleHorizontal from '@lucide/svelte/icons/rectangle-horizontal';
 import SquareDashed from '@lucide/svelte/icons/square-dashed';
 import FileDiff from '@lucide/svelte/icons/file-diff';
+import MessageSquare from '@lucide/svelte/icons/message-square';
 
 export const icons = {
   'arrow-left': ArrowLeft,
@@ -125,6 +126,7 @@ export const icons = {
   eraser: Eraser,
   file: File,
   'file-diff': FileDiff,
+  'message-square': MessageSquare,
   'file-braces': FileBraces,
   'file-code': FileCode,
   folder: Folder,

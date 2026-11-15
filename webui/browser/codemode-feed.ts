@@ -6,6 +6,9 @@
  * `declarePlan`, the same two calls the chat tool will get. It cannot approve anything.
  */
 import type { ProposalInput } from '../src/lib/codemode/host';
+import { createScriptedProvider } from '../src/lib/codemode/chat/scripted';
+import { bloodfangScript } from '../src/lib/codemode/chat/scripts/bloodfang';
+import { installChatProvider } from '../src/lib/codemode/chat/state.svelte';
 import { reviewAgentPort } from '../src/lib/codemode/review/state.svelte';
 import type { CodemodeHarness } from './contract';
 
@@ -39,6 +42,14 @@ export function createCodemodeHarness(pack: string): CodemodeHarness {
       };
       const proposal = await agent.propose(result, { program, plan: options.plan, autoApply: options.autoApply });
       return proposal.id;
+    },
+    connectBloodfangChat(paceMs = 0) {
+      const script = bloodfangScript(pack);
+      installChatProvider(createScriptedProvider(script, { paceMs }), script.prompts);
+      return script.prompts;
+    },
+    disconnectChatProvider() {
+      installChatProvider(null);
     },
   };
 }

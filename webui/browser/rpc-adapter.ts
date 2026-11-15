@@ -923,8 +923,19 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         pack: PACK,
         get: (path) => this.#documents.get(`${PACK}/${path}`),
         put: (path, doc) => {
-          if (doc === null) this.#documents.delete(`${PACK}/${path}`);
-          else this.#documents.set(`${PACK}/${path}`, { pack: PACK, path, rev: doc.rev, raw: doc.raw, parsed: doc.parsed });
+          if (doc === null) {
+            this.#documents.delete(`${PACK}/${path}`);
+            for (let i = this.#resources.length - 1; i >= 0; i--) {
+              if (this.#resources[i]?.pack === PACK && this.#resources[i]?.path === path) this.#resources.splice(i, 1);
+            }
+          } else {
+            this.#documents.set(`${PACK}/${path}`, { pack: PACK, path, rev: doc.rev, raw: doc.raw, parsed: doc.parsed });
+            if (!this.#resources.some((resource) => resource.pack === PACK && resource.path === path)) {
+              const type = path.split('/')[0] ?? 'items';
+              const id = Object.keys(doc.parsed)[0] ?? path;
+              this.#resources.push({ pack: PACK, type, path, id });
+            }
+          }
         },
         serialize: (parsed) => serializeFixtureYaml(parsed),
         audit: (entry) => this.#auditEntries.unshift(entry),
@@ -1230,11 +1241,16 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
             behavior: structuredClone(MODULES_VOCABULARY),
           });
         }
-        if (!this.#guided) return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
-        return this.success(op, {
-          types: [this.guidedItemType(), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
-          behavior: structuredClone(GUIDED_VOCABULARY),
-        });
+        if (this.#guided) {
+          return this.success(op, {
+            types: [this.guidedItemType(), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
+            behavior: structuredClone(GUIDED_VOCABULARY),
+          });
+        }
+        if (this.#codemode !== null) {
+          return this.success(op, structuredClone(goldenSnapshot.describe));
+        }
+        return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
       case 'browse.types':
         return this.success(op, { types: this.typeList() });
       case 'browse.resources': {
@@ -1527,7 +1543,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const offset = numberValue(payload.offset, 0);
     const limit = numberValue(payload.limit, 100);
     if (!Number.isInteger(offset) || offset < 0
-        || !Number.isInteger(limit) || limit < 1 || limit > 200) {
+        || !Number.isInteger(limit) || limit < 1 || limit > 500) {
       return this.failure(op, 'MTR-0012', 'summary page has invalid offset or limit');
     }
     const start = Math.min(offset, all.length);

@@ -421,12 +421,20 @@ const REVIEW_COVERS = [
   'webui/test-support/qa-browser.mjs',
 ];
 
+// The code-mode assistant panel (issue 348, codemode.md section 12.1).
+const CHAT_COVERS = [
+  ...REVIEW_COVERS,
+  'webui/src/lib/codemode/chat/**',
+  'webui/src/lib/host.ts',
+  'webui/browser/specs/codemode-chat.pw.ts',
+];
+
 /**
  * Serves the browser harness (`webui/browser`, the same App and Workbench over a fixture channel) on a free loopback port for
- * the duration of `run`, and points this test's browser page at it with `?codemode`. The harness is a dev server of the webui
- * workspace; nothing here reaches the live server or writes a fixture.
+ * the duration of `run`, and points this test's browser page at it with `query` (default `?codemode`). The harness is a dev
+ * server of the webui workspace; nothing here reaches the live server or writes a fixture.
  */
-async function withReviewHarness(ctx, run) {
+async function withReviewHarness(ctx, run, query = '?codemode') {
   const { spawn } = await import('node:child_process');
   const net = await import('node:net');
   const webui = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'webui');
@@ -445,7 +453,7 @@ async function withReviewHarness(ctx, run) {
   });
   try {
     const page = await ctx.browser.openEditor();
-    const url = `http://127.0.0.1:${port}/browser/fixture.html?codemode`;
+    const url = `http://127.0.0.1:${port}/browser/fixture.html${query}`;
     let ready = false;
     for (let attempt = 0; attempt < 120 && !ready; attempt++) {
       try {
@@ -740,8 +748,8 @@ export default [
       const page = await ctx.browser.openEditor();
       await page.getByLabel('project').selectOption('sample');
       const rail = page.getByRole('navigation', { name: 'Workspace navigation' });
-      // Four authoring views, four support views (Review appears because the server advertises code mode) and the labels toggle.
-      ctx.expect(await rail.locator('svg.lucide-icon').count()).toBe(9);
+      // Four authoring views, five support views (Assistant + Review, which appears because the server advertises code mode) and the labels toggle.
+      ctx.expect(await rail.locator('svg.lucide-icon').count()).toBe(10);
       ctx.expect(await rail.getByRole('button', { name: 'Content', exact: true }).locator('svg.lucide-icon').count()).toBe(1);
       await page.getByRole('button', { name: 'Content', exact: true }).click();
       const types = page.getByRole('navigation', { name: 'content types' });
@@ -782,7 +790,7 @@ export default [
       await page.getByRole('heading', { name: 'Problems', exact: true }).waitFor({ state: 'visible' });
       await ctx.browser.browserShot('icon-set-rail-collapsed');
       ctx.needsEyes(
-        'every icon is one Lucide stroke family (ISC, bundled, no runtime CDN) at the same visual weight: the rail (Start house, Content layers, Assets image, Files folder, Problems triangle, Review diff, Activity pulse, Server, labels chevron) and its collapsed 48px form; the Content toolbar (back, up, list, grid, New item plus) and the type tabs, where each content type has its own icon (Items package, Blocks box, Furniture armchair, Recipes chef hat, Templates layout, Glyphs type, Sounds speaker, Paintings frame, Text effects sparkles); the Start tiles repeat the per-type icon; no unicode glyph such as an arrow, cross or diamond appears as an icon. Colours and spacing are unchanged from before the icon set (issue #149; the visual identity work is tracked in #150).',
+        'every icon is one Lucide stroke family (ISC, bundled, no runtime CDN) at the same visual weight: the rail (Start house, Content layers, Assets image, Files folder, Problems triangle, Assistant message-square, Review diff, Activity pulse, Server, labels chevron) and its collapsed 48px form; the Content toolbar (back, up, list, grid, New item plus) and the type tabs, where each content type has its own icon (Items package, Blocks box, Furniture armchair, Recipes chef hat, Templates layout, Glyphs type, Sounds speaker, Paintings frame, Text effects sparkles); the Start tiles repeat the per-type icon; no unicode glyph such as an arrow, cross or diamond appears as an icon. Colours and spacing are unchanged from before the icon set (issue #149; the visual identity work is tracked in #150).',
       );
     },
   }),
@@ -1967,6 +1975,122 @@ export default [
           'codemode-review-auto-applied: an Applied proposal that only created content, with the sentence that nothing needed approval, no buttons, and the agent summary in a dashed box labelled as the agent\'s words; codemode-review-needs-approval-diff-program: the Needs your approval chip, "Changes to existing objects (4)", one diff per file with +/- signs, line numbers and a Needs approval chip each, the program with "staged operation N" labels, and Approve and apply plus Reject; codemode-review-change-log: the applied entry with Approved by you and a Revert button; codemode-review-revert-preview: what a revert would restore as diffs with Confirm revert and Cancel; codemode-review-revert-refused: Revert refused naming items/ruby_disc.yml and MTR-0034 with no confirm; codemode-review-refused: a Refused chip, an Error finding grouped under its operation with the program line, and no Approve; codemode-review-warnings: a Warning and an "Already there before this change" finding, neither blocking, with Approve; codemode-review-stale: Out of date with the instruction to ask the agent to run the program again and no button. Every state is named in words and no state is colour alone' + IDENTITY_EYES,
         );
       });
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-chat-local',
+    title: 'the live local editor shows the Assistant rail entry, focuses its heading on open, directs to editor.materione.com with no demo or composer, and closes on Escape',
+    covers: CHAT_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      const toggle = page.getByRole('button', { name: /^Assistant/ });
+      await toggle.waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect(await toggle.getAttribute('aria-expanded')).toBe('false');
+      await toggle.click();
+      ctx.expect(await toggle.getAttribute('aria-expanded')).toBe('true');
+      const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+      await panel.waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect(await page.evaluate(() => document.activeElement?.id)).toBe('assistant-title');
+      await panel.getByRole('note', { name: 'Available on editor.materione.com' }).waitFor({ state: 'visible' });
+      ctx.expect(await panel.getByRole('button', { name: /Use the next recorded message|demo/i }).count()).toBe(0);
+      ctx.expect(await panel.locator('#assistant-input').count()).toBe(0);
+      await page.keyboard.press('Escape');
+      await panel.waitFor({ state: 'hidden' });
+      ctx.expect(await page.evaluate(() => document.activeElement?.id)).toBe('assistant-toggle');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-chat-flow',
+    title: 'in the cloud browser harness Bloodfang reports missing primitives with zero applies on turn 1, repairs and auto-applies new files on turn 2, pauses for inline approval on turn 3, and reverts from the Assistant change log',
+    covers: CHAT_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await withReviewHarness(ctx, async (page) => {
+        const prompts = await page.evaluate(() => window.__materioneCodemode.connectBloodfangChat(0));
+        await page.getByRole('button', { name: /^Assistant/ }).click();
+        const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+        await panel.waitFor({ state: 'visible' });
+        const transcript = panel.getByRole('log', { name: 'Conversation' });
+        const composer = panel.locator('#assistant-input');
+
+        await composer.fill(prompts[0]);
+        await composer.press('Enter');
+        await transcript.getByText('Do you want that version, or should I wait until the server can do the rest?').waitFor({ state: 'visible', timeout: 30_000 });
+        const appliesAfterTurn1 = await page.evaluate(() => window.__materioneTestControls.codemode.calls.filter((c) => c.op === 'authoring.transaction' && !c.dryRun).length);
+        ctx.expect(appliesAfterTurn1).toBe(0);
+        const turn1Text = await transcript.innerText();
+        ctx.expect(turn1Text).toContain('holder');
+        ctx.expect(turn1Text).toContain('target');
+
+        await composer.fill(prompts[1]);
+        await composer.press('Enter');
+        await transcript.getByText(/Bloodfang is in\./).waitFor({ state: 'visible', timeout: 30_000 });
+        await transcript.getByRole('article').first().getByText('Applied', { exact: true }).first().waitFor({ state: 'visible' });
+
+        await composer.fill(prompts[2]);
+        await composer.press('Enter');
+        await transcript.getByText(/I cannot approve it\./).waitFor({ state: 'visible', timeout: 30_000 });
+        const waitingCard = transcript.getByRole('article').nth(1);
+        await waitingCard.getByText('Needs your approval').waitFor({ state: 'visible' });
+        await waitingCard.getByRole('button', { name: 'Approve and apply' }).click();
+        await waitingCard.getByText('Applied', { exact: true }).first().waitFor({ state: 'visible' });
+
+        await panel.getByRole('tab', { name: /^Change log/ }).click();
+        const entry = panel.getByRole('article', { name: /^Applied tx-/ }).first();
+        await entry.getByRole('button', { name: /^Revert/ }).click();
+        const preview = entry.getByRole('group', { name: 'Revert preview' });
+        await preview.waitFor({ state: 'visible' });
+        await preview.getByRole('button', { name: 'Confirm revert' }).click();
+        await entry.getByText('Reverted', { exact: true }).first().waitFor({ state: 'visible' });
+      }, '?codemode&host=cloud');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-codemode-chat-visual',
+    title: 'the Assistant panel reads cleanly in the local notice state and across the Bloodfang states (disclosure, missing primitives + auto-applied, inline Needs your approval diff)',
+    mode: 'visual',
+    dependsOn: ['editor.browser-codemode-chat-local', 'editor.browser-codemode-chat-flow'],
+    covers: CHAT_COVERS,
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      const localPage = await ctx.browser.openEditor();
+      await localPage.getByLabel('project').selectOption('sample');
+      await localPage.getByRole('button', { name: /^Assistant/ }).click();
+      await localPage.getByRole('region', { name: 'Assistant', exact: true }).waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('codemode-chat-local-notice');
+
+      await withReviewHarness(ctx, async (page) => {
+        const prompts = await page.evaluate(() => window.__materioneCodemode.connectBloodfangChat(0));
+        await page.getByRole('button', { name: /^Assistant/ }).click();
+        const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+        await panel.locator('section[aria-label="What leaves this page"]').waitFor({ state: 'visible' });
+        await ctx.browser.browserShot('codemode-chat-disclosure');
+
+        const transcript = panel.getByRole('log', { name: 'Conversation' });
+        const composer = panel.locator('#assistant-input');
+        await composer.fill(prompts[0]);
+        await composer.press('Enter');
+        await transcript.getByText('Do you want that version, or should I wait until the server can do the rest?').waitFor({ state: 'visible', timeout: 30_000 });
+        await composer.fill(prompts[1]);
+        await composer.press('Enter');
+        await transcript.getByText(/Bloodfang is in\./).waitFor({ state: 'visible', timeout: 30_000 });
+        await ctx.browser.browserShot('codemode-chat-bloodfang-applied');
+
+        await composer.fill(prompts[2]);
+        await composer.press('Enter');
+        await transcript.getByText(/I cannot approve it\./).waitFor({ state: 'visible', timeout: 30_000 });
+        await transcript.getByRole('article').nth(1).getByText('Needs your approval').waitFor({ state: 'visible' });
+        await ctx.browser.browserShot('codemode-chat-needs-approval');
+
+        ctx.needsEyes(
+          'codemode-chat-local-notice: the live local editor with the Assistant column on the right showing the editor.materione.com only chip and notice, no demo button and no composer; codemode-chat-disclosure: the Assistant panel in the cloud harness before any message, showing the What leaves this page section and composer; codemode-chat-bloodfang-applied: the Bloodfang conversation after turn 2 showing Read only, Type error with missing primitives (holder, target), repaired Dry run clean, and the auto-applied ProposalCard with Applied and no approve button; codemode-chat-needs-approval: turn 3 showing the inline Needs your approval ProposalCard with ruby_sword diff and Approve and apply / Reject buttons. Every state is named in words, tokens only, WCAG AA contrast, nothing clipped' + IDENTITY_EYES,
+        );
+      }, '?codemode&host=cloud');
     },
   }),
 ];

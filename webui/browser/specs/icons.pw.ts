@@ -21,11 +21,12 @@ test('the rail draws every view and the labels toggle from the icon set', async 
   await openFixture(page);
 
   const rail = page.getByRole('navigation', { name: 'Workspace navigation' });
-  // Four authoring views, three support views and the labels toggle.
-  await expect(rail.locator('svg.lucide-icon')).toHaveCount(8);
-  await expect(rail.locator('svg.lucide-icon[aria-hidden="true"]')).toHaveCount(8);
+  // Four authoring views, four support views and the labels toggle.
+  await expect(rail.locator('svg.lucide-icon')).toHaveCount(9);
+  await expect(rail.locator('svg.lucide-icon[aria-hidden="true"]')).toHaveCount(9);
   await expect(rail.getByRole('button', { name: 'Collapse navigation labels' }).locator('svg.lucide-icon')).toHaveCount(1);
   await expect(rail.getByRole('button', { name: 'Content', exact: true }).locator('svg.lucide-icon')).toHaveCount(1);
+  await expect(rail.getByRole('button', { name: 'Assistant', exact: true }).locator('svg.lucide-icon')).toHaveCount(1);
 });
 
 test('the Content toolbar names its icon-only controls and carries no glyph text', async ({ page }) => {

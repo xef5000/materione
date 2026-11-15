@@ -32,9 +32,11 @@ async function startFixture(): Promise<void> {
 
   await loadWorkspace();
   await refreshDelivery();
+  const host = params.get('host') === 'cloud' ? 'cloud' : 'plugin';
   mount(Workbench, {
     target,
     props: {
+      host,
       onDisconnect: () => {
         if (!confirmDisconnect()) return;
         adapter.simulateDisconnect();

@@ -1550,6 +1550,17 @@ alone, under the hard cap above.
 
 **Still open.** The model allowlist and the routing rule (#385); the numbers for rates and the free allowance; everything in #386.
 
+*As built (#348): the agent loop, context assembly, and `editor.materione.com` boundary.* The SPA side (`webui/src/lib/codemode/chat/`) is wired
+and verified with a scripted provider (`scripted.ts`, `scripts/bloodfang.ts`):
+- **Loop bounds**: `REPAIR_BUDGET = 3` consecutive failed programs per user request and `MAX_MODEL_TURNS = 12` model turns per request (`loop.ts`).
+- **Context assembly**: `agentContext` (`context.ts`) builds the system prompt and SDK index from the connected server's generated `m.sdk.d.ts`,
+  so the model only sees the registries and primitives the server actually advertises.
+- **Bounded tool outputs & missing primitives**: `run_program` (`tool.ts`) caps serialized results and diagnostics at `TOOL_RESULT_MAX_CHARS = 24_000`
+  and surfaces structured `missingPrimitives` diagnostics when a program references a catalog member absent from the generated SDK.
+- **Cloud-only boundary**: remote model calls are restricted to `editor.materione.com` (`EditorHost === 'cloud'`). On the embedded local editor
+  (`/materione editor local`), the Assistant panel shows a plain notice pointing to `editor.materione.com` and makes zero external requests;
+  the model proxy Worker (#402, #386) remains separate and unattached in this build.
+
 
 ### 12.2 Permissions, approval and old errors (decided 2026-11-14, #358, #372)
 
