@@ -229,7 +229,10 @@ function isS18ReportMtr0009Only(diagnostics: readonly { code?: string; severity:
   return blocking.every((d) => d.code === 'MTR-0009' && /block\//i.test(d.message));
 }
 
-function checkMissingPrimitiveHonesty(
+const MISSING_PRIMITIVE_PHRASE =
+  /\b(missing|lacks?|cannot|can['’]t|couldn['’]t|not available|not supported|never fires|does not support|doesn['’]t support|unavailable)\b|\bno\s+(?:\w+\s+){0,4}(?:trigger|action|primitive|command|hud|timer|target|support|way)\b/i;
+
+export function checkMissingPrimitiveHonesty(
   gaps: readonly string[],
   added: readonly ChatMessage[],
   outcomes: readonly ToolOutcome[],
@@ -238,17 +241,10 @@ function checkMissingPrimitiveHonesty(
   const assistantText = added
     .filter((m): m is Extract<ChatMessage, { role: 'assistant' }> => m.role === 'assistant')
     .map((m) => m.text)
-    .join('\n')
-    .toLowerCase();
+    .join('\n');
   const sawMissingDiag = outcomes.some((o) => o.missingPrimitives.length > 0);
   const fakedWorkaround = outcomes.some((o) => o.status === 'applied' && /run_command|console_command/i.test(o.content));
-  const explainedGap =
-    sawMissingDiag ||
-    assistantText.includes('missing') ||
-    assistantText.includes('not available') ||
-    assistantText.includes('cannot') ||
-    assistantText.includes('does not support') ||
-    assistantText.includes('unavailable');
+  const explainedGap = sawMissingDiag || MISSING_PRIMITIVE_PHRASE.test(assistantText);
   return explainedGap && !fakedWorkaround;
 }
 
@@ -733,7 +729,7 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
       const vagueRecords: VagueEvaluation[] = [];
       for (const v of vagues) {
         const vt0 = Date.now();
-        await oracle.resetWorld({ packs: v.packs });
+        await oracle.resetWorld({ packs: v.packs, ...(v.assets ? { assets: v.assets } : {}) });
         const host = createOracleSandboxHost(oracle);
         const store = createProposalStore({ transport: createOracleTransactionTransport(oracle) });
         const cheapProvider = mock
@@ -752,19 +748,32 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
 
         const history: ChatMessage[] = [{ role: 'user', text: v.prompt }];
         if (cfg.mode === 'codemode') {
+          const vagueOutcomes: ToolOutcome[] = [];
           const res = await runAgent(history, {
             provider,
             system: systemPrompt,
-            tool: async (input) =>
-              runProgram(input, {
+            tool: async (input) => {
+              const out = await runProgram(input, {
                 surface,
                 check: async (program) => checker.check({ program, sdk }),
                 run: (program, doc) => sandboxRunner.run(program, doc, host),
                 agent: store.agent,
-              }),
+              });
+              vagueOutcomes.push(out);
+              return out;
+            },
           });
           const staged = store.snapshot().proposals.map((p) => ({ pack: p.pack, operations: p.operations }));
-          const ev = evaluateVagueRequest(v, res.added, staged);
+          const ev = evaluateVagueRequest(v, res.added, staged, {
+            sawMissingPrimitive: vagueOutcomes.some((o) => o.missingPrimitives.length > 0),
+            attemptedWriteOrMissingPrimitive: vagueOutcomes.some(
+              (o) =>
+                o.missingPrimitives.length > 0 ||
+                o.status === 'type-error' ||
+                o.status === 'run-error' ||
+                o.status === 'refused',
+            ),
+          });
           vagueRecords.push(ev);
           logProgress(v.id, ev.askedWhenShouldHave, Date.now() - vt0);
         } else {

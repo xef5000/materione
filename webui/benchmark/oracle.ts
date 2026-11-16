@@ -307,6 +307,14 @@ export class MemoryBenchmarkOracle implements BenchmarkOracle {
         const pack = String(payload.pack ?? '');
         const docsMap = this.docs.get(pack);
         if (!docsMap) return { ok: false, error: { code: 'MTR-0009', message: `no such pack '${pack}'` } };
+        const offset = typeof payload.offset === 'number' ? payload.offset : 0;
+        const limit = typeof payload.limit === 'number' ? payload.limit : 100;
+        if (op === 'authoring.summaries' && (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 200)) {
+          return {
+            ok: false,
+            error: { code: 'MTR-0007', message: 'summary page requires offset >= 0 and limit between 1 and 200' },
+          };
+        }
         const typeFilter = typeof payload.type === 'string' ? payload.type.toLowerCase() : undefined;
         const query = typeof payload.query === 'string' ? payload.query.toLowerCase() : undefined;
         const rows = [...docsMap.entries()]
@@ -318,6 +326,17 @@ export class MemoryBenchmarkOracle implements BenchmarkOracle {
           })
           .filter((r) => typeFilter === undefined || r.type.toLowerCase() === typeFilter)
           .filter((r) => query === undefined || r.id.toLowerCase().includes(query));
+        if (op === 'authoring.summaries') {
+          const end = Math.min(offset + limit, rows.length);
+          return {
+            ok: true,
+            data: {
+              resources: rows.slice(Math.min(offset, rows.length), end),
+              total: rows.length,
+              ...(end < rows.length ? { nextOffset: end } : {}),
+            },
+          };
+        }
         return { ok: true, data: { resources: rows, total: rows.length } };
       }
       case 'browse.get': {

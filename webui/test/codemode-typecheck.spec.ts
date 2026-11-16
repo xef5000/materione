@@ -122,6 +122,33 @@ describe('a gap is reported as a missing primitive (codemode.md section 6, 9.2)'
     // a registry change mid-session: the same checker, the declarations swapped, the program rebuilt over them
     expect(codes(program, current)).toContain('TS2339');
   });
+
+  it('treats m.ref.texture and m.ref.model as asset-helper hints rather than missingPrimitive', () => {
+    for (const kind of ['texture', 'model']) {
+      const diag = check(`m.ref.${kind}("textures/item/foo.png");`).diagnostics.find((d) => d.code === 'TS2339');
+      expect(diag).toBeDefined();
+      expect(diag?.missingPrimitive).toBeUndefined();
+      expect(diag?.hint).toContain('m.ref.asset');
+    }
+  });
+
+  it('treats m.steps.action as a step-helper hint rather than missingPrimitive', () => {
+    const diag = check('m.steps.action(m.actions.cancel());').diagnostics.find((d) => d.code === 'TS2339');
+    expect(diag).toBeDefined();
+    expect(diag?.missingPrimitive).toBeUndefined();
+    expect(diag?.hint).toContain('m.actions.<name>');
+  });
+
+  it('adds actionable hints for MiniMessage, Ref<...>, and uncalled triggers', () => {
+    const mmDiag = check('const p = m.pack("t"); p.items.create("i", { material: "STICK", display_name: "<gold>Coin" });').diagnostics.find((d) => d.code === 'TS2322');
+    expect(mmDiag?.hint).toContain('m.mm(');
+
+    const refDiag = check('const p = m.pack("t"); p.blocks.create("b", { item: "minecraft:stone" });').diagnostics.find((d) => d.code === 'TS2322');
+    expect(refDiag?.hint).toContain('m.ref.');
+
+    const trigDiag = check('const p = m.pack("t"); const i = p.items.create("i", { material: "STICK" }); i.rules.add(m.triggers.consume, () => ({ do: [] }));').diagnostics.find((d) => d.code === 'TS2345');
+    expect(trigDiag?.hint).toContain('()');
+  });
 });
 
 describe('the program sees the surface and a minimal library, nothing else', () => {

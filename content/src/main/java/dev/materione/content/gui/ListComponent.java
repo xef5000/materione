@@ -54,7 +54,7 @@ public final class ListComponent implements GuiComponent {
                                 "The list source: a name (online_players), or a mapping with type and the source's "
                                         + "parameters ({type: pack_items, pack: shop}), or {entries: [...]}", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Source", "entries", 20, false, "text", "", "online_players")),
+                                        "Source", "entries", 20, false, "text", "list-source", "online_players")),
                         new ParameterSchema("filter", ParameterType.RAW, false, null,
                                 "Which entries show: a condition over entry.* (an expression, a predicate or a list)",
                                 null, null)

@@ -31,7 +31,15 @@ import type {
   SurfaceStepKind,
   SurfaceTrigger,
 } from './surface';
-import { KIND_ARGUMENTS, KIND_CONDITION, KIND_CONDITIONS, KIND_FLOW, KIND_STEPS } from './surface';
+import {
+  guiLayerCommonParams,
+  KIND_ARGUMENTS,
+  KIND_CONDITION,
+  KIND_CONDITIONS,
+  KIND_FLOW,
+  KIND_GUI_COMPONENT,
+  KIND_STEPS,
+} from './surface';
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from './capabilities';
 import { contextFor, contextTree, type ContextNode } from './context';
 import { camel, compare, memberNames, pascal, refMembers, sortedBy, writerMembers } from './names';
@@ -48,7 +56,8 @@ const HINT_RULES = 'behavior-rules';
 const HINT_INPUT_METHOD = 'input-method';
 /** The reference kinds that name a polymorphic registry rather than a resource or an asset. */
 const KIND_MECHANIC = 'mechanic';
-const KIND_GUI_COMPONENT = 'gui-component';
+const KIND_ITEM_SOURCE = 'item-source';
+const KIND_LIST_SOURCE = 'list-source';
 
 /**
  * The words JavaScript reserves, which a parameter of a generated signature cannot be named. They are language
@@ -151,6 +160,8 @@ interface Context {
   hasMechanics: boolean;
   hasGuiComponents: boolean;
   hasInputMethods: boolean;
+  hasItemSources: boolean;
+  hasListSources: boolean;
   /** Named unions extracted from large enums, in the order they were met. */
   aliases: string[];
 }
@@ -220,10 +231,17 @@ function baseTypeOfParam(param: SurfaceParam, owner: string, level: number, ctx:
     case 'boolean':
       return scalarType(param.type);
     case 'reference':
+      if (param.referenceKind !== undefined && !ctx.typeNames.has(param.referenceKind) && param.uiHint !== undefined && ctx.typeNames.has(param.uiHint)) {
+        return `Ref<${literal(param.uiHint)}>`;
+      }
       return param.referenceKind === undefined ? 'Ref' : `Ref<${literal(param.referenceKind)}>`;
     case 'string': {
       if (param.uiHint === HINT_FORMATTED_TEXT) return 'MiniMessage';
       if (param.uiHint === HINT_INPUT_METHOD && ctx.hasInputMethods) return 'InputMethodId';
+      if (param.referenceKind === KIND_ITEM_SOURCE) {
+        const base = param.uiHint !== undefined && ctx.typeNames.has(param.uiHint) ? `string | Ref<${literal(param.uiHint)}>` : 'string';
+        return ctx.hasItemSources ? `${base} | ItemSourceSpec` : base;
+      }
       if (param.uiHint !== undefined && ctx.typeNames.has(param.uiHint)) return `string | Ref<${literal(param.uiHint)}>`;
       if (param.referenceKind !== undefined) return `string | Ref<${literal(param.referenceKind)}>`;
       return 'string';
@@ -239,6 +257,7 @@ function baseTypeOfParam(param: SurfaceParam, owner: string, level: number, ctx:
       return 'JsonValue[]';
     }
     case 'raw':
+      if (param.referenceKind === KIND_LIST_SOURCE && ctx.hasListSources) return 'JsonValue | ListSourceSpec';
       return 'JsonValue';
     default:
       return 'unknown';
@@ -823,20 +842,9 @@ function sources(ctx: Context): string[] {
 
 // ---- GUI --------------------------------------------------------------------------------------------
 
-function layerCommon(ctx: Context): SurfaceParam[] {
-  for (const type of sortedBy(ctx.surface.contentTypes, (entry) => entry.name)) {
-    for (const param of type.parameters) {
-      if (param.type === 'list' && nestedLayerKind(param)) {
-        return (param.nested ?? []).filter((child) => child.referenceKind !== KIND_GUI_COMPONENT);
-      }
-    }
-  }
-  return [];
-}
-
 function gui(ctx: Context): string[] {
   const lines: string[] = [];
-  const common = layerCommon(ctx);
+  const common = guiLayerCommonParams(ctx.surface);
   const components = sortedBy(ctx.surface.gui.components, (component) => component.id);
   const names = memberNames(components.map((component) => component.id));
   const signatures: string[][] = [];
@@ -884,6 +892,8 @@ export function generateSdk(surface: SurfaceDocument): string {
     hasMechanics: surface.behavior.mechanics.length > 0,
     hasGuiComponents: surface.gui.components.length > 0,
     hasInputMethods: surface.behavior.inputMethods.length > 0,
+    hasItemSources: surface.behavior.itemSources.length > 0,
+    hasListSources: surface.behavior.listSources.length > 0,
     aliases: [],
   };
   const sections = [

@@ -1543,8 +1543,8 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const offset = numberValue(payload.offset, 0);
     const limit = numberValue(payload.limit, 100);
     if (!Number.isInteger(offset) || offset < 0
-        || !Number.isInteger(limit) || limit < 1 || limit > 500) {
-      return this.failure(op, 'MTR-0012', 'summary page has invalid offset or limit');
+        || !Number.isInteger(limit) || limit < 1 || limit > 200) {
+      return this.failure(op, 'MTR-0007', 'summary page requires offset >= 0 and limit between 1 and 200');
     }
     const start = Math.min(offset, all.length);
     const end = Math.min(start + limit, all.length);

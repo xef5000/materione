@@ -66,7 +66,7 @@ export function createOpHost(call: OpCall): SandboxHost {
           rows = (async () => {
             const found: Dict[] = [];
             for (let offset = 0; offset < 100_000; ) {
-              const page = await guarded('authoring.summaries', { pack, type: directory, offset, limit: 500 });
+              const page = await guarded('authoring.summaries', { pack, type: directory, offset, limit: 200 });
               if (!page.ok || !isDict(page.data) || !Array.isArray(page.data.resources)) break;
               const batch = (page.data.resources as unknown[]).filter(isDict);
               found.push(...batch);

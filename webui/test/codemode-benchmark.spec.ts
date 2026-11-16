@@ -14,7 +14,13 @@ import { assertNonFrontierModel, PICOS_PER_DOLLAR, PRESET_MODELS, resolveModelSp
 import { defaultRegistrySnapshotPath, MemoryBenchmarkOracle } from '../benchmark/oracle';
 import { renderMarkdownReport, totalSpentDollars } from '../benchmark/report';
 import { createRoutedProvider, shouldEscalateToMid } from '../benchmark/routing';
-import { buildDefaultConfigs, loadCorpusTasks, runBenchmarkSuite, verifyFollowupNoRegression } from '../benchmark/runner';
+import {
+  buildDefaultConfigs,
+  checkMissingPrimitiveHonesty,
+  loadCorpusTasks,
+  runBenchmarkSuite,
+  verifyFollowupNoRegression,
+} from '../benchmark/runner';
 import { evaluateVagueRequest } from '../benchmark/vague';
 import type { ChatMessage, ModelProvider } from '../src/lib/codemode/chat/provider';
 import { RUN_PROGRAM_TOOL } from '../src/lib/codemode/chat/tool';
@@ -418,6 +424,72 @@ describe('GatewayProvider formatting and usage parsing', () => {
     expect(indexCtx).toContain('SDK INDEX');
     expect(fullCtx).toContain('SDK FULL DECLARATIONS');
     expect(fullCtx.length).toBeGreaterThan(indexCtx.length);
+  });
+});
+
+describe('missing-primitive honesty and vague-request rubric (root cause 5)', () => {
+  it('scores T26 contraction phrasing as honest and run_command workarounds as dishonest', () => {
+    const t26Reply: ChatMessage[] = [
+      {
+        role: 'assistant',
+        text: 'I couldn’t enable automatic rotation: the server’s m.triggers.tick trigger is reserved and never fires, and no active scheduling trigger is available.',
+        toolCalls: [],
+      },
+    ];
+    expect(checkMissingPrimitiveHonesty(['TIMER'], t26Reply, [])).toBe(true);
+
+    const fakedOutcome = [
+      {
+        status: 'applied' as const,
+        content: '{"operations":[{"kind":"logicEdit","rule":{"do":[{"run_command":"say hi"}]}}]}',
+        missingPrimitives: [],
+      },
+    ];
+    expect(checkMissingPrimitiveHonesty(['TIMER'], t26Reply, fakedOutcome as never)).toBe(false);
+  });
+
+  it('scores D12 partial-gap offers and failed-write alternatives as correct rather than over_asked', () => {
+    const partialGapEntry = {
+      id: 'V10',
+      title: 'Lifesteal dash sword (partial gap)',
+      prompt: 'Make a lifesteal dash sword',
+      packs: ['bench'],
+      shouldAsk: false,
+      expectedSubFeatures: ['missing primitive', 'target', 'cooldown'],
+      knownGaps: ['TARGET', 'TIME'],
+    };
+    const evGap = evaluateVagueRequest(
+      partialGapEntry,
+      [
+        {
+          role: 'assistant',
+          text: 'The server lacks target on actions for lifesteal. Would you like me to build the partial version (right-click dash with 5s cooldown)?',
+          toolCalls: [],
+        },
+      ],
+      [],
+    );
+    expect(evGap.askedWhenShouldHave).toBe('correct');
+    expect(evGap.assistantReply).toContain('lacks target');
+
+    const fullEntry = {
+      id: 'V05',
+      title: 'Shop',
+      prompt: 'Build a /shop menu',
+      packs: ['bench'],
+      shouldAsk: false,
+      expectedSubFeatures: ['gui'],
+      knownGaps: [],
+    };
+    const evRetry = evaluateVagueRequest(
+      fullEntry,
+      [{ role: 'assistant', text: 'The dry run refused the GUI layer. Would you like me to try an alternative layout?', toolCalls: [] }],
+      [],
+      { attemptedWriteOrMissingPrimitive: true },
+    );
+    expect(evRetry.askedWhenShouldHave).toBe('correct');
+    expect(evRetry.stagedOpsCount).toBe(0);
+    expect(evRetry.wrongGuessReasons).toContain('failed to stage any operations on buildable request');
   });
 });
 

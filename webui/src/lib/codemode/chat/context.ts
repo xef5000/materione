@@ -12,7 +12,7 @@
  */
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from '../generate/capabilities';
 import { memberNames, refMembers, sortedBy, writerMembers } from '../generate/names';
-import type { SurfaceDocument } from '../generate/surface';
+import { guiLayerCommonParams, type SurfaceDocument } from '../generate/surface';
 
 /**
  * The index's size cap, in characters. Awaiting the benchmark's tuning (codemode.md section 3.7 leaves the size open; the
@@ -64,7 +64,7 @@ function sections(surface: SurfaceDocument): Section[] {
   out.push({
     title: 'Content types',
     use: canWrite
-      ? 'm.pack(id).<collection>.create(id, fields) makes one; m.ref.<type>("pack:id") names a stored one; m.edit(ref) changes it'
+      ? 'm.pack(id).<collection>.create(id, fields) makes one; m.ref.<type>("pack:id") names a stored one; m.edit(ref) changes it; m.ref.asset("textures/...") or m.ref.asset("models/...") names an uploaded asset'
       : 'm.ref.<type>("pack:id") names a stored one (this server has no write side)',
     rows: types.map((type) => {
       const nonRuleParams = type.parameters.filter((p) => p.uiHint !== 'behavior-rules');
@@ -105,7 +105,11 @@ function sections(surface: SurfaceDocument): Section[] {
     return outFacts;
   };
 
-  catalog('Actions', 'm.actions.<name>(params) is a step of a rule', behavior.actions, (entry) => [
+  const actionOptionIds = behavior.actionOptions.map((p) => `${p.id}?`).join(', ');
+  const actionsUse = actionOptionIds
+    ? `m.actions.<name>(params, options?) is a step of a rule (options: { ${actionOptionIds} })`
+    : 'm.actions.<name>(params, options?) is a step of a rule';
+  catalog('Actions', actionsUse, behavior.actions, (entry) => [
     ...availability(entry),
     ...entryParams(entry),
   ]);
@@ -113,7 +117,7 @@ function sections(surface: SurfaceDocument): Section[] {
     ...availability(entry),
     ...entryParams(entry),
   ]);
-  catalog('Triggers', 'm.triggers.<name>(filters) is the first argument of <handle>.rules.add', behavior.triggers, (trigger) => [
+  catalog('Triggers', 'm.triggers.<name>(filters?) — ALWAYS call with () — is the first argument of <handle>.rules.add', behavior.triggers, (trigger) => [
     ...(trigger.firedBy.length > 0 ? [`on ${[...trigger.firedBy].sort().join(', ')}`] : []),
     ...(trigger.filters.length > 0 ? [paramSummary(trigger.filters, 'filters', 6)] : []),
   ]);
@@ -129,7 +133,17 @@ function sections(surface: SurfaceDocument): Section[] {
   }
   catalog('Item sources', 'm.itemSources.<name>(params)', behavior.itemSources, entryParams);
   catalog('List sources', 'm.listSources.<name>(params)', behavior.listSources, entryParams);
-  catalog('GUI components', 'm.guiComponents.<name>(params) is an entry of a gui\'s `layers`', surface.gui.components, entryParams);
+  const commonLayer = guiLayerCommonParams(surface);
+  const commonLayerIds = new Set(commonLayer.map((p) => p.id));
+  catalog(
+    'GUI components',
+    'm.guiComponents.<name>({ id, ...params }) goes in a gui\'s `layers` array (never a keyed object)',
+    surface.gui.components.map((component) => ({
+      ...component,
+      parameters: [...commonLayer, ...component.parameters.filter((p) => !commonLayerIds.has(p.id))],
+    })),
+    entryParams,
+  );
   if (surface.gui.containers.length > 0) {
     out.push({
       title: 'GUI containers',
@@ -216,7 +230,11 @@ CORE SDK SIGNATURES
   - Edit existing: m.edit(m.ref.item("pack:id")).set({ ... }) (or m.edit(row.ref).set({ ... }))
   - MiniMessage: fields typed MiniMessage (display_name, lore items) MUST wrap strings in m.mm("..."); action messages (message, broadcast, actionbar) take plain string | Expr.
   - Resource rules (item, block, furniture, gui): <handle>.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({ cooldown: 5000, on_cooldown: [...], if: ..., do: [...] })) — trigger FIRST, callback (ctx) => ({ ... }) SECOND.
-  - Pack-level hostless rules (rules/*.yml): p.rules.create("id", { on: m.triggers.playerJoin, if: ..., do: [...] }).
+  - Pack-level hostless rules (rules/*.yml): const r = p.rules.create("id", { description: "..." }); r.rules.add(m.triggers.playerJoin(), (ctx) => ({ if: ..., do: [...] })); — p.rules.create ONLY takes { description?, flows? }, NEVER { on, do }! Every trigger MUST be called as a function: m.triggers.playerJoin(), m.triggers.consume(), m.triggers.break().
+  - Assets (Ref<"texture">, Ref<"model">): m.ref.asset("textures/item/foo.png") or m.ref.asset("models/foo.json") (there is NO m.ref.texture or m.ref.model).
+  - GUI layers & item icons: layers on p.guis.create is ALWAYS an array [ ... ], and every layer requires id: e.g. layers: [m.guiComponents.item({ id: "icon_1", slot: 11, item: "minecraft:diamond" }), m.guiComponents.button({ id: "buy_1", x: 60, y: 20, width: 36, height: 18 }), m.guiComponents.slots({ id: "inputs", region: "container", input: true, durable: "required" })].
+  - Action options & authoring-time unrolling: Any action step accepts chance (0..1) and delay (ticks) in its params or as a 2nd argument (m.actions.giveItem({ item: h, amount: 1 }, { chance: 0.05 })). When an action parameter takes a fixed number (such as takeMoney or giveMoney) across bounded tiers/levels, unroll branches in TypeScript with m.steps.choose([1, 2, 3, 4].map((lvl) => ({ if: m.expr\`...\`, then: [m.actions.takeMoney(500 * lvl)] }))).
+  - Check the SDK index before inventing names: Every registered action, condition, trigger, mechanic, and function is listed in the SDK index below. Compose shipped primitives directly (for example m.actions.potion({ type: "instant_health", amplifier: 1 }) for instant healing, m.actions.giveItem(..., { chance }) on m.triggers.entityKill({ type: "zombie" }) for mob kill drops, m.fn.random(1, 100) + m.steps.choose(...) for weighted loot) instead of inventing non-existent heal or dropItem methods.
   - Steps: m.steps.require([step1, step2], { else: [...] }) (takes action steps, NOT conditions); m.steps.if(condition, { then?: [...], else?: [...] }); m.steps.choose([{ if: cond, then: [...] }], { else?: [...] }).
   - Expressions & variables: m.expr\`\${m.fn.now()} - \${varHandle} >= 86400\`; in setVar and var conditions, value is string | Expr, so pass numbers/booleans as m.expr\`1\` or m.expr\`true\`.
   - Entries noted runtime provider inactive (valid to author; warns SDK-0016) (such as economy or server transfer when Vault/proxy is not active yet) ARE valid to author and dry-run; stage them normally and mention the inactive provider in your reply rather than refusing to build.
@@ -228,7 +246,7 @@ WHAT HAPPENS TO A CHANGE
 
 WHEN A RESULT REPORTS A PROBLEM
 - A type error or an SDK error: fix the program and run it again. Read the diagnostic's hint; it often names the valid alternatives.
-- A diagnostic marked missingPrimitive is an answer about the server, not a typo: the server has no such capability. Report it to the owner by name (which member, on which catalog) and stop that part of the plan. Do not work around it: do not fake the missing capability with something that behaves differently (for example a per-player variable in place of a per-item one) unless the owner, told of the difference, asks for it. Offer what can be built with what exists as a separate proposal.
+- A diagnostic marked missingPrimitive is an answer about the server, not a typo: the server has no such capability. Report it to the owner by name (which member, on which catalog) and stop that part of the plan. Do not work around it: do not fake the missing capability with something that behaves differently (for example a per-player variable in place of a per-item one) unless the owner, told of the difference, asks for it. Offer what can be built with what exists as a separate proposal. (Note: if you guessed a convenience name like heal or dropItem when a shipped primitive in the SDK index genuinely implements the behavior—such as potion with instant_health, or giveItem with chance—use the shipped primitive; only stop and report missingPrimitive when the capability itself is genuinely absent from the server, such as per-item/per-entity variable holder, target on actions, repeating timers, HUDs, dialogs, custom commands with arguments, leaderboard queries, or multi-player/persistent vault custody.)
 - A refused dry run: the server's diagnostics name the field and the program line. Fix the program.
 - A stale result (a document changed after the program read it): run the program again against the current state.
 - If you cannot make a program pass after a few attempts, stop and tell the owner what failed. The editor stops you after a fixed number of failed attempts.

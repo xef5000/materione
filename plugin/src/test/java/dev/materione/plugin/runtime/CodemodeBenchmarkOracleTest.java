@@ -155,6 +155,33 @@ class CodemodeBenchmarkOracleTest {
         assertThat(closeResp.getAsJsonObject("data").get("closed").getAsBoolean()).isTrue();
     }
 
+    @Test
+    void authoringSummariesWithLimit200FindsPreSeededGui() throws IOException {
+        JsonObject resetReq = new JsonObject();
+        resetReq.addProperty("id", 1);
+        resetReq.addProperty("cmd", "resetWorld");
+        JsonArray packs = new JsonArray();
+        packs.add("bench");
+        resetReq.add("packs", packs);
+        JsonObject files = new JsonObject();
+        files.addProperty("bench/guis/bloodfang_menu.yml",
+                "bloodfang_menu:\n  title: \"<red>Bloodfang\"\n  container: chest_3\n  layers: []\n");
+        resetReq.add("files", files);
+        JsonObject resetResp = oracle.handle(resetReq);
+        assertThat(resetResp.get("ok").getAsBoolean()).isTrue();
+
+        JsonObject sumPayload = new JsonObject();
+        sumPayload.addProperty("pack", "bench");
+        sumPayload.addProperty("type", "guis");
+        sumPayload.addProperty("offset", 0);
+        sumPayload.addProperty("limit", 200);
+        JsonObject sumResp = oracle.handle(rpc(2, "authoring.summaries", sumPayload));
+        assertThat(sumResp.get("ok").getAsBoolean()).isTrue();
+        JsonArray resources = sumResp.getAsJsonObject("data").getAsJsonArray("resources");
+        assertThat(resources).isNotNull();
+        assertThat(resources.toString()).contains("bloodfang_menu");
+    }
+
     private static JsonObject rpc(int id, String op, JsonObject payload) {
         JsonObject req = new JsonObject();
         req.addProperty("id", id);

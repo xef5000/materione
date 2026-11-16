@@ -3,7 +3,7 @@
   "kind": "task",
   "title": "Crate",
   "area": "furniture",
-  "prompt": "Create a placed crate furniture and a crate key item; right-clicking the crate with a key consumes it, gives one of five weighted rewards, and announces rare drops.",
+  "prompt": "Create a placed crate furniture (with model models/crate.json) and a crate key item; right-clicking the crate with a key consumes it, gives one of five weighted rewards, and announces rare drops.",
   "registry": "plugin-current",
   "result": "pass",
   "gaps": [],

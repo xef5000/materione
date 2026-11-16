@@ -70,14 +70,15 @@ public final class ItemComponent implements GuiComponent {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Slot", "placement", 10, false, "number", "", "13")
                                         .withRange(0.0, (double) MAX_SLOT, "")),
-                        new ParameterSchema("item", ParameterType.REFERENCE, false, null,
+                        new ParameterSchema("item", ParameterType.STRING, false, null,
                                 "The item: a Materione item (ns:id), a vanilla material (minecraft:diamond_sword), "
                                         + "a template (${entry.item}), or one source such as "
                                         + "{ head: { player: \"${player.name}\" } } or { player_slot: main_hand }. "
                                         + "Exactly one of item or frames",
                                 null, null)
+                                .acceptingExpression()
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Item", "appearance", 20, false, "item", "pack-item", "shop:gui/main/sword")),
+                                        "Item", "appearance", 20, false, "item", "item-source", "shop:gui/main/sword")),
                         new ParameterSchema("frames", ParameterType.RAW, false, null,
                                 "An animation in place of item: { every: <ticks>, items: [sources...] }; the "
                                         + "layer shows items in turn", null, null)

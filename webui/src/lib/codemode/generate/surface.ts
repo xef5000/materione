@@ -50,6 +50,20 @@ export const KIND_CONDITION = 'condition';
 export const KIND_CONDITIONS = 'conditions';
 export const KIND_FLOW = 'flow';
 export const KIND_ARGUMENTS = 'arguments';
+export const KIND_GUI_COMPONENT = 'gui-component';
+
+/** Returns the common properties carried by every GUI layer (outside the component-specific fields). */
+export function guiLayerCommonParams(surface: SurfaceDocument): SurfaceParam[] {
+  const sortedTypes = [...surface.contentTypes].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const type of sortedTypes) {
+    for (const param of type.parameters) {
+      if (param.type === 'list' && (param.nested ?? []).some((child) => child.referenceKind === KIND_GUI_COMPONENT)) {
+        return (param.nested ?? []).filter((child) => child.referenceKind !== KIND_GUI_COMPONENT);
+      }
+    }
+  }
+  return [];
+}
 
 /** The self-description every registry entry carries (`SelfDescription`, api registry). */
 export interface SurfaceEntry {
