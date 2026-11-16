@@ -1,5 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import readline from 'node:readline';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -76,23 +76,93 @@ export class JvmBenchmarkOracle implements BenchmarkOracle {
   private readonly pending = new Map<number, PendingRequest>();
   private readonly stderrTail: string[] = [];
   private closed = false;
+  private resolvedClasspath: string | null = null;
+  private lastWorld: BenchmarkWorldSpec | null = null;
 
   constructor(repoRoot: string) {
     this.repoRoot = repoRoot;
+  }
+
+  private resolveClasspath(): string {
+    if (this.resolvedClasspath !== null) return this.resolvedClasspath;
+    const isWin = process.platform === 'win32';
+    const cmd = isWin ? 'cmd.exe' : './gradlew';
+    const gradleArgs = [
+      ':plugin:writeBenchmarkOracleClasspath',
+      '-x',
+      ':webui:npmInstall',
+      '-x',
+      ':webui:npm_run_build',
+      '-q',
+      '--console=plain',
+    ];
+    const args = isWin ? ['/c', 'gradlew.bat', ...gradleArgs] : gradleArgs;
+    execFileSync(cmd, args, {
+      cwd: this.repoRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    const cpPath = join(this.repoRoot, 'plugin', 'build', 'benchmark-oracle.classpath');
+    this.resolvedClasspath = readFileSync(cpPath, 'utf8').trim();
+    return this.resolvedClasspath;
+  }
+
+  private resolveJavaExe(): string {
+    const javaHome = process.env.JAVA_HOME?.trim();
+    if (javaHome) {
+      const candidate = join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
+      if (existsSync(candidate)) return candidate;
+    }
+    return 'java';
+  }
+
+  private killChild(): void {
+    const child = this.child;
+    this.child = null;
+    const err = new Error('JvmBenchmarkOracle restarted');
+    for (const [, req] of this.pending) {
+      req.reject(err);
+    }
+    this.pending.clear();
+    if (child !== null) {
+      try {
+        child.stdin.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        child.stdout.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        child.stderr.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        child.kill();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   private async ensureStarted(): Promise<void> {
     if (this.child !== null) return;
     if (this.closed) throw new Error('JvmBenchmarkOracle is closed');
 
-    const isWin = process.platform === 'win32';
-    const cmd = isWin ? 'cmd.exe' : './gradlew';
-    const args = isWin
-      ? ['/c', 'gradlew.bat', ':plugin:benchmarkOracle', '-x', ':webui:npmInstall', '-x', ':webui:npm_run_build', '-q', '--console=plain', '--no-daemon']
-      : [':plugin:benchmarkOracle', '-x', ':webui:npmInstall', '-x', ':webui:npm_run_build', '-q', '--console=plain', '--no-daemon'];
+    const classpath = this.resolveClasspath();
+    const javaExe = this.resolveJavaExe();
+    const args = [
+      '-Xmx1536m',
+      `-Dmaterione.fixtures.root=${join(this.repoRoot, 'fixtures')}`,
+      'dev.materione.plugin.runtime.CodemodeBenchmarkOracleMain',
+    ];
 
-    const child = spawn(cmd, args, {
+    const child = spawn(javaExe, args, {
       cwd: this.repoRoot,
+      env: { ...process.env, CLASSPATH: classpath },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -123,7 +193,9 @@ export class JvmBenchmarkOracle implements BenchmarkOracle {
     });
 
     child.on('exit', (code) => {
-      this.child = null;
+      if (this.child === child) {
+        this.child = null;
+      }
       const err = new Error(`JvmBenchmarkOracle exited (code ${code ?? 'null'}): ${this.stderrTail.slice(-10).join('\n')}`);
       for (const [, req] of this.pending) {
         req.reject(err);
@@ -137,7 +209,7 @@ export class JvmBenchmarkOracle implements BenchmarkOracle {
     }
   }
 
-  private send(payload: Record<string, unknown>, timeoutMs = 60_000): Promise<OracleRpcReply> {
+  private send(payload: Record<string, unknown>, timeoutMs = 180_000): Promise<OracleRpcReply> {
     if (this.child === null) {
       return Promise.reject(new Error('JvmBenchmarkOracle process is not running'));
     }
@@ -163,17 +235,30 @@ export class JvmBenchmarkOracle implements BenchmarkOracle {
     });
   }
 
-  async resetWorld(world: BenchmarkWorldSpec = {}): Promise<{ packs: string[] }> {
+  private async sendResetWorld(world: BenchmarkWorldSpec): Promise<OracleRpcReply> {
     await this.ensureStarted();
-    const reply = await this.send(
+    return this.send(
       {
         cmd: 'resetWorld',
         packs: world.packs ?? [],
         files: world.files ?? {},
         assets: world.assets ?? {},
       },
-      120_000,
+      180_000,
     );
+  }
+
+  async resetWorld(world: BenchmarkWorldSpec = {}): Promise<{ packs: string[] }> {
+    this.lastWorld = world;
+    let reply: OracleRpcReply;
+    try {
+      reply = await this.sendResetWorld(world);
+    } catch (err) {
+      if (this.closed) throw err;
+      process.stderr.write(`[oracle] JVM oracle resetWorld failed/timed out; restarting JVM...\n`);
+      this.killChild();
+      reply = await this.sendResetWorld(world);
+    }
     if (!reply.ok) {
       throw new Error(`resetWorld failed: ${reply.error?.message ?? 'unknown error'}`);
     }
@@ -195,8 +280,19 @@ export class JvmBenchmarkOracle implements BenchmarkOracle {
   }
 
   async rpc(op: string, payload: Record<string, unknown>): Promise<OracleRpcReply> {
-    await this.ensureStarted();
-    return this.send({ cmd: 'rpc', op, payload });
+    try {
+      await this.ensureStarted();
+      return await this.send({ cmd: 'rpc', op, payload });
+    } catch (err) {
+      if (this.closed) throw err;
+      process.stderr.write(`[oracle] JVM oracle RPC (${op}) failed/timed out; restarting JVM and replaying world...\n`);
+      this.killChild();
+      await this.ensureStarted();
+      if (this.lastWorld !== null) {
+        await this.resetWorld(this.lastWorld);
+      }
+      return await this.send({ cmd: 'rpc', op, payload });
+    }
   }
 
   async close(): Promise<void> {

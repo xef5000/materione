@@ -199,8 +199,12 @@ public final class CodemodeBenchmarkOracleMain {
         if (workspace != null && Files.exists(workspace)) {
             try (Stream<Path> walk = Files.walk(workspace)) {
                 for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
-                    Files.deleteIfExists(p);
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException ignored) {
+                    }
                 }
+            } catch (IOException ignored) {
             }
             workspace = null;
         }
