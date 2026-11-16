@@ -62,6 +62,7 @@ class EditorDemoSnapshotTest {
 
     private static final List<Runnable> CLOSE = new ArrayList<>();
     private static final int[] LIVE = new int[2];
+    private static volatile List<String> cachedItemMaterials;
 
     @TempDir
     Path temp;
@@ -239,13 +240,19 @@ class EditorDemoSnapshotTest {
      * initialised).
      */
     static List<String> itemMaterials() {
-        return java.util.Arrays.stream(org.bukkit.inventory.ItemType.class.getFields())
+        List<String> cached = cachedItemMaterials;
+        if (cached != null) {
+            return cached;
+        }
+        List<String> computed = java.util.Arrays.stream(org.bukkit.inventory.ItemType.class.getFields())
                 .filter(field -> java.lang.reflect.Modifier.isStatic(field.getModifiers()))
                 .filter(field -> org.bukkit.inventory.ItemType.class.isAssignableFrom(field.getType()))
                 .map(java.lang.reflect.Field::getName)
                 .filter(name -> !name.equals("AIR"))
                 .sorted()
                 .toList();
+        cachedItemMaterials = computed;
+        return computed;
     }
 
     private static JsonObject record(RpcDispatcher ops) {

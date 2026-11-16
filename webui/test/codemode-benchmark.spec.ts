@@ -17,9 +17,12 @@ import { createRoutedProvider, shouldEscalateToMid } from '../benchmark/routing'
 import {
   buildDefaultConfigs,
   checkMissingPrimitiveHonesty,
+  configKey,
   loadCorpusTasks,
   runBenchmarkSuite,
   verifyFollowupNoRegression,
+  type BenchmarkCheckpoint,
+  type ConfigRunResult,
 } from '../benchmark/runner';
 import { evaluateVagueRequest } from '../benchmark/vague';
 import type { ChatMessage, ModelProvider } from '../src/lib/codemode/chat/provider';
@@ -827,5 +830,108 @@ describe('audit regression guards', () => {
     });
     await oracle.close();
     expect(results[0]!.tasks[0]!.assistantReply).toBeTruthy();
+  });
+
+  it('8. checkpoints after each item and resumes without re-running completed items while enforcing budget', async () => {
+    const oracle = new MemoryBenchmarkOracle(defaultRegistrySnapshotPath(REPO_ROOT));
+    const cfgs = buildDefaultConfigs({
+      models: ['claude-haiku-5-5'],
+      strategy: 'always-cheap',
+      contextMode: 'index',
+      mode: 'codemode',
+    });
+    const key = configKey(cfgs[0]!);
+
+    const snapshots: Array<{ ckpt: BenchmarkCheckpoint; partial: readonly ConfigRunResult[] }> = [];
+    const firstRun = await runBenchmarkSuite({
+      repoRoot: REPO_ROOT,
+      oracle,
+      configs: cfgs,
+      suite: 'all',
+      taskFilter: ['T04', 'F3', 'V01'],
+      maxDollars: 0,
+      mock: true,
+      onCheckpoint: (ckpt, partial) => {
+        snapshots.push({
+          ckpt: JSON.parse(JSON.stringify(ckpt)) as BenchmarkCheckpoint,
+          partial: JSON.parse(JSON.stringify(partial)) as ConfigRunResult[],
+        });
+      },
+    });
+    expect(snapshots).toHaveLength(3);
+    expect(Object.keys(snapshots[0]!.ckpt.configs[key]!.tasks)).toEqual(['T04']);
+    expect(snapshots[0]!.partial[0]!.tasks).toHaveLength(1);
+    expect(snapshots[1]!.partial[0]!.followups).toHaveLength(1);
+    expect(snapshots[2]!.partial[0]!.vague).toHaveLength(1);
+
+    // Partial checkpoint with T04 & F3 completed; V01 should run on resume
+    const partialCkpt: BenchmarkCheckpoint = {
+      format: 1,
+      updatedAt: snapshots[1]!.ckpt.updatedAt,
+      totalSpentPicos: 500_000_000,
+      configs: {
+        [key]: {
+          ...snapshots[1]!.ckpt.configs[key]!,
+        },
+      },
+    };
+
+    let resetCount = 0;
+    const origReset = oracle.resetWorld.bind(oracle);
+    oracle.resetWorld = async (world) => {
+      resetCount++;
+      return origReset(world);
+    };
+
+    const resumedCallbacks: number[] = [];
+    const resumedRun = await runBenchmarkSuite({
+      repoRoot: REPO_ROOT,
+      oracle,
+      configs: cfgs,
+      suite: 'all',
+      taskFilter: ['T04', 'F3', 'V01'],
+      maxDollars: 0,
+      mock: true,
+      resumeCheckpoint: partialCkpt,
+      onCheckpoint: () => {
+        resumedCallbacks.push(1);
+      },
+    });
+    await oracle.close();
+
+    // Only initial describe resetWorld + V01 resetWorld should have run (T04 & F3 skipped)
+    expect(resetCount).toBe(2);
+    expect(resumedCallbacks).toHaveLength(1);
+    expect(resumedRun[0]!.tasks[0]!.id).toBe('T04');
+    expect(resumedRun[0]!.followups[0]!.id).toBe('F3');
+    expect(resumedRun[0]!.vague[0]!.id).toBe('V01');
+    expect(resumedRun[0]!.tasks[0]!.accepted).toBe(firstRun[0]!.tasks[0]!.accepted);
+
+    // BudgetLedger enforces --max-dollars across resumed spend
+    const ledger = new BudgetLedger(0.01); // 10_000_000_000 picos
+    ledger.seedPriorSpendPicos(4_000_000_000);
+    expect(ledger.spentPicos).toBe(4_000_000_000);
+    expect(() => ledger.seedPriorSpendPicos(7_000_000_000)).toThrow(/exceeds --max-dollars/);
+  });
+
+  it('9. verifyFollowupNoRegression returns true on valid F3 and F4', async () => {
+    const corpus = loadCorpusTasks(REPO_ROOT);
+    const oracle = new MemoryBenchmarkOracle(defaultRegistrySnapshotPath(REPO_ROOT));
+    for (const id of ['F3', 'F4'] as const) {
+      const task = corpus.find((t) => t.expect.task === id)!;
+      await oracle.resetWorld(task.world);
+      const ops = task.goldenOps!;
+      const applyReply = await oracle.rpc('authoring.transaction', {
+        pack: ops.pack,
+        operations: ops.operations,
+        dryRun: false,
+        origin: 'code-mode',
+        approval: 'granted',
+      });
+      expect(applyReply.ok).toBe(true);
+      const ok = await verifyFollowupNoRegression(oracle, task, []);
+      expect(ok).toBe(true);
+    }
+    await oracle.close();
   });
 });

@@ -96,6 +96,33 @@ export interface RunConfigSpec {
   readonly midModel: BenchmarkModelSpec;
 }
 
+export interface PartialConfigCheckpoint {
+  readonly configKey: string;
+  readonly label: string;
+  readonly mode: BenchmarkMode;
+  readonly strategy: RoutingStrategy;
+  readonly contextMode: ContextMode;
+  readonly cheapModelId: string;
+  readonly midModelId: string;
+  readonly tasks: Record<string, TaskRunRecord>;
+  readonly followups: Record<string, TaskRunRecord>;
+  readonly vague: Record<string, VagueEvaluation>;
+  readonly vagueCostPicos?: Record<string, number>;
+}
+
+export interface BenchmarkCheckpoint {
+  readonly format: 1;
+  readonly updatedAt: string;
+  readonly totalSpentPicos: number;
+  readonly configs: Record<string, PartialConfigCheckpoint>;
+}
+
+export function configKey(
+  cfg: Pick<RunConfigSpec, 'mode' | 'strategy' | 'contextMode' | 'cheapModel' | 'midModel'>,
+): string {
+  return `${cfg.mode}|${cfg.strategy}|${cfg.contextMode}|${cfg.cheapModel.id}|${cfg.midModel.id}`;
+}
+
 export interface BenchmarkRunOptions {
   readonly repoRoot: string;
   readonly oracle: BenchmarkOracle;
@@ -106,6 +133,8 @@ export interface BenchmarkRunOptions {
   readonly mock: boolean;
   readonly gatewayConfig?: GatewayConfig;
   readonly modelOverrides?: Readonly<Record<string, Partial<BenchmarkModelSpec>>>;
+  readonly resumeCheckpoint?: BenchmarkCheckpoint;
+  readonly onCheckpoint?: (checkpoint: BenchmarkCheckpoint, partialResults: readonly ConfigRunResult[]) => void;
 }
 
 let cachedSandboxAssets: Promise<SandboxAssets> | undefined;
@@ -287,10 +316,16 @@ export async function verifyFollowupNoRegression(
   }
 
   for (const pack of packsToCheck) {
-    const dry = await oracle.rpc('authoring.transaction', { pack, operations: [], dryRun: true });
-    if (!dry.ok) return false;
-    const report = parseReport(dry.data);
-    if (!report.accepted) return false;
+    const summaries = await oracle.rpc('authoring.summaries', { pack, offset: 0, limit: 200 });
+    if (!summaries.ok || typeof summaries.data !== 'object' || summaries.data === null) return false;
+    const rows = (summaries.data as { resources?: unknown[] }).resources;
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    for (const row of rows) {
+      if (typeof row === 'object' && row !== null) {
+        const health = (row as { health?: unknown }).health;
+        if (health === 'quarantined' || health === 'broken' || health === 'error') return false;
+      }
+    }
   }
 
   const taskId = task.expect.task.toUpperCase();
@@ -460,7 +495,8 @@ function loadTsLibs(repoRoot: string): Record<string, string> {
 }
 
 export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<ConfigRunResult[]> {
-  const { repoRoot, oracle, configs, suite, taskFilter, maxDollars, mock, gatewayConfig } = options;
+  const { repoRoot, oracle, configs, suite, taskFilter, maxDollars, mock, gatewayConfig, resumeCheckpoint, onCheckpoint } =
+    options;
   const allCorpus = loadCorpusTasks(repoRoot);
   const vagueEntries = loadVagueRequests(repoRoot);
 
@@ -488,10 +524,30 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
 
   const results: ConfigRunResult[] = [];
   const budget = new BudgetLedger(maxDollars, { allowZeroForMock: mock });
+  if (resumeCheckpoint && !mock) {
+    budget.seedPriorSpendPicos(resumeCheckpoint.totalSpentPicos);
+  }
+  const checkpointConfigs: Record<string, PartialConfigCheckpoint> = { ...(resumeCheckpoint?.configs ?? {}) };
 
   try {
     for (const cfg of configs) {
-      const configCostBefore = budget.spentPicos;
+      const key = configKey(cfg);
+      const priorCfg = resumeCheckpoint?.configs[key];
+      const vagueCostPicos: Record<string, number> = { ...(priorCfg?.vagueCostPicos ?? {}) };
+      const ckptCfg: PartialConfigCheckpoint = {
+        configKey: key,
+        label: cfg.label,
+        mode: cfg.mode,
+        strategy: cfg.strategy,
+        contextMode: cfg.contextMode,
+        cheapModelId: cfg.cheapModel.id,
+        midModelId: cfg.midModel.id,
+        tasks: { ...(priorCfg?.tasks ?? {}) },
+        followups: { ...(priorCfg?.followups ?? {}) },
+        vague: { ...(priorCfg?.vague ?? {}) },
+        vagueCostPicos,
+      };
+      checkpointConfigs[key] = ckptCfg;
       const systemPrompt = assembleBenchmarkContext(surface, cfg.contextMode);
 
       const runOneCorpusTask = async (task: LoadedCorpusTask): Promise<TaskRunRecord> => {
@@ -711,24 +767,84 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
           );
         }
       };
+      const logResumed = (id: string): void => {
+        completedItems++;
+        if (!mock) {
+          process.stderr.write(`[${completedItems}/${totalItems}] ${cfg.label} :: ${id} -> RESUMED\n`);
+        }
+      };
 
       const taskRecords: TaskRunRecord[] = [];
+      const followupRecords: TaskRunRecord[] = [];
+      const vagueRecords: VagueEvaluation[] = [];
+
+      const buildConfigResult = (): ConfigRunResult => {
+        const totalCostPicos =
+          taskRecords.reduce((s, r) => s + r.costPicos, 0) +
+          followupRecords.reduce((s, r) => s + r.costPicos, 0) +
+          Object.values(vagueCostPicos).reduce((s, c) => s + c, 0);
+        return {
+          label: cfg.label,
+          mode: cfg.mode,
+          strategy: cfg.strategy,
+          contextMode: cfg.contextMode,
+          cheapModelId: cfg.cheapModel.id,
+          midModelId: cfg.midModel.id,
+          totalCostPicos,
+          tasks: taskRecords,
+          followups: followupRecords,
+          vague: vagueRecords,
+        };
+      };
+
+      const emitCheckpoint = (): void => {
+        if (!onCheckpoint) return;
+        const ckpt: BenchmarkCheckpoint = {
+          format: 1,
+          updatedAt: new Date().toISOString(),
+          totalSpentPicos: budget.spentPicos,
+          configs: checkpointConfigs,
+        };
+        onCheckpoint(ckpt, [...results, buildConfigResult()]);
+      };
+
       for (const t of tasks) {
+        const existing = priorCfg?.tasks[t.expect.task];
+        if (existing) {
+          taskRecords.push(existing);
+          logResumed(t.expect.task);
+          continue;
+        }
         const rec = await runOneCorpusTask(t);
         taskRecords.push(rec);
+        ckptCfg.tasks[t.expect.task] = rec;
+        emitCheckpoint();
         logProgress(rec.id, rec.expectedResult === 'pass' ? (rec.accepted ? 'PASS' : rec.s18AdjustedAccepted ? 'PASS(S18)' : `FAIL(${rec.stopReason})`) : rec.missingPrimitiveHonest ? 'HONEST-GAP' : 'FAKED-GAP', rec.wallTimeMs);
       }
 
-      const followupRecords: TaskRunRecord[] = [];
       for (const f of followups) {
+        const existing = priorCfg?.followups[f.expect.task];
+        if (existing) {
+          followupRecords.push(existing);
+          logResumed(f.expect.task);
+          continue;
+        }
         const rec = await runOneCorpusTask(f);
         followupRecords.push(rec);
+        ckptCfg.followups[f.expect.task] = rec;
+        emitCheckpoint();
         logProgress(rec.id, rec.expectedResult === 'pass' ? (rec.accepted && rec.regressionFree ? 'PASS' : 'FAIL') : rec.missingPrimitiveHonest ? 'HONEST-GAP' : 'FAKED-GAP', rec.wallTimeMs);
       }
 
-      const vagueRecords: VagueEvaluation[] = [];
       for (const v of vagues) {
+        const existing = priorCfg?.vague[v.id];
+        if (existing) {
+          vagueRecords.push(existing);
+          logResumed(v.id);
+          continue;
+        }
         const vt0 = Date.now();
+        const vCostBefore = budget.spentPicos;
         await oracle.resetWorld({ packs: v.packs, ...(v.assets ? { assets: v.assets } : {}) });
         const host = createOracleSandboxHost(oracle);
         const store = createProposalStore({ transport: createOracleTransactionTransport(oracle) });
@@ -775,6 +891,9 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
             ),
           });
           vagueRecords.push(ev);
+          ckptCfg.vague[v.id] = ev;
+          vagueCostPicos[v.id] = budget.spentPicos - vCostBefore;
+          emitCheckpoint();
           logProgress(v.id, ev.askedWhenShouldHave, Date.now() - vt0);
         } else {
           const res = await runBaselineAgent(history, { provider, surface, oracle });
@@ -784,22 +903,14 @@ export async function runBenchmarkSuite(options: BenchmarkRunOptions): Promise<C
           }));
           const ev = evaluateVagueRequest(v, res.added, staged);
           vagueRecords.push(ev);
+          ckptCfg.vague[v.id] = ev;
+          vagueCostPicos[v.id] = budget.spentPicos - vCostBefore;
+          emitCheckpoint();
           logProgress(v.id, ev.askedWhenShouldHave, Date.now() - vt0);
         }
       }
 
-      results.push({
-        label: cfg.label,
-        mode: cfg.mode,
-        strategy: cfg.strategy,
-        contextMode: cfg.contextMode,
-        cheapModelId: cfg.cheapModel.id,
-        midModelId: cfg.midModel.id,
-        totalCostPicos: budget.spentPicos - configCostBefore,
-        tasks: taskRecords,
-        followups: followupRecords,
-        vague: vagueRecords,
-      });
+      results.push(buildConfigResult());
     }
   } finally {
     sandboxRunner.dispose();

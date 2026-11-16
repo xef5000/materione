@@ -15,6 +15,7 @@ export interface ModelLedgerStats {
 export class BudgetLedger {
   readonly maxDollars: number;
   readonly capPicos: number;
+  readonly #allowZeroForMock: boolean;
   #spentPicos = 0;
   readonly #byModel = new Map<string, ModelLedgerStats>();
 
@@ -22,7 +23,8 @@ export class BudgetLedger {
     if (!Number.isFinite(maxDollars)) {
       throw new Error(`Invalid --max-dollars: ${maxDollars}`);
     }
-    if (options.allowZeroForMock && maxDollars === 0) {
+    this.#allowZeroForMock = options.allowZeroForMock === true;
+    if (this.#allowZeroForMock && maxDollars === 0) {
       this.maxDollars = 0;
       this.capPicos = 0;
       return;
@@ -32,6 +34,18 @@ export class BudgetLedger {
     }
     this.maxDollars = maxDollars;
     this.capPicos = Math.round(maxDollars * PICOS_PER_DOLLAR);
+  }
+
+  seedPriorSpendPicos(picos: number): void {
+    if (!Number.isFinite(picos) || picos < 0 || !Number.isInteger(picos)) {
+      throw new Error(`Invalid prior spend picos: ${picos}`);
+    }
+    if (!this.#allowZeroForMock && this.#spentPicos + picos > this.capPicos) {
+      throw new Error(
+        `Prior spend $${formatDollars(this.#spentPicos + picos)} exceeds --max-dollars $${formatDollars(this.capPicos)}.`,
+      );
+    }
+    this.#spentPicos += picos;
   }
 
   get spentPicos(): number {

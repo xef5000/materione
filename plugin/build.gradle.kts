@@ -84,9 +84,24 @@ tasks.named<ProcessResources>("processResources") {
 tasks.register<JavaExec>("benchmarkOracle") {
     description = "Runs the JSON-Lines JVM dry-run/apply oracle for code-mode benchmarks."
     group = "verification"
+    maxHeapSize = "1536m"
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("dev.materione.plugin.runtime.CodemodeBenchmarkOracleMain")
     standardInput = System.`in`
     workingDir = rootProject.projectDir
     systemProperty("materione.fixtures.root", rootProject.layout.projectDirectory.dir("fixtures").asFile.absolutePath)
+}
+
+tasks.register("writeBenchmarkOracleClasspath") {
+    description = "Compiles test classes and writes the benchmark oracle runtime classpath to build/benchmark-oracle.classpath."
+    group = "verification"
+    dependsOn("testClasses")
+    val cpFiles = sourceSets["test"].runtimeClasspath
+    val outFile = layout.buildDirectory.file("benchmark-oracle.classpath")
+    outputs.file(outFile)
+    doLast {
+        val f = outFile.get().asFile
+        f.parentFile.mkdirs()
+        f.writeText(cpFiles.asPath, Charsets.UTF_8)
+    }
 }

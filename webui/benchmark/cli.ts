@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ContextMode } from './context-mode';
@@ -10,8 +10,10 @@ import type { RoutingStrategy } from './routing';
 import {
   buildDefaultConfigs,
   runBenchmarkSuite,
+  type BenchmarkCheckpoint,
   type BenchmarkMode,
   type BenchmarkSuite,
+  type ConfigRunResult,
 } from './runner';
 
 function printHelp(): void {
@@ -41,6 +43,7 @@ Options:
   --tasks T04,T08,T27,F3          Comma-separated task/followup/vague IDs
   --max-dollars <N>               Hard spend cap in USD (required >0 for live; default: 1.00)
   --out-dir <dir>                 Output directory for report.json & report.md
+  --fresh                         Ignore any existing checkpoint.json in --out-dir and start fresh
 `);
 }
 
@@ -76,6 +79,7 @@ async function main(): Promise<void> {
   let taskFilter: string[] | undefined;
   let maxDollars = 1.0;
   let outDir: string | undefined;
+  let fresh = false;
   const overrides: Record<string, Partial<BenchmarkModelSpec>> = {};
 
   for (let i = 0; i < args.length; i++) {
@@ -124,6 +128,9 @@ async function main(): Promise<void> {
       case '--out-dir':
         outDir = next();
         break;
+      case '--fresh':
+        fresh = true;
+        break;
       default:
         throw new Error(`Unknown argument: ${arg}`);
     }
@@ -145,6 +152,65 @@ async function main(): Promise<void> {
     gatewayConfig = { accountId, gatewayId, token };
   }
 
+  const targetDir = outDir
+    ? resolve(repoRoot, outDir)
+    : join(repoRoot, 'webui', 'build', 'benchmark-reports');
+  mkdirSync(targetDir, { recursive: true });
+
+  const checkpointPath = join(targetDir, 'checkpoint.json');
+  let resumeCheckpoint: BenchmarkCheckpoint | undefined;
+  if (!fresh && existsSync(checkpointPath)) {
+    const parsed = JSON.parse(readFileSync(checkpointPath, 'utf8')) as BenchmarkCheckpoint;
+    if (parsed && parsed.format === 1 && typeof parsed.configs === 'object' && parsed.configs !== null) {
+      resumeCheckpoint = parsed;
+      process.stderr.write(
+        `Resuming from existing checkpoint in ${targetDir} (pass --fresh to start over)...\n`,
+      );
+    }
+  }
+
+  const writeAtomic = (filePath: string, content: string): void => {
+    const tmpPath = `${filePath}.tmp-${process.pid}`;
+    writeFileSync(tmpPath, content, 'utf8');
+    try {
+      renameSync(tmpPath, filePath);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY') {
+        writeFileSync(filePath, content, 'utf8');
+        try {
+          unlinkSync(tmpPath);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        try {
+          unlinkSync(tmpPath);
+        } catch {
+          /* ignore */
+        }
+        throw err;
+      }
+    }
+  };
+
+  const commitSha = gitHead(repoRoot);
+  const writeArtifact = (configsToWrite: readonly ConfigRunResult[]): { artifact: BenchmarkArtifact; markdown: string } => {
+    const artifact: BenchmarkArtifact = {
+      generatedAt: new Date().toISOString(),
+      gitCommit: commitSha,
+      oracle: oracleKind,
+      mock,
+      maxDollars: mock ? 0 : maxDollars,
+      totalSpentDollars: totalSpentDollars(configsToWrite),
+      configs: configsToWrite,
+    };
+    const markdown = renderMarkdownReport(artifact);
+    writeAtomic(join(targetDir, 'report.json'), `${JSON.stringify(artifact, null, 2)}\n`);
+    writeAtomic(join(targetDir, 'report.md'), `${markdown}\n`);
+    return { artifact, markdown };
+  };
+
   const oracle: BenchmarkOracle =
     oracleKind === 'jvm'
       ? new JvmBenchmarkOracle(repoRoot)
@@ -161,25 +227,14 @@ async function main(): Promise<void> {
       mock,
       gatewayConfig,
       modelOverrides: overrides,
+      resumeCheckpoint,
+      onCheckpoint: (ckpt, partialResults) => {
+        writeAtomic(checkpointPath, `${JSON.stringify(ckpt, null, 2)}\n`);
+        writeArtifact(partialResults);
+      },
     });
 
-    const artifact: BenchmarkArtifact = {
-      generatedAt: new Date().toISOString(),
-      gitCommit: gitHead(repoRoot),
-      oracle: oracleKind,
-      mock,
-      maxDollars: mock ? 0 : maxDollars,
-      totalSpentDollars: totalSpentDollars(results),
-      configs: results,
-    };
-    const markdown = renderMarkdownReport(artifact);
-
-    const targetDir = outDir
-      ? resolve(repoRoot, outDir)
-      : join(repoRoot, 'webui', 'build', 'benchmark-reports');
-    mkdirSync(targetDir, { recursive: true });
-    writeFileSync(join(targetDir, 'report.json'), `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
-    writeFileSync(join(targetDir, 'report.md'), `${markdown}\n`, 'utf8');
+    const { markdown } = writeArtifact(results);
 
     console.log(markdown);
     console.log(`Saved report.json and report.md to ${targetDir}`);

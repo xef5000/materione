@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
@@ -27,8 +27,37 @@ await esbuild.build({
   logLevel: 'error',
 });
 
-execFileSync(process.execPath, [OUT_FILE, ...process.argv.slice(2)], {
-  cwd: REPO_ROOT,
-  stdio: 'inherit',
-  env: process.env,
-});
+const args = process.argv.slice(2);
+let keepAwake = null;
+if (process.platform === 'win32' && !args.includes('--mock') && !args.includes('--help') && !args.includes('-h')) {
+  const psScript = [
+    'Add-Type -TypeDefinition @"',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public static class KeepAwake {',
+    '  [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);',
+    '  public static void Enable() { SetThreadExecutionState(0x80000001u); }',
+    '}',
+    '"@',
+    '[KeepAwake]::Enable()',
+    `while (Get-Process -Id ${process.pid} -ErrorAction SilentlyContinue) { [KeepAwake]::Enable(); Start-Sleep -Seconds 15 }`,
+  ].join('\n');
+  keepAwake = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', psScript], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+}
+
+try {
+  execFileSync(process.execPath, [OUT_FILE, ...args], {
+    cwd: REPO_ROOT,
+    stdio: 'inherit',
+    env: process.env,
+  });
+} finally {
+  try {
+    keepAwake?.kill();
+  } catch {
+    /* ignore */
+  }
+}
