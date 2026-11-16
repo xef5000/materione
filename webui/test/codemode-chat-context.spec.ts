@@ -65,14 +65,26 @@ describe('the index is generated from the surface', () => {
     expect(listed.filter((name) => !declared.has(name))).toEqual([]);
   });
 
-  it("marks what the server registered but cannot run, in the server's own words", () => {
+  it("marks what the server registered as inactive provider without forbidding authoring", () => {
     const unavailable = current.behavior.actions.filter((action) => !action.available);
     expect(unavailable.length).toBeGreaterThan(0);
     const names = memberNames(current.behavior.actions.map((action) => action.id));
     const lines = index.split('\n');
     for (const action of unavailable) {
       const line = lines.find((candidate) => candidate.startsWith(`- ${names.get(action.id)} [`)) ?? '';
-      expect(line, action.id).toContain('NOT AVAILABLE on this server');
+      expect(line, action.id).toContain('runtime provider inactive (valid to author; warns SDK-0016)');
+    }
+  });
+
+  it('keeps every line <= 350 chars and includes inline parameter/field summaries', () => {
+    for (const candidate of [index, buildIndex(withAddon)]) {
+      for (const line of candidate.split('\n')) {
+        expect(line.length).toBeLessThanOrEqual(350);
+      }
+      expect(candidate).toContain('fields:');
+      expect(candidate).toContain('params:');
+      expect(candidate).toContain('filters:');
+      expect(candidate).toContain('shorthand ');
     }
   });
 
