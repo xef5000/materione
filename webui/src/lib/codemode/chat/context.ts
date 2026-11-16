@@ -18,9 +18,10 @@ import type { SurfaceDocument } from '../generate/surface';
  * The index's size cap, in characters. Awaiting the benchmark's tuning (codemode.md section 3.7 leaves the size open; the
  * measured run is issue 385). Past it the index sheds descriptions, then entries, and says so.
  */
-export const INDEX_MAX_CHARS = 24_000;
+export const INDEX_MAX_CHARS = 28_000;
 
 const DESCRIPTION_CHARS = 90;
+const MAX_LINE_CHARS = 350;
 
 /** The first sentence of a description, on one line, cut at a word. */
 function brief(text: string): string {
@@ -29,6 +30,13 @@ function brief(text: string): string {
   if (sentence.length <= DESCRIPTION_CHARS) return sentence;
   const cut = sentence.slice(0, DESCRIPTION_CHARS);
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), 40))}...`;
+}
+
+function paramSummary(params: readonly { id: string; required: boolean }[], label = 'params', cap = 8): string {
+  if (params.length === 0) return `${label}: none`;
+  const shown = params.slice(0, cap).map((p) => `${p.id}${p.required ? '*' : '?'}`);
+  if (params.length > cap) shown.push(`+${params.length - cap} more`);
+  return `${label}: ${shown.join(', ')}`;
 }
 
 interface Row {
@@ -58,11 +66,16 @@ function sections(surface: SurfaceDocument): Section[] {
     use: canWrite
       ? 'm.pack(id).<collection>.create(id, fields) makes one; m.ref.<type>("pack:id") names a stored one; m.edit(ref) changes it'
       : 'm.ref.<type>("pack:id") names a stored one (this server has no write side)',
-    rows: types.map((type) => ({
-      name: canWrite ? (writers.get(type.directory ?? type.name) ?? type.name) : (refs.get(type.name) ?? type.name),
-      facts: [`type ${type.name}`, ...(canWrite ? [`ref m.ref.${refs.get(type.name) ?? type.name}`] : [])],
-      description: type.description,
-    })),
+    rows: types.map((type) => {
+      const nonRuleParams = type.parameters.filter((p) => p.uiHint !== 'behavior-rules');
+      const facts = [`type ${type.name}`, ...(canWrite ? [`ref m.ref.${refs.get(type.name) ?? type.name}`] : [])];
+      if (nonRuleParams.length > 0) facts.push(paramSummary(nonRuleParams, 'fields', 8));
+      return {
+        name: canWrite ? (writers.get(type.directory ?? type.name) ?? type.name) : (refs.get(type.name) ?? type.name),
+        facts,
+        description: type.description,
+      };
+    }),
   });
 
   const behavior = surface.behavior;
@@ -84,21 +97,39 @@ function sections(surface: SurfaceDocument): Section[] {
     });
   };
   const availability = (entry: { available: boolean; unavailableReason?: string }): string[] =>
-    entry.available ? [] : [`NOT AVAILABLE on this server${entry.unavailableReason ? `: ${brief(entry.unavailableReason)}` : ''}`];
+    entry.available ? [] : ['runtime provider inactive (valid to author; warns SDK-0016)'];
+  const entryParams = (entry: { shorthand?: string; parameters: readonly { id: string; required: boolean }[] }): string[] => {
+    const outFacts: string[] = [];
+    if (entry.shorthand !== undefined) outFacts.push(`shorthand ${entry.shorthand}`);
+    outFacts.push(paramSummary(entry.parameters, 'params', 8));
+    return outFacts;
+  };
 
-  catalog('Actions', 'm.actions.<name>(params) is a step of a rule', behavior.actions, availability);
-  catalog('Conditions', 'm.conditions.<name>(params) goes in a rule\'s `if`, or in m.steps.if', behavior.conditions, availability);
-  catalog('Triggers', 'm.triggers.<name>(filters) is the first argument of <handle>.rules.add', behavior.triggers, (trigger) =>
-    trigger.firedBy.length > 0 ? [`on ${[...trigger.firedBy].sort().join(', ')}`] : [],
-  );
-  catalog('Mechanics', 'm.mechanics.<name>(params) goes in a resource\'s `mechanics` list', behavior.mechanics);
-  catalog('Expression functions', 'm.fn.<name>(...) inside m.expr`...`', behavior.functions, (fn) => [`returns ${fn.returns}`]);
+  catalog('Actions', 'm.actions.<name>(params) is a step of a rule', behavior.actions, (entry) => [
+    ...availability(entry),
+    ...entryParams(entry),
+  ]);
+  catalog('Conditions', 'm.conditions.<name>(params) goes in a rule\'s `if`, or in m.steps.if', behavior.conditions, (entry) => [
+    ...availability(entry),
+    ...entryParams(entry),
+  ]);
+  catalog('Triggers', 'm.triggers.<name>(filters) is the first argument of <handle>.rules.add', behavior.triggers, (trigger) => [
+    ...(trigger.firedBy.length > 0 ? [`on ${[...trigger.firedBy].sort().join(', ')}`] : []),
+    ...(trigger.filters.length > 0 ? [paramSummary(trigger.filters, 'filters', 6)] : []),
+  ]);
+  catalog('Mechanics', 'm.mechanics.<name>(params) goes in a resource\'s `mechanics` list', behavior.mechanics, entryParams);
+  catalog('Expression functions', 'm.fn.<name>(...) inside m.expr`...`', behavior.functions, (fn) => [
+    `returns ${fn.returns}`,
+    ...(fn.parameters.length > 0 ? [paramSummary(fn.parameters, 'args', 6)] : []),
+  ]);
   if (capabilityOn(surface.capabilities, CAPABILITY_LOGIC)) {
-    catalog('Presets', '<handle>.rules.instantiate(m.recipes.<name>(params)) adds a preset\'s rules', behavior.recipes);
+    catalog('Presets', '<handle>.rules.instantiate(m.recipes.<name>(params)) adds a preset\'s rules', behavior.recipes, (recipe) => [
+      paramSummary(recipe.params.map((p) => ({ id: p.name, required: p.required })), 'params', 8),
+    ]);
   }
-  catalog('Item sources', 'm.itemSources.<name>(params)', behavior.itemSources);
-  catalog('List sources', 'm.listSources.<name>(params)', behavior.listSources);
-  catalog('GUI components', 'm.guiComponents.<name>(params) is an entry of a gui\'s `layers`', surface.gui.components);
+  catalog('Item sources', 'm.itemSources.<name>(params)', behavior.itemSources, entryParams);
+  catalog('List sources', 'm.listSources.<name>(params)', behavior.listSources, entryParams);
+  catalog('GUI components', 'm.guiComponents.<name>(params) is an entry of a gui\'s `layers`', surface.gui.components, entryParams);
   if (surface.gui.containers.length > 0) {
     out.push({
       title: 'GUI containers',
@@ -115,10 +146,19 @@ function sections(surface: SurfaceDocument): Section[] {
     out.push({
       title: 'Step kinds',
       use: 'm.steps.<name>(...) is a step of a rule (control flow)',
-      rows: sortedBy(steps, (step) => step.id).map((step) => ({ name: step.id, facts: [], description: step.description })),
+      rows: sortedBy(steps, (step) => step.id).map((step) => ({
+        name: step.id,
+        facts: step.parameters.length > 0 ? [paramSummary(step.parameters, 'params', 6)] : [],
+        description: step.description,
+      })),
     });
   }
   return out;
+}
+
+function clampLine(line: string): string {
+  if (line.length <= MAX_LINE_CHARS) return line;
+  return `${line.slice(0, MAX_LINE_CHARS - 3)}...`;
 }
 
 function render(parts: readonly Section[], withDescriptions: boolean, rowCap: number): string {
@@ -131,7 +171,7 @@ function render(parts: readonly Section[], withDescriptions: boolean, rowCap: nu
     for (const row of section.rows.slice(0, rowCap)) {
       const facts = row.facts.length > 0 ? ` [${row.facts.join('; ')}]` : '';
       const description = withDescriptions && row.description.trim() !== '' ? `: ${brief(row.description)}` : '';
-      lines.push(`- ${row.name}${facts}${description}`);
+      lines.push(clampLine(`- ${row.name}${facts}${description}`));
     }
     if (section.rows.length > rowCap) lines.push(`- ... and ${section.rows.length - rowCap} more; find them with m.docs.search`);
   }
@@ -159,6 +199,27 @@ HOW YOU WORK
 - A program can read (m.read.*, m.docs.*) and can stage changes (m.pack(id).<collection>.create, m.edit(ref).set, <handle>.rules.add, ...). It changes nothing by itself. The editor type-checks it, runs it in a sandbox, asks the server for a dry run of the staged changes, and answers with a result.
 - Every write of one program goes to one pack. Programs are one-shot: nothing is carried from one to the next except what the server stores. To build on a change, write a new program that reads the stored state.
 - Call m.summary("...") with one plain sentence that says what the change does.
+
+CORE SDK SIGNATURES
+- Never return m, return m.read, or return m.docs (returning an object containing functions fails with SDK-0014); return only plain JSON values or handles.
+- Exact m.read async methods (the ONLY awaited calls in the SDK):
+  - await m.read.packs() -> { id, builtin }[]
+  - await m.read.resources({ pack, type?, query?, limit? }) -> { ref, pack, type, path, id, name }[] (always pass { pack }, never a bare string)
+  - await m.read.get(ref) -> { ref, path, revision, fields, computed }
+  - await m.read.references(ref) -> { hits, coverage }
+- Exact m.docs sync methods:
+  - m.docs.describe("potion") or m.docs.describe("m.triggers.click") -> full parameters, filters, shorthand, firedBy for any entry
+  - m.docs.type("item") -> fields of a content type ("item", "gui", "block", "furniture", etc. — content types only)
+  - m.docs.search("keyword", limit?) -> matching entries with parameters and filters
+- Exact authoring & rule shapes (all synchronous — do NOT await staging calls):
+  - Create: const p = m.pack("pack_id"); const item = p.items.create("coin", { material: "GOLD_INGOT", display_name: m.mm("<gold>Coin") });
+  - Edit existing: m.edit(m.ref.item("pack:id")).set({ ... }) (or m.edit(row.ref).set({ ... }))
+  - MiniMessage: fields typed MiniMessage (display_name, lore items) MUST wrap strings in m.mm("..."); action messages (message, broadcast, actionbar) take plain string | Expr.
+  - Resource rules (item, block, furniture, gui): <handle>.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({ cooldown: 5000, on_cooldown: [...], if: ..., do: [...] })) — trigger FIRST, callback (ctx) => ({ ... }) SECOND.
+  - Pack-level hostless rules (rules/*.yml): p.rules.create("id", { on: m.triggers.playerJoin, if: ..., do: [...] }).
+  - Steps: m.steps.require([step1, step2], { else: [...] }) (takes action steps, NOT conditions); m.steps.if(condition, { then?: [...], else?: [...] }); m.steps.choose([{ if: cond, then: [...] }], { else?: [...] }).
+  - Expressions & variables: m.expr\`\${m.fn.now()} - \${varHandle} >= 86400\`; in setVar and var conditions, value is string | Expr, so pass numbers/booleans as m.expr\`1\` or m.expr\`true\`.
+  - Entries noted runtime provider inactive (valid to author; warns SDK-0016) (such as economy or server transfer when Vault/proxy is not active yet) ARE valid to author and dry-run; stage them normally and mention the inactive provider in your reply rather than refusing to build.
 
 WHAT HAPPENS TO A CHANGE
 - New content (a program that only creates) is applied at once and listed in the owner's change log, where they can revert it.

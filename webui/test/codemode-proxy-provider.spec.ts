@@ -11,6 +11,8 @@ import {
   setTestProxyBaseOverride,
 } from '../src/lib/codemode/proxy/config';
 import { createProxyModelProvider, toUpstreamBody } from '../src/lib/codemode/proxy/provider';
+import { agentContext, buildIndex } from '../src/lib/codemode/chat/context';
+import { surfaceNamed } from './helpers/codemode';
 
 afterEach(() => {
   setTestProxyBaseOverride(null);
@@ -245,4 +247,32 @@ describe('createProxyModelProvider', () => {
     ]);
     expect(onSettled).not.toHaveBeenCalled();
   });
+});
+
+describe('cloud model-proxy wire contract', () => {
+  it.each(['plugin-current', 'with-addon'] as const)(
+    'agentContext(surfaceNamed(%s)) satisfies cloud/model-proxy validateChatRequest invariants',
+    (name) => {
+      const surface = surfaceNamed(name);
+      const system = agentContext(surface);
+      const index = buildIndex(surface);
+      expect(system.startsWith('You are the Materione assistant,')).toBe(true);
+      expect(index.length).toBeLessThanOrEqual(30_000);
+      const lines = index.split('\n');
+      expect(lines[0]).toBe('SDK INDEX of the connected server (generated from its registries; not the full declarations).');
+      expect(lines[1]).toBe('For the fields and parameters of an entry, run a read-only program: return m.docs.type("item") or return m.docs.search("word").');
+      for (let i = 2; i < lines.length; i++) {
+        const line = lines[i]!;
+        if (line.length === 0) continue;
+        expect(line.length).toBeLessThanOrEqual(360);
+        expect(line.startsWith('## ') || line.startsWith('- ')).toBe(true);
+      }
+      const body = toUpstreamBody({
+        system,
+        tools: [RUN_PROGRAM_TOOL],
+        messages: [{ role: 'user', text: 'Create a ruby item.' }],
+      });
+      expect(JSON.stringify(body).length).toBeLessThan(512 * 1024);
+    },
+  );
 });

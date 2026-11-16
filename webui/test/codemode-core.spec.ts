@@ -247,14 +247,66 @@ describe('every kind of operation, and what it stages', () => {
   });
 
   it('m.docs answers from the registry\'s own text, in the program', async () => {
-    const { result } = await go(`return {
+    const basic = await go(`return {
       type: m.docs.type("item").directory,
       has: m.docs.type("item").fields.some((f) => f.id === "material"),
       found: m.docs.search("take money from the player").map((e) => e.kind + " " + e.member),
+      searchWithParams: m.docs.search("potion", 3).find((e) => e.member === "potion"),
+      searchTriggerFilters: m.docs.search("gui.click", 5).find((e) => e.id === "gui.click"),
     };`);
-    expect(errorsOf(result)).toEqual([]);
-    expect(result.returned).toMatchObject({ type: 'items', has: true });
-    expect((result.returned as { found: string[] }).found).toContain('m.actions takeMoney');
+    expect(errorsOf(basic.result)).toEqual([]);
+    const ret1 = basic.result.returned as Record<string, unknown>;
+    expect(ret1).toMatchObject({ type: 'items', has: true });
+    expect(ret1.found).toContain('m.actions takeMoney');
+    expect((ret1.searchWithParams as { parameters?: unknown[] }).parameters?.length).toBeGreaterThan(0);
+    expect((ret1.searchTriggerFilters as { filters?: unknown[] }).filters?.length).toBeGreaterThan(0);
+
+    const actionsAndTriggers = await go(`return {
+      byActionMember: m.docs.describe("potion"),
+      byQualifiedAction: m.docs.describe("m.actions.potion"),
+      byStrippedAction: m.docs.describe("actions.potion"),
+      byId: m.docs.describe("take_money"),
+      byTrigger: m.docs.describe("m.triggers.click"),
+    };`);
+    expect(errorsOf(actionsAndTriggers.result)).toEqual([]);
+    const ret2 = actionsAndTriggers.result.returned as Record<string, unknown>;
+    expect(ret2.byActionMember).toMatchObject({ kind: 'm.actions', id: 'potion', member: 'potion' });
+    expect((ret2.byActionMember as { parameters?: unknown[] }).parameters?.length).toBeGreaterThan(0);
+    expect(ret2.byQualifiedAction).toEqual(ret2.byActionMember);
+    expect(ret2.byStrippedAction).toEqual(ret2.byActionMember);
+    expect(ret2.byId).toMatchObject({ kind: 'm.actions', id: 'take_money', member: 'takeMoney' });
+    expect(ret2.byTrigger).toMatchObject({ kind: 'm.triggers', id: 'click', member: 'click' });
+    expect((ret2.byTrigger as { firedBy?: unknown[] }).firedBy?.length).toBeGreaterThan(0);
+
+    const others = await go(`return {
+      byMechanic: m.docs.describe("materione:backpack"),
+      byGuiComponent: m.docs.describe("guiComponents.button"),
+    };`);
+    expect(errorsOf(others.result)).toEqual([]);
+    const ret3 = others.result.returned as Record<string, unknown>;
+    expect(ret3.byMechanic).toMatchObject({ kind: 'm.mechanics', id: 'materione:backpack', member: 'backpack' });
+    expect(ret3.byGuiComponent).toMatchObject({ kind: 'm.guiComponents', id: 'materione:button', member: 'button' });
+
+    const byContentType = await go(`const d = m.docs.describe("item"); return { kind: d.kind, id: d.id, member: d.member, paramCount: d.parameters?.length ?? 0, hasMaterial: d.parameters?.some((p) => p.id === "material") };`);
+    expect(errorsOf(byContentType.result)).toEqual([]);
+    expect(byContentType.result.returned).toMatchObject({ kind: 'content type', id: 'item', member: 'items', hasMaterial: true });
+    expect((byContentType.result.returned as { paramCount: number }).paramCount).toBeGreaterThan(10);
+
+    const byContentDir = await go(`const d = m.docs.describe("guis"); return { kind: d.kind, id: d.id, member: d.member, paramCount: d.parameters?.length ?? 0 };`);
+    expect(errorsOf(byContentDir.result)).toEqual([]);
+    expect(byContentDir.result.returned).toMatchObject({ kind: 'content type', id: 'gui', member: 'guis' });
+    expect((byContentDir.result.returned as { paramCount: number }).paramCount).toBeGreaterThan(5);
+  });
+
+  it('m.docs.describe fails with SDK-0012 and nearest hints for unknown entries', async () => {
+    const missing = await go(`return m.docs.describe("potin");`);
+    expect(missing.result.ok).toBe(false);
+    expect(errorsOf(missing.result)[0]).toMatchObject({ code: 'SDK-0012' });
+    expect(errorsOf(missing.result)[0]?.hint).toContain('potion');
+
+    const empty = await go(`return m.docs.describe("");`);
+    expect(empty.result.ok).toBe(false);
+    expect(errorsOf(empty.result)[0]).toMatchObject({ code: 'SDK-0012' });
   });
 
   it('m.read reads the stored state: packs, a catalog page, one document, references and history', async () => {

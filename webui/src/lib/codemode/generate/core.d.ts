@@ -290,6 +290,7 @@ interface ParamDoc {
   readonly allowedValues?: readonly string[];
   readonly referenceKind?: string;
   readonly default?: string;
+  readonly acceptsExpression?: boolean;
 }
 
 interface TypeDoc {
@@ -299,17 +300,23 @@ interface TypeDoc {
   readonly fields: readonly ParamDoc[];
 }
 
-/** One registry entry found by `m.docs.search`. `member` is its spelling in the SDK (`m.actions.takeMoney`). */
+/** One registry entry found by `m.docs.search` or `m.docs.describe`. `member` is its spelling in the SDK (`m.actions.takeMoney`). */
 interface DocEntry {
   readonly kind: string;
   readonly id: string;
   readonly member: string;
   readonly summary: string;
+  readonly shorthand?: string;
+  readonly parameters?: readonly ParamDoc[];
+  readonly filters?: readonly ParamDoc[];
+  readonly firedBy?: readonly string[];
+  readonly returns?: string;
 }
 
 /** The registry's own text, searched in the program: the same words the declarations carry as documentation. */
 interface DocsApi {
   type(name: ContentTypeName): TypeDoc;
+  describe(entry: string): DocEntry;
   search(query: string, limit?: number): readonly DocEntry[];
 }
 

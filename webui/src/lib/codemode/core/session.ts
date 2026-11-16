@@ -1088,32 +1088,152 @@ export function createSession(config: SessionConfig): Session {
     member: string;
     name: string;
     text: string;
+    directory?: string;
+    shorthand?: string;
+    parameters?: Dict[];
+    filters?: Dict[];
+    firedBy?: readonly string[];
+    returns?: string;
+  }
+
+  function paramDocs(params: readonly SurfaceParam[]): Dict[] {
+    return params.map((param) => {
+      const entry: Dict = { id: param.id, type: param.type, required: param.required };
+      if (param.description !== undefined) entry.description = param.description;
+      if (param.allowedValues !== undefined) entry.allowedValues = [...param.allowedValues];
+      if (param.referenceKind !== undefined) entry.referenceKind = param.referenceKind;
+      if (param.default !== undefined) entry.default = param.default;
+      if (param.expression === true) entry.acceptsExpression = true;
+      return entry;
+    });
+  }
+
+  function toDocEntry(entry: Indexed): Dict {
+    const out: Dict = { kind: entry.kind, id: entry.id, member: entry.member, summary: entry.text };
+    if (entry.shorthand !== undefined) out.shorthand = entry.shorthand;
+    if (entry.parameters !== undefined) out.parameters = entry.parameters;
+    if (entry.filters !== undefined) out.filters = entry.filters;
+    if (entry.firedBy !== undefined) out.firedBy = entry.firedBy;
+    if (entry.returns !== undefined) out.returns = entry.returns;
+    return out;
   }
 
   let index: Indexed[] | undefined;
   function indexed(): Indexed[] {
     if (index !== undefined) return index;
     const out: Indexed[] = [];
-    const add = (kind: string, entries: readonly (SurfaceEntry | { id: string; displayName: string; description: string })[]): void => {
+    const add = (
+      kind: string,
+      entries: readonly (SurfaceEntry & { shorthand?: string; filters?: readonly SurfaceParam[]; firedBy?: readonly string[]; returns?: string })[],
+    ): void => {
       const names = memberMap(entries);
-      for (const entry of entries) out.push({ kind, id: entry.id, member: names.get(entry.id) ?? camel(entry.id), name: entry.displayName, text: entry.description });
+      for (const entry of entries) {
+        const row: Indexed = {
+          kind,
+          id: entry.id,
+          member: names.get(entry.id) ?? camel(entry.id),
+          name: entry.displayName,
+          text: entry.description,
+        };
+        if (entry.shorthand !== undefined) row.shorthand = entry.shorthand;
+        if (entry.filters !== undefined) {
+          row.filters = paramDocs(entry.filters);
+        } else if (entry.parameters !== undefined) {
+          row.parameters = paramDocs(entry.parameters);
+        }
+        if (entry.firedBy !== undefined) row.firedBy = [...entry.firedBy];
+        if (entry.returns !== undefined) row.returns = entry.returns;
+        out.push(row);
+      }
     };
     const b = surface.behavior;
     const writerNames = writerMembers(types);
     for (const type of types) {
-      out.push({ kind: 'content type', id: type.name, member: writerNames.get(directoryOf(type)) ?? directoryOf(type), name: type.displayName, text: type.description });
+      out.push({
+        kind: 'content type',
+        id: type.name,
+        member: writerNames.get(directoryOf(type)) ?? directoryOf(type),
+        name: type.displayName,
+        text: type.description,
+        directory: directoryOf(type),
+        parameters: paramDocs(type.parameters.filter((param) => param.uiHint !== HINT_RULES)),
+      });
     }
     add('m.actions', b.actions);
     add('m.conditions', b.conditions);
     add('m.triggers', b.triggers);
     add('m.mechanics', b.mechanics);
     add('m.fn', b.functions);
-    add('m.recipes', b.recipes);
+    const recipeNames = memberMap(b.recipes);
+    for (const recipe of b.recipes) {
+      out.push({
+        kind: 'm.recipes',
+        id: recipe.id,
+        member: recipeNames.get(recipe.id) ?? camel(recipe.id),
+        name: recipe.displayName,
+        text: recipe.description,
+        parameters: recipe.params.map((p) => {
+          const d: Dict = { id: p.name, type: p.type, required: p.required };
+          if (p.description !== undefined) d.description = p.description;
+          if (p.default !== undefined) d.default = String(p.default);
+          return d;
+        }),
+      });
+    }
     add('m.guiComponents', surface.gui.components);
     add('m.itemSources', b.itemSources);
     add('m.listSources', b.listSources);
+    const supportedSteps = b.steps.filter((step) => step.supported);
+    const stepNames = memberMap(supportedSteps);
+    for (const step of supportedSteps) {
+      out.push({
+        kind: 'm.steps',
+        id: step.id,
+        member: stepNames.get(step.id) ?? camel(step.id),
+        name: step.displayName,
+        text: step.description,
+        parameters: paramDocs(step.parameters),
+      });
+    }
     index = out;
     return out;
+  }
+
+  function findDocEntry(raw: string): Indexed | undefined {
+    const entries = indexed();
+    const lower = raw.toLowerCase();
+    const stripped = lower.startsWith('m.') ? lower.slice(2) : lower;
+
+    // Tier 1: qualified form (e.g. "m.actions.potion", "actions.potion", "actions.take_money")
+    for (const entry of entries) {
+      const kindLower = entry.kind.toLowerCase();
+      const kindStripped = kindLower.startsWith('m.') ? kindLower.slice(2) : kindLower;
+      const memberLower = entry.member.toLowerCase();
+      const idLower = entry.id.toLowerCase();
+      if (
+        `${kindLower}.${memberLower}` === lower ||
+        `${kindStripped}.${memberLower}` === stripped ||
+        `${kindLower}.${idLower}` === lower ||
+        `${kindStripped}.${idLower}` === stripped
+      ) {
+        return entry;
+      }
+    }
+    // Tier 2: exact match on member, id, or directory
+    for (const entry of entries) {
+      if (entry.member === raw || entry.id === raw || entry.directory === raw) return entry;
+    }
+    // Tier 3: case-insensitive match on member, id, or directory
+    for (const entry of entries) {
+      if (
+        entry.member.toLowerCase() === lower ||
+        entry.id.toLowerCase() === lower ||
+        entry.directory?.toLowerCase() === lower
+      ) {
+        return entry;
+      }
+    }
+    return undefined;
   }
 
   function docsApi(): Dict {
@@ -1127,15 +1247,24 @@ export function createSession(config: SessionConfig): Session {
           name: type.name,
           directory: directoryOf(type),
           description: type.description,
-          fields: type.parameters.filter((param) => param.uiHint !== HINT_RULES).map((param) => {
-            const entry: Dict = { id: param.id, type: param.type, required: param.required };
-            if (param.description !== undefined) entry.description = param.description;
-            if (param.allowedValues !== undefined) entry.allowedValues = [...param.allowedValues];
-            if (param.referenceKind !== undefined) entry.referenceKind = param.referenceKind;
-            if (param.default !== undefined) entry.default = param.default;
-            return entry;
-          }),
+          fields: paramDocs(type.parameters.filter((param) => param.uiHint !== HINT_RULES)),
         };
+      },
+      describe(target: unknown): unknown {
+        if (typeof target !== 'string' || target.trim() === '') {
+          return fail('SDK-0012', 'm.docs.describe takes an entry name');
+        }
+        const raw = target.trim();
+        const found = findDocEntry(raw);
+        if (found !== undefined) return toDocEntry(found);
+        const candidates = [
+          ...new Set(
+            indexed().flatMap((entry) =>
+              entry.kind.startsWith('m.') ? [entry.member, entry.id, `${entry.kind}.${entry.member}`] : [entry.id, entry.member],
+            ),
+          ),
+        ];
+        return fail('SDK-0012', `m.docs.describe: no entry "${raw}"`, { hint: `nearest: ${nearest(raw, candidates).join(', ')}` });
       },
       search(query: unknown, limit?: unknown): unknown {
         if (typeof query !== 'string' || query.trim() === '') return fail('SDK-0012', 'm.docs.search takes the words to look for');
@@ -1155,7 +1284,7 @@ export function createSession(config: SessionConfig): Session {
           if (score > 0) scored.push({ entry, score });
         }
         scored.sort((a, b) => b.score - a.score || (a.entry.kind < b.entry.kind ? -1 : a.entry.kind > b.entry.kind ? 1 : 0) || (a.entry.id < b.entry.id ? -1 : a.entry.id > b.entry.id ? 1 : 0));
-        return scored.slice(0, want).map(({ entry }) => ({ kind: entry.kind, id: entry.id, member: entry.member, summary: entry.text }));
+        return scored.slice(0, want).map(({ entry }) => toDocEntry(entry));
       },
     });
   }

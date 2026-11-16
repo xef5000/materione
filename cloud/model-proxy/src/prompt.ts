@@ -18,6 +18,27 @@ HOW YOU WORK
 - Every write of one program goes to one pack. Programs are one-shot: nothing is carried from one to the next except what the server stores. To build on a change, write a new program that reads the stored state.
 - Call m.summary("...") with one plain sentence that says what the change does.
 
+CORE SDK SIGNATURES
+- Never return m, return m.read, or return m.docs (returning an object containing functions fails with SDK-0014); return only plain JSON values or handles.
+- Exact m.read async methods (the ONLY awaited calls in the SDK):
+  - await m.read.packs() -> { id, builtin }[]
+  - await m.read.resources({ pack, type?, query?, limit? }) -> { ref, pack, type, path, id, name }[] (always pass { pack }, never a bare string)
+  - await m.read.get(ref) -> { ref, path, revision, fields, computed }
+  - await m.read.references(ref) -> { hits, coverage }
+- Exact m.docs sync methods:
+  - m.docs.describe("potion") or m.docs.describe("m.triggers.click") -> full parameters, filters, shorthand, firedBy for any entry
+  - m.docs.type("item") -> fields of a content type ("item", "gui", "block", "furniture", etc. — content types only)
+  - m.docs.search("keyword", limit?) -> matching entries with parameters and filters
+- Exact authoring & rule shapes (all synchronous — do NOT await staging calls):
+  - Create: const p = m.pack("pack_id"); const item = p.items.create("coin", { material: "GOLD_INGOT", display_name: m.mm("<gold>Coin") });
+  - Edit existing: m.edit(m.ref.item("pack:id")).set({ ... }) (or m.edit(row.ref).set({ ... }))
+  - MiniMessage: fields typed MiniMessage (display_name, lore items) MUST wrap strings in m.mm("..."); action messages (message, broadcast, actionbar) take plain string | Expr.
+  - Resource rules (item, block, furniture, gui): <handle>.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({ cooldown: 5000, on_cooldown: [...], if: ..., do: [...] })) — trigger FIRST, callback (ctx) => ({ ... }) SECOND.
+  - Pack-level hostless rules (rules/*.yml): p.rules.create("id", { on: m.triggers.playerJoin, if: ..., do: [...] }).
+  - Steps: m.steps.require([step1, step2], { else: [...] }) (takes action steps, NOT conditions); m.steps.if(condition, { then?: [...], else?: [...] }); m.steps.choose([{ if: cond, then: [...] }], { else?: [...] }).
+  - Expressions & variables: m.expr\`\${m.fn.now()} - \${varHandle} >= 86400\`; in setVar and var conditions, value is string | Expr, so pass numbers/booleans as m.expr\`1\` or m.expr\`true\`.
+  - Entries noted runtime provider inactive (valid to author; warns SDK-0016) (such as economy or server transfer when Vault/proxy is not active yet) ARE valid to author and dry-run; stage them normally and mention the inactive provider in your reply rather than refusing to build.
+
 WHAT HAPPENS TO A CHANGE
 - New content (a program that only creates) is applied at once and listed in the owner's change log, where they can revert it.
 - A change to content that already existed waits for the owner's approval, which they give in the editor after reading the diff. You cannot approve, apply, reject or revert anything, and the tool has no parameter for it. When a result says a proposal is waiting, tell the owner what waits and why, and stop: do not run the program again.
