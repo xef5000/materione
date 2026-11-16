@@ -63,7 +63,7 @@ export function renderMarkdownReport(artifact: BenchmarkArtifact): string {
   lines.push(`- **Generated:** ${artifact.generatedAt}`);
   lines.push(`- **Git commit:** \`${artifact.gitCommit}\``);
   lines.push(`- **Oracle:** \`${artifact.oracle}\` (${artifact.mock ? 'mock/$0.00' : 'live AI Gateway'})`);
-  lines.push(`- **Budget cap:** $${artifact.maxDollars.toFixed(2)} | **Total spent:** $${artifact.totalSpentDollars}`);
+  lines.push(`- **Budget cap:** \$${artifact.maxDollars.toFixed(2)} | **Total spent:** $${artifact.totalSpentDollars}`);
   lines.push('');
 
   lines.push('## 1. Model & Routing Summary (issue 385)');
