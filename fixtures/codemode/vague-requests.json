@@ -42,17 +42,17 @@
     {
       "id": "V05",
       "title": "Shop with ores and food",
-      "prompt": "In pack bench, build a /shop menu with ores and food categories where players can buy items.",
+      "prompt": "In pack bench, build a /shop menu selling minecraft:iron_ingot for 25 coins, minecraft:diamond for 200 coins, and minecraft:cooked_beef for 10 coins.",
       "packs": ["bench"],
       "allowedPacks": ["bench"],
       "shouldAsk": false,
-      "expectedSubFeatures": ["gui", "ores", "food", "buy", "economy"],
+      "expectedSubFeatures": ["gui", "iron_ingot", "diamond", "cooked_beef", "coins"],
       "knownGaps": []
     },
     {
       "id": "V06",
       "title": "Starter and daily kit menu",
-      "prompt": "In pack bench, create a /kits menu with a one-time Starter kit and a 24h Daily kit that shows cooldown feedback.",
+      "prompt": "In pack bench, create a /kits menu with a one-time Starter kit (minecraft:stone_sword and 8 minecraft:bread) and a 24h Daily kit (minecraft:golden_apple) that tells the player to come back later if on cooldown.",
       "packs": ["bench"],
       "allowedPacks": ["bench"],
       "shouldAsk": false,
@@ -62,7 +62,7 @@
     {
       "id": "V07",
       "title": "Zombie hunter quest",
-      "prompt": "In pack bench, build a Zombie Hunter quest with a /quests progress GUI and a rare rotten heart item drop.",
+      "prompt": "In pack bench, build a Zombie Hunter quest (kill 10 zombies for 100 coins, tracked in /quests) plus a 5% Rotten Heart (ROTTEN_FLESH) custom item drop on zombie kills.",
       "packs": ["bench"],
       "allowedPacks": ["bench"],
       "shouldAsk": false,
@@ -72,21 +72,24 @@
     {
       "id": "V08",
       "title": "Mystery crate with key",
-      "prompt": "In pack bench, create a placed mystery crate block/furniture with a matching crate key item and weighted prizes.",
+      "prompt": "In pack bench, create a Mystery Crate furniture (model models/crate.json) and a Crate Key item (TRIPWIRE_HOOK); right-clicking the crate with a key consumes it and gives weighted rewards (70% 8 iron_ingot, 25% 2 diamond, 5% 1 nether_star announced in broadcast).",
       "packs": ["bench"],
+      "assets": {
+        "bench": ["assets/models/crate.json"]
+      },
       "allowedPacks": ["bench"],
       "shouldAsk": false,
-      "expectedSubFeatures": ["key", "crate", "weighted", "prize"],
+      "expectedSubFeatures": ["key", "crate", "weighted", "nether_star"],
       "knownGaps": []
     },
     {
       "id": "V09",
       "title": "Ruby sword forge",
-      "prompt": "In pack bench, create a /forge GUI that upgrades sample:ruby_sword using 3 sample:ruby and 200 coins.",
+      "prompt": "In pack bench, create a /forge GUI with durable input slots where placing sample:ruby_sword in slot 11 and 3 sample:ruby in slot 13 and paying 200 coins crafts a new refined_ruby_sword (NETHERITE_SWORD).",
       "packs": ["bench", "sample"],
       "allowedPacks": ["bench"],
       "shouldAsk": false,
-      "expectedSubFeatures": ["gui", "ruby_sword", "ruby", "200", "upgrade"],
+      "expectedSubFeatures": ["gui", "ruby_sword", "ruby", "200", "refined_ruby_sword"],
       "knownGaps": []
     },
     {

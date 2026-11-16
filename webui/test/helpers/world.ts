@@ -58,11 +58,14 @@ export function fakePort(world: World, calls: Call[] = []): {
           return ok({ packs: world.packs, ...(world.builtin && world.builtin.length > 0 ? { builtin: world.builtin } : {}) });
         case 'authoring.summaries': {
           const pack = String(payload.pack);
+          const offset = typeof payload.offset === 'number' ? payload.offset : 0;
+          const limit = typeof payload.limit === 'number' ? payload.limit : 100;
+          if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 200) {
+            return refuse('summary page requires offset >= 0 and limit between 1 and 200', 'MTR-0007');
+          }
           const rows = (world.resources?.[pack] ?? [])
             .filter((row) => payload.type === undefined || row.type.toLowerCase() === String(payload.type).toLowerCase())
             .filter((row) => payload.query === undefined || row.id.toLowerCase().includes(String(payload.query).toLowerCase()));
-          const offset = typeof payload.offset === 'number' ? payload.offset : 0;
-          const limit = typeof payload.limit === 'number' ? payload.limit : 100;
           const page = rows.slice(offset, offset + limit).map((row) => ({ pack, name: row.id, health: 'ok', ...row }));
           const next = offset + limit < rows.length ? { nextOffset: offset + limit } : {};
           return ok({ resources: page, total: rows.length, ...next });

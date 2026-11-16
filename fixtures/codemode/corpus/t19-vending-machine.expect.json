@@ -3,7 +3,7 @@
   "kind": "task",
   "title": "Vending machine",
   "area": "furniture",
-  "prompt": "Create a vending machine furniture that opens the shop GUI when right-clicked.",
+  "prompt": "Create a vending machine furniture (with model models/vending_machine.json) that opens the existing bench:shop GUI when right-clicked.",
   "registry": "plugin-current",
   "result": "pass",
   "gaps": [],

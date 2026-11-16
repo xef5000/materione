@@ -17,12 +17,13 @@
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from '../generate/capabilities';
 import { contextFor, contextTree, type ContextNode } from '../generate/context';
 import { camel, memberNames, refMembers, sortedBy, writerMembers } from '../generate/names';
-import type {
-  SurfaceContentType,
-  SurfaceEntry,
-  SurfaceFunction,
-  SurfaceParam,
-  SurfaceTrigger,
+import {
+  guiLayerCommonParams,
+  type SurfaceContentType,
+  type SurfaceEntry,
+  type SurfaceFunction,
+  type SurfaceParam,
+  type SurfaceTrigger,
 } from '../generate/surface';
 import { SDK_CODES, SdkError, isSdkError, type SdkCode } from './diagnostics';
 import { readEntry, writeEntry, type OpEntry } from './ops';
@@ -1180,7 +1181,15 @@ export function createSession(config: SessionConfig): Session {
         }),
       });
     }
-    add('m.guiComponents', surface.gui.components);
+    const commonLayer = guiLayerCommonParams(surface);
+    const commonLayerIds = new Set(commonLayer.map((p) => p.id));
+    add(
+      'm.guiComponents',
+      surface.gui.components.map((component) => ({
+        ...component,
+        parameters: [...commonLayer, ...component.parameters.filter((p) => !commonLayerIds.has(p.id))],
+      })),
+    );
     add('m.itemSources', b.itemSources);
     add('m.listSources', b.listSources);
     const supportedSteps = b.steps.filter((step) => step.supported);

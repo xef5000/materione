@@ -308,11 +308,11 @@ SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are bu
 |---|---|
 | `string`, `integer`, `decimal`, `boolean` | `string`, `number`, `number`, `boolean`; `min`, `max`, `unit`, `default`, `example` become TSDoc |
 | `enum` | A union of the `allowedValues`; one with more than 16 values gets a named alias (`ItemFieldsMaterial`) |
-| `reference` with a `referenceKind` | `Ref<"kind">`; without one, `Ref` |
+| `reference` with a `referenceKind` | `Ref<"kind">` (when `referenceKind` is a sub-hint such as `pack-item` and `uiHint` names a content type, `Ref<"that type">`); without one, `Ref` |
 | `string` whose widget hint is `formatted-text` | `MiniMessage`; a `formatted-lines` list is `MiniMessage[]`. Built with `m.mm`, so a plain string literal is a type error |
-| `string` whose widget hint names a content type (`item`, `sound`, `variable`) | `string \| Ref<"that type">` (read from the registry, not listed) |
-| `list` with `nested` | An array of an object type; a list of `referenceKind` `mechanic` is `MechanicEntry[]` and one whose nested `type` references `gui-component` is `GuiLayerEntry[]` (the two reference kinds that name a polymorphic registry) |
-| `raw` | `JsonValue` |
+| `string` whose widget hint names a content type (`item`, `sound`, `variable`) | `string \| Ref<"that type">` (read from the registry, not listed); when `referenceKind` is `item-source`, also `\| ItemSourceSpec` |
+| `list` with `nested` | An array of an object type; a list of `referenceKind` `mechanic` is `MechanicEntry[]` and one whose nested `type` references `gui-component` is `GuiLayerEntry[]` |
+| `raw` | `JsonValue`; when `referenceKind` is `list-source`, `JsonValue \| ListSourceSpec` |
 | `valueKind` `steps`, `condition`, `conditions`, `flow`, `arguments` (#355) | `readonly Step[]`, `ConditionValue` (a built condition or an `Expr<boolean>`), `readonly ConditionValue[]`, `string`, a mapping of names to values; the kind replaces the value type |
 | `expression: true` (#355) | The value type, `\| Expr`: the parameter also takes `m.expr` or an `m.fn` result |
 | `multiple: true` (#355) | The value type, `\| readonly (type)[]`: one value or a list (every trigger filter) |

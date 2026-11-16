@@ -6,7 +6,7 @@ type Capability = "assets" | "blocks" | "codemode" | "delivery" | "furniture" | 
 /** The content types this server registers. */
 type ContentTypeName = "block" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "item" | "painting" | "recipe" | "rule" | "sound" | "variable";
 /** What a `Ref` can point at: a content type, or an asset kind a field names. */
-type RefKind = "block" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "mechanic" | "model" | "pack-item" | "painting" | "recipe" | "rule" | "sound" | "template" | "texture" | "variable";
+type RefKind = "block" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "recipe" | "rule" | "sound" | "template" | "texture" | "variable";
 /** The action ids this server registers. */
 type ActionId = "actionbar" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.back" | "gui.close" | "gui.open" | "gui.page" | "gui.refresh" | "gui.slot_item" | "message" | "potion" | "prompt" | "run_command" | "set_var" | "sound" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title";
 /** The condition ids this server registers. */
@@ -83,7 +83,7 @@ interface BlockFields {
    */
   move_policy?: "keep" | "break";
   /** Optional custom placement item; auto-generated from this block when omitted. */
-  item?: Ref<"pack-item">;
+  item?: Ref<"item">;
   /** Named flows (id to steps), run from this resource's rules with call: <id>. */
   flows?: JsonValue;
 }
@@ -259,7 +259,7 @@ interface FurnitureFields {
     after: number;
   }>;
   /** Optional custom placement item; auto-generated from this furniture when omitted. */
-  item?: Ref<"pack-item">;
+  item?: Ref<"item">;
   /** Named flows (id to steps), run from this resource's rules with call: <id>. */
   flows?: JsonValue;
 }
@@ -4783,9 +4783,10 @@ interface ItemLayerParams extends GuiLayerCommon {
   slot: number;
   /**
    * The item: a Materione item (ns:id), a vanilla material (minecraft:diamond_sword), a template (${entry.item}), or one source such as { head: { player: "${player.name}" } } or { player_slot: main_hand }. Exactly one of item or frames.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @example shop:gui/main/sword
    */
-  item?: Ref<"pack-item">;
+  item?: string | Ref<"item"> | ItemSourceSpec | Expr;
   /** An animation in place of item: { every: <ticks>, items: [sources...] }; the layer shows items in turn. */
   frames?: JsonValue;
   /**
@@ -4819,7 +4820,7 @@ interface ListLayerParams extends GuiLayerCommon {
    * The list source: a name (online_players), or a mapping with type and the source's parameters ({type: pack_items, pack: shop}), or {entries: [...]}.
    * @example online_players
    */
-  source: JsonValue;
+  source: JsonValue | ListSourceSpec;
   /**
    * Which entries show: a condition over entry.* (an expression, a predicate or a list)
    * @example ${contains(lower(entry.name), 'a')}

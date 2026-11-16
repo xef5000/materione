@@ -117,11 +117,11 @@ export function createChecker(options: CheckerOptions): Checker {
       const built = build(wrapProgram(input.program), input.sdk);
       const file = built.getSourceFile(PROGRAM)!;
       const checker = built.getTypeChecker();
-      const catalogs = catalogNames(built.getSourceFile(SDK)!);
+      const sdkInfo = catalogNames(built.getSourceFile(SDK)!);
 
       const found: CheckDiagnostic[] = [...refusals(file, input.program)];
       for (const diagnostic of ts.getPreEmitDiagnostics(built, file)) {
-        found.push(convert(diagnostic, file, input.program, checker, catalogs));
+        found.push(convert(diagnostic, file, input.program, checker, sdkInfo));
       }
       // The compiler's own order is deterministic; sorting by position keeps the list stable across compiler versions too.
       found.sort((a, b) => a.line - b.line || a.column - b.column || compare(a.code, b.code) || compare(a.message, b.message));
@@ -218,7 +218,7 @@ const SUGGESTION = /Did you mean '([^']+)'\?/;
 const MEMBER_MISSING = /^Property '([^']+)' does not exist on type '(.+?)'\./s;
 const LITERAL_UNKNOWN = /^Object literal may only specify known properties, and '([^']+)' does not exist in type '(.+?)'\./s;
 
-function convert(diagnostic: ts.Diagnostic, file: ts.SourceFile, program: string, checker: ts.TypeChecker, catalogs: ReadonlySet<string>): CheckDiagnostic {
+function convert(diagnostic: ts.Diagnostic, file: ts.SourceFile, program: string, checker: ts.TypeChecker, sdkInfo: SdkInfo): CheckDiagnostic {
   const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
   const at = diagnostic.file === file && diagnostic.start !== undefined ? file.getLineAndCharacterOfPosition(diagnostic.start) : undefined;
   const where = at === undefined ? undefined : programPosition(program, { line: at.line + 1, column: at.character + 1 });
@@ -238,26 +238,70 @@ function convert(diagnostic: ts.Diagnostic, file: ts.SourceFile, program: string
   }
 
   if (diagnostic.code === 2339 || diagnostic.code === 2353) {
-    const gap = classify(diagnostic.code, message, file, diagnostic.start, checker, catalogs);
+    const gap = classify(diagnostic.code, message, file, diagnostic.start, checker, sdkInfo.catalogs);
     if (gap !== undefined) {
-      out.missingPrimitive = gap;
-      out.hint = gap.nearest.length > 0
-        ? `The connected server has no '${gap.member}' on ${gap.catalog}. If one of these is what you meant, use it: ${gap.nearest.join(', ')}. Otherwise report the missing primitive and stop that part of the plan.`
-        : `The connected server has no '${gap.member}' on ${gap.catalog}. This is a missing primitive, not a typo: report it and stop that part of the plan, or build what exists.`;
+      const isAssetRef =
+        gap.catalog === 'RefFactory' &&
+        ((sdkInfo.refKinds.has(gap.member) && !sdkInfo.contentTypes.has(gap.member)) || gap.member === 'assets' || gap.member === 'file');
+      const isStepAction = gap.catalog === 'StepBuilders' && gap.member === 'action';
+      if (isAssetRef) {
+        out.hint = `Uploaded files (textures, models) use m.ref.asset("path/to/file"), not m.ref.${gap.member}. Only content types (${[...sdkInfo.contentTypes].join(', ')}) have m.ref.<type>("pack:id") methods.`;
+      } else if (isStepAction) {
+        out.hint = 'Actions are already steps directly: call m.actions.<name>(params, { chance, delay }) instead of m.steps.action(...).';
+      } else {
+        out.missingPrimitive = gap;
+        out.hint = gap.nearest.length > 0
+          ? `The connected server has no '${gap.member}' on ${gap.catalog}. If one of these is what you meant, use it: ${gap.nearest.join(', ')}. Otherwise report the missing primitive and stop that part of the plan.`
+          : `The connected server has no '${gap.member}' on ${gap.catalog}. This is a missing primitive, not a typo: report it and stop that part of the plan, or build what exists.`;
+      }
+    }
+  }
+
+  if (out.hint === undefined) {
+    if (diagnostic.code === 2322 && message.includes("'MiniMessage'")) {
+      out.hint = 'Wrap formatted text strings in m.mm("..."), for example display_name: m.mm("<gold>Coin").';
+    } else if (diagnostic.code === 2322 && message.includes('Ref<')) {
+      out.hint = 'Use m.ref.<type>("pack:id") (or a created handle) for content references, and m.ref.asset("textures/...") or m.ref.asset("models/...") for uploaded asset files.';
+    } else if (diagnostic.code === 2345 && message.includes('TriggerBinding<') && message.includes('=> TriggerBinding<')) {
+      out.hint = 'Triggers are functions: call the trigger builder with (), for example m.triggers.playerJoin() or m.triggers.consume().';
     }
   }
   return out;
 }
 
+interface SdkInfo {
+  catalogs: ReadonlySet<string>;
+  contentTypes: ReadonlySet<string>;
+  refKinds: ReadonlySet<string>;
+}
+
+function unionLiterals(statement: ts.TypeAliasDeclaration): Set<string> {
+  const out = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isLiteralTypeNode(node) && ts.isStringLiteral(node.literal)) {
+      out.add(node.literal.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(statement.type);
+  return out;
+}
+
 /** The top-level type names the generated surface declares or extends: the catalogs (`PackWriter`, `ActionCatalog`, `ItemFields`, ...). */
-function catalogNames(sdk: ts.SourceFile): Set<string> {
-  const names = new Set<string>();
+function catalogNames(sdk: ts.SourceFile): SdkInfo {
+  const catalogs = new Set<string>();
+  let contentTypes = new Set<string>();
+  let refKinds = new Set<string>();
   for (const statement of sdk.statements) {
     if ((ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name !== undefined) {
-      names.add(statement.name.text);
+      catalogs.add(statement.name.text);
+      if (ts.isTypeAliasDeclaration(statement)) {
+        if (statement.name.text === 'ContentTypeName') contentTypes = unionLiterals(statement);
+        else if (statement.name.text === 'RefKind') refKinds = unionLiterals(statement);
+      }
     }
   }
-  return names;
+  return { catalogs, contentTypes, refKinds };
 }
 
 /**

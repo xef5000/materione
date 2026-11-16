@@ -332,3 +332,47 @@ describe('handles, editing and the read side are typed (issue 339)', () => {
     expect(codes('const p = m.pack("t"); p.items.create("s", { material: "STICK" }).set({ material: "BONE" });')).toEqual([]);
   });
 });
+
+describe('item sources, list sources, and block/furniture item refs (root cause 2)', () => {
+  it('accepts vanilla strings, item handles, ItemSourceSpec, and Expr on m.guiComponents.item.item', () => {
+    const program = `
+      const p = m.pack("bench");
+      const swordHandle = p.items.create("sword", { material: "DIAMOND_SWORD" });
+      p.guis.create("menu", {
+        container: "chest_3",
+        title: m.mm("<gold>Menu"),
+        layers: [
+          m.guiComponents.item({ id: "icon", slot: 13, item: "minecraft:diamond" }),
+          m.guiComponents.item({ id: "custom", slot: 14, item: swordHandle }),
+          m.guiComponents.item({ id: "head", slot: 15, item: m.itemSources.head({ player: "Notch" }) }),
+          m.guiComponents.item({ id: "expr", slot: 16, item: m.expr\`\${"minecraft:stone"}\` }),
+        ],
+      });
+    `;
+    expect(codes(program)).toEqual([]);
+  });
+
+  it('accepts ListSourceSpec on m.guiComponents.list.source', () => {
+    const program = `
+      const p = m.pack("bench");
+      p.guis.create("players_gui", {
+        container: "chest_3",
+        title: m.mm("<gold>Players"),
+        layers: [
+          m.guiComponents.list({
+            id: "players",
+            slots: [10, 11],
+            source: m.listSources.onlinePlayers(),
+            entry: { item: "minecraft:player_head" },
+          }),
+        ],
+      });
+    `;
+    expect(codes(program)).toEqual([]);
+  });
+
+  it('accepts custom item handles on blocks.create.item while rejecting bare vanilla strings', () => {
+    expect(codes('const p = m.pack("bench"); const customItemHandle = p.items.create("ruby", { material: "EMERALD" }); p.blocks.create("ore", { item: customItemHandle });')).toEqual([]);
+    expect(codes('const p = m.pack("bench"); p.blocks.create("ore", { item: "minecraft:stone" });')).toContain(2322);
+  });
+});

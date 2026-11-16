@@ -3,7 +3,7 @@
   "kind": "task",
   "title": "Ruby ore",
   "area": "block",
-  "prompt": "Create a Ruby Ore custom block that drops a ruby, grants 5 XP, and has a 10% chance to give a second ruby.",
+  "prompt": "Create a Ruby Ore custom block (with texture textures/block/ruby_ore.png) that drops sample:ruby, grants 5 XP, and has a 10% chance to give a second sample:ruby.",
   "registry": "plugin-current",
   "result": "pass",
   "gaps": []

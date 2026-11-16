@@ -3,7 +3,7 @@
   "kind": "followup",
   "title": "Scaled upgrade cost",
   "area": "progression, GUI",
-  "prompt": "Change the Bloodfang upgrade button so upgrading costs 500 times the current level.",
+  "prompt": "Change the Bloodfang upgrade button (levels 1 to 5 max) so upgrading costs 500 times the current level.",
   "registry": "plugin-current",
   "result": "pass",
   "gaps": []
