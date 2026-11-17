@@ -88,7 +88,7 @@ export function createQaBrowserAdapter({ testDir, openSession, approveNonce, onS
   return {
     get page() { return page; },
 
-    async openEditor() {
+    async openEditor({ preparePage } = {}) {
       if (page) return page;
       if (opening) return opening;
       opening = (async () => {
@@ -108,6 +108,7 @@ export function createQaBrowserAdapter({ testDir, openSession, approveNonce, onS
             reducedMotion: 'reduce',
           });
           page = await context.newPage();
+          if (preparePage) await preparePage(page, new URL(capabilityUrl).origin);
           stage = 'opening the local editor';
           await page.goto(capabilityUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
           stage = 'waiting for normal editor approval';

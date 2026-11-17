@@ -413,6 +413,7 @@ const REVIEW_COVERS = [
   'webui/src/app.css',
   'webui/browser/codemode-fixture.ts',
   'webui/browser/codemode-feed.ts',
+  'webui/browser/live-review.ts',
   'webui/browser/rpc-adapter.ts',
   'webui/browser/fixture.ts',
   'webui/browser/specs/codemode-review.pw.ts',
@@ -437,11 +438,9 @@ const PROXY_COVERS = [
 ];
 
 /**
- * Serves the browser harness (`webui/browser`, the same App and Workbench over a fixture channel) on a free loopback port for
- * the duration of `run`, and points this test's browser page at it with `query` (default `?codemode`). The harness is a dev
- * server of the webui workspace; nothing here reaches the live server or writes a fixture.
+ * Serves the browser test entries on a free loopback port for the duration of `run`.
  */
-async function withReviewHarness(ctx, run, query = '?codemode') {
+async function withBrowserHarnessServer(run) {
   const { spawn } = await import('node:child_process');
   const net = await import('node:net');
   const webui = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'webui');
@@ -459,8 +458,8 @@ async function withReviewHarness(ctx, run, query = '?codemode') {
     stdio: 'ignore',
   });
   try {
-    const page = await ctx.browser.openEditor();
-    const url = `http://127.0.0.1:${port}/browser/fixture.html${query}`;
+    const origin = `http://127.0.0.1:${port}`;
+    const url = `${origin}/browser/fixture.html`;
     let ready = false;
     for (let attempt = 0; attempt < 120 && !ready; attempt++) {
       try {
@@ -470,12 +469,20 @@ async function withReviewHarness(ctx, run, query = '?codemode') {
       }
     }
     if (!ready) throw new Error('the browser harness did not start');
-    await page.goto(url);
-    await page.waitForFunction(() => document.documentElement.dataset.fixtureReady === 'true', undefined, { timeout: 60_000 });
-    await run(page);
+    await run(origin);
   } finally {
     child.kill();
   }
+}
+
+async function withReviewHarness(ctx, run, query = '?codemode') {
+  await withBrowserHarnessServer(async (origin) => {
+    const page = await ctx.browser.openEditor();
+    const url = `${origin}/browser/fixture.html${query}`;
+    await page.goto(url);
+    await page.waitForFunction(() => document.documentElement.dataset.fixtureReady === 'true', undefined, { timeout: 60_000 });
+    await run(page);
+  });
 }
 
 /** Feeds a recorded corpus program to the harness's review store through the agent port; resolves with the proposal id. */
@@ -1846,11 +1853,73 @@ export default [
     },
   }),
 
-  // The code-mode review panel and change log (issue 347, codemode.md section 5.6). The panel exists only where the server
-  // advertises `codemode`, so the live entries check what a real server shows. Nothing in the product produces proposals yet
-  // (the chat is issue 348), so the proposal states run in the browser harness (`webui/browser`, `?codemode`): the same App
-  // and panel, a transaction model over the fixture documents, and a recorded corpus program fed in through the agent port.
-  // Re-point these at a real proposal on a real server when the chat exists.
+  // The live flow uses the real App, channel and server, with a recorded proposal supplied through the agent port.
+  // The other browser-harness entries exercise additional review states against the transaction fixture.
+  test({
+    id: 'editor.browser-codemode-review-live-flow',
+    title: 'a real-server proposal waits for approval, applies only after a trusted click, and reverts to the original file',
+    covers: [
+      ...REVIEW_COVERS,
+      'webui/src/App.svelte',
+      'webui/src/lib/protocol/**',
+      'web/src/main/java/dev/materione/web/rpc/ops/TransactionOps.java',
+      'core/src/main/java/dev/materione/core/authoring/**',
+      'fixtures/packs/sample/items/ruby.yml',
+    ],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await withBrowserHarnessServer(async (origin) => {
+        const page = await ctx.browser.openEditor({
+          preparePage: async (browserPage, editorOrigin) => {
+            await browserPage.route('**/*', (route) => {
+              const request = route.request();
+              const url = new URL(request.url());
+              if (url.origin !== editorOrigin) return route.continue();
+              if (request.resourceType() === 'script' && /^\/assets\/index-[^/]+\.js$/.test(url.pathname)) {
+                return route.fulfill({
+                  status: 200,
+                  contentType: 'text/javascript',
+                  body: 'import "/browser/live-review.ts";',
+                });
+              }
+              if (/^\/(?:browser|src|static|node_modules|@vite|@id|@fs|fixtures|fonts)\//.test(url.pathname)) {
+                return route.fetch({ url: `${origin}${url.pathname}${url.search}` })
+                  .then((response) => route.fulfill({ response }));
+              }
+              return route.continue();
+            });
+          },
+        });
+        await page.getByLabel('project').selectOption('sample');
+        const file = path.join(SERVER_SAMPLE, 'items', 'ruby.yml');
+        const before = fs.readFileSync(file, 'utf8');
+        ctx.expect(before.includes('Kept for the harvest festival')).toBe(false);
+        const id = await feedProposal(page, 'c01-bulk-lore', { slice: [0, 1] });
+        const panel = page.getByRole('region', { name: 'Review', exact: true });
+        const proposal = panel.getByRole('article', { name: id, exact: true });
+        await proposal.getByText('Needs your approval').waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(await proposal.innerText()).toContain('Kept for the harvest festival');
+        ctx.expect(fs.readFileSync(file, 'utf8')).toBe(before);
+        const approve = proposal.getByRole('button', { name: 'Approve and apply' });
+        await approve.evaluate((button) => button.click());
+        await proposal.getByText('ignored: that was not a click or key press from you').waitFor({ state: 'visible' });
+        ctx.expect(fs.readFileSync(file, 'utf8')).toBe(before);
+        await approve.click();
+        await proposal.getByText('Applied', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(fs.readFileSync(file, 'utf8')).toContain('Kept for the harvest festival');
+        await panel.getByRole('tab', { name: /^Change log/ }).click();
+        const entry = panel.getByRole('article', { name: /^Applied tx-/ }).first();
+        await entry.getByRole('button', { name: /^Revert/ }).click();
+        const preview = entry.getByRole('group', { name: 'Revert preview' });
+        await preview.waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(fs.readFileSync(file, 'utf8')).toContain('Kept for the harvest festival');
+        await preview.getByRole('button', { name: 'Confirm revert' }).click();
+        await entry.getByText('Reverted', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(fs.readFileSync(file, 'utf8')).toBe(before);
+      });
+    },
+  }),
+
   test({
     id: 'editor.browser-codemode-review-panel',
     title: 'the live editor shows a Review panel (code mode is advertised): it opens with focus inside, says what it is for, has a change log, and closes on Escape with focus returned',

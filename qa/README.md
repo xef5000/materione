@@ -82,6 +82,15 @@ For the focused local slice run:
 node qa/runner.mjs run editor.browser-files-draft-save editor.browser-files-visual
 ```
 
+`editor.browser-codemode-review-live-flow` uses the real local editor handshake,
+channel and Paper server. A test-only browser entry mounts the editor source and
+feeds a recorded sealed proposal through the agent port; it does not call a model.
+The test entry refreshes the recorded document revision from the server before
+proposing, so repeated runs do not assume that revision numbers reset.
+It checks the file before approval, after a synthetic and a trusted click, during
+revert preview, and after confirming the revert. This is not a deployed-cloud or
+live-model test.
+
 Failure diagnostics retain only state flags/counts and a bounded, redacted App text excerpt after the address is scrubbed. No browser trace or network dump is recorded.
 
 ## Commands
