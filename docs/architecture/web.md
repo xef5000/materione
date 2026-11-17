@@ -516,8 +516,18 @@ issuing `browse.get` for every row; opening a resource is when the editor fetche
 Summary failures keep the catalog usable with an ID-derived name and unknown health, while an
 absent visual uses an honest placeholder. Thumbnail bytes are read separately through the existing
 asset operation, never embedded in the summary response. The browser keeps a 64-entry thumbnail
-cache and limits asset reads to four concurrent requests. Visible previews beyond the pending-read
+cache and limits asset reads to sixteen concurrent requests — reads issued together share one
+transport round, so a screen of previews is about one relay round trip. Visible previews beyond the pending-read
 budget wait for capacity and resume without polling; hidden previews do not enqueue new reads.
+Pushes refresh the catalog through one coalescer: a burst (`push.reload`, watcher
+`push.document.changed`) yields at most one `refreshPack` and one `delivery.status` after a short quiet
+period, and one landing mid-refresh folds into a single trailing refresh. Cached thumbnails are
+re-read only for pack-wide reloads (`one-pack:…`, `everything` — asset writes, folder moves,
+manual reloads); a document save's `files:N` reload and watcher changes (documents only) cannot
+change image bytes. A create or duplicate lists the new entry from the write's reply (`unknown`
+health) instead of spending a catalog round; the write's reload push brings the server's view. A
+studio save likewise refreshes only through its reload push — an accepted no-op reload announces
+nothing, so a write that sees no push within 10 s refreshes once on its own.
 Cached model thumbnails and textures
 are static previews, not a live Minecraft render or interactive model.
 Glyphs use this same summary and asset-read path: basic glyphs expose their bitmap,

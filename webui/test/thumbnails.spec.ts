@@ -4,6 +4,7 @@ import type { Response } from '../src/lib/protocol/wire';
 import {
   invalidateThumbnails,
   loadThumbnail,
+  MAX_CONCURRENT_READS,
   onThumbnailCapacity,
   resetThumbnailCache,
   ThumbnailCapacityError,
@@ -17,6 +18,19 @@ function channelFor(call: RpcChannel['call']): RpcChannel {
 
 function response(data = pngData): Response {
   return { id: 'thumbnail', op: 'assets.get', ok: true, data: { data } };
+}
+
+/** Answer every started read, let the queue start the next ones, until all settle. */
+async function drain(finishers: ((value: Response) => void)[], all: Promise<unknown>): Promise<void> {
+  let settled = false;
+  void all.finally(() => { settled = true; });
+  while (!settled) {
+    const batch = finishers.splice(0);
+    expect(batch.length).toBeLessThanOrEqual(MAX_CONCURRENT_READS);
+    for (const finish of batch) finish(response());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (!settled) expect(batch.length + finishers.length).toBeGreaterThan(0);
+  }
 }
 
 describe('thumbnail cache', () => {
@@ -42,7 +56,7 @@ describe('thumbnail cache', () => {
     });
   });
 
-  it('limits parallel asset reads to four', async () => {
+  it('bounds parallel asset reads so one screen shares a transport round', async () => {
     const finishers: ((value: Response) => void)[] = [];
     let active = 0;
     let peak = 0;
@@ -55,18 +69,14 @@ describe('thumbnail cache', () => {
       });
     }));
     const channel = channelFor(call);
-    const requests = Array.from({ length: 8 }, (_, index) =>
+    const total = MAX_CONCURRENT_READS * 2;
+    const requests = Array.from({ length: total }, (_, index) =>
       loadThumbnail(channel, 'demo', `assets/${index}.png`));
 
-    expect(call).toHaveBeenCalledTimes(4);
-    for (let start = 0; start < requests.length; start += 4) {
-      const batch = finishers.splice(0);
-      expect(batch).toHaveLength(Math.min(4, requests.length - start));
-      for (const finish of batch) finish(response());
-      await Promise.all(requests.slice(start, start + batch.length));
-    }
-    expect(call).toHaveBeenCalledTimes(8);
-    expect(peak).toBe(4);
+    expect(call).toHaveBeenCalledTimes(MAX_CONCURRENT_READS);
+    await drain(finishers, Promise.all(requests));
+    expect(call).toHaveBeenCalledTimes(total);
+    expect(peak).toBe(MAX_CONCURRENT_READS);
   });
 
   it('bounds the cache and evicts the least recently used asset', async () => {
@@ -160,15 +170,7 @@ describe('thumbnail cache', () => {
     expect(available).toHaveBeenCalled();
     unsubscribe();
     const retry = loadThumbnail(channel, 'demo', 'assets/overflow.png');
-    const remaining = [...requests.slice(1), retry];
-    for (let completed = 0; completed < remaining.length;) {
-      const batch = finishers.splice(0);
-      expect(batch.length).toBeGreaterThan(0);
-      for (const finish of batch) finish(response());
-      await Promise.all(remaining.slice(completed, completed + batch.length));
-      completed += batch.length;
-    }
-    await Promise.all([...requests, retry]);
+    await drain(finishers, Promise.all([...requests, retry]));
   });
 
   it('evicts settled bytes instead of cancelling queued previews under cache pressure', async () => {
@@ -178,15 +180,8 @@ describe('thumbnail cache', () => {
     for (const finish of finishers.splice(0)) finish(response());
     await Promise.all(initial.slice(0, 4));
     const extra = Array.from({ length: 56 }, (_, index) => loadThumbnail(channel, 'demo', `assets/extra-${index}.png`));
-    const remaining = [...initial.slice(4), ...extra];
-    const all = Promise.all(remaining);
-    for (let completed = 0; completed < remaining.length;) {
-      const batch = finishers.splice(0);
-      expect(batch.length).toBeGreaterThan(0);
-      for (const finish of batch) finish(response());
-      await Promise.all(remaining.slice(completed, completed + batch.length));
-      completed += batch.length;
-    }
+    const all = Promise.all([...initial.slice(4), ...extra]);
+    await drain(finishers, all);
     await expect(all).resolves.toHaveLength(64);
   });
 });

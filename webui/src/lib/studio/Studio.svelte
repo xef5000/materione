@@ -60,6 +60,7 @@
     diagnostics,
     connection,
     errorMessage,
+    expectReloadRefresh,
     logActivity,
     openStudio,
     registerEditorGuard,
@@ -416,7 +417,8 @@
     try {
       if (await saveDocumentDraft(documentDraft, channel)) {
         logActivity('save', `${resource.path} saved (${changed} pending changes)`);
-        await refreshPack();
+        // the save's reload push refreshes the catalog (one refresh per save)
+        expectReloadRefresh();
       }
     } catch (e) {
       documentDraft.error = errorMessage(e);
