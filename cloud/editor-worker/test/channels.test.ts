@@ -30,6 +30,7 @@ function postFrames(
   token: string,
   frames: Record<string, string | number>[],
   channelId = caps.channelId,
+  targetEnv: Env = env,
 ): Promise<Response> {
   return worker.fetch(
     new Request(`https://relay.test/v1/channels/${channelId}/frames`, {
@@ -37,17 +38,17 @@ function postFrames(
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ frames }),
     }),
-    env,
+    targetEnv,
   );
 }
 
-function poll(token: string, after = 0, wait = 0): Promise<Response> {
+function poll(token: string, after = 0, wait = 0, targetEnv: Env = env): Promise<Response> {
   return worker.fetch(
     new Request(
       `https://relay.test/v1/channels/${caps.channelId}/frames?after=${after}&wait=${wait}`,
       { headers: { authorization: `Bearer ${token}` } },
     ),
-    env,
+    targetEnv,
   );
 }
 
@@ -162,5 +163,83 @@ describe("channel lifecycle", () => {
     expect(view.closed).toBe(true);
     // Posting into a closed channel fails.
     expect((await postFrames(caps.pluginToken, [sealedFrame(0)])).status).toBe(410);
+  });
+});
+
+/** Counts D1 round trips (each first/all/run/raw on a statement, each batch). */
+function countingEnv(overrides: Record<string, string> = {}): { env: Env; trips: () => number } {
+  let trips = 0;
+  const wrapStmt = (stmt: D1PreparedStatement): D1PreparedStatement =>
+    new Proxy(stmt, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop, target);
+        if (typeof value !== "function") return value;
+        if (prop === "bind") {
+          return (...args: unknown[]) => wrapStmt(value.apply(target, args) as D1PreparedStatement);
+        }
+        if (prop === "first" || prop === "all" || prop === "run" || prop === "raw") {
+          return (...args: unknown[]) => {
+            trips++;
+            return value.apply(target, args);
+          };
+        }
+        return value.bind(target);
+      },
+    });
+  const db = new Proxy(env.DB, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target);
+      if (prop === "prepare") return (sql: string) => wrapStmt(target.prepare(sql));
+      if (prop === "batch") {
+        return (stmts: D1PreparedStatement[]) => {
+          trips++;
+          return target.batch(stmts);
+        };
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { env: { ...env, ...overrides, DB: db } as Env, trips: () => trips };
+}
+
+describe("D1 round trips (#423)", () => {
+  it("posting a batch costs two round trips; polling with frames costs two", async () => {
+    const counted = countingEnv();
+    const frames = [sealedFrame(0), sealedFrame(1), sealedFrame(2)];
+    const posted = await postFrames(caps.pluginToken, frames, caps.channelId, counted.env);
+    expect(posted.status).toBe(202);
+    expect(counted.trips()).toBe(2);
+
+    const pollEnv = countingEnv();
+    const polled = await poll(caps.editorToken, 0, 0, pollEnv.env);
+    expect(((await polled.json()) as PollBody).frames).toHaveLength(3);
+    // tick (channel + frames) + closing (oldest / throttled seen) batch
+    expect(pollEnv.trips()).toBe(2);
+  });
+
+  it("counts the post's writes in today's usage in the same batch", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const before = await env.DB.prepare("SELECT new_row_writes AS n FROM usage WHERE day = ?")
+      .bind(today).first<{ n: number }>();
+    await postFrames(caps.pluginToken, [sealedFrame(0), sealedFrame(1)]);
+    const after = await env.DB.prepare("SELECT new_row_writes AS n FROM usage WHERE day = ?")
+      .bind(today).first<{ n: number }>();
+    expect((after?.n ?? 0) - (before?.n ?? 0)).toBe(4); // channel update + 2 inserts + upsert
+  });
+
+  it("prunes the oldest frames once the channel is over its cap", async () => {
+    const capped = { ...env, maxFramesPerChannel: "3" } as unknown as Env;
+    for (let seq = 0; seq < 6; seq++) {
+      const padded = { ...sealedFrame(seq), pad: "x".repeat(300) };
+      expect((await postFrames(caps.pluginToken, [padded], caps.channelId, capped)).status).toBe(202);
+    }
+    const view = (await (await poll(caps.editorToken)).json()) as PollBody;
+    expect(view.frames.map((f) => f.frame.seq)).toEqual([3, 4, 5]);
+    expect(view.oldest).toBe(view.frames[0]!.id);
+    const row = await env.DB.prepare("SELECT frames_bytes AS b FROM channels WHERE id = ?")
+      .bind(caps.channelId).first<{ b: number }>();
+    const sum = await env.DB.prepare("SELECT SUM(size) AS s FROM frames WHERE channel_id = ?")
+      .bind(caps.channelId).first<{ s: number }>();
+    expect(row?.b).toBe(sum?.s);
   });
 });

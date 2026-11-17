@@ -193,7 +193,12 @@ are free and unlimited**; one cron trigger is free. The account stays on the fre
 
 Per-session economics (long-poll wait 20 s, internal poll ~1.5 s, sparse heartbeats):
 ≈ 430 Worker requests/h, ≈ 10 k D1 row reads/h, and ≤ ~1.5 k row writes/h while both sides
-are connected and busy.
+are connected and busy. Each request is also short on D1 *round trips* (latency, not
+billing): a frame post is two — the channel row and today's usage read in one batch, then
+every write including the usage upsert in one atomic batch — and a poll is one per check
+(channel row and frames together; the reader's direction is derived from its token hash in
+SQL) plus one closing batch (retention horizon and the throttled last-seen stamp). The
+retention prune runs only when the known byte total crosses a cap.
 
 | Daily scenario (sessions × length) | Worker requests | D1 reads | D1 new-row writes |
 |---|---|---|---|

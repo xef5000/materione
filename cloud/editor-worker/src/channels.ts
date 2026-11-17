@@ -9,7 +9,7 @@ import {
   rateLimited,
   secondsUntilUtcMidnight,
 } from "./http";
-import { bumpUsage, withinWriteCap } from "./quotas";
+import { bumpUsageStatement, bumpUsage, usageOrZero, usageStatement, withinWriteCap, type Usage } from "./quotas";
 
 interface ChannelRow {
   id: string;
@@ -48,15 +48,38 @@ async function authenticate(
   channelId: string,
   request: Request,
 ): Promise<{ role: Role; channel: ChannelRow } | Response> {
+  return authenticateWith(env, channelId, request, false);
+}
+
+/**
+ * Resolves the caller's role from its bearer token. With {@code withUsage},
+ * today's usage row is read in the same D1 round trip (the post path needs
+ * both before it may write).
+ */
+async function authenticateWith(
+  env: Env,
+  channelId: string,
+  request: Request,
+  withUsage: boolean,
+): Promise<{ role: Role; channel: ChannelRow; usage: Usage } | Response> {
   const token = bearerToken(request);
   if (!token) return errorResponse(401, "missing_token");
-  const channel = await env.DB.prepare("SELECT * FROM channels WHERE id = ?")
-    .bind(channelId)
-    .first<ChannelRow>();
+  const hashing = sha256Hex(token);
+  const channelStmt = env.DB.prepare("SELECT * FROM channels WHERE id = ?").bind(channelId);
+  let channel: ChannelRow | null;
+  let usage: Usage;
+  if (withUsage) {
+    const [channels, usages] = await env.DB.batch<unknown>([channelStmt, usageStatement(env)]);
+    channel = (channels!.results[0] as ChannelRow | undefined) ?? null;
+    usage = usageOrZero(usages!.results[0] as Usage | undefined);
+  } else {
+    channel = await channelStmt.first<ChannelRow>();
+    usage = usageOrZero(null);
+  }
   if (!channel) return errorResponse(404, "no_such_channel");
-  const hash = await sha256Hex(token);
-  if (hash === channel.plugin_token_hash) return { role: "plugin", channel };
-  if (hash === channel.editor_token_hash) return { role: "editor", channel };
+  const hash = await hashing;
+  if (hash === channel.plugin_token_hash) return { role: "plugin", channel, usage };
+  if (hash === channel.editor_token_hash) return { role: "editor", channel, usage };
   return errorResponse(403, "invalid_token");
 }
 
@@ -110,7 +133,8 @@ export async function postFrames(
     return errorResponse(429, "rate_limited");
   }
   const config = configFrom(env as unknown as Record<string, unknown>);
-  const auth = await authenticate(env, channelId, request);
+  // Round trip 1: channel + today's usage.
+  const auth = await authenticateWith(env, channelId, request, true);
   if (auth instanceof Response) return auth;
   if (auth.channel.closed) return errorResponse(410, "channel_closed");
   if (auth.channel.expires_at <= nowSeconds()) return errorResponse(410, "channel_expired");
@@ -145,7 +169,8 @@ export async function postFrames(
   }
 
   // Channel-row update + n inserts + usage upsert.
-  if (!(await withinWriteCap(env, config, bodies.length + 2))) return quotaRetry();
+  const writes = bodies.length + 2;
+  if (auth.usage.new_row_writes + writes > config.dailyNewRowWriteCap) return quotaRetry();
 
   const direction = auth.role === "plugin" ? "p2e" : "e2p";
   const now = nowSeconds();
@@ -162,10 +187,14 @@ export async function postFrames(
       ).bind(channelId, direction, body, body.length, now),
     );
   }
+  stmts.push(bumpUsageStatement(env, { newRowWrites: writes }));
+  // Round trip 2: every write, atomically.
   await env.DB.batch(stmts);
-  await bumpUsage(env, { newRowWrites: bodies.length + 2 });
 
-  await pruneOverCap(env, config, channelId);
+  // The byte total is known without a re-read; prune only when over a cap.
+  if (overCap(config, auth.channel.frames_bytes + total)) {
+    await pruneOverCap(env, config, channelId);
+  }
   return jsonResponse({ accepted: bodies.length }, 202);
 }
 
@@ -178,10 +207,8 @@ export async function pollFrames(
   url: URL,
 ): Promise<Response> {
   const config = configFrom(env as unknown as Record<string, unknown>);
-  const auth = await authenticate(env, channelId, request);
-  if (auth instanceof Response) return auth;
-
-  const direction = auth.role === "plugin" ? "e2p" : "p2e";
+  const token = bearerToken(request);
+  if (!token) return errorResponse(401, "missing_token");
   const after = Number(url.searchParams.get("after") ?? "0");
   if (!Number.isInteger(after) || after < 0) return errorResponse(400, "invalid_cursor");
   const waitParam = Number(url.searchParams.get("wait") ?? "0");
@@ -189,54 +216,53 @@ export async function pollFrames(
     Math.max(Number.isFinite(waitParam) ? waitParam : 0, 0),
     config.longPollMaxWaitSeconds,
   );
+  const hash = await sha256Hex(token);
 
-  const readRole = auth.role;
   const deadline = Date.now() + waitSeconds * 1000;
+  // One round trip per tick: the channel row (auth, closed, expiry) and the
+  // caller's frames. The reader's direction is derived in SQL from its token
+  // hash, so the first tick needs no separate authentication read; a token
+  // matching neither capability selects no frames and is rejected below.
+  const tick = [
+    env.DB.prepare("SELECT * FROM channels WHERE id = ?").bind(channelId),
+    env.DB.prepare(
+      `SELECT id, body, size FROM frames
+       WHERE channel_id = ?1
+         AND direction = (SELECT CASE WHEN plugin_token_hash = ?2 THEN 'e2p'
+                                      WHEN editor_token_hash = ?2 THEN 'p2e' END
+                          FROM channels WHERE id = ?1)
+         AND id > ?3
+       ORDER BY id ASC LIMIT ?4`,
+    ).bind(channelId, hash, after, config.maxPollFrames + 1),
+  ];
   for (;;) {
-    const channel = await env.DB.prepare("SELECT * FROM channels WHERE id = ?")
-      .bind(channelId)
-      .first<ChannelRow>();
+    const [channels, frames] = await env.DB.batch<unknown>(tick);
+    const channel = (channels!.results[0] as ChannelRow | undefined) ?? null;
+    const rows = (frames!.results as FrameRow[]) ?? [];
     if (!channel) return errorResponse(404, "no_such_channel");
+    const role: Role | null =
+      hash === channel.plugin_token_hash ? "plugin" : hash === channel.editor_token_hash ? "editor" : null;
+    if (!role) return errorResponse(403, "invalid_token");
     if (channel.closed || channel.expires_at <= nowSeconds()) {
       return jsonResponse({ closed: true, frames: [] });
     }
 
-    const rows = await env.DB.prepare(
-      "SELECT id, body, size FROM frames WHERE channel_id = ? AND direction = ? AND id > ? ORDER BY id ASC LIMIT ?",
-    )
-      .bind(channelId, direction, after, config.maxPollFrames + 1)
-      .all<FrameRow>();
-
     const eligible: FrameRow[] = [];
     let bytes = 0;
-    for (const row of rows.results ?? []) {
+    for (const row of rows) {
       if (eligible.length >= config.maxPollFrames || bytes + row.size > config.maxPollBytes) break;
       eligible.push(row);
       bytes += row.size;
     }
-    if (eligible.length > 0) {
-      const oldest = await env.DB.prepare(
-        "SELECT MIN(id) AS m FROM frames WHERE channel_id = ? AND direction = ?",
-      )
-        .bind(channelId, direction)
-        .first<{ m: number | null }>();
-      await touchSeen(env, config, channel, readRole);
+    if (eligible.length > 0 || Date.now() >= deadline) {
+      const direction = role === "plugin" ? "e2p" : "p2e";
+      const oldest = await finishPoll(env, config, channel, role, direction);
       return jsonResponse({
         closed: false,
         frames: eligible.map((row) => ({ id: row.id, frame: JSON.parse(row.body) })),
-        oldest: oldest?.m ?? null,
-        more: (rows.results?.length ?? 0) > eligible.length,
+        oldest,
+        more: rows.length > eligible.length,
       });
-    }
-
-    if (Date.now() >= deadline) {
-      const oldest = await env.DB.prepare(
-        "SELECT MIN(id) AS m FROM frames WHERE channel_id = ? AND direction = ?",
-      )
-        .bind(channelId, direction)
-        .first<{ m: number | null }>();
-      await touchSeen(env, config, channel, readRole);
-      return jsonResponse({ closed: false, frames: [], oldest: oldest?.m ?? null, more: false });
     }
     await scheduler.wait(config.longPollIntervalMs);
   }
@@ -255,53 +281,55 @@ export async function closeChannel(
   return jsonResponse({ closed: true });
 }
 
-/** Updates last-seen for the polling role, throttled: polls are frequent and
- * presence must not cost a write each time (§3.3 write economics). */
-async function touchSeen(
+/**
+ * The poll's closing round trip: the retention horizon (oldest retained
+ * frame, for the reader's fell-behind check) and — throttled, since polls are
+ * frequent and presence must not cost a write each time (§3.3 write
+ * economics) — the reader's last-seen stamp, in one batch.
+ */
+async function finishPoll(
   env: Env,
   config: { seenWriteThrottleMs: number },
   channel: ChannelRow,
   role: Role,
-): Promise<void> {
+  direction: string,
+): Promise<number | null> {
+  const stmts: D1PreparedStatement[] = [
+    env.DB.prepare("SELECT MIN(id) AS m FROM frames WHERE channel_id = ? AND direction = ?")
+      .bind(channel.id, direction),
+  ];
   const lastSeen = role === "plugin" ? channel.last_plugin_seen : channel.last_editor_seen;
-  if (Date.now() - lastSeen * 1000 < config.seenWriteThrottleMs) return;
-  const column = role === "plugin" ? "last_plugin_seen" : "last_editor_seen";
-  await env.DB.prepare(`UPDATE channels SET ${column} = ? WHERE id = ?`)
-    .bind(nowSeconds(), channel.id)
-    .run();
-  await bumpUsage(env, { newRowWrites: 1 });
+  if (Date.now() - lastSeen * 1000 >= config.seenWriteThrottleMs) {
+    const column = role === "plugin" ? "last_plugin_seen" : "last_editor_seen";
+    stmts.push(
+      env.DB.prepare(`UPDATE channels SET ${column} = ? WHERE id = ?`).bind(nowSeconds(), channel.id),
+      bumpUsageStatement(env, { newRowWrites: 1 }),
+    );
+  }
+  const [oldest] = await env.DB.batch<{ m: number | null }>(stmts);
+  return oldest!.results[0]?.m ?? null;
 }
 
-/** Lazily enforces the per-channel retention cap (frame count / bytes) by
- * deleting the oldest frames of the channel. */
-async function pruneOverCap(
-  env: Env,
-  config: Config & { seenWriteThrottleMs: number },
-  channelId: string,
-): Promise<void> {
-  const channel = await env.DB.prepare("SELECT frames_bytes FROM channels WHERE id = ?")
-    .bind(channelId)
-    .first<{ frames_bytes: number }>();
-  if (!channel) return;
-  if (
-    channel.frames_bytes < config.maxChannelFramesBytes &&
-    channel.frames_bytes < config.maxFramesPerChannel * 256
-  ) {
-    return;
-  }
-  await env.DB.prepare(
-    `DELETE FROM frames WHERE channel_id = ? AND id NOT IN (
-       SELECT id FROM frames WHERE channel_id = ? ORDER BY id DESC LIMIT ?
-     )`,
-  )
-    .bind(channelId, channelId, config.maxFramesPerChannel)
-    .run();
-  const remaining = await env.DB.prepare(
-    "SELECT COALESCE(SUM(size), 0) AS s FROM frames WHERE channel_id = ?",
-  )
-    .bind(channelId)
-    .first<{ s: number }>();
-  await env.DB.prepare("UPDATE channels SET frames_bytes = ? WHERE id = ?")
-    .bind(remaining?.s ?? 0, channelId)
-    .run();
+function overCap(config: Config, framesBytes: number): boolean {
+  return (
+    framesBytes >= config.maxChannelFramesBytes ||
+    framesBytes >= config.maxFramesPerChannel * 256
+  );
+}
+
+/** Enforces the per-channel retention cap (frame count / bytes) by deleting
+ * the oldest frames of the channel and recounting the bytes — one batch. */
+async function pruneOverCap(env: Env, config: Config, channelId: string): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM frames WHERE channel_id = ? AND id NOT IN (
+         SELECT id FROM frames WHERE channel_id = ? ORDER BY id DESC LIMIT ?
+       )`,
+    ).bind(channelId, channelId, config.maxFramesPerChannel),
+    env.DB.prepare(
+      `UPDATE channels SET frames_bytes =
+         (SELECT COALESCE(SUM(size), 0) FROM frames WHERE channel_id = ?)
+       WHERE id = ?`,
+    ).bind(channelId, channelId),
+  ]);
 }
