@@ -15,7 +15,7 @@ export function resolveUpstreamUrl(env: Env): string {
   if (!GATEWAY_ID_REGEX.test(accountId) || !GATEWAY_ID_REGEX.test(gatewayId)) {
     throw new Error("Invalid gateway configuration.");
   }
-  return `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}/anthropic/v1/messages`;
+  return `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayId}/openai/responses`;
 }
 
 export async function callUpstreamModel(
@@ -30,7 +30,6 @@ export async function callUpstreamModel(
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "anthropic-version": "2023-06-01",
       "cf-aig-authorization": `Bearer ${token}`,
       "cf-aig-collect-log-payload": "false",
       "cf-aig-skip-cache": "true",

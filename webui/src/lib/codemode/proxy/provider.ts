@@ -22,6 +22,7 @@ export type WireContentBlock =
 export interface WireMessage {
   role: 'user' | 'assistant';
   content: string | WireContentBlock[];
+  continuation?: unknown;
 }
 
 export interface UpstreamChatBody {
@@ -67,7 +68,7 @@ export function toUpstreamBody(request: ModelRequest): UpstreamChatBody {
 
     if (message.toolCalls.length === 0) {
       if (message.text !== '') {
-        messages.push({ role: 'assistant', content: message.text });
+        messages.push({ role: 'assistant', content: message.text, ...(message.continuation !== undefined ? { continuation: message.continuation } : {}) });
       }
     } else {
       const content: WireContentBlock[] = [
@@ -79,7 +80,7 @@ export function toUpstreamBody(request: ModelRequest): UpstreamChatBody {
           input: sanitizeToolInput(call.input),
         })),
       ];
-      messages.push({ role: 'assistant', content });
+      messages.push({ role: 'assistant', content, ...(message.continuation !== undefined ? { continuation: message.continuation } : {}) });
     }
   }
 
@@ -194,6 +195,7 @@ export function createProxyModelProvider(options: ProxyProviderOptions): ModelPr
       const usage: ModelUsage = {};
       let hasUsage = false;
       let rawBuffer = '';
+      let streamFailed = false;
 
       const setUsage = (key: keyof ModelUsage, value: unknown): void => {
         if (typeof value === 'number' && Number.isFinite(value)) {
@@ -206,6 +208,7 @@ export function createProxyModelProvider(options: ProxyProviderOptions): ModelPr
         const parsed = parseSseFrame(frame);
         if (parsed === null) return true;
         const { eventType, payload } = parsed;
+        if (streamFailed && eventType !== 'materione_settlement') return true;
 
         if (eventType === 'message_start') {
           if (isRecord(payload.message) && isRecord(payload.message.usage)) {
@@ -288,14 +291,21 @@ export function createProxyModelProvider(options: ProxyProviderOptions): ModelPr
           return true;
         }
 
+        if (eventType === 'materione_continuation') {
+          if (!Array.isArray(payload.output)) throw new Error('Invalid model continuation.');
+          yield { type: 'continuation', state: payload.output };
+          return true;
+        }
+
         if (eventType === 'error') {
+          streamFailed = true;
           const errObj = isRecord(payload.error) ? payload.error : null;
           const errMsg =
             typeof errObj?.message === 'string' && errObj.message !== ''
               ? errObj.message
               : 'The model stream ended with an error.';
           yield { type: 'refusal', refusal: { code: 'unavailable', message: errMsg } };
-          return false;
+          return true;
         }
 
         return true;
@@ -356,13 +366,13 @@ export function createProxyModelProvider(options: ProxyProviderOptions): ModelPr
           await reader.cancel().catch(() => {});
         }
         reader.releaseLock();
+        options.onSettled?.();
       }
 
       if (aborted()) return;
       if (hasUsage) {
         yield { type: 'usage', usage };
       }
-      options.onSettled?.();
     },
   };
 }

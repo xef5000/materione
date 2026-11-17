@@ -3,6 +3,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelEvent, ModelRequest } from '../src/lib/codemode/chat/provider';
+import { runAgent } from '../src/lib/codemode/chat/loop';
 import { RUN_PROGRAM_TOOL } from '../src/lib/codemode/chat/tool';
 import {
   CLOUD_EDITOR_ORIGIN,
@@ -126,6 +127,45 @@ describe('createProxyModelProvider', () => {
     messages: [{ role: 'user', text: 'Make a ruby.' }],
   };
 
+  it('carries encrypted continuation through a tool turn without exposing it as chat text', async () => {
+    const continuation = [
+      { type: 'reasoning', id: 'rs_1', summary: [], encrypted_content: 'opaque-reasoning' },
+      { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'run_program', arguments: '{"text":"return 1;"}' },
+    ];
+    const bodies: Record<string, unknown>[] = [];
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      if (bodies.length === 1) {
+        return sseResponse([
+          'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_1","name":"run_program","input":{}}}\n\n',
+          'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"text\\":\\"return 1;\\"}"}}\n\n',
+          'event: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\n',
+          `event: materione_continuation\ndata: ${JSON.stringify({ type: 'materione_continuation', output: continuation })}\n\n`,
+          'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+        ]);
+      }
+      return sseResponse([
+        'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done."}}\n\n',
+        'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+      ]);
+    });
+    const provider = createProxyModelProvider({
+      baseUrl: 'https://ai.materione.com',
+      fetchImpl: fetchMock as typeof fetch,
+    });
+    const result = await runAgent(baseRequest.messages, {
+      provider,
+      system: baseRequest.system,
+      tool: async () => ({
+        status: 'read', failed: false, content: '{"status":"read"}', proposalId: null, diagnostics: [], missingPrimitives: [],
+      }),
+    });
+    expect(result.stop).toBe('done');
+    expect(result.added[0]).toMatchObject({ role: 'assistant', text: '', continuation });
+    expect((bodies[1]?.messages as unknown[])[1]).toMatchObject({ role: 'assistant', continuation });
+    expect(result.added.at(-1)).toMatchObject({ role: 'assistant', text: 'Done.' });
+  });
+
   it('parses multi-chunk SSE with split CRLF, text deltas, tool_use JSON assembly, and materione_settlement', async () => {
     const onSettled = vi.fn();
     const fetchMock = vi.fn(async () =>
@@ -227,11 +267,12 @@ describe('createProxyModelProvider', () => {
     ]);
   });
 
-  it('yields unavailable refusal when SSE stream emits an error event', async () => {
+  it('drains an SSE error and refreshes the account without executing subsequent content', async () => {
     const onSettled = vi.fn();
     const fetchMock = vi.fn(async () =>
       sseResponse([
         'event: error\ndata: {"type":"error","error":{"message":"Upstream overloaded."}}\n\n',
+        'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ignored"}}\n\n',
       ]),
     );
 
@@ -245,7 +286,7 @@ describe('createProxyModelProvider', () => {
     expect(events).toEqual([
       { type: 'refusal', refusal: { code: 'unavailable', message: 'Upstream overloaded.' } },
     ]);
-    expect(onSettled).not.toHaveBeenCalled();
+    expect(onSettled).toHaveBeenCalledTimes(1);
   });
 });
 

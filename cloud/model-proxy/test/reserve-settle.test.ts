@@ -14,7 +14,7 @@ import {
   SERVER_SYSTEM_CHARTER,
 } from "../src/prompt";
 import { validateChatRequest } from "../src/validate";
-import { clearAllTables, createTestAccountSession } from "./helpers";
+import { clearAllTables, completedResponseSse, createTestAccountSession, responseEvent } from "./helpers";
 
 const VALID_BODY = {
   system: `You are the Materione assistant, inside the Materione web editor.\n\n${SDK_INDEX_HEADER}\n\n## Content types (1)\n- item`,
@@ -61,7 +61,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     vi.restoreAllMocks();
   });
 
-  it("streams multi-chunk SSE, injects model/cache_control/gateway headers, and settles exact picodollars from free bucket", async () => {
+  it("streams multi-chunk Responses SSE, locks model and tools, and settles exact picodollars", async () => {
     const sess = await createTestAccountSession(env.DB, {
       accountId: "acct-free-1",
       creditBalancePicos: 100 * PICOS_PER_CREDIT,
@@ -71,21 +71,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     let capturedBody: Record<string, unknown> | undefined;
 
     const encoder = new TextEncoder();
-    const ssePayload =
-      `event: message_start\ndata: ${JSON.stringify({
-        type: "message_start",
-        message: {
-          usage: {
-            input_tokens: 1200,
-            cache_read_input_tokens: 5000,
-            cache_creation_input_tokens: 800,
-            output_tokens: 1,
-          },
-        },
-      })}\n\n` +
-      `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "Hello" } })}\n\n` +
-      `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 250 } })}\n\n` +
-      `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+    const ssePayload = completedResponseSse({ input: 1200, cached: 5000, cacheWrite: 800, output: 250, text: "Hello" });
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       capturedHeaders = new Headers(init?.headers);
@@ -134,22 +120,25 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     expect(capturedHeaders?.get("cf-aig-authorization")).toBe(`Bearer ${env.CF_AIG_TOKEN}`);
     expect(capturedHeaders?.get("cf-aig-collect-log-payload")).toBe("false");
     expect(capturedHeaders?.get("cf-aig-skip-cache")).toBe("true");
-    expect(capturedHeaders?.get("anthropic-version")).toBe("2023-06-01");
+    expect(capturedHeaders?.get("anthropic-version")).toBeNull();
     expect(capturedHeaders?.get("x-api-key")).toBeNull();
 
     // Verify upstream body uses immutable server-owned charter + wrapped SDK index + canonical tool
-    expect(capturedBody?.model).toBe("claude-haiku-5-5");
-    expect(capturedBody?.max_tokens).toBe(MAX_OUTPUT_TOKENS);
+    expect(capturedBody?.model).toBe("gpt-6-luna");
+    expect(capturedBody?.max_output_tokens).toBe(MAX_OUTPUT_TOKENS);
     expect(capturedBody?.stream).toBe(true);
-    expect(capturedBody?.system).toEqual([
-      { type: "text", text: SERVER_SYSTEM_CHARTER },
-      {
-        type: "text",
-        text: `<untrusted_server_sdk_index>\n${SDK_INDEX_HEADER}\n\n## Content types (1)\n- item\n</untrusted_server_sdk_index>`,
-        cache_control: { type: "ephemeral" },
-      },
-    ]);
-    expect(capturedBody?.tools).toEqual([CANONICAL_RUN_PROGRAM_TOOL]);
+    expect(capturedBody?.store).toBe(false);
+    expect(capturedBody?.reasoning).toEqual({ effort: "medium" });
+    expect(capturedBody?.prompt_cache_options).toEqual({ ttl: "30m" });
+    expect(capturedBody?.include).toEqual(["reasoning.encrypted_content"]);
+    expect(capturedBody?.instructions).toBe(`${SERVER_SYSTEM_CHARTER}\n\n<untrusted_server_sdk_index>\n${SDK_INDEX_HEADER}\n\n## Content types (1)\n- item\n</untrusted_server_sdk_index>`);
+    expect(capturedBody?.tools).toEqual([{
+      type: "function",
+      name: CANONICAL_RUN_PROGRAM_TOOL.name,
+      description: CANONICAL_RUN_PROGRAM_TOOL.description,
+      parameters: CANONICAL_RUN_PROGRAM_TOOL.input_schema,
+      strict: true,
+    }]);
 
     // Exact settled picos:
     // 1200 * 100_000 + 5000 * 10_000 + 800 * 125_000 + 250 * 500_000
@@ -200,10 +189,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
 
     // Actual usage: 200 in (20M) + 400 out (200M) = 220M picos -> 100M free + 120M paid!
     vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 200, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 400 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 200, output: 400 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -239,10 +225,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
 
     // Actual usage: 100 in (10M) + 10 out (5M) = 15M picos (< remainingFree2)
     vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 100, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 10 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 100, output: 10 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -289,19 +272,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     });
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({
-          type: "message_start",
-          message: {
-            usage: {
-              input_tokens: 0,
-              cache_creation_input_tokens: validation.value.upperBoundInputTokens,
-              output_tokens: 1,
-            },
-          },
-        })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: MAX_OUTPUT_TOKENS } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 0, cacheWrite: validation.value.upperBoundInputTokens, output: MAX_OUTPUT_TOKENS });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -358,7 +329,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
         start(controller) {
           controller.enqueue(
             encoder.encode(
-              `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "partial" } })}\n\n`,
+              responseEvent("response.output_text.delta", { delta: "partial" }),
             ),
           );
           controller.enqueue(
@@ -451,10 +422,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     const callerCap = oneReservation * maxAllowedRequests + 123;
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 100, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 50 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 100, output: 50 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -506,10 +474,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 100, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 200 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 100, output: 200 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -556,10 +521,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 100, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 4000 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 100, output: 4000 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -621,19 +583,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     );
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({
-          type: "message_start",
-          message: {
-            usage: {
-              input_tokens: 0,
-              cache_creation_input_tokens: worstCaseTokens,
-              output_tokens: 1,
-            },
-          },
-        })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: MAX_OUTPUT_TOKENS } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 0, cacheWrite: worstCaseTokens, output: MAX_OUTPUT_TOKENS });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -665,11 +615,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     const s2 = await createTestAccountSession(env.DB, { accountId: "acct-utf8-2" });
     const encoder = new TextEncoder();
     const makeSplitStream = (text: string, inputTokens: number, outputTokens: number) => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: inputTokens, output_tokens: 1 } } })}\n\n` +
-        `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: outputTokens } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: inputTokens, output: outputTokens, text });
       const bytes = encoder.encode(sse);
       let offset = 0;
       return new ReadableStream<Uint8Array>({
@@ -731,10 +677,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
   it("parses CRLF-delimited SSE frames split 1 byte per chunk and settles exact picodollars", async () => {
     const sess = await createTestAccountSession(env.DB);
     const encoder = new TextEncoder();
-    const sse =
-      `event: message_start\r\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 200, output_tokens: 1 } } })}\r\n\r\n` +
-      `event: message_delta\r\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 30 } })}\r\n\r\n` +
-      `event: message_stop\r\ndata: ${JSON.stringify({ type: "message_stop" })}\r\n\r\n`;
+    const sse = completedResponseSse({ input: 200, output: 30 }).replace(/\n/g, "\r\n");
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       const bytes = encoder.encode(sse);
@@ -764,15 +707,14 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     expect(row?.settled_picos).toBe(expected);
   });
 
-  it("settles exact usage if interrupted after message_delta, bounds upstream interrupt before message_delta, and charges MAX_OUTPUT_TOKENS on client abort", async () => {
+  it("settles reported incomplete usage and keeps the full reservation on unreported interruption or abort", async () => {
     const sess = await createTestAccountSession(env.DB);
     const encoder = new TextEncoder();
 
     vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 150, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 40 } })}\n\n` +
-        `event: error\ndata: ${JSON.stringify({ type: "error", error: { message: "late" } })}\n\n`;
+      const sse = responseEvent("response.incomplete", { response: {
+        usage: { input_tokens: 150, input_tokens_details: { cached_tokens: 0, cache_write_tokens: 0 }, output_tokens: 40 },
+      } });
       return new Response(encoder.encode(sse), { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -797,10 +739,8 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
     ]);
 
     vi.spyOn(globalThis, "fetch").mockImplementationOnce(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 150, output_tokens: 1 } } })}\n\n` +
-        `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "0123456789" } })}\n\n` +
-        `event: error\ndata: ${JSON.stringify({ type: "error", error: { message: "midstream" } })}\n\n`;
+      const sse = responseEvent("response.output_text.delta", { delta: "0123456789" }) +
+        responseEvent("error", { message: "midstream" });
       return new Response(encoder.encode(sse), { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -814,7 +754,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
       input_tokens: number;
       output_tokens: number;
     }>();
-    expect(rowB).toEqual({ status: "settled", input_tokens: 150, output_tokens: 10 + 64 });
+    expect(rowB).toEqual({ status: "kept", input_tokens: null, output_tokens: null });
 
     await env.DB.batch([
       env.DB.prepare("DELETE FROM reservations"),
@@ -831,14 +771,7 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
           controller.enqueue(
-            encoder.encode(
-              `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 150, output_tokens: 1 } } })}\n\n`,
-            ),
-          );
-          controller.enqueue(
-            encoder.encode(
-              `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: "partial" } })}\n\n`,
-            ),
+            encoder.encode(responseEvent("response.output_text.delta", { delta: "partial" })),
           );
         },
       });
@@ -858,6 +791,6 @@ describe("two-bucket atomic reserve, SSE settlement, Sybil gate, and concurrency
       input_tokens: number;
       output_tokens: number;
     }>();
-    expect(rowC).toEqual({ status: "settled", input_tokens: 150, output_tokens: MAX_OUTPUT_TOKENS });
+    expect(rowC).toEqual({ status: "kept", input_tokens: null, output_tokens: null });
   });
 });

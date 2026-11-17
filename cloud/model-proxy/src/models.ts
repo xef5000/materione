@@ -17,12 +17,12 @@ export interface TokenUsage {
   readonly cacheWriteTokens: number;
 }
 
-export const DEFAULT_MODEL_ID = "claude-haiku-5-5";
+export const DEFAULT_MODEL_ID = "gpt-6-luna-medium";
 
 export const ALLOWLIST: Readonly<Record<string, ModelSpec>> = {
-  "claude-haiku-5-5": {
-    id: "claude-haiku-5-5",
-    catalogId: "anthropic/claude-haiku-5.5",
+  "gpt-6-luna-medium": {
+    id: "gpt-6-luna-medium",
+    catalogId: "openai/gpt-6-luna",
     inputPicosPerToken: 100_000, // $0.10 / 1M short-context input
     cacheReadPicosPerToken: 10_000, // $0.01 / 1M short-context cached input
     cacheWritePicosPerToken: 125_000, // $0.125 / 1M short-context cache creation

@@ -232,7 +232,8 @@ credentials out of the browser while the relay Worker remains ciphertext-only:
   `HttpOnly; Secure; Path=/; SameSite=Lax` `__Host-materione_ai_session` cookie (never sent
   to `editor.materione.com`, keeping `?s={code}#{wrapping-key}` unlinkable).
 - **Endpoints**: `GET /v1/me`, `POST /v1/auth/logout`, `GET /v1/allowance`, `POST /v1/chat`
-  (streams Anthropic SSE with `materione_settlement` summary), and Polar MoR billing
+  (adapts OpenAI Responses SSE to the editor's existing event contract with `materione_continuation`
+  and `materione_settlement`), and Polar MoR billing
   routes (`POST /v1/checkout`, `GET /v1/checkout/complete`, `POST /v1/webhooks/polar` with
   Standard Webhooks HMAC-SHA256 verification, `POST /v1/portal`).
 - **Two-bucket atomic ledger**: single-statement SQLite `BEFORE INSERT` / `AFTER UPDATE`

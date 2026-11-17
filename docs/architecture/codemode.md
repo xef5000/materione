@@ -8,8 +8,8 @@
 > (§7), what is explicitly out (§8), a worked example (§9), what the server must add (§10), how it is proven (§11), and the
 > the owner's answers to its questions (§12).
 >
-> **Status.** **Design, docs only (#320).** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
-> (2026-11-12, §12). The model's host and billing are decided (§12.1, master §14.8, #351); which model is the one question still open. Lines still marked "recommended"
+> **Status.** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
+> (2026-11-12, §12). The model host, billing and initial model are decided (§12.1, master §14.8, #351, #385). Lines still marked "recommended"
 > are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); **the SDK generator is built (#337, §3.8)**, with its recorded registries, goldens and the first program corpus, and **the SDK core is built (#339, §3.9)**: handles, the read API, the stage recorder, the operation table; the sandbox, the type-check Worker and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
 > SDK is generated, so its real spelling comes from the registries it is generated from (§3.1). §3.8 has the real spellings.
 >
@@ -284,8 +284,8 @@ of master §3.1 like a built-in does.
 The type checker always has the whole `.d.ts`; the model's context need not. The agent starts with a short index (content types,
 registered action, condition and trigger ids, preset ids, a few lines each) and pulls declarations by running a small read-only
 program (`m.docs.type("item")`, `m.docs.search("bleed")`). A type error returns the valid alternatives, so the checker teaches
-the rest. How large the index may be and what lives in a system prompt versus a skill is a tuning question for the benchmark
-(§11) and is not decided here.
+the rest. The initial production choice is the benchmark's index context rather than the full declaration (§12.1); its size and
+the division between prompt and skills remain tuning questions.
 
 ### 3.8 As built: the generator (#337)
 
@@ -809,7 +809,7 @@ make**, so the sandbox cannot make the editor send an operation the SDK's table 
 - **No Cloudflare compute.** Nothing in this design is a Worker invocation, a D1 query beyond editor traffic, Workers AI, a
   queue or a container. The WASM engine and the TypeScript checker are static assets (web.md §3.3: free and unlimited). A PR
   that implements this states its cost model per the guardrails, and it should read "no change".
-- **The model call is the one thing that leaves the page**, and it is not decided here (§12, question 2; master §14.8). Whatever the owner chooses, two
+- **The model call is the one thing that leaves the page** (§12.1; master §14.8). Two
   facts bind it: a call that leaves the browser is a place where content leaves the end-to-end boundary of master §9.2 (code
   mode narrows what leaves, §3.2 rule 3, but does not remove it), and any cloud-side LLM call or billing is bound by the cost
   guardrails (Workers AI is off-limits, no plan purchases, no public endpoint without rate limits).
@@ -1473,7 +1473,8 @@ Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`)
   primitive**. That second run is what turns §2.4's borrowed evidence into this project's own.
   *Harness built (#349, #385):* `npm --prefix webui run benchmark` (`scripts/benchmark/README.md`) runs both `codemode` and
   `tool-baseline` over the real type-checker, QuickJS sandbox, and JVM `authoring.transaction` oracle (`:plugin:benchmarkOracle`),
-  verified offline with `--mock` for `$0.00` and ready for the owner's budgeted live run.
+  verified offline with `--mock` for `$0.00`. Owner-budgeted live code-mode measurements and their limitations are recorded in
+  [`agent-benchmark.md`](agent-benchmark.md#71-owner-budgeted-model-measurements-385).
 - **QA catalog entries** for the user-visible part (proposal, diff, approve, refusal), with `visual` tests for the review UI
   (`qa/catalog/`, `qa/README.md`).
 
@@ -1482,12 +1483,12 @@ Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`)
 ## 12. The owner's answers (2026-11-12)
 
 The owner answered the nine questions of the first draft on PR #326. They are recorded in §1 (C7 to C14) and applied in the
-sections cited. Question 2 was answered later (§12.1); which model stays open.
+sections cited. Question 2 and the initial model were answered later (§12.1).
 
 | # | Question | Answer | Lands in |
 |---|---|---|---|
 | 1 | Sandbox technology | **A**: QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe; B (a Worker in a sandboxed iframe) is the fallback. | C7, §4.3 |
-| 2 | Model provider and billing | **Decided 2026-11-14 (#351): Cloudflare AI Gateway with unified billing**, through a model proxy Worker, under a hard spend cap; users buy Materione AI credits (not bring-your-own-key). Frontier-priced models are excluded. **Which model stays open**, to be measured (#385). | §12.1, master §14.8 |
+| 2 | Model provider and billing | **Decided (#351, #385): Cloudflare AI Gateway with unified billing**, through a model proxy Worker, under a hard spend cap; users buy Materione AI credits (not bring-your-own-key). Frontier-priced models are excluded. Initially use GPT-6 Luna Medium, index context and no escalation. | §12.1, master §14.8 |
 | 3 | Publishing the SDK for local or external agents | **Not a priority; not published for now.** The core stays DOM-free so the door is not closed, but no package boundary, trust model or handshake for an outside agent is designed or built. | C8, §8 |
 | 4 | Where the type-check runs | **In the editor page, in a Worker**, with the TypeScript checker as a static asset. | C9, §5.1 |
 | 5 | Autonomy | **The agent is trusted for the most part.** Creating new content needs no approval. Changing or deleting existing content needs the owner's approval **once per object**: after the first approval, later changes to that object in the session apply without asking again. | C10, §5.6 |
@@ -1504,7 +1505,7 @@ sections cited. Question 2 was answered later (§12.1); which model stays open.
 **Decision.** The chatbot's model calls go to **Cloudflare AI Gateway with unified billing**: the project has one bill, prepaid.
 They are made by a **model proxy**, a Worker separate from the relay. **Users pay the project, not a provider:** they buy
 Materione AI credits and spend them in the chatbot; a small free daily allowance is possible. It is not bring-your-own-key. The
-owner excluded frontier-priced models; the choice between a mid-tier and a cheap model is not made here.
+owner excluded frontier-priced models and chose GPT-6 Luna Medium with index context and no escalation for the initial model (#385).
 
 **Why a proxy and not the browser.** The gateway credential cannot be in the page, and a balance has to be checked where the user
 cannot edit it. The proxy is the one new endpoint (master §14.8 as amended). It is not the relay: the relay keeps seeing
@@ -1535,31 +1536,37 @@ design sends a slice of it. Taking the whole surface as the worst case, with a 2
 | Cheap, short-context prices | about $0.008 | about $0.002 | about $0.013 |
 | Cheap, long-context prices | about $0.04 | about $0.008 | about $0.065 |
 
-A cold turn recurs whenever the provider's cache expires between messages. A free allowance of $0.05 a day is therefore several
-tasks on the cheap model and less than one on the mid-tier model. None of this is measured.
+A cold turn recurs whenever the provider's cache expires between messages. These are historical illustrations, not measured
+production costs or a guarantee of how many tasks fit in the free allowance.
 
 *As built (#402): the model proxy Worker.* `cloud/model-proxy/` (`ai.materione.com`) implements the free-allowance slice: an
-allowlist containing only `claude-haiku-5-5` (short-context, enforced by a price-tier ban test), an immutable server-owned
+allowlist containing only `gpt-6-luna-medium` (enforced by a price-tier ban test), an immutable server-owned
 system charter + `run_program({ text })` tool lock (wrapping only the caller's bounded SDK index in `<untrusted_server_sdk_index>`),
-mathematical `1 byte = 1 token + framing` upper-bound reservation under `80,000` input / `4,000` output / `512 KiB` per-request
+mathematical `1 byte = 1 token + framing` upper-bound reservation under `80,000` input / `12,288` output / `512 KiB` per-request
 ceilings, `https://editor.materione.com`-only CORS + `Sec-Fetch-Site` check, fail-closed `10 req/min` per-caller rate limiting and
 D1 `503` error boundary, daily-salted SHA-256 canonical network identity (IPv4 `/32`, IPv4-mapped IPv6 normalized to IPv4, IPv6 `/64`
 prefix; no raw IPs or prompt content logged or stored), `$0.05/day` caller cap + `$1.00/day` global D1 pool (`GLOBAL_DAILY_POOL_PICOS=0`
 instant kill-switch) via single-statement atomic reserve/settle triggers in integer picodollars, and `cf-aig-collect-log-payload: false`
-on AI Gateway calls. `webui`'s live `ModelProvider` implementation will connect to `/v1/chat` once `#348` and `#402` both land on `main`.
+on AI Gateway calls. At the configured Luna rates, the maximum reserve is
+`80,000 × $0.125/M + 12,288 × $0.50/M = $0.016144` per turn; actual input reserves depend on submitted bytes.
 
-**Which model: measured, not chosen from public leaderboards.** The harness exists: the benchmark tasks (agent-benchmark.md), the
+**Model decision.** The harness exists: the benchmark tasks (agent-benchmark.md), the
 type-check Worker (§3.10) and the server dry-run replay (§3.9). For each candidate model the run records the fraction of tasks
 that reach an accepted dry run within a fixed number of repair turns, the turns used, and the dollars per accepted task. A second
 set of deliberately vague requests (`fixtures/codemode/vague-requests.json`) is scored on whether the plan covers the sub-features
 and whether the model asks instead of guessing. The CLI harness (`npm --prefix webui run benchmark`, `scripts/benchmark/README.md`)
 enforces non-frontier pricing, hard `--max-dollars` pre-turn budget caps, `index` vs `full-dts` context ablation, and the
-`always-cheap` / `always-mid` / `escalate` routing strategies. Issue #385.
+`always-cheap` / `always-mid` / `escalate` routing strategies. The owner chose **GPT-6 Luna Medium, index, always-cheap,
+no escalation** on cost per accepted task (#385). Full declarations improved success and turns but cost more, and the
+S18-adjusted score saturated at 100%; these small samples do not establish a general quality ceiling. See the
+[measurements and limitations](agent-benchmark.md#71-owner-budgeted-model-measurements-385).
 
-**Routing (recommended, not decided).** The proxy picks the model from signals it already has, not from a second model call: start
-on the cheap model; move to the mid-tier model for the rest of the request after two failed type-checks or one refused dry run.
-The gateway's own routing is used only for provider failure (fallback), so the escalation rule stays in one place and is testable.
-Whether this beats "always mid-tier" is one of the things #385 measures.
+The proxy sends the fixed OpenAI Responses model `gpt-6-luna`, `reasoning.effort: medium`, `store: false`, a single
+`run_program` tool, a fixed 30-minute prompt-cache lifetime, and the 12,288-token output cap. It streams text and tool calls through the existing editor SSE contract,
+and returns encrypted reasoning and output items as opaque, bounded continuation state for the browser to replay in memory
+on the next tool turn. The proxy checks replayed calls and text against the validated conversation. A valid final usage settles
+the reservation exactly; missing, malformed or interrupted usage retains the full reserve rather than guessing hidden reasoning
+token cost. Incomplete responses are errors and never execute a partial tool call.
 
 **Accounts, payments and the ledger are designed in [`ai-credits.md`](ai-credits.md) (owner decision, #386, 2026-11-15).**
 Google and Discord OAuth 2.0 (PKCE) in a popup issue a host-locked `__Host-` `HttpOnly` session cookie on `ai.materione.com`,
@@ -1567,8 +1574,6 @@ keeping editor session keys (`?s=...#...`) completely unlinkable from `ai.materi
 Polar Merchant of Record handles custom `$10–$200` top-ups scaled strictly off `net_amount` (`100 credits / $1 = $0.75` wholesale AI
 budget), recorded in a two-bucket atomic D1 picodollar ledger (`credit_balance_picos` + dual-gated `$0.05/day` per-account and
 per-canonical-subnet free allowance under a `$1.00/day` global pool). The ledger is state, not content (D1 is unaffected).
-
-**Still open.** The model allowlist and the routing rule (#385); the #386 design in [`ai-credits.md`](ai-credits.md) is ready for implementation.
 
 *As built (#348, #410): the agent loop, context assembly, `editor.materione.com` boundary, and live cloud proxy client.* The SPA side (`webui/src/lib/codemode/chat/`
 and `webui/src/lib/codemode/proxy/`) is wired and verified with both the scripted Bloodfang provider (`scripted.ts`, `scripts/bloodfang.ts`) and the live
@@ -1579,7 +1584,7 @@ and `webui/src/lib/codemode/proxy/`) is wired and verified with both the scripte
 - **Bounded tool outputs & missing primitives**: `run_program` (`tool.ts`) caps serialized results and diagnostics at `TOOL_RESULT_MAX_CHARS = 24_000`
   and surfaces structured `missingPrimitives` diagnostics when a program references a catalog member absent from the generated SDK.
 - **Strict `https://editor.materione.com` proxy gate**: `webui/src/lib/codemode/proxy/` (kept outside `chat/` so `chat/` stays 100% network- and storage-free,
-  enforced by `codemode-chat-bans.spec.ts`) connects the `ModelProvider` (`POST /v1/chat`, Anthropic Messages wire translation, SSE streaming, settlement refresh),
+  enforced by `codemode-chat-bans.spec.ts`) connects the `ModelProvider` (`POST /v1/chat`, server-side Responses translation, SSE streaming, settlement refresh),
   Google/Discord popup OAuth (`GET /v1/me`, `GET /v1/allowance`, `POST /v1/auth/logout`), and Polar `$10–$200` top-up / invoice portal (`POST /v1/checkout`,
   `POST /v1/portal`) strictly when `EditorHost === 'cloud'` and `location.origin === 'https://editor.materione.com'` (never automatically on `localhost` or on
   the embedded local editor). Auth uses `HttpOnly` cookies (`credentials: 'include'`) with zero browser storage (`codemode-proxy-bans.spec.ts`), and `ChatPanel`

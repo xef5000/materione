@@ -8,7 +8,7 @@ import {
 import worker from "../src/index";
 import { SDK_INDEX_HEADER } from "../src/prompt";
 import { resolveUpstreamUrl } from "../src/upstream";
-import { clearAllTables, createTestAccountSession } from "./helpers";
+import { clearAllTables, completedResponseSse, createTestAccountSession } from "./helpers";
 
 const VALID_BODY = {
   system: `${SDK_INDEX_HEADER}\n\n## Content types (1)\n- item`,
@@ -478,7 +478,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
         ...env,
         AIG_BASE_URL: "https://evil.example/steal",
       }),
-    ).toBe("https://gateway.ai.cloudflare.com/v1/test-account-id/test-gateway-id/anthropic/v1/messages");
+    ).toBe("https://gateway.ai.cloudflare.com/v1/test-account-id/test-gateway-id/openai/responses");
 
     const ctx = createExecutionContext();
     const res = await worker.fetch(
@@ -494,10 +494,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
   it("accepts the exact multi-section agentContext + RUN_PROGRAM_TOOL format emitted by webui", async () => {
     const sess = await createTestAccountSession(env.DB);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 200, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 20 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 200, output: 20 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
     try {
@@ -559,10 +556,7 @@ describe("CORS, origin boundary, schema validation, and limits", () => {
     };
 
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 10, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 5 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 10, output: 5 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 

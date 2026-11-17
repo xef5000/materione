@@ -4,7 +4,7 @@ export const ALLOWED_ORIGIN = "https://editor.materione.com";
 
 export const MAX_BODY_BYTES = 512 * 1024; // 524,288 bytes (512 KiB)
 export const MAX_INPUT_TOKENS = 80_000;
-export const MAX_OUTPUT_TOKENS = 4_000;
+export const MAX_OUTPUT_TOKENS = 12_288;
 export const MAX_MESSAGES = 64;
 
 export const RATE_LIMIT_RETRY_SECONDS = 60;

@@ -94,6 +94,7 @@ export async function runAgent(history: readonly ChatMessage[], deps: LoopDeps):
     deps.onEvent?.({ type: 'turn-start' });
     let text = '';
     const calls: ToolCall[] = [];
+    let continuation: unknown;
     let refusal: ModelRefusal | undefined;
     try {
       for await (const event of deps.provider.stream({ system: deps.system, messages, tools: [RUN_PROGRAM_TOOL], signal: deps.signal })) {
@@ -105,6 +106,8 @@ export async function runAgent(history: readonly ChatMessage[], deps: LoopDeps):
         } else if (event.type === 'usage') {
           usage = addUsage(usage, event.usage);
           deps.onEvent?.({ type: 'usage', usage: event.usage });
+        } else if (event.type === 'continuation') {
+          continuation = event.state;
         } else {
           refusal = event.refusal;
         }
@@ -122,7 +125,7 @@ export async function runAgent(history: readonly ChatMessage[], deps: LoopDeps):
       if (text !== '') push({ role: 'assistant', text, toolCalls: [] });
       return end('refused', { refusal });
     }
-    push({ role: 'assistant', text, toolCalls: calls });
+    push({ role: 'assistant', text, toolCalls: calls, ...(continuation !== undefined ? { continuation } : {}) });
     if (calls.length === 0) return end('done');
 
     for (const call of calls) {
