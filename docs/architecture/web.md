@@ -174,6 +174,10 @@ Channel rules:
   retries the edge's 502); any other
   rejection ends the session, since a dropped frame breaks the strict sequence anyway. RPCs
   carry a client-side deadline (120 s) so a lost reply surfaces as an error, not a hang.
+  The editor leans on this by issuing independent requests together: its post-handshake load
+  is one round (pack list, capabilities, diagnostics, session info, delivery status — and the
+  active pack's catalog when already known) plus, on a first load only, one round for the
+  chosen pack's catalog; open drafts reconcile concurrently.
 - **Keepalive**: presence is the long-poll itself (reads, not writes); the plugin posts a
   channel heartbeat every ~2 min, and the editor's application-level `ping` rides frames
   sparsely. Channels whose both sides stop polling are swept (§3.4).

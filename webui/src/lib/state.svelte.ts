@@ -350,29 +350,43 @@ export function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Initial metadata fetch after the handshake; safe to call again anytime. */
+/**
+ * Initial metadata fetch after the handshake; safe to call again anytime.
+ *
+ * Every request that does not depend on the pack list is issued at once, so
+ * the transport carries them as one round trip (one batched relay post); a
+ * known active pack's catalog joins that round. Only a first load, which must
+ * learn the pack list before it can pick a pack, spends a second round.
+ * Each part fails on its own: one bad answer does not blank the others.
+ */
 export async function loadWorkspace(): Promise<void> {
   const channel = session.channel;
   if (!channel) return;
-  try {
-    const packs = unwrap(await ops.packs(channel)).packs as string[];
-    workspace.packs = packs ?? [];
-    if (workspace.packs.length && !workspace.activePack) {
-      await selectPack(workspace.packs[0]!);
-    } else if (workspace.activePack) {
-      await refreshPack();
-    }
-    await loadCapabilities(channel);
-    diagnostics.entries =
-      ((unwrap(await ops.diagnostics(channel)).diagnostics as DiagnosticEntry[]) ?? []);
-    const info = unwrap(await ops.sessionInfo(channel));
-    server.version = String(info.serverVersion ?? '');
-    server.minecraftVersion = String(info.minecraftVersion ?? '');
-    server.protocolVersion = Number(info.protocolVersion ?? 0);
-    server.editorRunning = Boolean(info.editorRunning);
-    server.editorPort = Number(info.editorPort ?? 0);
-  } catch (e) {
-    logActivity('error', `metadata: ${errorMessage(e)}`);
+  const metadata = (task: Promise<unknown>) =>
+    task.catch((e: unknown) => logActivity('error', `metadata: ${errorMessage(e)}`));
+  const packList = metadata((async () => {
+    workspace.packs = (unwrap(await ops.packs(channel)).packs as string[]) ?? [];
+  })());
+  const knownPack = workspace.activePack;
+  await Promise.all([
+    packList,
+    knownPack ? refreshPack() : Promise.resolve(),
+    metadata(loadCapabilities(channel)),
+    metadata((async () => {
+      diagnostics.entries =
+        ((unwrap(await ops.diagnostics(channel)).diagnostics as DiagnosticEntry[]) ?? []);
+    })()),
+    metadata((async () => {
+      const info = unwrap(await ops.sessionInfo(channel));
+      server.version = String(info.serverVersion ?? '');
+      server.minecraftVersion = String(info.minecraftVersion ?? '');
+      server.protocolVersion = Number(info.protocolVersion ?? 0);
+      server.editorRunning = Boolean(info.editorRunning);
+      server.editorPort = Number(info.editorPort ?? 0);
+    })()),
+  ]);
+  if (!knownPack && !workspace.activePack && workspace.packs.length) {
+    await selectPack(workspace.packs[0]!);
   }
 }
 
