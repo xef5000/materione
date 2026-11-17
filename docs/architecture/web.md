@@ -157,10 +157,13 @@ Channel rules:
   unguessable strings (§5.3); possession is the transport-level auth. The server stores
   only their hashes.
 - **Max frame 1 MiB**; larger data goes through the payload store (§4.3).
-- **Long-poll**: `wait` ≤ 25 s; the Worker internally re-checks D1 roughly every 1.5 s
-  (`scheduler.wait()` — wall-clock time is free on Workers; only CPU counts, and awaits are
-  not CPU). Interactive RPC round-trip latency is typically 0.3–2 s; direct mode remains
-  the low-latency path on LAN (§4.4).
+- **Long-poll**: `wait` ≤ 25 s; the Worker internally re-checks D1 between ticks with
+  `scheduler.wait()` (wall-clock time is free on Workers; only CPU counts, and awaits are
+  not CPU). The interval is **adaptive**: every 300 ms while the channel saw a frame in the
+  last 10 s (an RPC or its reply is likely in flight — the post stamps `last_frame_at` in the
+  channel-row update it already makes), 1.5 s otherwise. Both legs of an RPC on an active
+  channel are therefore picked up within ~0.3 s; the first request after an idle spell waits
+  at most one slow tick. Direct mode remains the low-latency path on LAN (§4.4).
 - **Ordered, non-destructive reads**: frames return in strict insertion order by cursor and
   are retained until the channel's cap/TTL — so the protocol's strict per-direction
   sequence numbers work unchanged, and the retained frames *are* the catch-up buffer: a
@@ -199,6 +202,13 @@ every write including the usage upsert in one atomic batch — and a poll is one
 (channel row and frames together; the reader's direction is derived from its token hash in
 SQL) plus one closing batch (retention horizon and the throttled last-seen stamp). The
 retention prune runs only when the known byte total crosses a cap.
+
+The adaptive poll interval (§3.2) costs reads only while a channel is in use: a check reads
+~2 rows, so the 300 ms rate is ~5× the idle rate, but each post buys at most one 10 s fast
+window (≈ 33 checks × 2 readers × 2 rows ≈ 130 reads), and posts are bounded by the
+new-row write self-cap (≥ 3 rows each ⇒ ≤ ~13 k posts/day). The worst-case extra is
+therefore ≤ ~1.8 M reads/day — the busy scenario below stays under ~3.6 M of the 5 M hard
+stop, and the free plan stops rather than bills if it were ever exceeded.
 
 | Daily scenario (sessions × length) | Worker requests | D1 reads | D1 new-row writes |
 |---|---|---|---|
