@@ -1102,8 +1102,10 @@ lists), `codemode-host-store.spec.ts` (the lifecycle against a model of the tran
 existing object without a grant is never sent, plan approval, stale at the dry run and between dry run and apply, the change log
 and revert), `codemode-host-transport.spec.ts` (the lifecycle replayed over `editor-codemode-v1.json`) and
 `codemode-host-bans.spec.ts` (the sandbox side cannot load or name approval, the agent port, one grant and one apply call site,
-no storage, literal op names for the compat gate). **Not built here**: the chat tool (#348), which calls the agent port; a
-real-server test of the approval flow. The review and change-log UI is built (below).
+no storage, literal op names for the compat gate). The local QA entry `editor.browser-codemode-review-live-flow` exercises the
+approval and revert flow over the real editor channel and Paper server, with a recorded sealed proposal fed into the agent
+port; it checks the file on disk before and after the owner's actions, including a rejected synthetic click. It is not a
+live-model or deployed-cloud test. The review and change-log UI is built (below).
 
 **As built (#347, track A4): the review panel and the change log.** `webui/src/lib/codemode/review/` (components and view model),
 `host/actions.ts` (the owner's actions), mounted by `Workbench.svelte`. This is D13's human-review step: it shows **what will be
@@ -1155,9 +1157,10 @@ the audit list, a synthetic click approves nothing, the keyboard-only flow with 
 `browser/codemode-feed.ts` feeds a corpus program's recorded sealed result (`fixtures/golden/codemode/ops/`, with its program text from
 `fixtures/codemode/corpus/`, retargeted to the fixture pack) through `store.agent.propose` and `declarePlan`, the two calls the chat tool will
 get; `browser/codemode-fixture.ts` answers the two transaction ops over the fixture documents in the real reply shapes. It lives under
-`browser/` and is not in the editor build. **Not built**: a real-server run of the panel (the live QA entries check the capability gate, the empty
-states and focus; proposal states run in the harness until a real producer exists), and `findReferences`/`queryGraph` impact in the proposal view (the
-dry run now refuses what breaks a reference the pipeline checks; a listing of every use is a separate read).
+`browser/` and is not in the editor build. The separate `editor.browser-codemode-review-live-flow` QA entry mounts the editor
+source in a test-only browser entry and feeds a recorded proposal over a real local editor session to Paper; the normal
+handshake, review actions and server transaction remain real. **Not built**: `findReferences`/`queryGraph` impact in the proposal
+view (the dry run now refuses what breaks a reference the pipeline checks; a listing of every use is a separate read).
 
 ---
 
