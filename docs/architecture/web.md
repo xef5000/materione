@@ -876,13 +876,27 @@ cannot read, forge, replay, or reorder anything.
   pack/path and shared between Content and Files. Studio and Files form edits use one
   revision-checked `authoring.setFields` batch; raw YAML uses a revision-checked full-document
   write. Unchanged documents are not written, and switching between field and YAML representations
-  requires an explicit apply or discard. The store is not persisted to browser storage: drafts
-  survive workspace navigation and unexpected disconnection in the same tab, but not a confirmed
-  page reload or tab close. The browser-unload guard also checks active editor guards for texture,
+  requires an explicit apply or discard. A write's reply carries the full document view (`raw`,
+  `parsed`, `computed`), so a save of K field edits is one RPC; a reply without `computed` (an
+  older plugin) is read back with `browse.get`. Drafts survive workspace navigation and unexpected
+  disconnection in the same tab. The browser-unload guard also checks active editor guards for texture,
   asset, and model work; it is intentionally conservative and may warn while one of these editors
   is open even when unchanged. Reconnect checks the plugin signing identity and reconciles against
   server files without automatically replaying a save. Conflicting or overlapping changes block
   further apply until the author resolves them; unrelated pending fields remain pending.
+- **Local drafts (as built, M6, #427):** dirty drafts (base `rev`, saved raw, base values,
+  pending field edits or YAML) are also kept in the browser's IndexedDB, one record per server
+  signing identity, rewritten at most once per 250 ms pause and on page hide; a record with
+  nothing dirty is deleted, and records older than 30 days are dropped unread. On the first
+  connect to that server the kept drafts are restored at their own base revision (in-tab drafts
+  win; the 32-draft limit holds) and reconciled exactly like a reconnect, so a draft whose base
+  changed underneath it is flagged stale and never silently applied. This is an **unsaved buffer,
+  not a second source of truth (D1)**: files on disk win, nothing is saved until the server
+  confirms a revision-checked write, and confirming Disconnect discards the kept drafts too.
+  Two tabs editing against the same server share one record (last writer wins). Without
+  IndexedDB (some private modes) drafts stay in-tab only. Normal saves stay on
+  `authoring.setFields`/`edit.put`: `authoring.transaction` is code mode's reviewed-proposal path
+  ([codemode.md](codemode.md)), not the studio's save.
 - **Schema-driven studios**: registry metadata declares labels, sections/facets, ordering,
   constraints, reference targets, structured children, conditional visibility, widgets, and
   creation capabilities. The UI provides reusable controls and domain previews; it does not

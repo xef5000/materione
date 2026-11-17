@@ -273,6 +273,8 @@ public final class EditorContentOps {
                 JsonObject payload = new JsonObject();
                 payload.addProperty("rev", result.value().revision());
                 payload.add("parsed", jsonOf(result.value().parsed()));
+                // the full view: the editor rebases on this reply without a browse.get round trip
+                payload.add("computed", jsonOf(result.value().computed()));
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException e) {
                 // malformed frame — the editor shows it inline
@@ -382,6 +384,8 @@ public final class EditorContentOps {
                 payload.addProperty("rev", result.value().revision());
                 payload.addProperty("raw", result.value().raw());
                 payload.add("parsed", jsonOf(result.value().parsed()));
+                // the full view: the editor rebases on this reply without a browse.get round trip
+                payload.add("computed", jsonOf(result.value().computed()));
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
