@@ -39,7 +39,15 @@ public final class FakeMailbox {
     private final Map<String, List<String>> editorToPlugin = new ConcurrentHashMap<>();
     private final Map<String, Stored> blobs = new ConcurrentHashMap<>();
     private final AtomicLong ids = new AtomicLong();
+    private final java.util.concurrent.atomic.AtomicInteger pluginPostsToReject =
+            new java.util.concurrent.atomic.AtomicInteger();
     private HttpServer server;
+
+    /** The next {@code count} plugin-side frame POSTs answer 429 (the worker's
+     * rate limiter, which rejects before writing anything). */
+    public void rejectPluginPosts(int count) {
+        pluginPostsToReject.set(count);
+    }
 
     public HttpServer start() throws IOException {
         HttpServer http = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -104,6 +112,10 @@ public final class FakeMailbox {
                 return;
             }
             if (path.endsWith("/frames") && "POST".equals(exchange.getRequestMethod())) {
+                if (pluginSide && pluginPostsToReject.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
+                    respond(exchange, 429, "{\"error\":\"rate_limited\"}");
+                    return;
+                }
                 JsonObject parsed = JsonParser.parseString(body).getAsJsonObject();
                 List<String> queue = pluginSide ? pluginToEditor(channelId) : editorToPlugin(channelId);
                 synchronized (queue) {

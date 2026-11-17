@@ -19,6 +19,9 @@ const POLL_FLOOR_MS = 100;
 const BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 8000;
 const MAX_MESSAGES_PER_BATCH = 32;
+/** Soft cap on one POST's total message bytes (a single larger message
+ * still goes alone; the worker caps each message at 1 MiB). */
+const MAX_BATCH_BYTES = 1024 * 1024;
 
 interface Delivered {
   id: number;
@@ -38,8 +41,14 @@ export class LongPollTransport implements Transport {
   private readonly buffered: string[] = [];
   private closed = false;
   private cursor = 0;
-  /** POSTs serialize through this chain: mailbox ids follow send order. */
-  private postChain: Promise<void> = Promise.resolve();
+  /**
+   * Messages not yet accepted by the relay, in send order. One POST is in
+   * flight at a time (mailbox ids follow send order); whatever queues up
+   * behind it goes out together in the next POST, so a burst of RPCs costs
+   * a few requests instead of one each.
+   */
+  private readonly outbox: string[] = [];
+  private flushing = false;
 
   constructor(
     private readonly base: string,
@@ -50,9 +59,13 @@ export class LongPollTransport implements Transport {
   }
 
   send(text: string): void {
-    this.postChain = this.postChain.then(() => this.postOne(text)).catch(() => {
-      this.transportDead('relay post failed');
-    });
+    if (this.closed) {
+      return;
+    }
+    this.outbox.push(text);
+    if (!this.flushing) {
+      void this.flush();
+    }
   }
 
   onMessage(handler: ((text: string) => void) | null): void {
@@ -90,15 +103,70 @@ export class LongPollTransport implements Transport {
     return `${this.base}/v1/channels/${this.channelId}${path}`;
   }
 
-  private async postOne(text: string): Promise<void> {
+  private async flush(): Promise<void> {
+    this.flushing = true;
+    let backoff = BACKOFF_MS;
+    try {
+      while (!this.closed && this.outbox.length > 0) {
+        const batch = this.nextBatch();
+        const outcome = await this.postBatch(batch);
+        if (outcome === 'accepted') {
+          // Removed only once accepted: a dropped message would break the
+          // plugin's strict receive sequence.
+          this.outbox.splice(0, batch.length);
+          backoff = BACKOFF_MS;
+        } else if (outcome === 'retry') {
+          await new Promise((resolve) => setTimeout(resolve, backoff));
+          backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+        } else {
+          return;
+        }
+      }
+    } catch {
+      this.transportDead('relay post failed');
+    } finally {
+      this.flushing = false;
+    }
+  }
+
+  /** The head of the outbox, capped by count and total size (at least one). */
+  private nextBatch(): string[] {
+    let bytes = 0;
+    let count = 0;
+    while (count < this.outbox.length && count < MAX_MESSAGES_PER_BATCH) {
+      bytes += this.outbox[count]!.length;
+      if (count > 0 && bytes > MAX_BATCH_BYTES) {
+        break;
+      }
+      count++;
+    }
+    return this.outbox.slice(0, count);
+  }
+
+  /**
+   * One POST. 429 and 503 are retried: the worker answers both before
+   * writing anything (rate limiter, daily quota), so a retry cannot
+   * duplicate a message. Any other rejection is fatal — the message is
+   * gone and the sequence with it.
+   */
+  private async postBatch(batch: string[]): Promise<'accepted' | 'retry' | 'dead'> {
     const response = await fetch(this.channelUrl('/frames'), {
       method: 'POST',
       headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ frames: [JSON.parse(text)] }),
+      body: `{"frames":[${batch.join(',')}]}`,
     });
-    if (!response.ok && (response.status === 410 || response.status === 404)) {
-      this.transportDead('channel gone');
+    if (response.ok) {
+      return 'accepted';
     }
+    if (response.status === 429 || response.status === 503) {
+      return 'retry';
+    }
+    this.transportDead(
+      response.status === 410 || response.status === 404
+        ? 'channel gone'
+        : `relay post rejected: HTTP ${response.status}`,
+    );
+    return 'dead';
   }
 
   private async pollLoop(): Promise<void> {
@@ -165,5 +233,5 @@ export class LongPollTransport implements Transport {
   }
 }
 
-/** The mailbox fixture's batch cap, mirrored for tests and future batching. */
+/** The mailbox fixture's batch cap, mirrored for tests. */
 export const RELAY_MAX_MESSAGES_PER_BATCH = MAX_MESSAGES_PER_BATCH;

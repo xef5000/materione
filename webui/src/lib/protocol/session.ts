@@ -32,6 +32,10 @@ import {
 import { canonicalJson } from './wire';
 import type { Request, Response } from './wire';
 
+/** Default per-RPC deadline; generous enough for uploads and slow applies
+ * over the relay, short enough that a lost reply doesn't hang the UI. */
+export const RPC_TIMEOUT_MS = 120_000;
+
 /** Relay-mode routing carried inside the encrypted blob (web.md §3.2). */
 export interface RelayInfo {
   base: string;
@@ -441,11 +445,33 @@ export class EditorChannel {
     return channel;
   }
 
-  /** One RPC round trip over sealed frames. */
-  async call(op: string, payload: Record<string, unknown> = {}): Promise<Response> {
+  /**
+   * One RPC round trip over sealed frames. Rejects after `timeoutMs` so a
+   * reply lost in transit surfaces as an error instead of a hung UI; a late
+   * reply then finds no waiter and is ignored.
+   */
+  async call(
+    op: string,
+    payload: Record<string, unknown> = {},
+    timeoutMs = RPC_TIMEOUT_MS,
+  ): Promise<Response> {
     const id = 'c' + Math.random().toString(36).slice(2, 10);
     const promise = new Promise<Response>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) {
+          reject(new Error(`${op} timed out after ${Math.round(timeoutMs / 1000)} s`));
+        }
+      }, timeoutMs);
+      this.pending.set(id, {
+        resolve: (response) => {
+          clearTimeout(timer);
+          resolve(response);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
     });
     this.deliver(canonicalJson({ op, id, payload }));
     return promise;

@@ -41,6 +41,8 @@ public final class RelaySession implements SessionDriver.Out {
     private final SessionDriver driver;
     private final DiagnosticsBus diagnostics;
     private final LinkedBlockingQueue<String> outbound = new LinkedBlockingQueue<>();
+    /** The batch being posted; only the pump thread touches it. */
+    private final List<String> unsent = new ArrayList<>();
     private volatile CompletableFuture<RelayClient.Poll> inFlight;
     private volatile boolean stopped;
 
@@ -172,17 +174,22 @@ public final class RelaySession implements SessionDriver.Out {
         }
     }
 
+    /**
+     * Posts queued frames in batches. A batch is dropped only after the
+     * relay accepted it: when a post throws (a 429/503 back-off), the batch
+     * stays in {@link #unsent} and goes first on the next attempt — a lost
+     * reply would break the browser's strict receive sequence.
+     */
     private void postOutbound() throws RelayException {
-        List<String> batch = new ArrayList<>();
-        outbound.drainTo(batch, MAX_BATCH);
-        while (!batch.isEmpty()) {
-            client.postMessages(channel.channelId(), channel.pluginToken(), batch);
-            if (batch.size() == MAX_BATCH) {
-                batch = new ArrayList<>();
-                outbound.drainTo(batch, MAX_BATCH);
-            } else {
-                batch = new ArrayList<>();
+        while (true) {
+            if (unsent.size() < MAX_BATCH) {
+                outbound.drainTo(unsent, MAX_BATCH - unsent.size());
             }
+            if (unsent.isEmpty()) {
+                return;
+            }
+            client.postMessages(channel.channelId(), channel.pluginToken(), List.copyOf(unsent));
+            unsent.clear();
         }
     }
 

@@ -111,6 +111,83 @@ describe('LongPollTransport', () => {
     }
   });
 
+  it('coalesces messages queued behind an in-flight post into one batch', async () => {
+    const mailbox = stubMailbox();
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const postBatches: number[] = [];
+    let firstPost = true;
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(input).endsWith('/frames')) {
+        postBatches.push((JSON.parse(String(init.body)) as { frames: unknown[] }).frames.length);
+        if (firstPost) {
+          firstPost = false;
+          await gate;
+        }
+      }
+      return mailbox.fetchImpl(input, init);
+    }));
+    try {
+      const transport = new LongPollTransport('https://relay.test', 'chan-1', 'editor-token-0123456789abcdef');
+      for (let i = 0; i < 5; i++) {
+        transport.send(`{"seq":${i}}`);
+      }
+      await tick();
+      release!();
+      await tick();
+      expect(postBatches).toEqual([1, 4]);
+      expect(mailbox.posted()).toEqual([0, 1, 2, 3, 4].map((i) => `{"seq":${i}}`));
+      transport.close();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('retries a rate-limited post without losing or duplicating messages', async () => {
+    const mailbox = stubMailbox();
+    let rejections = 1;
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(input).endsWith('/frames') && rejections > 0) {
+        rejections--;
+        return new Response('{"error":"rate_limited"}', { status: 429 });
+      }
+      return mailbox.fetchImpl(input, init);
+    }));
+    try {
+      const transport = new LongPollTransport('https://relay.test', 'chan-1', 'editor-token-0123456789abcdef');
+      const closes: number[] = [];
+      transport.onClose((code) => closes.push(code));
+      transport.send('{"seq":0}');
+      transport.send('{"seq":1}');
+      await new Promise((resolve) => setTimeout(resolve, 700)); // past one back-off
+      expect(mailbox.posted()).toEqual(['{"seq":0}', '{"seq":1}']);
+      expect(closes).toEqual([]);
+      transport.close();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('treats any other rejected post as fatal instead of dropping it silently', async () => {
+    const mailbox = stubMailbox();
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(input).endsWith('/frames')) {
+        return new Response('{"error":"frame_too_large"}', { status: 413 });
+      }
+      return mailbox.fetchImpl(input, init);
+    }));
+    try {
+      const transport = new LongPollTransport('https://relay.test', 'chan-1', 'editor-token-0123456789abcdef');
+      const closes: number[] = [];
+      transport.onClose((code) => closes.push(code));
+      transport.send('{"seq":0}');
+      await tick();
+      expect(closes).toEqual([1000]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('reports channel-closed through onClose exactly once', async () => {
     const fetchImpl = vi.fn(async (input: string | URL) =>
       new Response('{"closed":true,"frames":[],"oldest":null,"more":false}', { status: 200 }));
