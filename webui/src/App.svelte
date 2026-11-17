@@ -82,14 +82,15 @@
         }
       });
       noncePrefix = '';
+      // Delivery status is independent of the workspace: same round trip.
+      const deliveryLoad = refreshDelivery();
       await loadWorkspace();
       if (hasWorkspace) {
-        for (const draft of draftStore.documents) {
-          if (draft.loaded) await reconcileDocumentDraft(draft, opened.channel);
-          else await ensureDocumentDraft(draft, opened.channel);
-        }
+        await Promise.all(draftStore.documents.map((draft) => draft.loaded
+          ? reconcileDocumentDraft(draft, opened.channel)
+          : ensureDocumentDraft(draft, opened.channel)));
       }
-      await refreshDelivery();
+      await deliveryLoad;
       if (session.channel !== opened.channel) {
         throw new Error('The connection closed while loading server state. Drafts were kept.');
       }
@@ -119,8 +120,7 @@
       session.channel = await createDemoChannel();
       connection.connected = true;
       connection.error = '';
-      await loadWorkspace();
-      await refreshDelivery();
+      await Promise.all([loadWorkspace(), refreshDelivery()]);
       demo = true;
       hasWorkspace = true;
       phase = 'active';

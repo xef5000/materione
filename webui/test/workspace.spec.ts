@@ -39,6 +39,37 @@ describe('workspace context and draft safety', () => {
     expect(content.open).toEqual(resource);
   });
 
+  it('loads the workspace in two rounds on first connect and one once the pack is known', async () => {
+    let round = 0;
+    let flush: Promise<void> | null = null;
+    const seen: Array<[string, number]> = [];
+    const responses: Record<string, Record<string, unknown>> = {
+      'browse.packs': { packs: ['pack'] },
+      'authoring.summaries': { resources: [], total: 0 },
+      'authoring.describe': { types: [] },
+      'admin.diagnostics.recent': { diagnostics: [] },
+      'session.info': { serverVersion: '1.0' },
+    };
+    // Calls issued before the next macrotask share a round, like one batched relay post.
+    session.channel = { call: async (op) => {
+      seen.push([op, round]);
+      await (flush ??= new Promise((resolve) => setTimeout(() => { flush = null; round++; resolve(); }, 0)));
+      return { op, id: 'test', ok: true, data: responses[op] ?? {} };
+    } };
+    await loadWorkspace();
+    expect(workspace.activePack).toBe('pack');
+    expect(round).toBe(2);
+    expect(seen.filter(([, r]) => r === 0).map(([op]) => op).sort()).toEqual(
+      ['admin.diagnostics.recent', 'authoring.describe', 'browse.packs', 'session.info']);
+    expect(seen.find(([op]) => op === 'browse.resources')?.[1]).toBe(1);
+
+    seen.length = 0;
+    await loadWorkspace();
+    expect(round).toBe(3);
+    expect(new Set(seen.map(([, r]) => r))).toEqual(new Set([2]));
+    expect(seen.map(([op]) => op)).toContain('browse.resources');
+  });
+
   it('keeps the resource browser available when summary metadata fails', async () => {
     const resource = { pack: 'pack', path: 'items/item.yml', type: 'item', id: 'item' };
     workspace.activePack = 'pack';
