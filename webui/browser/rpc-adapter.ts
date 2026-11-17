@@ -1110,6 +1110,12 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const response = this.dispatch(op, payload);
     if (write) {
       write.outcome = response.ok ? 'saved' : response.error.code === 'MTR-0034' ? 'conflict' : 'rejected';
+      // Like the plugin's ReloadHook: every accepted write reloads and pushes, after the reply.
+      if (response.ok && !this.#disconnectAfterNextWrite) {
+        setTimeout(() => {
+          if (!this.#disconnected) this.emitReload({ files: 'files:1', accepted: true, noop: false });
+        }, 0);
+      }
       if (response.ok && this.#disconnectAfterNextWrite) {
         this.#disconnectAfterNextWrite = false;
         this.#disconnected = true;
