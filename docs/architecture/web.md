@@ -167,6 +167,13 @@ Channel rules:
   briefly disconnected editor resumes `after={cursor}` and continues the same session. A
   reader that falls behind the retention horizon gets a clean error and re-handshakes —
   never silent corruption.
+- **Batched, lossless posts**: each side keeps one POST in flight and sends everything queued
+  behind it as the next batch (≤ 32 frames), so a burst of RPCs costs a few requests rather
+  than one each. A frame leaves the sender's queue only once the relay accepted it: 429 and
+  503 — both answered before anything is written — are retried with back-off (the plugin also
+  retries the edge's 502); any other
+  rejection ends the session, since a dropped frame breaks the strict sequence anyway. RPCs
+  carry a client-side deadline (120 s) so a lost reply surfaces as an error, not a hang.
 - **Keepalive**: presence is the long-poll itself (reads, not writes); the plugin posts a
   channel heartbeat every ~2 min, and the editor's application-level `ping` rides frames
   sparsely. Channels whose both sides stop polling are swept (§3.4).

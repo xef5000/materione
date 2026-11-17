@@ -135,7 +135,9 @@ class RelaySessionTest {
                 .isTrue();
         SecretKey sessionKey = SessionCrypto.sessionKey(sharedSecret, transcriptHash);
 
-        // --- sealed RPC round trip through the mailbox
+        // --- sealed RPC round trip through the mailbox; the reply's first
+        // post is rate-limited, so it must survive a 429 (re-queued, not lost)
+        mailbox.rejectPluginPosts(1);
         FrameCodec browserSender = FrameCodec.sender();
         FrameCodec pluginFrames = FrameCodec.receiver();
         JsonObject ping = new JsonObject();
