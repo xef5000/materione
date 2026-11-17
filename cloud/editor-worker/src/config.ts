@@ -21,6 +21,8 @@ export interface Config {
   storeTtlClasses: number[];
   longPollMaxWaitSeconds: number;
   longPollIntervalMs: number;
+  longPollActiveIntervalMs: number;
+  longPollActiveWindowSeconds: number;
   seenWriteThrottleMs: number;
 }
 
@@ -42,6 +44,12 @@ const DEFAULTS: Config = {
   storeTtlClasses: [3600, 86400, 604800],
   longPollMaxWaitSeconds: 25,
   longPollIntervalMs: 1500,
+  // Re-check D1 faster while the channel is in use: a frame posted within
+  // the window means an RPC or its reply is likely in flight. Each post buys
+  // at most window/interval fast checks per reader, and posts are bounded by
+  // dailyNewRowWriteCap — so the extra reads are bounded too (web.md §3.3).
+  longPollActiveIntervalMs: 300,
+  longPollActiveWindowSeconds: 10,
   seenWriteThrottleMs: 60_000,
 };
 
@@ -74,6 +82,12 @@ export function configFrom(env: Record<string, unknown>): Config {
     storeTtlClasses: DEFAULTS.storeTtlClasses,
     longPollMaxWaitSeconds: num(env, "longPollMaxWaitSeconds", DEFAULTS.longPollMaxWaitSeconds),
     longPollIntervalMs: num(env, "longPollIntervalMs", DEFAULTS.longPollIntervalMs),
+    longPollActiveIntervalMs: num(env, "longPollActiveIntervalMs", DEFAULTS.longPollActiveIntervalMs),
+    longPollActiveWindowSeconds: num(
+      env,
+      "longPollActiveWindowSeconds",
+      DEFAULTS.longPollActiveWindowSeconds,
+    ),
     seenWriteThrottleMs: num(env, "seenWriteThrottleMs", DEFAULTS.seenWriteThrottleMs),
   };
 }

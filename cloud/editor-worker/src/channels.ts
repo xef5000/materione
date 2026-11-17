@@ -21,6 +21,7 @@ interface ChannelRow {
   closed: number;
   frames_bytes: number;
   expires_at: number;
+  last_frame_at: number;
 }
 
 type Role = "plugin" | "editor";
@@ -177,8 +178,8 @@ export async function postFrames(
   const seenColumn = auth.role === "plugin" ? "last_plugin_seen" : "last_editor_seen";
   const stmts: D1PreparedStatement[] = [
     env.DB.prepare(
-      `UPDATE channels SET ${seenColumn} = ?, frames_bytes = frames_bytes + ? WHERE id = ?`,
-    ).bind(now, total, channelId),
+      `UPDATE channels SET ${seenColumn} = ?, last_frame_at = ?, frames_bytes = frames_bytes + ? WHERE id = ?`,
+    ).bind(now, now, total, channelId),
   ];
   for (const body of bodies) {
     stmts.push(
@@ -264,7 +265,8 @@ export async function pollFrames(
         more: rows.length > eligible.length,
       });
     }
-    await scheduler.wait(config.longPollIntervalMs);
+    const active = nowSeconds() - channel.last_frame_at <= config.longPollActiveWindowSeconds;
+    await scheduler.wait(active ? config.longPollActiveIntervalMs : config.longPollIntervalMs);
   }
 }
 

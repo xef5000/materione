@@ -243,3 +243,34 @@ describe("D1 round trips (#423)", () => {
     expect(row?.b).toBe(sum?.s);
   });
 });
+
+describe("adaptive long-poll interval (#424)", () => {
+  async function pickUpLatency(targetEnv: Env): Promise<number> {
+    const waiting = poll(caps.editorToken, 0, 5, targetEnv);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const postedAt = Date.now();
+    await postFrames(caps.pluginToken, [sealedFrame(1)]);
+    const body = (await (await waiting).json()) as PollBody;
+    expect(body.frames.map((f) => f.frame.seq)).toEqual([1]);
+    return Date.now() - postedAt;
+  }
+
+  it("re-checks fast while the channel saw a frame recently", async () => {
+    await postFrames(caps.editorToken, [sealedFrame(0)]); // channel in use
+    const slow = { ...env, longPollIntervalMs: "2000" } as unknown as Env;
+    expect(await pickUpLatency(slow)).toBeLessThan(1000);
+  });
+
+  it("falls back to the idle interval when the channel is quiet", async () => {
+    const slow = {
+      ...env,
+      longPollIntervalMs: "2000",
+      longPollActiveWindowSeconds: "1",
+    } as unknown as Env;
+    await env.DB.prepare("UPDATE channels SET last_frame_at = 0 WHERE id = ?")
+      .bind(caps.channelId).run();
+    // The parked poll's first tick saw an idle channel, so it sleeps the idle
+    // interval before it can see the frame.
+    expect(await pickUpLatency(slow)).toBeGreaterThan(1500);
+  });
+});
