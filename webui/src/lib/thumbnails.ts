@@ -2,7 +2,9 @@ import { assetOps, unwrap } from './api';
 import type { RpcChannel } from './api';
 
 const MAX_CACHE_ENTRIES = 64;
-const MAX_CONCURRENT_READS = 4;
+// Reads issued together share one transport round (the relay batches a
+// burst into one post), so a screen of previews costs ~1 round, not N/4.
+export const MAX_CONCURRENT_READS = 16;
 
 interface CacheEntry {
   key: string;

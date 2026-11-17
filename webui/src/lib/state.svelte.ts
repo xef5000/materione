@@ -304,10 +304,16 @@ export function handlePush(frame: PushFrame): void {
     const line = `Latest server-wide reload: ${outcome}; live items: ${String(payload.itemsLive ?? 'unknown')}; quarantined: ${String(payload.quarantined ?? 'unknown')}`;
     connection.lastReload = line;
     logActivity('reload', line);
-    void refreshDelivery();
-    invalidateThumbnails();
-    workspace.visualVersion++;
-    void refreshPack();
+    if (pushRefresh.fallback) clearTimeout(pushRefresh.fallback);
+    pushRefresh.fallback = null;
+    // A document save reloads just that file set ("files:N"); asset writes,
+    // folder moves and manual reloads are pack-wide. Only the latter can
+    // change image bytes, so only they re-read every visible thumbnail.
+    if (!String(payload.files ?? '').startsWith('files:')) {
+      invalidateThumbnails();
+      workspace.visualVersion++;
+    }
+    scheduleRefresh({ pack: true, delivery: true });
   } else if (frame.op === 'push.diagnostic') {
     if (typeof payload.code === 'string' && typeof payload.severity === 'string' &&
         typeof payload.message === 'string') {
@@ -327,14 +333,102 @@ export function handlePush(frame: PushFrame): void {
     };
     const effect = documentChangedEffect(change, workspace.activePack,
       draftStore.documents.map((draft) => `${draft.pack}/${draft.path}`));
-    invalidateThumbnails();
-    workspace.visualVersion++;
-    // A different pack's asset can be referenced by the active pack.
-    if (workspace.activePack) void refreshPack();
+    // The watcher reports documents only (never assets), so thumbnails stay.
+    // A different pack's document can be referenced by the active pack.
+    if (workspace.activePack) scheduleRefresh({ pack: true });
     for (const _key of effect.staleKeys) markDocStale(change.pack, change.path);
     logActivity('info', effect.log);
   }
   bus.push.emit(frame);
+}
+
+/** Quiet period that lets one burst of pushes (a git pull, a reload) share one refresh. */
+export const PUSH_REFRESH_DELAY_MS = 150;
+/** How long a write waits for its reload push before refreshing on its own. */
+export const RELOAD_PUSH_FALLBACK_MS = 10_000;
+
+const pushRefresh = {
+  pack: false,
+  delivery: false,
+  timer: null as ReturnType<typeof setTimeout> | null,
+  fallback: null as ReturnType<typeof setTimeout> | null,
+  running: false,
+};
+
+/**
+ * Every write reloads on the server, and the reload's push refreshes the
+ * catalog — so a write does not refresh on its own as well. Only an accepted
+ * no-op reload announces nothing; the fallback covers that case.
+ */
+export function expectReloadRefresh(): void {
+  if (pushRefresh.fallback) clearTimeout(pushRefresh.fallback);
+  pushRefresh.fallback = setTimeout(() => {
+    pushRefresh.fallback = null;
+    scheduleRefresh({ pack: true, delivery: true });
+  }, RELOAD_PUSH_FALLBACK_MS);
+}
+
+/**
+ * Pushes ask for refreshes; this answers each burst with at most one
+ * `refreshPack` and one `refreshDelivery`. A request that lands while one is
+ * running is folded into a single trailing refresh, never a parallel one.
+ */
+function scheduleRefresh(what: { pack?: boolean; delivery?: boolean }): void {
+  pushRefresh.pack ||= what.pack === true;
+  pushRefresh.delivery ||= what.delivery === true;
+  if (pushRefresh.timer || pushRefresh.running) return;
+  pushRefresh.timer = setTimeout(() => void runScheduledRefresh(), PUSH_REFRESH_DELAY_MS);
+}
+
+async function runScheduledRefresh(): Promise<void> {
+  pushRefresh.timer = null;
+  const { pack, delivery } = pushRefresh;
+  pushRefresh.pack = false;
+  pushRefresh.delivery = false;
+  pushRefresh.running = true;
+  try {
+    await Promise.all([pack ? refreshPack() : undefined, delivery ? refreshDelivery() : undefined]);
+  } finally {
+    pushRefresh.running = false;
+    if (pushRefresh.pack || pushRefresh.delivery) scheduleRefresh({});
+  }
+}
+
+function cancelScheduledRefresh(): void {
+  if (pushRefresh.timer) clearTimeout(pushRefresh.timer);
+  if (pushRefresh.fallback) clearTimeout(pushRefresh.fallback);
+  pushRefresh.timer = null;
+  pushRefresh.fallback = null;
+  pushRefresh.pack = false;
+  pushRefresh.delivery = false;
+}
+
+function sortedInsert<T>(list: T[], value: T, key: (entry: T) => string): T[] {
+  return [...list.filter((entry) => key(entry) !== key(value)), value]
+    .sort((a, b) => key(a).localeCompare(key(b)));
+}
+
+/**
+ * A create's reply already names the new resource: list it now instead of
+ * spending a catalog round. The reload push the write causes brings the
+ * server's full view (health, visuals) through the scheduled refresh.
+ */
+export function noteCreatedResource(resource: ResourceRef, name: string): void {
+  if (resource.pack !== workspace.activePack) return;
+  workspace.resources = sortedInsert(workspace.resources, resource,
+    (entry) => `${entry.path}\u0000${entry.id}`);
+  workspace.summaries = [
+    ...workspace.summaries.filter((entry) => entry.path !== resource.path || entry.id !== resource.id),
+    { ...resource, name, health: 'unknown' },
+  ];
+  expectReloadRefresh();
+  const segments = resource.path.split('/').slice(0, -1);
+  let folders = workspace.folders;
+  for (let depth = 1; depth <= segments.length; depth++) {
+    const folder = segments.slice(0, depth).join('/');
+    if (!folders.includes(folder)) folders = sortedInsert(folders, folder, (entry) => entry);
+  }
+  workspace.folders = folders;
 }
 
 let activitySeq = 0;
@@ -610,6 +704,7 @@ export function activeTab(): Tab | undefined {
 /** Clears every store — used when the channel closes or the user disconnects. */
 export function resetWorkspace(): void {
   packRefresh++;
+  cancelScheduledRefresh();
   resetThumbnailCache();
   workspace.packs = [];
   workspace.activePack = null;

@@ -51,6 +51,7 @@
     errorMessage,
     loadWorkspace,
     logActivity,
+    noteCreatedResource,
     openStudio,
     refreshPack,
     requireSavedDocument,
@@ -304,11 +305,13 @@
         await loadWorkspace();
         await selectPack(pack);
       }
-      await refreshPack();
+      const resource = { pack, type: content.type, path: String(created.path), id };
+      // The reply names the new entry; the write's reload push refreshes the catalog.
+      noteCreatedResource(resource, name);
       logActivity('save', start.kind === 'template'
         ? `created ${pack}:${id} from template ${start.template.id}`
         : `created ${pack}:${id}; preview is building`);
-      openStudio({ pack, type: content.type, path: String(created.path), id });
+      openStudio(resource);
     });
   }
 
@@ -373,10 +376,9 @@
         void run('duplicate', async () => {
           const id = idFromName(value);
           if (!id) throw new Error('use at least one letter or number');
-          unwrap(await ops.duplicateResource(
-            session.channel!, workspace.activePack!, entry.path, id, folder,
-          ));
-          await refreshPack();
+          const pack = workspace.activePack!;
+          const copied = unwrap(await ops.duplicateResource(session.channel!, pack, entry.path, id, folder));
+          noteCreatedResource({ pack, type: refOf(entry).type, path: String(copied.path), id }, entry.name);
         });
       },
     };

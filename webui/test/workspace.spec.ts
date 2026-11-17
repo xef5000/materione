@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  connection, content, handlePush, hasUnsavedChanges, loadWorkspace, markConnectionLost,
-  openDoc, openStudio, registerEditorGuard, requireSavedDocument,
+  connection, content, expectReloadRefresh, handlePush, hasUnsavedChanges, loadWorkspace, markConnectionLost,
+  noteCreatedResource, openDoc, openStudio, PUSH_REFRESH_DELAY_MS, registerEditorGuard, RELOAD_PUSH_FALLBACK_MS,
+  requireSavedDocument,
   refreshPack, resetWorkspace, revealInAdvanced, session, ui, workspace,
 } from '../src/lib/state.svelte';
 import { getDocumentDraft, setDraftField } from '../src/lib/drafts.svelte';
@@ -173,5 +174,73 @@ describe('workspace context and draft safety', () => {
     expect(connection.lastReload).toContain('server-wide');
     expect(connection.lastReload).toContain('quarantined: 1');
     expect(draft.edits).toHaveLength(1);
+  });
+
+  it('answers a burst of pushes with one catalog and one delivery refresh', async () => {
+    vi.useFakeTimers();
+    try {
+      workspace.activePack = 'pack';
+      const calls: string[] = [];
+      session.channel = { call: async (op) => {
+        calls.push(op);
+        return { op, id: 'test', ok: true, data: op === 'authoring.summaries' ? { resources: [] } : {} };
+      } };
+      const version = workspace.visualVersion;
+      handlePush({ op: 'push.reload', payload: { files: 'files:1', accepted: true, noop: false } });
+      handlePush({ op: 'push.document.changed', payload: { pack: 'pack', path: 'items/a.yml', deleted: false } });
+      handlePush({ op: 'push.reload', payload: { files: 'files:1', accepted: true, noop: false } });
+      expect(calls).toEqual([]);
+      await vi.advanceTimersByTimeAsync(PUSH_REFRESH_DELAY_MS);
+      expect(calls.filter((op) => op === 'browse.resources')).toHaveLength(1);
+      expect(calls.filter((op) => op === 'delivery.status')).toHaveLength(1);
+      // document saves and watcher changes never touch image bytes
+      expect(workspace.visualVersion).toBe(version);
+
+      calls.length = 0;
+      handlePush({ op: 'push.reload', payload: { files: 'one-pack:pack', accepted: true, noop: false } });
+      expect(workspace.visualVersion).toBe(version + 1);
+      await vi.advanceTimersByTimeAsync(PUSH_REFRESH_DELAY_MS);
+      expect(calls.filter((op) => op === 'browse.resources')).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets a write rely on its reload push, refreshing alone only when none arrives', async () => {
+    vi.useFakeTimers();
+    try {
+      workspace.activePack = 'pack';
+      const calls: string[] = [];
+      session.channel = { call: async (op) => {
+        calls.push(op);
+        return { op, id: 'test', ok: true, data: op === 'authoring.summaries' ? { resources: [] } : {} };
+      } };
+      expectReloadRefresh();
+      handlePush({ op: 'push.reload', payload: { files: 'files:1', accepted: true, noop: false } });
+      await vi.advanceTimersByTimeAsync(RELOAD_PUSH_FALLBACK_MS + PUSH_REFRESH_DELAY_MS);
+      expect(calls.filter((op) => op === 'browse.resources')).toHaveLength(1);
+
+      calls.length = 0;
+      expectReloadRefresh(); // an accepted no-op reload pushes nothing
+      await vi.advanceTimersByTimeAsync(RELOAD_PUSH_FALLBACK_MS - 1);
+      expect(calls).toEqual([]);
+      await vi.advanceTimersByTimeAsync(PUSH_REFRESH_DELAY_MS + 1);
+      expect(calls.filter((op) => op === 'browse.resources')).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lists a created resource from the reply without a catalog round', () => {
+    workspace.activePack = 'pack';
+    workspace.folders = ['items'];
+    workspace.resources = [{ pack: 'pack', type: 'items', path: 'items/z.yml', id: 'z' }];
+    const created = { pack: 'pack', type: 'items', path: 'items/gems/ruby.yml', id: 'ruby' };
+    noteCreatedResource(created, 'Ruby');
+    expect(workspace.resources.map((entry) => entry.id)).toEqual(['ruby', 'z']);
+    expect(workspace.summaries).toEqual([{ ...created, name: 'Ruby', health: 'unknown' }]);
+    expect(workspace.folders).toEqual(['items', 'items/gems']);
+    noteCreatedResource({ ...created, pack: 'other' }, 'Elsewhere');
+    expect(workspace.resources).toHaveLength(2);
   });
 });
