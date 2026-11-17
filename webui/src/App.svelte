@@ -7,7 +7,15 @@
   import type { ChannelState, EditorChannel } from './lib/protocol/session';
   import { encodeBase64Url } from './lib/protocol/wire';
   import { detectHost, startIntent, type EditorHost } from './lib/host';
-  import { draftStore, ensureDocumentDraft, reconcileDocumentDraft } from './lib/drafts.svelte';
+  import {
+    draftStore,
+    ensureDocumentDraft,
+    persistableDrafts,
+    reconcileDocumentDraft,
+    restoreDocumentDraft,
+    type DocumentDraft,
+  } from './lib/drafts.svelte';
+  import { draftPersister, indexedDbDraftStorage, readKeptDrafts, type DraftPersister } from './lib/draft-persistence';
   import {
     confirmDisconnect,
     connection,
@@ -34,6 +42,9 @@
   let demoStarting = $state(false);
   let demoError = $state('');
   let serverIdentity = '';
+  // Unsaved drafts survive a reload in IndexedDB, per server (web.md §4 "Local drafts").
+  const draftStorage = indexedDbDraftStorage();
+  let persister = $state<DraftPersister | null>(null);
   let browserLabel = navigator.userAgent.replace(/^.*\)\s*/, '').slice(0, 40) || 'browser';
   // `?mode=relay|direct` is read once, up front: the capability URL is scrubbed
   // from the address bar before connect() runs, which would otherwise drop it.
@@ -85,10 +96,22 @@
       // Delivery status is independent of the workspace: same round trip.
       const deliveryLoad = refreshDelivery();
       await loadWorkspace();
-      if (hasWorkspace) {
+      // First connect to this server: bring back what this browser kept, then
+      // reconcile it like any reconnect so a changed base is flagged, not applied.
+      const restored: DocumentDraft[] = [];
+      if (!hasWorkspace) {
+        for (const kept of await readKeptDrafts(draftStorage, identity)) {
+          const draft = restoreDocumentDraft(kept);
+          if (draft) restored.push(draft);
+        }
+      }
+      if (hasWorkspace || restored.length) {
         await Promise.all(draftStore.documents.map((draft) => draft.loaded
           ? reconcileDocumentDraft(draft, opened.channel)
           : ensureDocumentDraft(draft, opened.channel)));
+      }
+      for (const draft of restored) {
+        if (!draft.error) draft.notice = 'Restored unsaved changes kept by this browser. They are not applied until you Save & apply.';
       }
       await deliveryLoad;
       if (session.channel !== opened.channel) {
@@ -96,6 +119,9 @@
       }
       connection.connected = true;
       hasWorkspace = true;
+      // only now: a failed first connect resets the workspace, and an empty
+      // snapshot must not overwrite what this browser kept
+      if (draftStorage && !persister) persister = draftPersister(draftStorage, identity);
       reconnecting = false;
       phase = 'active';
     } catch (e) {
@@ -139,6 +165,9 @@
     channel = null;
     closing?.close();
     resetWorkspace();
+    // the user confirmed discarding: kept drafts go too
+    void persister?.clear();
+    persister = null;
     serverIdentity = '';
     hasWorkspace = false;
     reconnecting = false;
@@ -150,10 +179,18 @@
   }
 
   function warnBeforeUnload(event: BeforeUnloadEvent) {
+    void persister?.flush();
     if (!hasUnsavedChanges()) return;
     event.preventDefault();
     event.returnValue = '';
   }
+
+  // Every draft change (field, YAML, save, discard) re-snapshots the dirty
+  // drafts; the persister coalesces them into one IndexedDB write per pause.
+  $effect(() => {
+    const drafts = persistableDrafts();
+    persister?.save(drafts);
+  });
 
   // A capability URL connects at once, whatever the host; otherwise ask which
   // host served the page before choosing between the landing card and Login.
@@ -177,7 +214,7 @@
 
 </script>
 
-<svelte:window onbeforeunload={warnBeforeUnload} />
+<svelte:window onbeforeunload={warnBeforeUnload} onpagehide={() => void persister?.flush()} />
 
 <main>
   {#if demo}

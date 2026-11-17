@@ -217,7 +217,12 @@ export class DemoServer implements RpcChannel {
     const path = text(p.path);
     this.#checkRev(this.#document(pack, path), p.rev);
     const document = await this.#store(pack, path, text(p.content), op);
-    return { rev: document.rev, ...(op === 'authoring.commit' ? { raw: document.raw } : {}), parsed: structuredClone(document.parsed) };
+    return {
+      rev: document.rev,
+      ...(op === 'authoring.commit' ? { raw: document.raw } : {}),
+      parsed: structuredClone(document.parsed),
+      computed: structuredClone(document.computed ?? {}),
+    };
   }
 
   async #setFields(p: Record<string, unknown>): Promise<unknown> {
@@ -251,7 +256,12 @@ export class DemoServer implements RpcChannel {
     }
     const document = await this.#store(pack, path, yaml.toString(), 'authoring.setFields');
     assets.forEach((asset, index) => this.#assetPut(pack, assetPaths[index]!, text(asset.data)));
-    return { rev: document.rev, raw: document.raw, parsed: structuredClone(document.parsed) };
+    return {
+      rev: document.rev,
+      raw: document.raw,
+      parsed: structuredClone(document.parsed),
+      computed: structuredClone(document.computed ?? {}),
+    };
   }
 
   #references(p: Record<string, unknown>): unknown {

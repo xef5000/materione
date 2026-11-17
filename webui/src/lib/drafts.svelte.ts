@@ -262,7 +262,11 @@ export async function saveDocumentDraft(draft: DocumentDraft, channel: RpcChanne
     draft.base = clone(draft.values);
     draft.uncertain = false;
     draft.notice = 'Saved to server files; reload requested. Runtime status is reported separately.';
-    const fresh = unwrap(await ops.get(channel, draft.pack, draft.path));
+    // A server that returns the full view (computed included) saves in one round trip;
+    // an older one is read back.
+    const fresh = result.computed !== undefined
+      ? { ...result, raw: result.raw ?? submittedRaw }
+      : unwrap(await ops.get(channel, draft.pack, draft.path));
     snapshot(draft, fresh);
     return true;
   } catch (error) {
@@ -353,4 +357,69 @@ export function resetDrafts(): void {
   draftStore.documents = [];
   loads.clear();
   retained.clear();
+}
+
+/**
+ * An unsaved draft as this browser keeps it across a reload or a dropped
+ * connection (web.md §4 "Local drafts"). It is a buffer, never content: it
+ * names the revision it was edited against, and it reaches the server only
+ * through the same revision-checked save as a live draft.
+ */
+export interface PersistedDraft {
+  pack: string;
+  path: string;
+  rev: number;
+  raw: string;
+  savedRaw: string;
+  base: Record<string, unknown>;
+  computed: Record<string, unknown>;
+  edits: FieldEdit[];
+}
+
+/** The drafts worth keeping: loaded, with field or YAML edits not yet confirmed by the server. */
+export function persistableDrafts(): PersistedDraft[] {
+  return draftStore.documents
+    .filter((draft) => draft.loaded && draftDirty(draft))
+    .map((draft) => clone({
+      pack: draft.pack,
+      path: draft.path,
+      rev: draft.rev,
+      raw: draft.raw,
+      savedRaw: draft.savedRaw,
+      base: draft.base,
+      computed: draft.computed,
+      edits: draft.edits,
+    }));
+}
+
+/**
+ * Puts a kept draft back in the store, at its own base revision. A draft
+ * already open in this tab wins; the draft limit is respected. The caller
+ * reconciles it against the server before anything can be applied, so a draft
+ * whose base changed underneath is flagged, never silently written.
+ */
+export function restoreDocumentDraft(kept: PersistedDraft): DocumentDraft | null {
+  if (draftStore.documents.some((draft) => draft.pack === kept.pack && draft.path === kept.path)) return null;
+  let draft: DocumentDraft;
+  try {
+    draft = getDocumentDraft(kept.pack, kept.path);
+  } catch {
+    return null;
+  }
+  draft.rev = kept.rev;
+  draft.savedRaw = kept.savedRaw;
+  draft.raw = kept.raw;
+  draft.base = clone(record(kept.base));
+  draft.computed = clone(record(kept.computed));
+  draft.values = clone(draft.base);
+  draft.edits = [];
+  draft.loaded = true;
+  if (!rawDraftDirty(draft)) {
+    for (const edit of kept.edits ?? []) {
+      if (!Array.isArray(edit.field) || !edit.field.length) continue;
+      if (edit.remove) removeDraftField(draft, edit.field);
+      else if (edit.value !== undefined) setDraftField(draft, edit.field, edit.value);
+    }
+  }
+  return draft;
 }

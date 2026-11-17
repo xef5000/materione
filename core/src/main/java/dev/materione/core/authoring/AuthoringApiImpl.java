@@ -507,9 +507,9 @@ public final class AuthoringApiImpl implements AuthoringApi {
                     request.content(), actorId(actor));
             audit.record(actorId(actor), operation, request.pack() + "/" + request.path());
             reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), request.path()));
-            return ApiResult.ok(new DocumentView(
-                    request.pack(), request.path(), request.content(), parsed(request.content()),
-                    revision, Documents.sha256(request.content()), Map.of()));
+            return ApiResult.ok(view(new DocumentStore.Document(
+                    request.pack(), request.path(), request.content(),
+                    revision, Documents.sha256(request.content()))));
         } catch (DocumentConflictException e) {
             if (auditConflicts) {
                 audit.record(actorId(actor), operation + ".conflict",
