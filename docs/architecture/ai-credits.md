@@ -5,8 +5,8 @@
 > to `ai.materione.com`, OAuth providers, or Polar. Companion to [`codemode.md`](codemode.md) §12.1 and
 > [`web.md`](web.md).
 >
-> **Status.** **Design, decided by the owner (2026-11-15, #386).** Implementation follows in `cloud/model-proxy/` and `webui/`.
-> Still open from §12.1: which model(s) and routing rule (#385).
+> **Status.** **Design, decided by the owner (2026-11-15, #386).** Implemented in `cloud/model-proxy/` and `webui/`.
+> The initial model and routing choice is GPT-6 Luna Medium with index context and no escalation (#385).
 >
 > **Traceability.**
 >
@@ -45,7 +45,7 @@ Total Cloudflare AI Gateway Wholesale Spend
 
 Four independent layers enforce this invariant simultaneously:
 
-1. **Pre-call mathematical worst-case reservation in D1** — before any upstream fetch, a single atomic SQLite statement reserves the mathematical worst-case picodollar cost (bounded `80,000` input tokens × `max(input, cache_write)` + `4,000` output tokens × `output`).
+1. **Pre-call mathematical worst-case reservation in D1** — before any upstream fetch, a single atomic SQLite statement reserves the mathematical worst-case picodollar cost (bounded `80,000` input tokens × `max(input, cache_write)` + `12,288` output tokens × `output`). The submitted byte bound usually makes the input reserve smaller; missing or interrupted usage keeps the full reservation.
 2. **Dual-gated daily free allowance** — `$0.05/day` per verified `account_id` **and** `$0.05/day` per canonical IP/subnet, inside a `$1.00/day` global free pool (`<= $31.50/mo` worst-case including Cloudflare's 5% Unified Billing fee).
 3. **Prepaid credit balance funded strictly from Polar `net_amount`** — `$1.00` net collected grants `100 credits = $0.75` wholesale AI budget (`750_000_000_000` picodollars), leaving positive safety margin even after worst-case Polar MoR international + 25% VAT fees, Stripe Connect CAD payout fees, and Cloudflare's 5% Unified Billing fee (§5).
 4. **Cloudflare AI Gateway hard Spend Limit + Auto Top-Up OFF** — the gateway blocks inference below loaded prepaid Unified Billing credits; hitting it degrades `POST /v1/chat` to `503 unavailable` while leaving the editor, relay, and server plugin unaffected.
@@ -558,8 +558,10 @@ Because Cloudflare charges a **5% fee** when loading Unified Billing credits, `$
 **How model price differences appear to the user:**
 
 - D1 debits `credit_balance_picos` at the exact wholesale picodollar rate of whichever model served the turn (`models.ts`), and the UI displays `credits = picos / 7_500_000_000`.
-- On a cheap model (`claude-haiku-5-5`, ~$0.001–$0.003 wholesale/turn), a turn naturally consumes **~0.15–0.40 credits** (~2,500–6,000 turns per `$10` purchase).
-- If #385 later enables escalation to a mid-tier model, that turn automatically debits its exact wholesale picodollar price (`~4–10×` more credits per turn) with zero schema or ledger changes.
+- The initial model is GPT-6 Luna Medium; costs vary with uncached, cached and output tokens. The owner-budgeted
+  benchmark measured $0.0051 per strictly accepted task for index context, not a guaranteed per-turn or production price
+  ([benchmark](agent-benchmark.md#71-owner-budgeted-model-measurements-385)).
+- Escalation is not enabled. Any future model change needs its own price-tier, spend and benchmark review.
 
 ---
 

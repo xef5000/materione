@@ -16,6 +16,7 @@ export type AllowedContentBlock =
 export interface NormalizedMessage {
   role: "user" | "assistant";
   content: string | AllowedContentBlock[];
+  continuation?: Record<string, unknown>[];
 }
 
 export interface ValidatedChatRequest {
@@ -36,11 +37,15 @@ export type ValidationResult = { ok: true; value: ValidatedChatRequest } | Valid
 
 const TOP_LEVEL_KEYS = new Set(["system", "messages", "tools"]);
 const TOOL_KEYS = new Set(["name", "description", "input_schema", "inputSchema"]);
-const MESSAGE_KEYS = new Set(["role", "content"]);
+const MESSAGE_KEYS = new Set(["role", "content", "continuation"]);
 const TEXT_BLOCK_KEYS = new Set(["type", "text"]);
 const TOOL_USE_KEYS = new Set(["type", "id", "name", "input"]);
 const TOOL_RESULT_KEYS = new Set(["type", "tool_use_id", "content", "is_error"]);
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const REASONING_ITEM_KEYS = new Set(["type", "id", "summary", "encrypted_content", "status", "content"]);
+const MESSAGE_ITEM_KEYS = new Set(["type", "id", "role", "content", "status", "phase"]);
+const OUTPUT_TEXT_KEYS = new Set(["type", "text", "annotations", "logprobs"]);
+const FUNCTION_ITEM_KEYS = new Set(["type", "id", "call_id", "name", "arguments", "status"]);
 
 const textEncoder = new TextEncoder();
 
@@ -54,6 +59,10 @@ function isSafePlainObject(value: unknown): value is Record<string, unknown> {
     }
   }
   return true;
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: Set<string>): boolean {
+  return Object.keys(value).every((key) => allowed.has(key));
 }
 
 function fail(status: 400 | 413, error: string, message: string): ValidationError {
@@ -285,6 +294,32 @@ function validateContentBlock(
   return fail(400, "invalid_request", "Disallowed content block type.");
 }
 
+export function isValidContinuation(value: unknown): value is Record<string, unknown>[] {
+  if (!Array.isArray(value) || value.length > 128) return false;
+  for (const raw of value) {
+    if (!isSafePlainObject(raw)) return false;
+    if (raw.type === "reasoning") {
+      if (!hasOnlyKeys(raw, REASONING_ITEM_KEYS) || typeof raw.id !== "string" ||
+          typeof raw.encrypted_content !== "string" || !Array.isArray(raw.summary) ||
+          raw.summary.some((part: unknown) => !isSafePlainObject(part) || part.type !== "summary_text" ||
+            typeof part.text !== "string" || !hasOnlyKeys(part, TEXT_BLOCK_KEYS)) ||
+          (raw.content !== undefined && (!Array.isArray(raw.content) ||
+            raw.content.some((part: unknown) => !isSafePlainObject(part) || part.type !== "reasoning_text" ||
+              typeof part.text !== "string" || !hasOnlyKeys(part, TEXT_BLOCK_KEYS))))) return false;
+    } else if (raw.type === "message") {
+      if (!hasOnlyKeys(raw, MESSAGE_ITEM_KEYS) || raw.role !== "assistant" || !Array.isArray(raw.content) ||
+          raw.content.some((part: unknown) => !isSafePlainObject(part) || !hasOnlyKeys(part, OUTPUT_TEXT_KEYS) ||
+            part.type !== "output_text" || typeof part.text !== "string")) return false;
+    } else if (raw.type === "function_call") {
+      if (!hasOnlyKeys(raw, FUNCTION_ITEM_KEYS) || raw.name !== "run_program" ||
+          typeof raw.call_id !== "string" || typeof raw.arguments !== "string") return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
 function validateMessages(
   rawMessages: unknown,
 ): { ok: true; messages: NormalizedMessage[]; totalContentBlocks: number } | ValidationError {
@@ -311,11 +346,18 @@ function validateMessages(
       return fail(400, "invalid_request", "Message 'role' must be 'user' or 'assistant'.");
     }
     const role = item.role;
+    let continuation: Record<string, unknown>[] | undefined;
+    if ("continuation" in item) {
+      if (role !== "assistant" || !isValidContinuation(item.continuation)) {
+        return fail(400, "invalid_request", "Invalid assistant continuation.");
+      }
+      continuation = item.continuation;
+    }
     if (typeof item.content === "string") {
       if (item.content.length === 0) {
         return fail(400, "invalid_request", "Message 'content' string must not be empty.");
       }
-      normalized.push({ role, content: item.content });
+      normalized.push({ role, content: item.content, ...(continuation ? { continuation } : {}) });
       totalContentBlocks += 1;
       continue;
     }
@@ -326,13 +368,39 @@ function validateMessages(
         if (!res.ok) return res;
         blocks.push(res.block);
       }
-      normalized.push({ role, content: blocks });
+      normalized.push({ role, content: blocks, ...(continuation ? { continuation } : {}) });
       totalContentBlocks += blocks.length;
       continue;
     }
     return fail(400, "invalid_request", "Message 'content' must be a non-empty string or non-empty block array.");
   }
 
+  for (const message of normalized) {
+    if (!message.continuation) continue;
+    const blocks: AllowedContentBlock[] = typeof message.content === "string"
+      ? [{ type: "text", text: message.content }]
+      : message.content;
+    const expectedText = blocks.filter((block) => block.type === "text").map((block) => block.text).join("");
+    const expectedCalls = blocks.filter((block) => block.type === "tool_use");
+    let actualText = "";
+    const actualCalls: { id: string; input: unknown }[] = [];
+    for (const item of message.continuation) {
+      if (item.type === "message" && Array.isArray(item.content)) {
+        actualText += item.content.map((part: { text: string }) => part.text).join("");
+      } else if (item.type === "function_call") {
+        try {
+          actualCalls.push({ id: String(item.call_id), input: JSON.parse(String(item.arguments)) });
+        } catch {
+          return fail(400, "invalid_request", "Invalid continuation tool arguments.");
+        }
+      }
+    }
+    if (actualText !== expectedText || actualCalls.length !== expectedCalls.length ||
+        actualCalls.some((call, i) => call.id !== expectedCalls[i]?.id ||
+          JSON.stringify(call.input) !== JSON.stringify(expectedCalls[i]?.input))) {
+      return fail(400, "invalid_request", "Assistant continuation does not match the chat history.");
+    }
+  }
   return { ok: true, messages: normalized, totalContentBlocks };
 }
 
@@ -340,20 +408,48 @@ export function buildUpstreamPayload(
   model: ModelSpec,
   validated: Pick<ValidatedChatRequest, "sdkIndexSlice" | "messages">,
 ): Record<string, unknown> {
+  const input: unknown[] = [];
+  for (const message of validated.messages) {
+    if (message.role === "assistant" && message.continuation) {
+      input.push(...message.continuation);
+      continue;
+    }
+    if (typeof message.content === "string") {
+      input.push({ role: message.role, content: message.content });
+      continue;
+    }
+    for (const block of message.content) {
+      if (block.type === "text") {
+        input.push({ role: message.role, content: block.text });
+      } else if (block.type === "tool_use") {
+        input.push({
+          type: "function_call",
+          call_id: block.id,
+          name: block.name,
+          arguments: JSON.stringify(block.input),
+        });
+      } else {
+        input.push({ type: "function_call_output", call_id: block.tool_use_id, output: block.content });
+      }
+    }
+  }
   return {
-    model: model.id,
-    max_tokens: MAX_OUTPUT_TOKENS,
+    model: model.catalogId.replace(/^openai\//, ""),
+    max_output_tokens: MAX_OUTPUT_TOKENS,
     stream: true,
-    system: [
-      { type: "text", text: SERVER_SYSTEM_CHARTER },
-      {
-        type: "text",
-        text: `<untrusted_server_sdk_index>\n${validated.sdkIndexSlice}\n</untrusted_server_sdk_index>`,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    tools: [CANONICAL_RUN_PROGRAM_TOOL],
-    messages: validated.messages,
+    store: false,
+    reasoning: { effort: "medium" },
+    prompt_cache_options: { ttl: "30m" },
+    include: ["reasoning.encrypted_content"],
+    instructions: `${SERVER_SYSTEM_CHARTER}\n\n<untrusted_server_sdk_index>\n${validated.sdkIndexSlice}\n</untrusted_server_sdk_index>`,
+    tools: [{
+      type: "function",
+      name: CANONICAL_RUN_PROGRAM_TOOL.name,
+      description: CANONICAL_RUN_PROGRAM_TOOL.description,
+      parameters: CANONICAL_RUN_PROGRAM_TOOL.input_schema,
+      strict: true,
+    }],
+    input,
   };
 }
 

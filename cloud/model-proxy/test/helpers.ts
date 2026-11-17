@@ -1,6 +1,37 @@
 import { hashSessionToken, SESSION_COOKIE_NAME } from "../src/auth";
 import { nowSeconds } from "../src/http";
 
+export function responseEvent(type: string, value: Record<string, unknown> = {}): string {
+  return `event: ${type}\ndata: ${JSON.stringify({ type, ...value })}\n\n`;
+}
+
+export function completedResponseSse(options: {
+  input: number;
+  output: number;
+  cached?: number;
+  cacheWrite?: number;
+  text?: string;
+}): string {
+  const cached = options.cached ?? 0;
+  const written = options.cacheWrite ?? 0;
+  const output = options.text
+    ? [{ type: "message", role: "assistant", content: [{ type: "output_text", text: options.text }] }]
+    : [];
+  return (options.text ? responseEvent("response.output_text.delta", { delta: options.text }) : "") +
+    responseEvent("response.completed", { response: {
+      output,
+      usage: {
+        input_tokens: options.input + cached + written,
+        input_tokens_details: {
+          cached_tokens: cached,
+          cache_write_tokens: written,
+          cache_write_tokens_details: { ttl_30m_tokens: written, ttl_12h_tokens: 0 },
+        },
+        output_tokens: options.output,
+      },
+    } });
+}
+
 export async function clearAllTables(db: D1Database): Promise<void> {
   await db.batch([
     db.prepare("DELETE FROM reservations"),

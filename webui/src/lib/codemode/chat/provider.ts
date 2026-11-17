@@ -20,7 +20,7 @@ export interface ToolCall {
 
 export type ChatMessage =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; text: string; toolCalls: readonly ToolCall[] }
+  | { role: 'assistant'; text: string; toolCalls: readonly ToolCall[]; continuation?: unknown }
   /** The result of one tool call, as bounded text (JSON). */
   | { role: 'tool'; callId: string; name: string; content: string };
 
@@ -71,6 +71,7 @@ export interface ModelRefusal {
 export type ModelEvent =
   | { type: 'text'; delta: string }
   | { type: 'tool_call'; call: ToolCall }
+  | { type: 'continuation'; state: unknown }
   | { type: 'usage'; usage: ModelUsage }
   | { type: 'refusal'; refusal: ModelRefusal };
 

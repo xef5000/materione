@@ -2171,6 +2171,64 @@ export default [
   }),
 
   test({
+    id: 'editor.browser-codemode-luna-continuation',
+    title: 'the cloud assistant carries encrypted model reasoning across a tool turn without showing it in the conversation',
+    covers: PROXY_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const proxyOrigin = 'https://ai.materione.com';
+      await withReviewHarness(ctx, async (page) => {
+        const continuation = [
+          { type: 'reasoning', id: 'rs_test', summary: [], encrypted_content: 'encrypted-test-state' },
+          { type: 'function_call', id: 'fc_test', call_id: 'call_test', name: 'run_program', arguments: '{"text":"return 1;"}' },
+        ];
+        let chatCalls = 0;
+        let followupBody = null;
+        await page.route(`${proxyOrigin}/v1/**`, async (route) => {
+          const pathname = new URL(route.request().url()).pathname;
+          if (pathname === '/v1/me' || pathname === '/v1/allowance') {
+            await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+              authenticated: true,
+              account: { id: 'acc_1', displayName: 'Alex', emailHint: 'a***@example.com', suspended: false, freeEligible: true },
+              credits: { balancePicos: 7500000000000, balanceCredits: 1000, picosPerCredit: 7500000000 },
+              freeAllowance: { remainingPicos: 50000000000, dailyCapPicos: 50000000000, remainingCredits: 6.66, dailyCapCredits: 6.66, poolOpen: true },
+            }) });
+            return;
+          }
+          if (pathname === '/v1/chat') {
+            chatCalls++;
+            if (chatCalls > 1) followupBody = route.request().postDataJSON();
+            const sse = chatCalls === 1 ? [
+              'event: content_block_start\ndata: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"call_test","name":"run_program","input":{}}}\n\n',
+              'event: content_block_delta\ndata: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"text\\":\\"return 1;\\"}"}}\n\n',
+              'event: content_block_stop\ndata: {"type":"content_block_stop","index":1}\n\n',
+              `event: materione_continuation\ndata: ${JSON.stringify({ type: 'materione_continuation', output: continuation })}\n\n`,
+              'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+            ].join('') : [
+              'event: content_block_delta\ndata: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Done."}}\n\n',
+              'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+            ].join('');
+            await route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse });
+            return;
+          }
+          await route.abort();
+        });
+        await page.reload();
+        await page.waitForFunction(() => document.documentElement.dataset.fixtureReady === 'true');
+        await page.getByRole('button', { name: /^Assistant/ }).click();
+        const panel = page.getByRole('region', { name: 'Assistant', exact: true });
+        await panel.getByRole('region', { name: 'Materione AI account and credits' }).waitFor({ state: 'visible' });
+        await panel.locator('#assistant-input').fill('Read a value');
+        await panel.locator('#assistant-input').press('Enter');
+        await panel.getByRole('log', { name: 'Conversation' }).getByText('Done.', { exact: true }).waitFor({ state: 'visible' });
+        ctx.expect(chatCalls).toBe(2);
+        ctx.expect(followupBody.messages.find((message) => message.role === 'assistant').continuation).toEqual(continuation);
+        ctx.expect((await panel.innerText()).includes('encrypted-test-state')).toBe(false);
+      }, '?codemode=cloud-proxy&host=cloud');
+    },
+  }),
+
+  test({
     id: 'editor.browser-codemode-cloud-proxy',
     title: 'in the cloud browser harness the Assistant wires Google/Discord sign-in, live SSE streaming with allowance refresh, Polar $10-$200 top-up, and stays inert on local plugin host',
     covers: PROXY_COVERS,

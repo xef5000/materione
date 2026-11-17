@@ -91,6 +91,10 @@ It checks the file before approval, after a synthetic and a trusted click, durin
 revert preview, and after confirming the revert. This is not a deployed-cloud or
 live-model test.
 
+`editor.browser-codemode-luna-continuation` exercises the assistant UI and tool loop
+with a mocked cloud proxy: it checks encrypted continuation replay and that the
+opaque state is not displayed. It does not call the real proxy or a paid model.
+
 Failure diagnostics retain only state flags/counts and a bounded, redacted App text excerpt after the address is scrubbed. No browser trace or network dump is recorded.
 
 ## Commands

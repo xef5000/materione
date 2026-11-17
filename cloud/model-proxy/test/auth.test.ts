@@ -4,7 +4,7 @@ import { OAUTH_COOKIE_NAME, SESSION_COOKIE_NAME, computeScriptSha256Base64 } fro
 import { ALLOWED_ORIGIN, PICOS_PER_CREDIT } from "../src/config";
 import worker from "../src/index";
 import { SDK_INDEX_HEADER } from "../src/prompt";
-import { clearAllTables, createTestAccountSession } from "./helpers";
+import { clearAllTables, completedResponseSse, createTestAccountSession } from "./helpers";
 
 const DISCORD_EPOCH_MS = 1_420_070_400_000n;
 
@@ -362,11 +362,8 @@ describe("Google & Discord OAuth PKCE, sessions, account linking, and logout", (
           { status: 200 },
         );
       }
-      if (url.includes("anthropic/v1/messages")) {
-        const sse =
-          `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 50, output_tokens: 1 } } })}\n\n` +
-          `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 10 } })}\n\n` +
-          `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      if (url.includes("openai/responses")) {
+        const sse = completedResponseSse({ input: 50, output: 10 });
         return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
       }
       throw new Error(`Unexpected fetch: ${url}`);

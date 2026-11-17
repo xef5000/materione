@@ -42,12 +42,13 @@ import {
 } from "./ledger";
 import { computeWorstCaseReservationPicos, getDefaultModel } from "./models";
 import { handleCheckout, handleCheckoutComplete, handlePolarWebhook, handlePortal } from "./polar";
+import { adaptResponsesStream } from "./responses-stream";
 import { createSettlementStream } from "./sse";
 import { callUpstreamModel } from "./upstream";
 import { validateChatRequest } from "./validate";
 import type { AuthenticatedSession } from "./auth";
 
-const UPSTREAM_TIMEOUT_MS = 90_000;
+const UPSTREAM_TIMEOUT_MS = 240_000;
 
 async function maybeSendFloatAlert(env: Env): Promise<void> {
   const alertUrl = env.ALERT_WEBHOOK_URL?.trim();
@@ -246,7 +247,7 @@ async function handleChat(
   }
 
   const stream = createSettlementStream({
-    upstreamBody: upstreamResponse.body,
+    upstreamBody: adaptResponsesStream(upstreamResponse.body, validation.value.upperBoundInputTokens),
     db: env.DB,
     ctx,
     reservationId,

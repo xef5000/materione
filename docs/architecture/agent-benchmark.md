@@ -709,17 +709,35 @@ milestone **M6.5**.
 Track A1's three issues share no file and start together. Track B does not wait for track A: a primitive is a registry entry
 and is tested by the harness as today; it appears in the SDK by itself when the generator exists (D5).
 
+### 7.1 Owner-budgeted model measurements (#385)
+
+The owner ran these code-mode arms against the same commit (`9cb4496f`), with the real checker, sandbox and transaction oracle.
+The [published benchmark](https://materione.com/ai-benchmark/) and its linked reports contain the task-level results.
+
+| Model / context / route | Strict accepted | S18-adjusted | First turn | Average turns | Cost / strict accepted |
+|---|---:|---:|---:|---:|---:|
+| GPT-6 Luna Medium / index / always-cheap | 13/16 | 14/16 | 8/16 | 5.45 | $0.0051 |
+| Luna to Sol escalation / index | 12/16 | 14/16 | 6/16 | 5.69 | $0.0189 |
+| GPT-6 Luna Medium / full `.d.ts` / always-cheap | 14/16 | 16/16 | 10/16 | 4.17 | $0.0083 |
+
+The owner chose Luna Medium with the index and no escalation as the initial cost-effective configuration. Full declarations
+improved results and reduced turns but cost more per accepted task. Their S18-adjusted score reached the benchmark ceiling,
+so saturation may conceal additional quality differences. These are small, single-run measurements, not guarantees of
+production cost or quality. The Sol always-mid arm was deliberately not run; neither it nor a live production deployment is
+established by these results.
+
 ---
 
 ## 8. Not verified
 
-- **The live measured model run (#385, codemode.md §11).** All 29 benchmark tasks, 5 follow-ups, and 3 corpus-only programs are
+- **Broader model comparisons and deployed inference (#385, codemode.md §11).** All 29 benchmark tasks, 5 follow-ups, and 3 corpus-only programs are
   now machine-verified in CI: compiled by the real TypeScript checker (`codemode-compile.spec.ts`, `codemode-typecheck.spec.ts`),
   executed to staged operation lists (`codemode-core.spec.ts`), replayed against the real Java server (`CodemodeReplayTest`),
   and checked for tally consistency (`scripts/benchmark/corpus-report.mjs --check`). The offline-verified CLI harness
   (`npm --prefix webui run benchmark`, `scripts/benchmark/README.md`) with real JVM oracle (`:plugin:benchmarkOracle`),
   tool-per-operation baseline, context ablation (`index` vs `full-dts`), escalation routing, vague-request rubric (`V01`–`V12`),
-  and hard picodollar budget guard is ready for the owner's budgeted live AI Gateway run (#385, #349).
+  and hard picodollar budget guard supports owner-budgeted runs (#385, #349). The measured arms and their scope are in §7.1;
+  they do not prove the deployed editor and gateway configuration.
 - **Live runtime execution of all 16 passing tasks on Paper.** `CodemodeReplayTest` proves that every staged transaction
   validates and compiles cleanly through `authoring.transaction(dryRun=true)` (except T16 and T19 which hit S18 `MTR-0009` on the
   furniture scaffold's default texture); end-to-end in-game execution is covered by the harness and QA catalog.

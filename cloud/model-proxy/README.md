@@ -16,12 +16,13 @@ src/auth.ts       Google + Discord OAuth 2.0 PKCE, __Host- session cookie, /v1/m
 src/polar.ts      Polar checkout, Standard Webhooks HMAC-SHA256 (/v1/webhooks/polar), customer portal
 src/http.ts       strict Origin + Sec-Fetch-Site gate, credentialed CORS/JSON/HTML helpers, UTC day
 src/config.ts     request/token/checkout ceilings, picodollar & credit constants, clamped caps
-src/models.ts     model allowlist (claude-haiku-5-5), exact integer picodollar math
+src/models.ts     fixed gpt-6-luna-medium allowlist, exact integer picodollar math
 src/identity.ts   fail-closed config & RATE_LIMITER, IPv6 /64 canonicalization, daily-salted SHA-256
 src/prompt.ts     immutable server-owned system charter & canonical run_program tool definition
 src/validate.ts   streamed 512 KiB body, strict prompt/tool lock, 1-byte=1-token upper bound
 src/ledger.ts     single-statement two-bucket atomic D1 reserve/settle, allowance & cron sweep
 src/upstream.ts   AI Gateway fetch (cf-aig-authorization, ZDR/no-payload-logging, abort signal)
+src/responses-stream.ts   Responses-to-editor SSE adapter, bounded continuation and exact usage
 src/sse.ts        per-stream UTF-8 + CRLF SSE parser, interrupted-stream settlement, event emitter
 migrations/       0001_allowance.sql -> 0002_accounts_and_credits.sql (accounts, sessions, ledger, triggers)
 test/             vitest on the real Workers runtime (@cloudflare/vitest-plugin)
@@ -62,12 +63,14 @@ One-time setup on your Cloudflare, OAuth, and Polar accounts:
 
 1. **AI Gateway**: create a gateway in the Cloudflare dashboard (e.g. `materione-ai`):
    - **Unified Billing**: purchase prepaid credits with **Auto top-up: OFF**.
-   - **Require provider credentials: OFF** (Unified Billing + Zero Data Retention serves
-     Anthropic without storing a provider key).
+   - **Require provider credentials: OFF** (Unified Billing serves the configured model
+     without storing a provider key).
    - **Log payloads: OFF** in gateway settings (in addition to the Worker's
      `cf-aig-collect-log-payload: false` header).
    - **Gateway Spend Limit**: set a hard dollar budget below the prepaid credit balance.
    - **Gateway Rate Limit**: configure a gateway-level request ceiling as defense-in-depth.
+   - Confirm that `gpt-6-luna` and the OpenAI Responses endpoint are available through this
+     gateway's Unified Billing before the owner runs a live smoke test.
 2. **Gateway token**: create a scoped API token with `AI Gateway - Run` permission only
    (`CF_AIG_TOKEN`).
 3. **Google & Discord OAuth apps**:
@@ -102,6 +105,14 @@ One-time setup on your Cloudflare, OAuth, and Polar accounts:
 8. **Deploy**: `npx wrangler deploy`. The `routes` block in `wrangler.jsonc` attaches
    `ai.materione.com` on the `materione.com` zone.
 
+For the Luna rollout, deploy the compatible editor SPA **before** the model proxy; older
+editor tabs should reload before starting a new conversation. Once these changes are
+merged to `main`, the owner can dispatch the editor deployment with
+`gh workflow run deploy.yml --repo xef5000/materione --ref main`, wait for it to finish,
+then run `npx wrangler deploy` from `cloud/model-proxy/`. Verify a multi-turn tool call
+and credit settlement with an owner-controlled account. The benchmark used a live
+gateway, but does not prove that the deployed editor and proxy work together.
+
 ## D1 schema & cost model
 
 All monetary arithmetic uses exact integer **picodollars** (`1 USD = 1_000_000_000_000` picos;
@@ -119,6 +130,15 @@ All monetary arithmetic uses exact integer **picodollars** (`1 USD = 1_000_000_0
   Snowflake age `>= 7 days`) and draw any remainder from `accounts.credit_balance_picos`,
   settling free-first / paid-second. Negative balances or `suspended != 0` block inference
   with `403 account_suspended`.
+
+The fixed Luna Medium model uses index context, no escalation and a 12,288-token output
+ceiling. Configured per-million-token prices are `$0.10` input, `$0.01` cached input,
+`$0.125` cache write and `$0.50` output ([OpenAI pricing](https://developers.openai.com/api/docs/pricing)).
+The request fixes the cache lifetime at 30 minutes; the proxy checks reported read/write
+counts and the write-lifetime breakdown before settling. The absolute per-turn reservation
+bound is `$0.016144`; valid final usage settles the reservation, while missing or
+inconsistent usage keeps it in full. AI Gateway Unified Billing fees and the owner's
+configured gateway limits still apply; this change adds no Cloudflare service or paid plan.
 
 ## What the proxy sees vs never stores
 

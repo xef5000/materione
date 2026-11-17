@@ -5,7 +5,7 @@ import { cutoffUtcDay, nowSeconds, utcDay } from "../src/http";
 import { canonicalizeCallerNetwork, hashCallerIp } from "../src/identity";
 import worker from "../src/index";
 import { SDK_INDEX_HEADER } from "../src/prompt";
-import { clearAllTables, createTestAccountSession } from "./helpers";
+import { clearAllTables, completedResponseSse, createTestAccountSession } from "./helpers";
 
 describe("zero-content logging, daily-salted IP rotation, and cron sweep", () => {
   beforeEach(async () => {
@@ -38,11 +38,7 @@ describe("zero-content logging, daily-salted IP rotation, and cron sweep", () =>
     ];
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 50, output_tokens: 1 } } })}\n\n` +
-        `event: content_block_delta\ndata: ${JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text: deltaSentinel } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 12 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 50, output: 12, text: deltaSentinel });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
@@ -190,10 +186,7 @@ describe("zero-content logging, daily-salted IP rotation, and cron sweep", () =>
     };
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      const sse =
-        `event: message_start\ndata: ${JSON.stringify({ type: "message_start", message: { usage: { input_tokens: 100, output_tokens: 1 } } })}\n\n` +
-        `event: message_delta\ndata: ${JSON.stringify({ type: "message_delta", usage: { output_tokens: 10 } })}\n\n` +
-        `event: message_stop\ndata: ${JSON.stringify({ type: "message_stop" })}\n\n`;
+      const sse = completedResponseSse({ input: 100, output: 10 });
       return new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
