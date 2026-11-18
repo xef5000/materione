@@ -157,11 +157,14 @@ function fromProblem(found: Problem): ToolDiagnostic {
 }
 
 /** A JSON value as text of at most `max` characters; a larger one is replaced by a note and its head (never half a structure the model would parse). */
-function boundedValue(value: JsonValue | null, max: number): { value: JsonValue | null } | { valueCut: string; valueChars: number } {
+function boundedValue(value: JsonValue | null, max: number): { value: JsonValue | null } | { valueCut: string; valueChars: number; valueHint: string } {
   const text = JSON.stringify(value) ?? 'null';
   if (text.length <= max) return { value };
-  return { valueCut: text.slice(0, max), valueChars: text.length };
+  return { valueCut: text.slice(0, max), valueChars: text.length, valueHint: VALUE_HINT };
 }
+
+/** What a cut value tells the model, so it narrows the next read instead of asking for the same bundle again. */
+const VALUE_HINT = 'The value was too large and is cut. Return less: one or two entries per program, e.g. m.docs.describe("m.actions.setVar"), or only the fields you need: m.docs.type("item").fields.filter((f) => ["material", "display_name"].includes(f.id)).';
 
 function boundedLogs(logs: readonly string[]): { logs: string[]; logsCut?: true } {
   const kept: string[] = [];
@@ -204,7 +207,7 @@ function seal(body: Body): string {
   let text = JSON.stringify(body);
   if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
   const lean: Body = { ...body };
-  if (lean.result !== undefined) lean.result = { ...lean.result, logs: [], logsCut: true, value: undefined, valueCut: undefined, valueOmitted: true, operations: undefined };
+  if (lean.result !== undefined) lean.result = { ...lean.result, logs: [], logsCut: true, value: undefined, valueCut: undefined, valueHint: undefined, valueOmitted: true, operations: undefined };
   text = JSON.stringify(lean);
   if (text.length <= TOOL_RESULT_MAX_CHARS) return text;
   const least: Body = { status: body.status, note: body.note, diagnostics: body.diagnostics.slice(0, 5), diagnosticsOmitted: (body.diagnosticsOmitted ?? 0) + Math.max(body.diagnostics.length - 5, 0) };

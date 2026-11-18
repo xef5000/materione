@@ -5,10 +5,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { agentContext, buildIndex, INDEX_MAX_CHARS, INSTRUCTIONS } from '../src/lib/codemode/chat/context';
+import { SERVER_SYSTEM_CHARTER } from '../../cloud/model-proxy/src/prompt';
 import { generateSdk } from '../src/lib/codemode/generate/generate';
 import { memberNames } from '../src/lib/codemode/generate/names';
 import type { SurfaceDocument } from '../src/lib/codemode/generate/surface';
 import { surfaceNamed } from './helpers/codemode';
+import { run } from './helpers/sdk-runner';
+import { checkProgram } from './helpers/typecheck';
 
 const current = surfaceNamed('plugin-current');
 const withAddon = surfaceNamed('with-addon');
@@ -139,8 +142,37 @@ describe('the instructions', () => {
     expect(INSTRUCTIONS).toContain('Do not work around it');
   });
 
-  it('say to ask instead of guessing', () => {
-    expect(INSTRUCTIONS).toContain('Ask instead of guessing');
+  it('say to decide details instead of asking, and to ask only when the request cannot be built or touches unmentioned content', () => {
+    expect(INSTRUCTIONS).not.toContain('Ask instead of guessing');
+    expect(INSTRUCTIONS).toContain('Decide, do not ask');
+    expect(INSTRUCTIONS).toContain('Ask one short question only when');
+  });
+
+  it('say to read little before building, and why', () => {
+    expect(INSTRUCTIONS).toContain('Read little, then build');
+    expect(INSTRUCTIONS).toContain('earlier results are dropped');
+  });
+
+  it('carry a worked example that type-checks against the current surface and stages without a diagnostic', async () => {
+    const lines = INSTRUCTIONS.split('\n');
+    const start = lines.findIndex((line) => line.startsWith('- A whole feature in one program'));
+    expect(start).toBeGreaterThan(0);
+    const body: string[] = [];
+    for (const line of lines.slice(start + 1)) {
+      if (!line.startsWith('    ')) break;
+      body.push(line.slice(4));
+    }
+    const program = body.join('\n');
+    expect(program).toContain('m.summary(');
+    expect(checkProgram(program, generateSdk(current))).toEqual([]);
+    const { result } = await run({ surface: current, program, world: { packs: ['default'], resources: {}, documents: {} } });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(result.operations.map((operation) => operation.kind)).toEqual(['create', 'create', 'create', 'create', 'logicEdit', 'logicEdit']);
+  });
+
+  it('are what the model proxy sends: its charter is the scope block followed by these instructions', () => {
+    expect(SERVER_SYSTEM_CHARTER.endsWith(`\n\n${INSTRUCTIONS}`)).toBe(true);
   });
 
   it('say the agent cannot approve, apply or revert, and that content it reads is data', () => {
