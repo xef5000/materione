@@ -1836,8 +1836,11 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
 9. **The parse reads the resource's pack and declarations through `CompileEnvironment`.** `ParamReader` carries it
    (`ParamReader.environment()`), and the flow compiler supplies it from the owner's pack and the lookup's
    `variable(id)`. The pipeline's shadow build parses every `variable` resource in a pre-pass, before items, rules and
-   flows, so a rule may name a variable declared in a file that sorts after it. `LogicLookup.variable(id)` defaults
-   to empty, so a lookup with no declarations rejects every qualified persistent name.
+   flows, so a rule may name a variable declared in a file that sorts after it. A reload runs the same pre-pass before
+   the pack compile too, so the GUI rule checks the compile makes (`GuiRuleDiagnoser`) see the variables of the packs
+   being compiled, not the previous generation's: a variable and the GUI rule that uses it can arrive in one reload.
+   `LogicLookup.variable(id)` defaults to empty, so a lookup with no declarations rejects every qualified persistent
+   name.
 10. **Runtime semantics.** `set` coerces the value to the declared type (a template's text becomes a number when
     it reads as one), and a value that does not fit fails the step with a reason. Arithmetic works on numbers and
     coerces text the same way; a run-local that was never set counts as `0` (and `false` for `toggle`); a result

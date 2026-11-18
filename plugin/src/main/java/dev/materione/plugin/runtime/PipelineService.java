@@ -290,6 +290,9 @@ public final class PipelineService {
         }
 
         List<ContentPack> packs = runner.lastPacks();
+        // the pack compile checks GUI rules against these packs' variables, not the previous build's, so a variable
+        // and the rule that uses it can arrive in one reload (logic.md §3.2); buildShadow reports unparsable ones
+        declaredVariables = parseVariables(packs, dev.materione.core.pipeline.TemplatePools.of(packs), diagnostic -> { });
         PackCompiler.Outcome outcome = compiler.compile(
                 packs, contentTypes(), allocation, generatedDir, diagnostics, quarantine,
                 detectedPackFormat, detectedDataFormat);
@@ -450,7 +453,7 @@ public final class PipelineService {
         var templates = dev.materione.core.pipeline.TemplatePools.of(packs);
         // pre-pass: the declared variables first, so a set_var in any rule or flow compiles against
         // the whole shadow whatever order the resources iterate in (logic.md §3.2)
-        var declaredVariables = parseVariables(packs, templates);
+        var declaredVariables = parseVariables(packs, templates, diagnostics::publish);
         this.declaredVariables = declaredVariables;
         builder.view(RuntimeVariables.KEY, new RuntimeVariables(declaredVariables));
         // pre-pass: parse every item once — the block/furniture branches need
@@ -1055,10 +1058,11 @@ public final class PipelineService {
 
     /**
      * Parses every {@code variable} resource of the packs into its declaration. A definition that does
-     * not parse is skipped here and quarantined by the pipeline like any other resource.
+     * not parse is skipped here, reported to {@code problems}, and quarantined by the pipeline like any other resource.
      */
     private Map<NamespacedId, dev.materione.api.logic.variable.VariableDeclaration> parseVariables(
-            List<ContentPack> packs, Map<String, Map<String, Object>> templates) {
+            List<ContentPack> packs, Map<String, Map<String, Object>> templates,
+            java.util.function.Consumer<Diagnostic> problems) {
         var declared = new LinkedHashMap<NamespacedId, dev.materione.api.logic.variable.VariableDeclaration>();
         var variableType = contentTypes().stream().filter(t -> t.name().equals("variable")).findFirst();
         if (variableType.isEmpty()) {
@@ -1085,7 +1089,7 @@ public final class PipelineService {
                         declared.putIfAbsent(declaration.id(), declaration);
                     }
                 } catch (RuntimeException e) {
-                    diagnostics.publish(Diagnostic.error(
+                    problems.accept(Diagnostic.error(
                             DiagnosticCodes.PIPELINE_STAGE_FAILED,
                             "shadow build skipped " + resource.id() + ": " + e));
                 }
