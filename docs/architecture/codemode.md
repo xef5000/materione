@@ -287,6 +287,21 @@ program (`m.docs.type("item")`, `m.docs.search("bleed")`). A type error returns 
 the rest. The initial production choice is the benchmark's index context rather than the full declaration (§12.1); its size and
 the division between prompt and skills remain tuning questions.
 
+*As built (assistant context fix): the context budget.* The model proxy bounds a turn at 80,000 input tokens counted as one
+token per byte of the upstream body (§12.1), and that body carries the charter, the SDK index (up to 30 KB), every earlier
+program and result, and the encrypted reasoning replayed from each earlier turn. A history that only grew crossed the bound
+after five broad `m.docs` reads, and every later turn was refused (`413 too_large`). The loop (`chat/loop.ts`) now sends
+`fitContext(system, history)` (`chat/budget.ts`): the whole history when it fits `CONTEXT_BUDGET_BYTES = 62_000` (client-measured,
+headroom for the proxy's charter and framing) and `MAX_WIRE_MESSAGES = 60`, otherwise a view compacted oldest first: replayed
+reasoning, then earlier results (a stub that keeps the status and says to re-read narrowly), then earlier program text (only
+where no replayed reasoning repeats it, since the proxy checks the two match), then whole earlier requests. The latest turn
+and the current request's user message are never compacted, and the history the loop keeps is not changed. A cut read value
+carries `valueHint`, which says how to narrow the read. The instructions tell the agent to **decide** names, materials, contents and
+amounts rather than ask (asking only when the request cannot be built, or would change content the owner did not mention), to
+read little before building, and carry one worked example (a kits menu with a once-per-player and a daily claim) that a test
+type-checks and stages against the current surface. The proxy's charter is the client's instructions behind the scope block,
+also enforced by a test, so a change to the instructions takes effect only once the owner deploys `cloud/model-proxy`.
+
 ### 3.8 As built: the generator (#337)
 
 *As built (#337, M6.5 track A1).* The generator of §3.1 exists, with its recorded registries and goldens. It is the first piece of
@@ -1581,8 +1596,9 @@ and `webui/src/lib/codemode/proxy/`) is wired and verified with both the scripte
 - **Loop bounds**: `REPAIR_BUDGET = 3` consecutive failed programs per user request and `MAX_MODEL_TURNS = 12` model turns per request (`loop.ts`).
 - **Context assembly**: `agentContext` (`context.ts`) builds the system prompt and SDK index from the connected server's generated `m.sdk.d.ts`,
   so the model only sees the registries and primitives the server actually advertises.
-- **Bounded tool outputs & missing primitives**: `run_program` (`tool.ts`) caps serialized results and diagnostics at `TOOL_RESULT_MAX_CHARS = 24_000`
+- **Bounded tool outputs & missing primitives**: `run_program` (`tool.ts`) caps serialized results and diagnostics at `TOOL_RESULT_MAX_CHARS = 12_000`
   and surfaces structured `missingPrimitives` diagnostics when a program references a catalog member absent from the generated SDK.
+- **Context budget**: each turn sends `fitContext` of the history (`budget.ts`, §3.7), so a long request stays under the proxy's 80,000-byte input bound.
 - **Strict `https://editor.materione.com` proxy gate**: `webui/src/lib/codemode/proxy/` (kept outside `chat/` so `chat/` stays 100% network- and storage-free,
   enforced by `codemode-chat-bans.spec.ts`) connects the `ModelProvider` (`POST /v1/chat`, server-side Responses translation, SSE streaming, settlement refresh),
   Google/Discord popup OAuth (`GET /v1/me`, `GET /v1/allowance`, `POST /v1/auth/logout`), and Polar `$10–$200` top-up / invoice portal (`POST /v1/checkout`,

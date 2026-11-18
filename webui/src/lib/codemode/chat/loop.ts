@@ -6,6 +6,7 @@
  * proposal store, a grant or a gesture, so nothing a model says can approve, apply or revert (a ban test reads this file).
  */
 import { addUsage, RUN_PROGRAM, type ChatMessage, type ModelProvider, type ModelRefusal, type ModelUsage, type ToolCall } from './provider';
+import { fitContext } from './budget';
 import { RUN_PROGRAM_TOOL, type ToolOutcome } from './tool';
 
 /**
@@ -97,7 +98,8 @@ export async function runAgent(history: readonly ChatMessage[], deps: LoopDeps):
     let continuation: unknown;
     let refusal: ModelRefusal | undefined;
     try {
-      for await (const event of deps.provider.stream({ system: deps.system, messages, tools: [RUN_PROGRAM_TOOL], signal: deps.signal })) {
+      const view = fitContext(deps.system, messages);
+      for await (const event of deps.provider.stream({ system: deps.system, messages: view, tools: [RUN_PROGRAM_TOOL], signal: deps.signal })) {
         if (event.type === 'text') {
           text += event.delta;
           deps.onEvent?.({ type: 'text', delta: event.delta });

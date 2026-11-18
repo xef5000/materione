@@ -43,7 +43,7 @@ const imports = (text: string): string[] => [...text.matchAll(/from\s+'([^']+)'/
 describe('the assistant makes no network call and keeps nothing', () => {
   it('scans the chat directory', () => {
     expect(files.map((entry) => entry.name).sort()).toEqual(
-      ['ChatPanel.svelte', 'context.ts', 'disclosure.ts', 'loop.ts', 'provider.ts', 'scripted.ts', 'scripts/bloodfang.ts', 'state.svelte.ts', 'tool.ts'].sort(),
+      ['ChatPanel.svelte', 'budget.ts', 'context.ts', 'disclosure.ts', 'loop.ts', 'provider.ts', 'scripted.ts', 'scripts/bloodfang.ts', 'state.svelte.ts', 'tool.ts'].sort(),
     );
   });
 
@@ -74,7 +74,7 @@ describe('the assistant cannot approve, apply or revert', () => {
   });
 
   it('the loop, the provider, the context and the script import nothing of the host, the review session or the channel', () => {
-    for (const name of ['loop.ts', 'provider.ts', 'scripted.ts', 'context.ts', 'disclosure.ts', 'scripts/bloodfang.ts']) {
+    for (const name of ['loop.ts', 'budget.ts', 'provider.ts', 'scripted.ts', 'context.ts', 'disclosure.ts', 'scripts/bloodfang.ts']) {
       expect(imports(file(name)).filter((specifier) => /host|review|api|state/.test(specifier)), name).toEqual([]);
     }
   });
