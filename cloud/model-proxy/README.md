@@ -105,11 +105,19 @@ One-time setup on your Cloudflare, OAuth, and Polar accounts:
 8. **Deploy**: `npx wrangler deploy`. The `routes` block in `wrangler.jsonc` attaches
    `ai.materione.com` on the `materione.com` zone.
 
+After setup, routine deploys (code, prompt, migrations) can run from GitHub instead:
+`gh workflow run deploy-model-proxy.yml --repo xef5000/materione --ref main`
+(`.github/workflows/deploy-model-proxy.yml`, manual dispatch only). It type-checks and tests
+the worker, applies D1 migrations, then deploys, using the same `CLOUDFLARE_API_TOKEN` /
+`CLOUDFLARE_ACCOUNT_ID` repo secrets as `deploy.yml`. Secrets (step 7) and gateway settings
+(step 1) are never set by the workflow.
+
 For the Luna rollout, deploy the compatible editor SPA **before** the model proxy; older
 editor tabs should reload before starting a new conversation. Once these changes are
 merged to `main`, the owner can dispatch the editor deployment with
 `gh workflow run deploy.yml --repo xef5000/materione --ref main`, wait for it to finish,
-then run `npx wrangler deploy` from `cloud/model-proxy/`. Verify a multi-turn tool call
+then run `npx wrangler deploy` from `cloud/model-proxy/` (or dispatch
+`deploy-model-proxy.yml`). Verify a multi-turn tool call
 and credit settlement with an owner-controlled account. The benchmark used a live
 gateway, but does not prove that the deployed editor and proxy work together.
 

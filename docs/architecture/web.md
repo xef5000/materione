@@ -1506,6 +1506,7 @@ Everything in §2 is self-hostable by a third party:
 |---|---|
 | Editor SPA | one vite build → embedded in the jar (M3 path) **and** bundled as the Worker's static assets |
 | Relay Worker | `cloud/` tests (vitest on the Workers runtime) on every PR; deploy via manual-dispatch `deploy.yml` using an owner-provided API token (cost guardrails: agents never deploy) |
+| Model proxy Worker | `cloud/model-proxy` tests on the Workers runtime; deploy via manual-dispatch `deploy-model-proxy.yml` (verify → D1 migrations → deploy) with the same owner token; secrets and AI Gateway limits stay owner dashboard actions |
 | Harness relay gate | CI boots real Paper + `wrangler dev` locally and drives the full relay handshake + one save→apply round trip (the "local" environment below) |
 | Protocol fixtures | golden handshake/frames/mailbox files checked in; plugin tests, SPA tests and Worker tests run against the same fixtures (drift fails all sides) |
 
