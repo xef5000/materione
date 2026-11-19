@@ -3,8 +3,8 @@
 > **Status.** Design, for review on the PR that adds it (`Refs #335`). Nothing here is built. The owner decided on 2026-11-19
 > (dialogs design, PR #451, answer Q7) that this document is written **before** dialogs (#6) and the HUD (#7) are built, so
 > that both are built to it once and not twice. The document is therefore pulled forward from M7; dialogs and the HUD stay M6.
-> The parts that need keyed state (#333 step 2) stay M7 and are marked as such (§6, §13). Decisions this design takes are
-> reversible by the owner and are listed in §14.2; the owner questions are §14.1.
+> The parts that need keyed state (#333 step 2) stay M7 and are marked as such (§6, §13). **The owner answered every question
+> on 2026-11-19 by accepting the defaults (§14.1)**; the decisions are listed in §14.2.
 >
 > **Scope.** The view model that primitives.md §5.3 directs: what a view kind is, what is viewer-local and what is state, how a
 > write to state finds the viewers that read it, how many players view one thing, and how the shipped container GUI, the dialog
@@ -23,7 +23,7 @@
 > | **D6** | A view renders compiled definitions published by the shadow swap; no editor path changes a live view directly (§5.2). |
 > | **D8** | Every render and every send runs on the viewer's owner thread through the gateway; a write marks viewers dirty from any thread without touching their state (§5.6). |
 > | **D13** | The SDK surface (the verb, the keys, the view references) is generated (§9). |
-> | master §5.5, §5.6 | Every `gui` file keeps its meaning and round-trips byte-identically; every new key is additive with a default equal to today's behavior, except the one default the owner is asked about (§7, Q1). |
+> | master §5.5, §5.6 | Every `gui` file keeps its meaning and round-trips byte-identically; every new key is additive with a default equal to today's behavior, except the GUI rerender default the owner chose (§7, Q1). |
 > | master §14.2 | Not decided here: whether a view's state can live across servers is the store adapter's question (§6.4). |
 > | primitives.md §4.6, §4.7, §5.2, §5.3, §5.6 | `GuiSession` (class F) is split into binding, viewer-local state and state (§3.3); session variables become a named key of keyed state when #333 step 2 lands (§3.4); target addressing reaches views (§3.6). |
 > | plugin.md §2, §5, §9 | Threading (§5.6), placeholder diagnostics (§10), new budget rows (§5.7). |
@@ -104,7 +104,7 @@ written to the store can be watched by any number of viewers of any kind.
 ### 3.2 The view kind contract
 
 A kind implements one internal SPI in `plugin/view` (module placement in §13). It is not a public addon API in v1 (decision
-D-6, Q5).
+D-13, owner answer Q5).
 
 | Member | Meaning | GUI | Dialog | HUD |
 |---|---|---|---|---|
@@ -113,7 +113,7 @@ D-6, Q5).
 | `reads(definition)` | Compile-time read set (§5.2) | templates, `visible_if`, item and list sources, dynamic titles | templates, `visible_if`, item and list sources, at open | layer templates, `visible_if`, `worlds`, `permission` |
 | `render(...)` | Pure: definition, binding, viewer, viewer-local state, the logic context → a frame | slot appearances, title, hidden layers (logic.md §24 decision 13) | `RenderedDialog` (dialogs.md §7.1) | one string per channel (hud.md §8.2) |
 | `deliver(...)` | Owner thread: diff with the last frame, send only what changed | `RenderDiff` (logic.md §24 decision 13) | re-send the dialog, new token (§4.3) | channel writers (hud.md §8.2) |
-| `rerenderDefault` | §5.5 | `on_change` (Q1) | `off` | always `on_change` |
+| `rerenderDefault` | §5.5 | `on_change` (owner, Q1) | `off` | always `on_change` |
 | `minInterval` | Fewest ticks between two automatic renders of one viewer | 1 | 20 | 1 (2 for server-driven animation, hud.md §5.6) |
 | Viewer record | Holds the viewer-local state | `GuiSession` | `DialogSession` | `HudViewer` |
 
@@ -150,8 +150,7 @@ map today.
 
 What is **not** added: no session scope for dialogs or HUDs. A dialog wizard carries state in `args` or a declared variable
 (dialogs.md §8, §15 decision 4); a HUD is not a window (hud.md §7.1, `MTR-0116`). A shared view does not share session
-variables: each viewer of a keyed view has its own, and the shared part is keyed state (§6.2). Q2 asks whether to keep this or
-deprecate the scope.
+variables: each viewer of a keyed view has its own, and the shared part is keyed state (§6.2). The owner kept the scope (Q2).
 
 ### 3.5 Viewer-set rules
 
@@ -228,7 +227,7 @@ and so `key` and `item` have one home instead of three. The compiler's root chec
 | Binding | `args`, subject stack, key | `args`, key | none | to be designed |
 | Viewer-local | pages, search, last render, back stack | token, button table, list snapshots, option snapshots | last-sent strings, poll cache, phase | likely: last frame per map |
 | Sibling triggers | `gui.*` | `dialog.*` | none in v1 | to be designed |
-| Rerender default | `on_change` (Q1) | `off`; opt-in `rerender: on_change` | always | likely always |
+| Rerender default | `on_change` (owner, Q1) | `off`; opt-in `rerender: on_change` | always | likely always |
 | What a re-render costs the player | nothing (slots and title rewritten in place) | **their typing** (vanilla has no update packet) | nothing | nothing |
 | Many viewers | yes, via keyed state (§6) | yes, each its own modal | yes, by nature | yes, by nature |
 
@@ -240,7 +239,7 @@ polls. What changes:
 
 1. Its session becomes a viewer record (§3.8); nothing visible.
 2. Its dynamic layers' reads are indexed (§5.2), and a write to one re-renders the viewer with a **partial** render (the dynamic
-   layers and the dynamic title, logic.md §6.4) under the GUI's rerender policy (Q1).
+   layers and the dynamic title, logic.md §6.4) under the GUI's rerender policy (default `on_change`, owner answer Q1).
 3. `refresh:` keeps its meaning: the clock re-reads dynamic layers every N ticks. It is now needed only for polled reads; a
    GUI whose dynamic layers read only declared variables updates without one.
 4. A window is never changed in the middle of the player's own click (logic.md §21 decision 8): automatic renders are
@@ -357,7 +356,7 @@ nothing (§3.2 `deliver`), so the cost is one render, not a packet.
 
 | Kind | Key | Values | Default | Effect |
 |---|---|---|---|---|
-| `gui` | `rerender:` (new, top level) | `on_change`, `off` | `on_change` (Q1) | `off`: only the clock, `gui.refresh`, `view.refresh` and a reload render, as today |
+| `gui` | `rerender:` (new, top level) | `on_change`, `off` | `on_change` (owner, Q1) | `off`: only the clock, `gui.refresh`, `view.refresh` and a reload render, as today |
 | `dialog` | `rerender:` (new, top level) | `on_change`, `off` | `off` | §4.3 |
 | `hud` | none | — | always `on_change` | a HUD is continuous |
 
@@ -423,7 +422,7 @@ What waits, and what views need of keyed state:
 | Off-owner reads of keyed state during renders on other regions | keyed stores answer concurrent reads safely (snapshots or a concurrent map; writes serialised per key) | none: a requirement stated to #333 |
 
 A key binding is a label, not a container: it holds no data. Opening the same definition with the same key for two players
-gives two viewers whose renders read the same keyed values. Q3 asks the owner to confirm this over a shared session object.
+gives two viewers whose renders read the same keyed values. The owner confirmed this over a shared session object (Q3).
 
 ### 6.3 Walk-through: T02's shared window
 
@@ -493,7 +492,7 @@ renamed or removed, and every new key is additive.
 | `gui.open`, `gui.close`, `gui.back`, close reasons, one GUI per player | same | no |
 | Live reload keeps the session (logic.md §21 decision 17, gui.md §5) | same; the viewer record survives a swap | no |
 | `%materione_gui_open%`, `%materione_gui_last%` | same (`GuiSessionPort`) | no |
-| A GUI whose dynamic layers read a declared variable | **re-renders within a tick of a write** instead of at the next clock tick or `gui.refresh` | **yes, under Q1 (a)**: the template's meaning ("the current value") is unchanged; it is shown sooner. Under Q1 (b), no |
+| A GUI whose dynamic layers read a declared variable | **re-renders within a tick of a write** instead of at the next clock tick or `gui.refresh` | **yes** (owner answer Q1): the template's meaning ("the current value") is unchanged; it is shown sooner. A file that wants today's behavior writes `rerender: off` |
 | The `MTR-` codes | unchanged meanings; new codes are additive (§10) | no |
 
 Fixture rule: no existing GUI fixture changes bytes; the golden render tests gain cases, not edits.
@@ -534,7 +533,7 @@ fold-down is (master §3.1, consequence 2).
 - **The view facet.** A content type's self-description gains an optional `view` block: `{viewerRule, rerenderDefault,
   supportsTarget, supportsKey}`. `gui`, `dialog` and `hud` declare it. It is how the SDK generator and the editor know that a
   type is a view kind, with no list of kinds written anywhere else. **No new registry** (decision D-6): the content-type
-  registry already holds the kinds, and an addon view kind needs the internal SPI too, which is not public in v1 (Q5).
+  registry already holds the kinds, and an addon view kind needs the internal SPI too, which is not public in v1 (owner answer Q5).
 - **References.** `view.refresh`'s `view:` parameter is a `REFERENCE` whose kinds are the types that declare the facet, so the
   generated type is the union of GUI, dialog and HUD handles; a static id that resolves to nothing is `MTR-0105`, its existing
   meaning (plugin.md §5).
@@ -623,12 +622,12 @@ Neither branch is edited by this PR. Each change below is what that design must 
 ## 13. Implementation rows
 
 Sized for agents (agent delegation policy: senior and cross-cutting work on Sonnet at high effort, regular implementation on
-Haiku). The milestone column is the proposal of Q6.
+Haiku). The milestone column is the owner's answer to Q6.
 
 | Row | Scope | Depends on | Milestone | Size | Agent |
 |---|---|---|---|---|---|
 | **V0** | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, binding / viewer-local split; `GuiSession` implements the viewer record with **no behavior change** (render goldens unchanged); the `view.*` context subtree and the root check; the view facet in self-descriptions (`gui` declares it) | — | M6 | M | Sonnet, high |
-| **V1** | Read extraction and `ReadsIndex` built at the shadow swap; `StateWriteObserver` on the `VariableStore` port for `player`, `server`, `session`; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default per Q1); `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
+| **V1** | Read extraction and `ReadsIndex` built at the shadow swap; `StateWriteObserver` on the `VariableStore` port for `player`, `server`, `session`; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default `on_change` per owner answer Q1); `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
 | **V2** | `view.refresh` (selectors none / `view` / `var`+`holder`); `gui.refresh` re-expressed over it; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
 | #6 row S | `DialogOpener` and `DialogSessions` as the dialog kind on V0; `rerender:` on dialogs via V1, V2; `MTR-V03` | V0 (V1, V2 for `on_change`) | M6 | (dialogs.md) | (dialogs.md) |
 | #7 row V | `HudViewer` as the HUD kind on V0, V1 | V0, V1 | M6 | (hud.md) | (hud.md) |
@@ -646,21 +645,22 @@ QA close-out so their catalog entries can use `view.refresh`.
 
 ## 14. Owner questions, and the decisions this design takes
 
-### 14.1 Owner questions
+### 14.1 Owner questions and answers
 
-None decides a master §14 question; §6.4 records the requirement §14.2's adapters inherit without choosing one.
+**Answered by the owner on 2026-11-19: every default accepted** (option (a) for Q1 to Q7). None decides a master §14 question;
+§6.4 records the requirement §14.2's adapters inherit without choosing one.
 
-| # | Question | Options | Default (this design) |
+| # | Question | Answer (owner, 2026-11-19) | Rationale |
 |---|---|---|---|
-| **Q1** | Should an existing GUI re-render on its own when a declared variable it reads changes? | (a) Yes: `rerender: on_change` is the GUI default; `off` restores today's clock-only behavior per file. (b) No: `off` is the default; authors opt in. | **(a).** A template means "the current value"; showing it a tick after the write keeps that meaning, coalescing bounds the cost, and an author who wanted staleness can say `off`. (b) is the strictly behavior-preserving choice. |
-| **Q2** | The `session` scope | (a) Keep it, restated as the viewer's named key when #333 step 2 lands (§3.4); no deprecation. (b) Deprecate it in favour of keyed state keyed by the viewer, with a migration warning. | **(a).** It has real uses (a per-window mode toggle) and costs nothing once it is a named key. |
-| **Q3** | How many players share one view | (a) No shared session object: a key binding is a label; all shared data is keyed state (§6.2). (b) A shared session per key holding shared variables. | **(a).** (b) is a second state store with its own lifetime, TTL and Folia owner problem, i.e. a feature-shaped copy of keyed state. |
-| **Q4** | The re-render verb | (a) One generic `view.refresh` with selectors; `gui.refresh` kept as its no-selector form. (b) Per-kind verbs only (`gui.refresh`, `dialog.refresh`, `hud.refresh`). | **(a).** One verb passes U2 across kinds; per-kind copies would be wrong in the next kind (#453). |
-| **Q5** | Addon view kinds | (a) Internal SPI plus the self-description facet now; a public `api` SPI when #453 or an addon forces the shape. (b) A public SPI now. | **(a).** One shape built on three kinds is safer to publish after the fourth. |
-| **Q6** | Milestones | (a) Rows V0 to V2 are filed as M6 issues under #335 and ride #6/#7; V3 and V4 M6.5; #335 itself stays M7 for V5. (b) Move #335 to M6 whole. | **(a).** M6 gets what dialogs and HUDs need; the keyed part waits for #333 step 2, as #335 says. |
-| **Q7** | Dialog re-render with typed inputs | (a) Allowed per document, with the load warning `MTR-V03`. (b) Refused at load on a dialog with `text` or `number` inputs. | **(a).** A form that must reflect a hot value is rare but legitimate; the warning makes the cost visible. |
+| **Q1** | Should an existing GUI re-render on its own when a declared variable it reads changes? | **(a) Yes.** `rerender: on_change` is the GUI default; `off` restores today's clock-only behavior per file. (Rejected: (b) `off` by default, opt in.) | A template means "the current value"; showing it a tick after the write keeps that meaning, coalescing bounds the cost, and an author who wanted staleness can say `off`. |
+| **Q2** | The `session` scope | **(a) Keep it**, restated as the viewer's named key when #333 step 2 lands (§3.4); no deprecation. (Rejected: (b) deprecate it for keyed state.) | It has real uses (a per-window mode toggle) and costs nothing once it is a named key. |
+| **Q3** | How many players share one view | **(a) No shared session object**: a key binding is a label; all shared data is keyed state (§6.2). (Rejected: (b) a shared session per key.) | (b) would be a second state store with its own lifetime, TTL and Folia owner problem: a feature-shaped copy of keyed state. |
+| **Q4** | The re-render verb | **(a) One generic `view.refresh`** with selectors; `gui.refresh` kept as its no-selector form. (Rejected: (b) per-kind refresh verbs.) | One verb passes U2 across kinds; per-kind copies would be wrong in the next kind (#453). |
+| **Q5** | Addon view kinds | **(a) Internal SPI plus the self-description facet now**; a public `api` SPI when #453 or an addon forces the shape. (Rejected: (b) public now.) | One shape built on three kinds is safer to publish after the fourth. |
+| **Q6** | Milestones | **(a)** Rows V0 to V2 are filed as M6 issues under #335 and ride #6/#7; V3 and V4 are M6.5; #335 itself stays M7 for V5. (Rejected: (b) move #335 to M6 whole.) | M6 gets what dialogs and HUDs need; the keyed part waits for #333 step 2, as #335 says. Filed: §13. |
+| **Q7** | Dialog re-render with typed inputs | **(a) Allowed per document**, with the load warning `MTR-V03`. (Rejected: (b) refused at load.) | A form that must reflect a hot value is rare but legitimate; the warning makes the cost visible. |
 
-### 14.2 Decisions this design takes (reversible by the owner)
+### 14.2 Decisions this design takes
 
 | # | Decision | Where |
 |---|---|---|
@@ -672,6 +672,16 @@ None decides a master §14 question; §6.4 records the requirement §14.2's adap
 | D-6 | No new registry: a view facet on the content type's self-description | §9 |
 | D-7 | A common `view.*` context subtree beside each kind's root | §3.7 |
 | D-8 | Close on expiry is content (a flow on #333's `expire` trigger); no new close reason | §6.2 |
+| D-9 | GUIs default to `rerender: on_change` (owner, Q1) | §4.2, §5.5 |
+| D-10 | `session` is kept and becomes the viewer's named key with #333 step 2 (owner, Q2) | §3.4 |
+| D-11 | Sharing is through keyed state only; a key binding holds no data (owner, Q3) | §3.1, §6.2 |
+| D-12 | One generic `view.refresh`; `gui.refresh` is its no-selector form (owner, Q4) | §3.6 |
+| D-13 | The view-kind SPI is internal in v1; the facet is public through self-description (owner, Q5) | §3.2, §9 |
+| D-14 | Rows V0 to V2 are M6, V3 and V4 M6.5, V5 M7 with #335 (owner, Q6) | §13 |
+| D-15 | `rerender: on_change` is allowed on any dialog, with `MTR-V03` when it has typed inputs (owner, Q7) | §4.3, §10 |
+
+D-1 to D-8 were taken by this design and accepted with it on 2026-11-19; D-9 to D-15 are the owner's answers. All remain
+reversible by the owner.
 
 ---
 
