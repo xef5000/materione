@@ -1741,14 +1741,18 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     hand. The licences of the upstream projects are not verified here (as with Vault, item 21); they are
     compile-only and not distributed, so Materione takes on no obligation, but verify before any shaded use.
 36. **QA: one test per provider, against the real plugin.** The `economy` suite (`qa/catalog/economy.mjs`, setup in
-    `qa/README.md`) runs `economy.playerpoints-roundtrip` and `economy.excellenteconomy-two-currencies` in the probe:
+    `qa/README.md`) runs `economy.playerpoints-roundtrip`, `economy.excellenteconomy-two-currencies` and
+    `economy.rediseconomy-two-currencies` in the probe:
     a probe item's right-click pays, charges and refuses against the plugin, and the run then asks the plugin itself,
-    as the player, for the balance (`points me`, `coins balance`, `money balance`), so a pass means the money moved
-    in the provider. They need the pinned jars in the disposable server (PlayerPoints; ExcellentEconomy with
+    as the player, for the balance (`points me`, `coins balance`, `money balance`), or reads the plugin's own store
+    (RedisEconomy keeps its money in Redis, which the test queries directly), so a pass means the money moved in the
+    provider. They need the pinned jars in the disposable server (PlayerPoints; ExcellentEconomy with
     nightcore and a Vault API, which it needs even with its Vault integration off, because the JVM must verify
-    `CurrencyFactory`). The ExcellentEconomy test runs two Materione currencies on the one plugin (its whole-number
-    `coins` and decimal `money`). Not covered yet: UltraEconomy (a paid plugin), RedisEconomy (needs Redis and a
-    build that runs on 26.x). TokenManager is deliberately not supported: it is unmaintained (its Spigot page shows no update since
+    `CurrencyFactory`; RedisEconomy with a Vault API and a Redis server). The ExcellentEconomy and RedisEconomy tests
+    each run two Materione currencies on the one plugin (ExcellentEconomy's whole-number `coins` and decimal `money`;
+    RedisEconomy's default and `dollar` currencies). The RedisEconomy test works in changes from the balances it
+    finds, because Redis keeps them between runs. Not covered: UltraEconomy, a paid plugin the maintainers do not
+    have, so it is assumed to work until a report says otherwise. TokenManager is deliberately not supported: it is unmaintained (its Spigot page shows no update since
     2023) and users report it broken on 1.21. Unit tests still pin the rest: the `Integrations` gate reports each
     unloadable plugin as `MTR-0061` rather than failing, the whole-number rule is tested, and the adapter is
     exercised against the plugin's real API types.

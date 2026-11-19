@@ -1,0 +1,6 @@
+qa_rediseconomy_dollar:
+  integration: rediseconomy
+  currency: dollar
+  display_name: Dollar
+  symbol: "$"
+  decimals: 2

@@ -134,7 +134,8 @@ join the boot environment key, as for PlaceholderAPI above.
 | `PlayerPoints-3.3.5.jar` | `economy.playerpoints-roundtrip` | Modrinth `playerpoints` (source: Rosewood-Development/PlayerPoints) | 602351 | `4b15ba1654463a3f7363dc3d9b7330d5675b800d55efe70631b32eed03669ac3` |
 | `ExcellentEconomy-2.8.0.jar` | `economy.excellenteconomy-two-currencies` | Hangar NightExpress/ExcellentEconomy 2.8.0 | 173814 | `dfcc93ad4c2ca60a85f1e0e58a02b2a8983ccb15428b0f7a372c86819a8b752a` |
 | `nightcore-2.16.7.jar` | ExcellentEconomy (hard dependency) | Hangar NightExpress/nightcore 2.16.7 | 1581781 | `645c643635ef0add0e38fa82cf6609a2350b5ea28e257ab2fc93a017864bc301` |
-| `VaultUnlocked-2.20.3.jar` | ExcellentEconomy (see below) | Modrinth `vaultunlocked` 2.20.3 | 134932 | `fbc6651aca11e13376c115df66eeffa79592e79517be398299aa6beb49c22695` |
+| `VaultUnlocked-2.20.3.jar` | ExcellentEconomy and RedisEconomy (both need a Vault API) | Modrinth `vaultunlocked` 2.20.3 | 134932 | `fbc6651aca11e13376c115df66eeffa79592e79517be398299aa6beb49c22695` |
+| `RedisEconomy-4.5.13.jar` | `economy.rediseconomy-two-currencies` | SpigotMC resource 105965 (RedisEconomy, by Unnm3d), downloaded by hand | 6045404 | `136017b02c9fbe316162445c548c60ab58ba1feaf92737de1d698ca08670bcaf` |
 
 Things the setup runs into:
 
@@ -148,14 +149,32 @@ Things the setup runs into:
   satisfy. This is also why its adapter has its own module (logic.md section 18, item 34).
 - **VaultUnlocked collects anonymous usage statistics** after its second start (FastStats). Opt the disposable server
   out in `plugins/Vault/` metrics config (`enabled=false`) if that matters to you.
+- **RedisEconomy needs a Redis server** on `localhost:6379` (its default; nothing to configure) and a Vault API. Start
+  the official image from Docker Hub, bound to the local machine only, before the run:
+
+  ```
+  docker run -d --name materione-qa-redis -p 127.0.0.1:6379:6379 redis:7.4-alpine
+  # image digest verified for this suite: sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+  docker rm -f materione-qa-redis   # when done
+  ```
+
+  The test reads Redis itself as its independent cross-check (`docker exec materione-qa-redis redis-cli ZSCORE
+  rediseco:balances_<currency> <uuid>`), so the container must be named `materione-qa-redis` (or set
+  `MATERIONE_QA_REDIS_CONTAINER`). The balances live in Redis and outlast a run, so the test works in changes from where
+  they started and never needs a clean database. RedisEconomy ships two currencies, `vault` (its default, named by
+  omitting `currency:`) and `dollar`; the test uses both.
+- **Do not use RedisEconomy's `purge-balance` as a baseline**: it also removes the player's name-to-UUID mapping, after
+  which its own `/balance <player>` answers only with its usage line until the player rejoins. With ExcellentEconomy
+  installed too, plain `/balance` belongs to ExcellentEconomy.
 - Run these tests one at a time with the probe client; each one sets the plugin's balance to a known value first.
 
 ```
 node qa/runner.mjs run economy.playerpoints-roundtrip economy.excellenteconomy-two-currencies --no-ledger
 ```
 
-Not covered here yet: UltraEconomy (a paid TechsCode plugin, so the jar has to be supplied by whoever runs the
-suite) and RedisEconomy (needs a Redis server and a build that runs on 26.x).
+Not covered here: UltraEconomy. It is a paid TechsCode plugin that the maintainers do not have, so its integration is
+assumed to work until a report says otherwise; whoever has the jar can add `economy.ultraeconomy-*` entries the way the
+others are written.
 
 ### Local native currency callback gate
 
