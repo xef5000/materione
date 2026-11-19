@@ -161,7 +161,7 @@ Content types registered by `content/` (D5), 12 in total (the audit counted 11; 
 |---|---|
 | A **command** type | §3 need 1. |
 | ~~A **rule or flow unit** that is not owned by an item, block, furniture or GUI~~ | **Built in #327** as the `rule` content type (`rules/`, logic.md §37): the exact shape of a host's `behavior:` and `flows:`, and the world fires its triggers with no resource in the way. A command and a timer still have no host (§5.4, #332). Was: Rules live in a host resource today (logic.md §2.1, §2.4: named flows are callable only inside one resource). A command, a world-event rule or a timer has no host. §5.5. |
-| A **preset** type (if presets are data, master §14.7 sub-question ii) | A preset's definition must be content, or presets become an addon-only Java surface (the recommended answer to master §14.7 (ii)). §7. |
+| A **preset** type | A preset's definition must be content, or presets become an addon-only Java surface. **Decided** (master §14.7 (ii), PR #450): a user-extensible `preset` content type; design in [`backpack-preset.md`](backpack-preset.md) §4.4. §7. |
 | Other **view kinds**: dialog (#6), HUD (#7) | They are the GUI's siblings (§5.3). |
 
 ### 4.2 Mechanics (the natives)

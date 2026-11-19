@@ -5,12 +5,14 @@
 > custody **by the item stack**. This document says which primitives that composition needs, which exist and which are missing
 > (§2), the content it resolves to (§3), the preset's declaration and resolution (§4), the lossless migration of stacks that
 > already hold contents (§5), durability and the backpack's specific hazards (§6), the editor (§7), code mode (§8), diagnostics
-> (§9), tests (§10) and implementation rows (§11). It ends with the owner's questions (§12).
+> (§9), tests (§10) and implementation rows (§11). It ends with the owner's answers (§12).
 >
 > **Status: design, not built.** Nothing here changes a shipped file's meaning. The native mechanic
 > (`plugin/src/main/java/dev/materione/plugin/runtime/mechanics/builtin/BackpackMechanic.java`) keeps working until row F (§11)
 > retires it, and it is retired only when the composition passes the round-trip tests of §10 against stacks the native mechanic
-> wrote. Two of the rows are blocked on owner answers (§12 Q1, Q2) and one on the custody holder design of #334.
+> wrote. **The owner answered every question on PR #450 (2026-11-19, §12):** presets are content, a `preset` content type that the
+> built-in pack and content makers' own packs both ship (§4.4), and every other recommendation is accepted. Row P waits on the custody
+> holder design of #334.
 >
 > **Traceability.**
 >
@@ -67,7 +69,7 @@ and the tests of §10 pin the fix:
 | 5 | **The window knows which stack it was opened about**, and keeps knowing it while the stack sits in an inventory slot | **The run's item carried into a view** | **Missing** | **G** |
 | 6 | **The slots load from, and are held by, that stack**, not returned to the player on close | **Custody with a stack holder** | **Missing** (custody has one holder, the player's account) | **G** |
 | 7 | Crash safety for transfers in and out | Custody tier 1 (gui-input-durability.md §5.4) with the stack as the holder | Mechanism shipped for the account holder; Phase B of §6.2 | P (after 6) |
-| 8 | Refuse nesting a backpack in a backpack (if Q4 says deny) | An `accept:` condition that can tell a stack holds custody | **Missing** as an expression property | G (small) |
+| 8 | Refuse nesting a backpack in a backpack by default (Q4: deny, `allow_nested` opts in) | An `accept:` condition that can tell a stack holds custody | **Missing** as an expression property | G (small) |
 | 9 | "This item is a backpack" as one setting | The **preset** layer: a declaration resolved by the pipeline | **Missing**; representation partly open (master §14.7) | — (D12 Layer 2, not a primitive) |
 
 Needs 1 to 4 compose today. Needs 5 and 6 are the two primitives this design depends on; need 8 is optional; need 9 is the
@@ -106,7 +108,7 @@ holder (#304)"). The `slots` layer names its holder, defaulting to today's behav
 | Store | Per stack, one store: the slot list in the stack's PDC (§5.1 for the keys and format). One custody region per stack in v1; a second region on the same stack is additive later (a region key). |
 | Capacity | The store's length, not the view's. A view smaller than the store shows the first slots and **keeps** the rest (fixes B1, §6.4 H6). |
 | Pinning | While a view of a stack holder is open, the holder stack cannot move (§6.4 H1). This is a property of the holder, not of a backpack. |
-| Size bound | The encoded store is capped (proposed 256 KiB, the account's cap, gui-input-durability.md §5.4; Q5). A transfer that would exceed it is refused with a diagnostic. Because an inner holder's bytes are inside the outer one's, the cap bounds nesting at any depth (fixes B5). |
+| Size bound | The encoded store is capped (256 KiB, the account's cap, gui-input-durability.md §5.4; Q5, measured in row B). A transfer that would exceed it is refused with a diagnostic. Because an inner holder's bytes are inside the outer one's, the cap bounds nesting at any depth (fixes B5). |
 | Exits | `custody.consume` on a stack-held slot is **refused** in v1 ("not supported for this holder"): the backpack needs no exit, and an exit from a stack that can leave the player's snapshot is #334's open ledger question. |
 | U-tests | U1 a holder kind (item), not a backpack. U2 any item, any GUI, any slots layer. U3 a key on an existing layer. U4 `holder` joins the `slots` component's schema with its allowed values. U5 load-time checks (§9); Phase B carries the kill-boundary proof (§6.2). |
 
@@ -133,8 +135,8 @@ behavior:
     do:
       - cancel: {}
       - gui.open:
-          id: "materione:backpack_${preset.rows}"   # §4.2 Q-check: a templated id, or six `if` branches
-          args: { title: "${preset.title}" }
+          id: "materione:backpack_${preset.rows}"   # §4.2, check for row D: a templated id, or six `if` branches
+          args: { title: "${preset.title}", allow_nested: "${preset.allow_nested}" }
 ```
 
 `gui.open` from this rule carries the clicked stack as the session's subject (P-A).
@@ -151,6 +153,7 @@ backpack_3:
   open:
     args:
       - { name: title, type: string, default: "Backpack" }
+      - { name: allow_nested, type: boolean, default: false }
   layers:
     - id: title
       type: text
@@ -164,7 +167,7 @@ backpack_3:
       region: container
       input: true
       holder: item
-      # accept: "${!slot.item.holds_custody}"   # only if Q4 answers deny (need 8)
+      accept: "${!slot.item.holds_custody || gui.args.allow_nested}"   # Q4: nesting denied by default (need 8)
 ```
 
 No code names these resources (master §7.3 "No special case"): the preset definition names them, which is content naming content.
@@ -184,46 +187,44 @@ special case.
 ### 4.1 What is decided, and what is open
 
 Decided (master §3.1 R1 to R7, §14.7): the author's file declares the preset and its parameters; the definition lives in a pack (here
-the built-in pack) and is loaded by the pipeline; nothing is copied into the author's files. **Open, and not decided here:** (i) the
-spelling, (ii) where definitions live, (iii) pinning and versioning, (iv) a read-only expanded view. Logic recipes (logic.md §4.6, §30)
-are the only existing parameterised composition, and they are the model the owner did **not** choose for presets: a recipe expands into
-the file and "never survives into the file as a recipe".
+the built-in pack) and is loaded by the pipeline; nothing is copied into the author's files. **Decided by the owner on PR #450
+(2026-11-19):** (ii) definitions are **content**, in a `preset` content type that content makers may author in their own packs (§4.4);
+(i) for items, the spelling stays the mechanic-entry shape (S1 below). **Still open:** (iii) pinning and versioning, (iv) a read-only
+expanded view; the backpack ships without either. Logic recipes (logic.md §4.6, §30) are the only other parameterised composition, and
+they are the model the owner did **not** choose for presets: a recipe expands into the file and "never survives into the file as a recipe".
 
-The backpack needs (i) and (ii) answered to ship; (iii) and (iv) can follow. The options, with this design's recommendation, are Q1 and
-Q2 (§12). The rest of this section is written so that it holds under every combination.
+### 4.2 The options, and the owner's answers
 
-### 4.2 Options
-
-**(i) Spelling.**
+**(i) Spelling. Answered: S1 for items (Q1).**
 
 | Option | The author's file | Migration |
 |---|---|---|
-| **S1, keep the mechanic-entry shape** (recommended) | `mechanics: [- backpack: {rows: 2, title: "&6Satchel"}]`, unchanged | None: every existing file already is the declaration (`fixtures/packs/world/items/satchel.yml`). |
+| **S1, keep the mechanic-entry shape** (chosen for items) | `mechanics: [- backpack: {rows: 2, title: "&6Satchel"}]`, unchanged | None: every existing file already is the declaration (`fixtures/packs/world/items/satchel.yml`). |
 | S2, a generic key | `preset: {id: materione:backpack, rows: 2, title: "&6Satchel"}` | `mechanics: [backpack]` must load forever as an alias (master §5.5); the editor writes S2 only for new declarations, and an untouched file keeps S1 (§5.6). Two spellings of one thing. |
 
-S1 is recommended for items because the `mechanics:` list is already "named bundles with parameters" (master §8.1) and the editor's
-module rows are drawn from it (web.md §6). S2 would still be needed for hosts that have no `mechanics:` list (a block, a GUI); that is
-additive and not the backpack's.
+S1 holds for items because the `mechanics:` list is already "named bundles with parameters" (master §8.1) and the editor's module rows are
+drawn from it (web.md §6). A generic key is still needed for hosts that have no `mechanics:` list (a block, a GUI); that is additive, not
+the backpack's, and its spelling is decided when the first such preset is designed.
 
-**(ii) Where definitions live.**
+**(ii) Where definitions live. Answered: L1, a content type, user-extensible (Q2).**
 
 | Option | Shape | Notes |
 |---|---|---|
-| **L1, a `preset` content type** (recommended, as primitives.md §4.1 and R1, R7 recommend) | `builtin-packs/materione/presets/backpack.yml`: `params:` (typed, the recipe parameter schema of logic.md §30), `applies_to: item`, and the host fields it contributes (`behavior:`, `flows:`), whose expressions read `preset.<param>` | Data, so an addon or a pack ships presets the same way (R7). Self-description is generated from `params:` (R6). Needs a content type and a compile stage. |
-| L2, a Java registry entry like the logic `Recipe` SPI | A registered `Preset` that returns the host fields | Faster to build; a preset becomes an addon-only surface, against R1 ("never Java behavior") unless the Java returns only data. |
+| **L1, a `preset` content type** (chosen) | `builtin-packs/materione/presets/backpack.yml`: `params:` (typed, the recipe parameter schema of logic.md §30), `applies_to: item`, and the host fields it contributes (`behavior:`, `flows:`), whose expressions read `preset.<param>` | Data, so the built-in pack, a server's own packs and an addon's pack ship presets the same way (R7). Self-description is generated from `params:` (R6). |
+| L2, a Java registry entry like the logic `Recipe` SPI | A registered `Preset` that returns the host fields | Rejected: a preset would be an addon-only surface, against R1 ("never Java behavior"). |
 
-Under L1, a declaration's parameters reach the definition as a typed, read-only `preset.*` context in its expressions, not by text
-substitution (the recipes' `{{param}}`): substitution would be a second templating language and an injection seam for a `title` that
-contains `${...}`. **Check for row D:** whether `gui.open`'s `id` accepts a template. If not, the definition uses six `if` branches on
+A declaration's parameters reach the definition as a typed, read-only `preset.*` context in its expressions, not by text substitution
+(the recipes' `{{param}}`): substitution would be a second templating language and an injection seam for a `title` that contains
+`${...}`. **Check for row D:** whether `gui.open`'s `id` accepts a template. If not, the definition uses six `if` branches on
 `preset.rows`, which is uglier and equally honest; the parameter schema bounds `rows` to 1..6 either way.
 
-### 4.3 Resolution (both options)
+### 4.3 Resolution
 
-1. **Parse.** The item's `mechanics:` entry `backpack` is looked up in the presets (L1: the preset content type's index; L2: the registry).
-   While the native mechanic is registered (until row F), the native mechanic wins and the preset is not consulted; after row F the name
-   resolves to the preset. A name that is both a registered mechanic and a preset after row F is a load error on the preset (D-4), never a
-   silent shadow.
-2. **Validate.** The parameters against the preset's schema (`rows` integer 1..6, required; `title` text, default `"Backpack"`), with the
+1. **Parse.** The item's `mechanics:` entry `backpack` is looked up in the preset index the pipeline builds from every loaded `preset`
+   resource. While the native mechanic is registered (until row F), the native mechanic wins and the preset is not consulted; after row F
+   the name resolves to the preset. A name that is both a registered mechanic and a preset after row F is a load error on the preset (D-4),
+   never a silent shadow.
+2. **Validate.** The parameters against the preset's schema (`rows` integer 1..6, required; `title` text, default `"Backpack"`; `allow_nested` boolean, default false; from row P, `durable`), with the
    same messages the native `parse` gave, so an existing author sees no new wording for an existing mistake.
 3. **Graph.** Edges item → preset definition → each resource it names (`materione:backpack_1..6`), so impact analysis and "where is this
    used" see through the declaration (R3, D2).
@@ -234,8 +235,28 @@ contains `${...}`. **Check for row D:** whether `gui.open`'s `id` accepts a temp
 
 **Customize (R5).** The route from declaring to defining is the existing Customize pattern (gui.md *Decisions taken in #203*): copy the
 definition's rule into the item's `behavior:` and the chosen GUI into the author's pack, rewrite the ids, remove the declaration, in one
-revision. Whether the editor ships it for v1 is Q6. Stack contents survive Customize unchanged, because the holder keys of §5.1 do not
-depend on which GUI opens the stack.
+revision. The owner answered Q6 "later": v1 does not ship it. Stack contents survive Customize unchanged, because the holder keys of §5.1 do
+not depend on which GUI opens the stack.
+
+### 4.4 Presets authored by content makers (owner, PR #450)
+
+The owner's answer to Q2: the built-in pack ships the `backpack` preset, and **content makers may create their own presets** to
+streamline the creation of content (a server that makes forty themed backpacks, or forty quest-giver items, writes the composition once
+and declares it forty times). A user preset is the same content type as the built-in one; nothing distinguishes them but the pack they
+live in. What follows:
+
+| Property | Statement |
+|---|---|
+| **Files (D1)** | A preset is a resource in `presets/` of a pack (master §7.2 layout), one resource per key like every type. The editor holds nothing a preset file does not say. |
+| **Self-description and round-trip (D5, master §5.6)** | The `preset` type registers through the public content-type registry with its schema, like every built-in type. A preset file loads and saves losslessly: unknown fields kept, an untouched save byte-identical. A preset's own `params:` generate the schema of its declarations, so the editor's settings panel (§7) and the SDK member (§8) need no per-preset code (R6). |
+| **One pipeline (D6)** | Preset resources are parsed, validated and graphed before the resources that declare them, in the same reload; a declaration is resolved by the stage of §4.3 and never by the editor. Editing a preset re-resolves every declaration of it on the next reload, as editing a template re-resolves the items linked to it (plugin.md §3.1). A preset that fails to validate is quarantined, and so is every declaration of it (D-4); the declaring resources otherwise load. |
+| **Names and references** | A preset's identity is `<namespace>:<id>` like every resource (master §5.1): one namespace per pack, ids unique per type within it, `materione` reserved for built-in packs (master §7.3), so a user preset can never replace or shadow `materione:backpack`. A declaration names a preset the way a resource names any other resource, including across packs under the existing rules for cross-pack references. A preset id that collides with a registered mechanic name is D-4. |
+| **The by-hand rule (R4)** | A user preset contributes only the host fields a content maker could write on the host by hand (`behavior:`, `flows:`, and fields of the host's own schema), with only registered triggers, conditions and actions, and it names only resources that exist. The preset type has no field that reaches the engine any other way, so a preset can never be a capability. Validation rejects a contributed field the host's schema does not have. |
+| **Where it applies** | `applies_to:` names one content type. v1 resolves presets for `item` only (through S1, under `mechanics:`); other hosts follow with the generic spelling of §4.2 (i). |
+| **Presets declaring presets** | Not in v1: a preset's contributed fields may not declare a preset. It is additive later, with a cycle check in the graph. |
+| **Pinning and versioning** | Still open (master §14.7 (iii)). It matters less for a user preset (the author edits both sides on one server) than for a built-in preset across plugin updates. |
+| **The editor** | Authoring a preset is §7.1. |
+| **The agent (D13)** | A preset is content, so the agent creates one with the ordinary staged operations (a `presets` builder generated from the type's schema), and declares it with the member generated from that preset's `params:` (§8). |
 
 ---
 
@@ -267,8 +288,8 @@ account has (gui-input-durability.md §5.3). That is a format change, made once,
   store's holder id.
 - A stack with both keys (only possible after a downgrade and re-upgrade) is merged: the new store wins its slots, legacy entries go to
   free slots, and what does not fit is returned through the holder's overflow rule. Nothing is dropped silently (D-3).
-- **Downgrade across the Phase B boundary** is the open cost: an older build sees an adopted stack as empty. Q3 asks whether to dual-write
-  `backpack-data` for a deprecation window.
+- **Downgrade across the Phase B boundary** (Q3, answered: adopt and document): an older build sees an adopted stack as empty, and the
+  release notes of the build that ships row P say so. There is no dual-write of `backpack-data`, because two stores of one truth diverge.
 
 ### 5.3 D1
 
@@ -278,8 +299,8 @@ stack contents.
 
 ### 5.4 Files
 
-Under S1 no file changes. Under S2 no file changes either: the S1 spelling stays valid forever, and the editor does not rewrite an
-untouched declaration. The fixture `fixtures/packs/world/items/satchel.yml` is the regression input for both.
+No file changes: S1 (Q1) keeps today's spelling as the declaration, and the editor does not rewrite an untouched declaration. The fixture
+`fixtures/packs/world/items/satchel.yml` is the regression input.
 
 ---
 
@@ -317,7 +338,8 @@ What Phase B does **not** cover, stated so no sentence widens it: a backpack at 
 is in a chunk snapshot, and its contents are as safe as the chunk; exits from a stack holder (`custody.consume`), transfers between a stack
 and another holder (`HAND_OFF`), and two holders' joint decision are #334's.
 
-Whether the built-in backpack defaults to `required` once Phase B is green (and so becomes inert on servers without checkpoint support) is Q7.
+Once Phase B is green, the built-in backpack keeps `best_effort` as its default and gains a `durable` parameter that opts into `required`
+(Q7, answered): a backpack that is inert on a server with saving disabled is a worse first experience than the narrowed exposure of §6.1.
 
 ### 6.3 Threading
 
@@ -332,10 +354,10 @@ Whether the built-in backpack defaults to `required` once Phase B is green (and 
 |---|---|---|
 | **H1** | The backpack is moved while its window is open: dropped (Q, Ctrl-Q over its slot), clicked into its own window, picked into a bundle, number-key or off-hand swapped, shift-clicked, dragged over | **The pin.** For the life of the session the holder stack's slot is locked: every click, drag, hotbar swap or bundle interaction whose source or target is that slot is cancelled. The stack stays where it was, so the slot index in the subject reference stays valid. Fixes B2. |
 | **H2** | The stack changes under the session anyway (another plugin, `/clear`, an admin `/invsee`) | Every use of the subject checks player, slot and holder id. A mismatch closes the session, makes the slots accept nothing in the meantime, and writes nothing (Phase A: nothing was outstanding beyond the last tick's mirror). Diagnostic D-2. |
-| **H3** | Nested backpacks | Bounded by the size cap at any depth (P-B). Whether insertion of a holder stack into a holder is refused by default is Q4; existing nested stacks can always be taken out, because `accept:` gates only insertion. |
+| **H3** | Nested backpacks | Bounded by the size cap at any depth (P-B). Insertion of a holder stack into a holder is refused by default, and the preset's `allow_nested: true` opts in (Q4, answered); existing nested stacks can always be taken out, because `accept:` gates only insertion. |
 | **H4** | The backpack put into itself | Impossible under the pin (H1): its slot is locked. |
 | **H5** | Two viewers | One open view per holder stack in v1: a second open of the same stack (same player and slot) replaces the first, which closes and writes. Two players cannot reach one stack in vanilla play. Multi-viewer views are #335. |
-| **H6** | `rows` shrinks on reload while open, or between opens | The store keeps its length (P-B *Capacity*). Stacks past the new view stay stored and are listed by `gui.item` for content that wants to show "N hidden"; increasing `rows` again shows them. Fixes B1. Whether the hidden tail should instead be returned to the player is Q8. |
+| **H6** | `rows` shrinks on reload while open, or between opens | The store keeps its length (P-B *Capacity*). Stacks past the new view stay stored and are listed by `gui.item` for content that wants to show "N hidden"; increasing `rows` again shows them. Fixes B1. The hidden tail is not returned to the player (Q8, answered): nothing leaves custody without the player's act. |
 | **H7** | Cloned identity (creative middle-click, B4) | The subject reference uses the slot as well as the id, so writes go to the stack that was opened. Contents duplicate with the clone, as a shulker box's do in creative; this is vanilla behavior and not custody's to prevent. |
 | **H8** | Death, quit, kick, stop, plugin disable while open | `InventoryCloseEvent` fires before the save (gui-input-durability.md F4, F7): the session closes and the final write runs. On death the stack drops or is kept with its contents inside, as any item. |
 | **H9** | The item definition stops being a backpack (declaration removed, item deleted) while stacks exist | Contents stay in the stacks untouched (the holder keys are not removed). The stack cannot open until a declaration or a by-hand rule names it again. Diagnostic D-5 is a doctor-level info, not a deletion. |
@@ -347,16 +369,31 @@ Whether the built-in backpack defaults to `required` once Phase B is green (and 
 
 The item studio is a display card plus modules (web.md §6, #152, #174). Under S1 the preset is a **module row** like a mechanic today,
 labelled "Backpack" with its description, and its settings panel is derived from the preset's parameter schema (R6): `rows` as a 1..6
-stepper, `title` as a rich-text field (the §5.7 stored form, web.md §6.2). Nothing per preset is hand-written.
+stepper, `title` as a rich-text field (the §5.7 stored form, web.md §6.2), `allow_nested` as a toggle. Nothing per preset is hand-written;
+a content maker's own preset (§4.4) appears the same way.
 
 | Element | Statement |
 |---|---|
-| Picker | The "Add module" picker lists presets that apply to the type beside mechanics, with a *Preset* chip so an author can filter. Under S1 the entry writes the same `mechanics:` entry the native mechanic wrote. |
+| Picker | The "Add module" picker lists presets that apply to the type beside mechanics, with a *Preset* chip so an author can filter, and the pack each preset comes from. Under S1 the entry writes the same `mechanics:` entry the native mechanic wrote. |
 | Start workspace | A feature starter "A backpack" (master §9.1, primitives.md §7) creates an item with the declaration and opens it. |
-| What it shows | A read-only line "Opens the built-in backpack window (`materione:backpack_N`)" with a link that opens the GUI read-only (built-in resources are never editable, master §7.3). |
-| Customize | If Q6 says yes: "Make my own…" runs the Customize of §4.3 as one staged revision with a diff. |
-| Durability | Under Phase A the settings panel says "Contents are saved as the player uses the backpack; a server crash can lose the last moment of changes." Phase B replaces the line when the preset's default changes (Q7). |
+| What it shows | A read-only line "Opens the built-in backpack window (`materione:backpack_N`)" with a link that opens the GUI read-only (built-in resources are never editable, master §7.3). For a content maker's preset, the line links to the preset file, which opens in its own studio (§7.1). |
+| Customize | Not in v1 (Q6, answered "later"). |
+| Durability | Under Phase A the settings panel says "Contents are saved as the player uses the backpack; a server crash can lose the last moment of changes." From row P the `durable` parameter's control carries the required-layer wording (Q7). |
 | Honest coverage | Until row F, the module is the native mechanic's and the panel says nothing different; the switch is invisible to the author by design. |
+
+### 7.1 Authoring a preset
+
+`preset` is a content type, so it gets the editor's ordinary surfaces with no preset-specific framework: it is listed in Files and in the
+Start workspace's type starters (master §9.1), and a preset resource opens in a **preset studio** built from the generic pieces that exist:
+
+| Part | Built from |
+|---|---|
+| Parameters | A list editor over `params:` (name, type, default, range, description), the same schema shape as the logic recipes' parameters (logic.md §30), with a live preview of the settings panel a declaring item will show. |
+| Applies to | A single choice of content type; v1 offers `item` only (§4.4). |
+| Contributed behavior | The existing rules editor and Logic tab (logic.md §7) over the preset's `behavior:` and `flows:`, with `preset.*` offered in the expression completions and typed from `params:`. |
+| Validation | The pipeline's diagnostics on the preset and on every declaration of it (D-4, D-6), shown in Problems like any resource's. |
+| Used by | The graph's reverse edges (R3): the items that declare this preset, as for templates' "Used by N" (web.md §6). |
+| Built-in presets | Open read-only, with the same studio, so a content maker can read `materione:backpack` before writing their own (master §7.3). |
 
 ---
 
@@ -364,7 +401,8 @@ stepper, `title` as a rich-text field (the §5.7 stored form, web.md §6.2). Not
 
 | Surface | In the SDK (codemode.md §3.5) |
 |---|---|
-| The declaration | Under S1 unchanged: `m.mechanics.backpack({ rows: 3, title: "Traveler's Pack" })` (agent-benchmark.md T03's program passes as is). Under S2: `m.presets.backpack(item, {..})`, generated from the preset's schema. |
+| The declaration | Unchanged under S1 (Q1): `m.mechanics.backpack({ rows: 3, title: "Traveler's Pack" })` (agent-benchmark.md T03's program passes as is). A content maker's preset is declared the same way, by a member generated from its `params:`. |
+| A content maker's preset | `preset` is a content type, so the generated SDK has its builder like any type's (codemode.md §3.5: a self-describing registry entry appears with no SDK code); an agent creates a preset in the author's pack with the ordinary staged operations, then declares it. Creating one is new content and applies without approval; editing an existing preset asks once per object per session, and the review shows every declaring item as affected (R3). |
 | The by-hand route | With P-A and P-B shipped, the `holder: "item"` value appears on the generated `slots` layer builder and `gui.item` in the context types; T03's by-hand program (a `click:right` rule, `gui.open`, a GUI with a `holder: "item"` input layer) type-checks. Today it fails with the `[CUSTODY]` error of agent-benchmark.md T03. |
 | The built-in GUIs | Readable and referenceable as `m.ref.gui("materione:backpack_3")`; never writable (master §7.3). |
 | The expansion | `m.read.expand(ref)` only once master §14.7 (iv) is answered; until then absent. |
@@ -386,6 +424,7 @@ in plugin.md §5.
 | **D-3** | warning | A stack holder transfer was refused: the store would exceed its size cap, or the store could not be encoded. The click did nothing (the shape of `MTR-0102` for the account; may reuse it if the owner prefers one code per refusal kind). |
 | **D-4** | error (load) | A preset name collides with a registered mechanic, or a declaration names a preset that does not exist or does not apply to this content type. The declaration is quarantined; the rest of the item loads. |
 | **D-5** | info (doctor) | Stacks with a holder store exist for an item that no longer declares one (§6.4 H9). Never deletes. |
+| **D-6** | error (load) | A preset resource is invalid (§4.4): a parameter with a bad type or default, an `applies_to:` that names no content type or one v1 does not resolve, a contributed field the host's schema does not have (R4), a contributed field that declares a preset, or a reference to a resource that does not exist. The preset is quarantined, and every declaration of it reports D-4 naming this preset. |
 
 `MTR-0027` (unknown mechanic, skipped) keeps its meaning for names that are neither a mechanic nor a preset.
 
@@ -399,14 +438,16 @@ in plugin.md §5.
 | Unit | Subject reference liveness: same slot different id, same id different slot, player gone | P-A, H2, H7 |
 | Unit | Pin policy table: every click kind, drag, hotbar, off-hand and bundle path against the holder slot | H1, H4 |
 | Unit | Preset resolution: S1 declaration resolves; schema errors keep the native wording; collision is D-4; graph edges present | §4.3 |
+| Unit | The `preset` type: lossless round-trip (unknown fields kept, untouched save byte-identical); D-6 for each invalid shape; a contributed field absent from the host's schema rejected (R4); a user preset cannot take the `materione` namespace; cross-pack declaration resolves only under the reference rules; editing a preset re-resolves its declarations on reload | §4.4 |
+| Golden | The `preset` type's self-description and generated SDK builder; a content maker's preset from `fixtures/packs/presets/` resolved onto two items | §4.4, §8 |
 | Golden | **Legacy stack round-trip:** PDC bytes written by today's `BackpackMechanic` (captured fixture, before row F deletes the class) open and close through the composition with no change and come out byte-identical | §5.1, master §5.6 |
 | Golden | The resolved runtime of `satchel.yml` (the compiled rule and GUI reference) | §3, §4 |
 | Golden | The built-in `backpack_1..6` compiled screens | §3.2 |
 | Integration (1.21.4 harness) | Open, put, take, close, re-open; a stack written by the native mechanic shows its contents; shrink and regrow `rows` across reloads keeps every stack; drop key and self-insertion refused while open; quit while open persists | B1 to B4, H1, H6, H8 |
 | Integration (Phase B) | Kill-boundary rows for the stack holder in `PaperEscrowCrashIT`: a kill after a click and before the next save, the stack in main hand, off hand and storage | §6.2 |
 | Codegen | The generated `.d.ts` golden gains `holder` and `gui.item`; T03's by-hand program type-checks (`fixtures/codemode/corpus/t03-backpack.*`) | §8 |
-| Editor | The `?modules` fixture adds, configures and removes the backpack preset module; the settings panel is schema-derived | §7 |
-| QA catalog | `backpack.opens-builtin-gui` (visual: the window, its title, its rows), `backpack.legacy-contents` (auto: a pre-migration stack's contents), `backpack.pinned-while-open` (auto), `backpack.shrink-keeps-items` (auto), `backpack.title-formatting` (visual) | player-visible behavior (`qa/README.md`) |
+| Editor | The `?modules` fixture adds, configures and removes the backpack preset module; the settings panel is schema-derived. A `?preset-studio` fixture creates a preset, edits its parameters and rules, sees Used by, and opens `materione:backpack` read-only | §7, §7.1 |
+| QA catalog | `backpack.opens-builtin-gui` (visual: the window, its title, its rows), `backpack.legacy-contents` (auto: a pre-migration stack's contents), `backpack.pinned-while-open` (auto), `backpack.shrink-keeps-items` (auto), `backpack.nesting-refused` (auto), `backpack.title-formatting` (visual), `presets.user-preset-applies` (auto: a content maker's preset declared on two items behaves on both) | player-visible behavior (`qa/README.md`) |
 
 ---
 
@@ -418,33 +459,39 @@ Each row is one issue and one PR, sized for one agent. Rows are ordered by depen
 |---|---|---|---|
 | **R** | Probe on the 26.x seam: a templated title argument with legacy and MiniMessage formatting in a GUI without art (§3.2 *Title fidelity*); `gui.open` with a templated id; screenshots | none | Haiku |
 | **A** | P-A: the subject stack on `gui.open` from an item run, `gui.item.*` in context, the liveness check, D-1 (load half). Coordinate with #333 step 1 (one implementation) | none | Sonnet, high |
-| **B** | P-B Phase A: `holder: item` on `slots` (schema, studio field, self-description), the stack store over the shipped keys, the per-tick mirror, capacity, the pin, the cap, D-1 runtime half, D-2, D-3; unit and harness tests; the legacy-bytes golden captured from today's mechanic; T03 by-hand corpus update | A, Q5 | Sonnet, high |
-| **G** | The six built-in GUIs `materione:backpack_1..6`, their compiled goldens, `backpack.opens-builtin-gui` visual QA | B, R | Haiku |
-| **D** | The preset mechanism per Q1 and Q2: declaration lookup, `preset.*` binding, graph edges, D-4, the editor picker's *Preset* chip, the SDK surface; the backpack preset definition | Q1, Q2, G | Sonnet, high |
-| **F** | Fold-down: delete `BackpackMechanic` and its registration, the name resolves to the preset; harness tests over a world with native-written stacks; QA `backpack.legacy-contents`, `.pinned-while-open`, `.shrink-keeps-items`; docs (mechanics.md table, primitives.md §4.2, runtime-systems.md, agent-benchmark.md T03) | D | Haiku |
-| **C** | Customize for presets (only if Q6 says yes) | D | Sonnet |
-| **P** | Phase B: the strict path for `holder: item`, the versioned store and adoption of §5.2, the stack-holder kill-boundary rows. Lands inside #334's design (the holder formats), not before #312 closes (primitives.md §5.1 order) | #334 design, B | Sonnet, high |
+| **B** | P-B Phase A: `holder: item` on `slots` (schema, studio field, self-description), the stack store over the shipped keys, the per-tick mirror, capacity, the pin, the 256 KiB cap, D-1 runtime half, D-2, D-3, the `holds_custody` item property (need 8); unit and harness tests; the legacy-bytes golden captured from today's mechanic; T03 by-hand corpus update | A | Sonnet, high |
+| **G** | The six built-in GUIs `materione:backpack_1..6` (vanilla look, nesting refused unless `allow_nested`), their compiled goldens, `backpack.opens-builtin-gui` visual QA | B, R | Haiku |
+| **T** | The `preset` content type (§4.4): registration through the public content-type registry, its schema (`params:`, `applies_to:`, contributed `behavior:`/`flows:`), lossless round-trip fixtures, validation that a contributed field exists on the host's schema (R4), namespacing and the cross-pack reference rules, D-6; the type's self-description golden and the generated SDK builder | none | Sonnet, high |
+| **D** | Resolution (§4.3): the preset index, S1 lookup under `mechanics:`, `preset.*` binding, graph edges, D-4, quarantine of a broken preset's declarations; the built-in `materione:backpack` preset definition; the SDK declaration members generated from each preset's `params:`; tests with a content maker's preset in a fixture pack (`fixtures/packs/presets/`) declared by items in the same pack and in a dependent pack | T, G | Sonnet, high |
+| **E** | The editor (§7, §7.1): the picker's *Preset* chip and pack label, the schema-derived settings panel for any preset, the preset studio (parameters list, applies-to, the rules editor with `preset.*` completions, Used by), built-in presets read-only; the `?modules` and a new `?preset-studio` browser fixture | T, D | Sonnet, high |
+| **F** | Fold-down: delete `BackpackMechanic` and its registration, the name resolves to the preset; harness tests over a world with native-written stacks; QA `backpack.legacy-contents`, `.pinned-while-open`, `.shrink-keeps-items`, `.nesting-refused`, and `presets.user-preset-applies` (a content maker's preset on two items); docs (mechanics.md table, primitives.md §4.2, runtime-systems.md, agent-benchmark.md T03) | D, E | Haiku |
+| **P** | Phase B: the strict path for `holder: item`, the versioned store and adoption of §5.2 (no dual-write, Q3), the backpack preset's `durable` parameter (default `best_effort`, Q7), the stack-holder kill-boundary rows. Lands inside #334's design (the holder formats), not before #312 closes (primitives.md §5.1 order) | #334 design, B | Sonnet, high |
+
+Customize for presets (former row C) is not scheduled (Q6, answered "later").
 
 Row F's PR is where the plain-chest path disappears; the issue's exit criterion ("the plain-chest path is gone") is met there, and the
 crash-safety sentence of the issue is met by row P.
 
 ---
 
-## 12. Owner questions
+## 12. Owner answers (2026-11-19)
 
-None of these is a master §14 question other than §14.7, which this document does not decide.
+The owner answered on PR #450: *"i like the idea of presets: the materione builtin pack would have the backpack preset, but content
+makers would be allowed to create their own presets (to streamline the creation of content). Everything else looks good for backpacks."*
+Q2 is answered with that extension (§4.4); Q1 and Q3 to Q9 are answered as recommended. Of master §14.7, part (ii) is now decided and
+recorded there; part (i) is settled for items only; (iii) pinning and versioning and (iv) the expanded view stay open.
 
-| # | Question | Options | Recommendation |
+| # | Question | Options | Answer |
 |---|---|---|---|
-| **Q1** | The preset spelling on items (master §14.7 (i)) | S1 keep `mechanics: [backpack: {rows, title}]`; S2 a generic `preset:` key | S1 for items (no file migrates); S2 later for hosts with no `mechanics:` list |
-| **Q2** | Where preset definitions live (master §14.7 (ii)) | L1 a `preset` content type (data in packs); L2 a Java registry like the `Recipe` SPI | L1 (R1, R7, primitives.md §4.1) |
-| **Q3** | Downgrade across Phase B's format change (§5.2) | Dual-write `backpack-data` for a deprecation window; or adopt and document that an older build sees adopted backpacks as empty | Adopt and document; dual-writing two stores of one truth is what invites divergence |
-| **Q4** | Nesting: may a backpack go inside a backpack by default? | Allow (today's behavior, bounded by the cap); deny by default with a preset parameter to allow (needs need 8) | Deny by default, `allow_nested: true` to opt in; existing nested stacks can always be taken out |
-| **Q5** | The stack store's size cap | 256 KiB like the account; smaller (vanilla packet and chunk pressure argue lower) | 256 KiB, refusal with D-3; measured in row B |
-| **Q6** | Does the editor ship Customize for presets in v1? | Yes (row C); later | Later: the by-hand route is reachable through the SDK and Files, and the decision says Customize is not required |
-| **Q7** | Once Phase B is green on main, does the built-in backpack default to `durable: required`? | Required (inert on servers without checkpoint support, `MTR-0100`); stay `best_effort` with `required` as a preset parameter | `best_effort` default with a `durable` parameter: an inert backpack on a server with saving disabled is a worse first experience than the narrowed exposure of §6.1 |
-| **Q8** | Contents past a shrunken view (§6.4 H6) | Keep them stored and hidden; return them to the player on the next open | Keep them stored: nothing leaves custody without the player's act, and regrowing `rows` restores the view |
-| **Q9** | The built-in GUIs' look | Vanilla chest without art (today's look); a Materione-styled backpack art | Vanilla in row G; art is content and can follow without a design change |
+| **Q1** | The preset spelling on items (master §14.7 (i)) | S1 keep `mechanics: [backpack: {rows, title}]`; S2 a generic `preset:` key | **S1 for items** (no file migrates). A generic key for hosts with no `mechanics:` list is decided when the first such preset is designed. |
+| **Q2** | Where preset definitions live (master §14.7 (ii)) | L1 a `preset` content type (data in packs); L2 a Java registry like the `Recipe` SPI | **L1, and user-extensible:** the built-in pack ships `backpack`; content makers author their own presets in their own packs (§4.4, §7.1, rows T, D, E). |
+| **Q3** | Downgrade across Phase B's format change (§5.2) | Dual-write `backpack-data` for a deprecation window; or adopt and document that an older build sees adopted backpacks as empty | **Adopt and document**; no dual-write. |
+| **Q4** | Nesting: may a backpack go inside a backpack by default? | Allow (today's behavior, bounded by the cap); deny by default with a preset parameter to allow (needs need 8) | **Deny by default**, `allow_nested: true` to opt in; existing nested stacks can always be taken out. |
+| **Q5** | The stack store's size cap | 256 KiB like the account; smaller (vanilla packet and chunk pressure argue lower) | **256 KiB**, refusal with D-3; measured in row B. |
+| **Q6** | Does the editor ship Customize for presets in v1? | Yes; later | **Later.** The by-hand route is reachable through the SDK and Files. |
+| **Q7** | Once Phase B is green on main, does the built-in backpack default to `durable: required`? | Required (inert on servers without checkpoint support, `MTR-0100`); stay `best_effort` with `required` as a preset parameter | **`best_effort` default with a `durable` parameter** (row P). |
+| **Q8** | Contents past a shrunken view (§6.4 H6) | Keep them stored and hidden; return them to the player on the next open | **Keep them stored**; regrowing `rows` restores the view. |
+| **Q9** | The built-in GUIs' look | Vanilla chest without art (today's look); a Materione-styled backpack art | **Vanilla** in row G; art is content and can follow without a design change. |
 
 **Not verified in this design** (read from code and docs, not run): defects B1 to B5 (read from `BackpackMechanic`; row B's harness
 tests confirm them before fixing); whether `gui.open` accepts a templated id and whether formatting in a templated title argument renders
