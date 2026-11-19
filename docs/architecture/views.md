@@ -680,6 +680,7 @@ Neither branch is edited by this PR. Each change below is what that design must 
 | D10 | §13.3 rows | Row S depends on views row V0; the `rerender` opt-in depends on V1 and V2; row K's SDK check includes `rerender`. |
 | D11 | §8 universality table | Add the `rerender` key row (views.md §8.1). |
 | D12 | §15 decisions 4 and 5, §16 Q7 | Point decisions 4 (no session scope) and 5 (no re-render by default) and the Q7 answer at views.md (§3.4, §4.3) instead of "when #335 lands". |
+| D13 | §4 rule 7, §6.2 (owner review of #335, Q7 qualified) | `MTR-V03` warns for every editable input, not only `text`/`number`; an automatic wake whose rendered dialog and submission snapshot are both unchanged keeps the token and sends nothing; the 20-tick floor limits resets but does not protect an unfinished form. |
 
 ### 12.2 `hud.md` (#452)
 
@@ -697,6 +698,7 @@ Neither branch is edited by this PR. Each change below is what that design must 
 | H10 | §16 rows | Row V depends on views rows V0 and V1; remove "(or #335's, if landed)". Row K's SDK check includes the view facet. |
 | H11 | §17 Q5 | Note that views.md endorses (a), one component registry with surfaces, as the D12 reading of one view model. |
 | H12 | §12 diagnostics | No change of numbers; views.md takes its codes after the HUD's block. |
+| H13 | §6.2, §6.3, §8.1, §8.3 (owner review of #335, acceptance case 1) | State the attach-on-visibility rule: `HudViewer` exists per online player from join (a candidate, attached to no HUD); a write to a visibility read marks it dirty and its wake attaches newly visible HUDs, so the `hud_on` toggle of §6.3 works with no rejoin or unrelated poll; two visible HUDs compose into one string per channel. |
 
 ---
 
