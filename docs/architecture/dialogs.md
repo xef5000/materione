@@ -37,10 +37,10 @@
 
 | Non-goal | Why | Where it goes |
 |---|---|---|
-| Dialogs in the pause menu or the quick-actions key (vanilla's `pause_screen_additions` and `quick_actions` dialog tags) | They need the dialog **registry**, which is frozen at bootstrap, so they are restart-required content, unlike everything else here. | Owner question Q5 (§16). |
+| Dialogs in the pause menu or the quick-actions key (vanilla's `pause_screen_additions` and `quick_actions` dialog tags) | They need the dialog **registry**, which is frozen at bootstrap, so they are restart-required content, unlike everything else here. | Owner question Q5 (§16), still open. |
 | Dialogs during the configuration phase (before the player joins the world) | Paper exposes them (`PlayerCommonConnection`), but nothing in the logic engine runs before a player exists. | Later; the host interface (§9) does not preclude it. |
 | A generated chest-GUI imitation of a dialog for old clients | A second renderer is feature-shaped and duplicates ViaBackwards (§10.3). An author who wants a GUI names one in `fallback:`. | §10.2. |
-| Bedrock forms (Geyser) | Master §14.3 (Geyser timing) is open; this design does not decide it. | Owner question Q2. |
+| Bedrock forms (Geyser) | Bedrock is not supported by Materione yet; master §14.3 (Geyser timing) stays open. | Owner answer Q2 (§16): not now. |
 | Shared, multi-viewer dialogs ("everyone sees this vote") | Needs keyed state (#333) and target addressing (primitives.md §5.6). A dialog is one modal per player. | §8, when #335 lands. |
 | Code stored or run as content | D13. | — |
 
@@ -103,7 +103,7 @@ payload size; the limits of §6.4 are therefore Materione's own.
 | V4 | What the client does with an open **container** when a dialog is shown, and whether closing the dialog returns to it. | Decides the dialog `InputMethod`'s `closesWindow` (logic.md §29 decision 19 assumed false) and the GUI hand-off (§7.3). |
 | V5 | Whether resource-pack fonts (`<glyph:…>`, `<shift:N>`, effects) render in dialog titles, labels and bodies. | The studio preview and the text pipeline (master §5.7). |
 | V6 | Whether the client enforces `max_length` and `number_range` bounds (assumed yes for a vanilla client; irrelevant for a hostile one, §6.3). | Only user experience; the server re-validates regardless. |
-| V7 | ViaBackwards' chest emulation of dialogs for 1.21.5 clients: which inputs it supports and what payload it sends back. | §10.3. |
+| V7 | ViaBackwards' chest emulation of dialogs for 1.21.5 clients: which inputs it supports and what payload it sends back. | §10.3. **Not probed**: Q1 is answered, older clients are the server owner's concern. |
 | V8 | The largest custom-click payload the server accepts before the packet is refused. | §6.4 sets a lower cap of its own. |
 
 ---
@@ -538,10 +538,11 @@ with dialogs invisible to older clients; 5.6.0 added chest-inventory emulation f
 `dialogs-via-chests` option (from ViaBackwards' release notes on Hangar and Modrinth). How the emulation lays out inputs and what it
 returns is unverified (V7).
 
-The design's default is to **send the dialog and let ViaBackwards translate it**; the server validates whatever comes back like any
-other submission (§6.3), so a translation that sends a malformed payload is refused, never trusted. Whether Materione should instead
-ask ViaVersion for the player's protocol and run `fallback:` for older clients is owner question Q1. Bedrock players (Geyser) are
-master §14.3 and owner question Q2.
+**Decided (owner, Q1, 2026-11-19): Materione does not account for older clients.** It sends the dialog to every player; a
+server owner who enables dialogs is expected not to admit clients older than 1.21.6. If ViaBackwards translates the dialog anyway,
+the server validates whatever comes back like any other submission (§6.3), so a malformed translation is refused, never trusted.
+No protocol lookup, no `old_clients:` key and no ViaVersion dependency are added. Bedrock players (Geyser) are not supported yet
+(Q2); `fallback:` (§10.2) exists for servers below 1.21.6 and may serve Bedrock work later, but nothing Bedrock-specific is built.
 
 ---
 
@@ -641,7 +642,7 @@ needs the generator to read a document's declared inputs (as it would need for `
 
 | Row | Scope | Depends on | Size | Agent |
 |---|---|---|---|---|
-| **R** | Probes V2, V4, V5 (first, it gates row I), V6, V8 on the 26.x seam (Paper and Folia); V7 against ViaBackwards if the owner wants Q1 answered with evidence. Records results in §2.2 and closes the unverified list. | — | S | Haiku |
+| **R** | Probes V2, V4, V5 (first, it gates row I), V6, V8 on the 26.x seam (Paper and Folia). V7 is not probed (Q1). Records results in §2.2 and closes the unverified list. | — | S | Haiku |
 | **C** | Capability fix: `DIALOGS` by class detection (§10.1); descriptor tests; the ban test for dialog imports | — | S | Haiku |
 | **M** | `DialogType`: self-description, parse, validate, round-trip, compile to `CompiledDialog`; fixtures and golden files; `MTR-D03` to `D05`, `D08` (numbers assigned here) | — | M | Haiku |
 | **G** | Extract `OpenGate` from `GuiOpener`; parity test; no behaviour change for GUIs | — | S | Haiku |
@@ -650,7 +651,7 @@ needs the generator to read a document's declared inputs (as it would need for `
 | **P** | The `materione:dialog` input method; GUI hand-off per V4 | S, H, R | S | Haiku |
 | **W** | Studio: Design form and preview, Logic tab wiring, Preview in game; `webui` specs | M (S for preview in game) | M | Sonnet, high |
 | **I** | The `image` body (§4.2, §14.3): glyph compilation through the GUI raster path, allocation, the studio's image picker, golden pack output | M, R (V5) | M | Haiku |
-| **X** | *Only if the owner says yes to Q8:* the studio's **Import HTML/CSS** (§14.3): rasterize an HTML/CSS fragment in the browser to PNG and add it as an `image` body or a GUI `paint` layer; nothing but the PNG and the YAML reference is written | W, I | M | Sonnet, high |
+| **X** | The studio's **HTML/CSS image source** (§14.3, owner answer Q8): the author writes or imports an HTML/CSS fragment, stored as a pack asset; the editor's browser rasterizes it to the PNG the pack compiler needs, recorded against the HTML's hash; a missing or stale raster is a diagnostic; the `image` body or GUI `paint` layer references the HTML | W, I | M | Sonnet, high |
 | **K** | Code mode: confirm the generated surface, T28 passes in the benchmark harness, the `confirm_dialog` recipe variant | M, S | S | Haiku |
 | **Q** | QA catalog entries, the showcase pack's dialog page, docs close-out (runtime-systems §8.2, feature-parity §3.10 as built, parity-reconciliation row, glossary, roadmap) | all | S | Haiku |
 
@@ -695,15 +696,15 @@ across Materione's view kinds where that is the honest answer.
 | Forged-click resistance | not described | per-session tokens, player binding, single use, rate limits, server-held state (§6) | **exceeds**, as far as can be compared |
 | Navigation between screens | `page:`, back | `dialog.open` (gated), `args` for wizards, static `show_dialog`, `dialog_list` with gates | **equal or better** |
 | Player heads, items | head images | `item` bodies from any item source (Materione items, heads, integrations) | **equal**; custom items **exceed** |
-| Free-form layout and styling (CSS: flex, grid, gradients, fonts, transforms) | **yes, its core strength** | Vanilla dialogs have a fixed layout (title, body column, inputs, button grid). Freedom comes from (a) **`image` bodies** (§4.2): any designed bitmap, drawn in the GUI studio or imported, shown inside the dialog; (b) the text pipeline's styling (colors, gradients, glyphs, shader effects, master §5.7); (c) the **GUI view kind** for screens whose whole surface is designed (gui.md §11, the open canvas: art past the container, pixel layers, buttons, items) | **gap closed for static art** by `image` bodies (row I) and, if Q8 is yes, by HTML/CSS import (row X); **not equal** for layout that reflows live, which Materione does not attempt (§14.3) |
+| Free-form layout and styling (CSS: flex, grid, gradients, fonts, transforms) | **yes, its core strength** | Vanilla dialogs have a fixed layout (title, body column, inputs, button grid). Freedom comes from (a) **`image` bodies** (§4.2): any designed bitmap, drawn in the GUI studio or imported, shown inside the dialog; (b) the text pipeline's styling (colors, gradients, glyphs, shader effects, master §5.7); (c) the **GUI view kind** for screens whose whole surface is designed (gui.md §11, the open canvas: art past the container, pixel layers, buttons, items) | **gap closed for static art** by `image` bodies (row I) and by HTML/CSS image sources (row X, Q8); **not equal** for layout that reflows live, which Materione does not attempt (§14.3) |
 | Animations (CSS, GIF) | yes | text shader effects (master §5.7); no animated images in dialogs | **gap**, recorded; animated glyphs are a pack-compiler question outside #6 |
 | Hover states, custom cursors, per-element sounds, key bindings | yes | native button hover and tooltips; sounds through flows on submit; no cursors or key bindings (vanilla dialogs expose neither) | **partial**; the vanilla client offers no hook for the rest |
 | Canvas scripting | Rhino JavaScript on the server | **refused by D13**: code is never stored content and never runs on the server; dynamic content is templates, sources and conditions | **deliberately not** |
-| In-world wall screens, many viewers | yes (maps on item frames) | none | **gap, outside #6** (Q9: a map-canvas view kind under #335) |
-| Fullscreen camera-locked view | yes | dialogs and GUIs are native screens; no camera lock | **different model**; the view kind of Q9 would cover it |
+| In-world wall screens, many viewers | yes (maps on item frames) | none | **gap, outside #6** (Q9: filed as #453, a map-canvas view kind with #335) |
+| Fullscreen camera-locked view | yes | dialogs and GUIs are native screens; no camera lock | **different model**; the view kind of #453 would cover it |
 | Works with shader packs (Iris, OptiFine) | **no** (views break) | yes: native screens are not drawn through world shaders | **exceeds** |
 | Works without a resource pack | dithered colours | dialogs fully, except `image` bodies and custom glyphs | **exceeds** |
-| Bedrock players | refused | the `fallback:` flow (§10.2); Geyser policy open (Q2) | **exceeds** |
+| Bedrock players | refused | not supported yet (Q2); nothing Bedrock-specific in v1 | **neither**; not a target yet |
 | Version floor | 1.21.11+ | content loads on 1.21.4+; dialogs show on 1.21.6+; `fallback:` below | **exceeds** |
 | Web editor | mcgui.dev (features unverified), import by code | the live relay editor (D11): Design form and preview, Logic node canvas, Script, preview in game, diagnostics, live trace; agent authoring through code mode (D13) | **exceeds** on what can be verified |
 | Extension | Java events and a drawing API | registries (D5): addons add actions, conditions, item and list sources, input methods; the SDK picks them up | **exceeds** |
@@ -724,20 +725,24 @@ screens and NPC panels uses, and the design now covers it:
 
 1. **`image` bodies** (§4.2, row I): any bitmap, shown inside the dialog, compiled through the existing GUI raster path. Authors
    draw it with the GUI studio's paint and image tools or upload it.
-2. **Import HTML/CSS in the studio** (row X, if Q8 is yes): the editor runs in a real browser, so it can render an author's
-   HTML/CSS fragment natively and rasterize it to a PNG, which becomes an `image` body or a GUI `paint` layer. Authors keep CSS for
-   *designing* art, the server needs no HTML renderer, and the files on disk stay a PNG and a YAML reference (D1, D6). Live reflow
-   and CSS animation do not carry over, as the table records.
+2. **HTML/CSS as an image source** (row X, owner answer Q8): the author's HTML/CSS is **kept as the stored asset**, because a
+   PNG alone loses the design (owner, 2026-11-19). The PNG is a derived output: the editor runs in a real browser, so it
+   rasterizes the HTML natively when a raster is needed (on save, and whenever the HTML's hash no longer matches the recorded
+   raster), and the pack compiler consumes that PNG through the GUI raster path. The server needs no HTML renderer. The HTML is
+   the one source of truth (D1); the raster is a cache of it, never edited by hand, and a missing or stale raster is reported,
+   not silently used (D6). An HTML file edited outside the editor therefore needs the editor to re-rasterize it; a server-side
+   renderer would remove that step but would draw CSS differently from the browser the author previewed in, so it is not
+   planned. Live reflow and CSS animation do not carry over, as the table records.
 3. **The GUI view kind** for screens whose whole surface is the design, unchanged.
 
 **What is left as a gap, on purpose or for the owner.** Animated images (a pack-compiler question), custom cursors and key bindings
-(no vanilla hook), canvas scripting (D13), and map-drawn wall and fullscreen screens (Q9, a view kind of its own under #335).
+(no vanilla hook), canvas scripting (D13), and map-drawn wall and fullscreen screens (#453, a view kind of its own with #335).
 
 ---
 
 ## 15. Decisions this design takes (reversible by the owner)
 
-1. **Every input-reading action is a server flow.** No client `run_command` or `dynamic/run_command` (Q3 can reverse this).
+1. **Every input-reading action is a server flow.** No client `run_command` or `dynamic/run_command` (owner answer Q3).
 2. **`dialog_list` compiles to a gated `multi_action`**, not to vanilla's client-side list (§4.1).
 3. **One custom-click identifier, a random per-session token, single use by default** (§6.1, §6.2); Paper's callback API is not used.
 4. **No session variable scope for dialogs** (§8): wizard state is `args`; shared state waits for keyed state (#333).
@@ -749,21 +754,25 @@ screens and NPC panels uses, and the design now covers it:
 9. **Dialogs render as vanilla dialogs**, not as maps or a camera-locked view (§14.2); rich imagery comes through `image` bodies,
    and free-form canvases stay the GUI view kind's job.
 10. **Escape is made observable** by compiling an exit into a server button where vanilla allows one (§5.1).
+11. **Older clients are not accounted for** (owner answer Q1): dialogs are sent to everyone; admitting pre-1.21.6 clients is the
+    server owner's choice.
+12. **`dialog.submit` reaches the dialog's own host only** (owner answer Q4); `rule` documents do not receive it.
+13. **HTML/CSS is a stored image source and its PNG is derived** in the editor's browser (owner answer Q8, row X).
 
 ---
 
-## 16. Owner questions
+## 16. Owner questions and answers
 
-None of these is a master §14 question decided here; Q2 touches §14.3 and is left open on purpose.
+Answered by the owner on 2026-11-19 unless marked open. None decides a master §14 question; Q2 leaves §14.3 open.
 
-| # | Question | Options | This design's default |
-|---|---|---|---|
-| **Q1** | Old clients (≤ 1.21.5) on a 1.21.6+ server through ViaVersion/ViaBackwards: send the dialog and let ViaBackwards' chest emulation handle it, or ask ViaVersion for the player's protocol and run `fallback:` for them? | (a) always send; (b) `fallback:` for older clients when ViaVersion is present; (c) per dialog (`old_clients: send\|fallback`) | (a), because the server validates whatever comes back; (c) is cheap to add later |
-| **Q2** | Bedrock players (Geyser/Floodgate): translate dialogs to Bedrock forms, run `fallback:`, or leave it to Geyser? This is master §14.3 (Geyser timing). | — | Not decided; v1 does nothing Bedrock-specific |
-| **Q3** | Offer vanilla's client-side `run_command` and `dynamic/run_command` as client buttons? They run with the player's own permissions, need no round trip, but bypass server validation, cooldowns and the trace. | (a) no (server flows only); (b) yes, with a warning in the studio | (a) |
-| **Q4** | Should `rule` documents (logic.md §37) also receive `dialog.submit` with a `dialog:` filter, so one rule file can answer several dialogs? | (a) dialog host only in v1; (b) both | (a); additive later |
-| **Q5** | Pause-menu and quick-actions dialogs (vanilla dialog tags) need the dialog registry, which is frozen at bootstrap: restart-required content, like registry paintings. In scope for M6? | (a) out of v1; (b) a `pause_menu: true` key, restart-required, through the modern registry seam | (a) |
-| **Q6** | The diagnostic block: take the next free block after `MTR-0105` and after the HUD design's (#7) at implementation, as proposed in §11? | — | yes |
-| **Q7** | Sequencing with #335: build dialogs now to the view contract of §8 (this design), or hold #6 until #335's document exists? | (a) now; (b) wait | (a): #335 is not in the M6.5 slice and the contract above is what #335 would generalise |
-| **Q8** | Add the studio's **Import HTML/CSS** (row X, §14.3): the browser rasterizes an author's HTML/CSS to a PNG that becomes an `image` body or a GUI `paint` layer? It gives mcgui-style styling freedom for *static* art without a server-side HTML renderer; the HTML is not kept (it would be a second source of truth beside the PNG, D1) unless the owner wants it stored as an asset. | (a) yes, PNG only; (b) yes, and keep the `.html` as an asset the studio can re-rasterize; (c) no | (a) |
-| **Q9** | mcgui's other surface, **in-world wall screens and a fullscreen camera-locked view drawn on maps** (§14.1), has no Materione counterpart. File it as a new **view kind** issue (a map-canvas renderer of the GUI's raster layers, many viewers by nature, so it belongs with #335), or leave it out of scope? | (a) file a view-kind issue under #335, milestone to be set by the owner; (b) out of scope | (a); not part of #6 |
+| # | Question | Answer |
+|---|---|---|
+| **Q1** | Old clients (≤ 1.21.5) on a 1.21.6+ server through ViaVersion/ViaBackwards: send, or run `fallback:` for them? | **Send; do not account for them.** A server owner who enables dialogs should not admit older clients. V7 is not probed (§10.3). |
+| **Q2** | Bedrock players (Geyser/Floodgate)? (master §14.3) | **Not now.** Bedrock is not supported by Materione yet and is much later work; nothing Bedrock-specific in v1. What helps later at no cost (`fallback:`) stays. |
+| **Q3** | Offer vanilla's client-side `run_command` / `dynamic/run_command` buttons? | **No: server flows only** (§15 decision 1). |
+| **Q4** | Should `rule` documents also receive `dialog.submit`? | **No**; the dialog host only (§15 decision 12). |
+| **Q5** | Pause-menu and quick-actions dialogs: in scope? | **Open.** Vanilla 1.21.6+ lets a server add a button to the pause (Escape) screen that opens a dialog (`pause_screen_additions` tag) and list dialogs under the Quick Actions key (`quick_actions` tag). Tags belong to the dialog registry the client receives while joining, and Paper freezes registries at server start, so adding or removing such a dialog takes a restart. Materione already has a restart-required path for registry paintings (runtime-systems.md, `MTR-0028`/`MTR-0029`), so (b) reuses it; v1 left it out only to keep the first slice reload-only. Options: (a) out of v1; (b) a `pause_menu:` / `quick_actions:` key, restart-required, through the paintings' registry seam, as a late row of #6. |
+| **Q6** | Diagnostic block: the next free block after `MTR-0105` and after the HUD design's (#7), at implementation? | **Yes.** |
+| **Q7** | Sequencing with #335: build now to §8's contract, or wait for #335? | **Open; the owner leans to waiting.** #335 is in M7 and its design is not written; it depends on keyed state #333 (M6.5). #335's issue asks to be "sequenced with #6 and #7 so they are not built twice", which this design does by building to #335's sketched contract (§8). A dialog takes little from #335: one modal per player (no viewer sets), and no re-render by default because re-sending resets typing. Options: (a) build now; (b) wait for #335, moving dialogs to M7; (c) write #335's design document first, then build #6 to it. |
+| **Q8** | The studio's HTML/CSS import: keep only the PNG? | **Keep the HTML; derive the PNG when needed.** A PNG alone loses information. The HTML/CSS is the stored asset; the editor's browser rasterizes it when a raster is needed (§14.3, row X). |
+| **Q9** | mcgui's map-drawn wall and fullscreen screens: file a view-kind issue? | **Filed as #453** (M7 with #335; the owner may move it). |
