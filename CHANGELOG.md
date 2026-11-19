@@ -344,6 +344,11 @@ releases may change file formats, settings and the public API.
 
 ### Changed
 
+- **Probe loop: `crash-restart` and `ctx.crashRestart()` (gui-input-durability.md §12 row Q, #312).** The probe kills the server
+  without a save (SIGKILL) and boots it again on the same world with a fresh log; the QA runner's `ctx.crashRestart()` adds the client
+  relaunch and rejoin. New QA entry `guiescrow.recovery-message` (not blessed): a stack in a `durable: required` slot at the crash comes
+  back on the next join with the recovery line, once. Test tooling only; no plugin behavior change.
+
 - **Crash-safe input slots, docs close-out (gui-input-durability.md §12 row Q, #312).** plugin.md §7 gains the escrow row (the account in
   the player's PDC, the ledger in `storage/escrow/`, backed up with `storage/` and restored with the player data); the glossary defines custody,
   durable, escrow account, escrow ledger and owed; logic.md §25 records that row H's kill-boundary IT exists while the word *crash-safe* stays

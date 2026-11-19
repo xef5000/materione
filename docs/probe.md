@@ -187,6 +187,13 @@ already asserts.
 
 - **Fresh world per `up`** — no leftovers from last session (pass
   `--keep-world` to debug across restarts).
+- **`crash-restart` is a crash, `restart` is not.** `restart` stops through RCON,
+  so Paper saves every player and chunk first. `crash-restart` kills the server
+  process (SIGKILL, TerminateProcess on Windows: no shutdown hook, no save) and
+  boots it again on the same world with a fresh `latest.log`; the client is left
+  disconnected. QA tests use `ctx.crashRestart()` (kill, boot, relaunch the client,
+  rejoin) and choose what the crash keeps with `save-all flush` first. It exists
+  for the crash-safe input slots' recovery path (gui-input-durability.md §12 row Q).
 - Everything lives under `harness/build/probe/` (a build dir): a killed
   process or a full-disk purge can never dirty the repo.
 - The probe server opts out of bStats usage metrics (`plugins/bStats/config.yml`,
