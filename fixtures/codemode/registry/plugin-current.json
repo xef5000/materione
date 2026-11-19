@@ -11847,6 +11847,19 @@
           },
           {
             "advanced": true,
+            "default": "4",
+            "description": "Animation speed: ticks each frame shows (1 to 1200; 20 ticks = 1 second). Frames play on surfaces that tick (a GUI's refresh clock); text without a clock shows frame 1",
+            "example": "4",
+            "id": "frame_ticks",
+            "label": "Frame ticks",
+            "order": 46,
+            "required": false,
+            "section": "appearance",
+            "type": "integer",
+            "uiHint": "number"
+          },
+          {
+            "advanced": true,
             "description": "Alias another glyph's bitmaps (no codepoint of its own)",
             "id": "reference",
             "label": "Reference glyph",

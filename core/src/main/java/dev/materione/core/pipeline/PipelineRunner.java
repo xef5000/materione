@@ -95,7 +95,9 @@ public final class PipelineRunner {
 
     /**
      * The run's packs with their asset index. A targeted run indexes only the packs it rebuilt, so the assets of a
-     * pack it rode over (the same instance as in the previous run) are carried from the previous parse.
+     * pack it rode over (the same instance as in the previous run) are carried from the previous parse. The run
+     * merges the result back into its context before validation, so a targeted run resolves references against the
+     * same assets a full run does (#362).
      */
     private ParsedContent parsedOf(PipelineContext context, java.util.List<ContentPack> previous) {
         var assets = new java.util.LinkedHashSet<>(context.knownAssets());
@@ -150,6 +152,10 @@ public final class PipelineRunner {
             quarantine.clear();
             parseStage.run(context);
             lastParsed = parsedOf(context, lastPacks);
+            // validation and the graph see the same asset set a full run would (#362): the assets carried from the
+            // packs a targeted run rode over join the ones the rebuilt packs just indexed
+            context.knownAssets().addAll(lastParsed.knownAssets());
+            context.paintingSizes().putAll(lastParsed.paintingSizes());
             lastPacks = java.util.List.copyOf(context.packs());
             validateStage.run(context);
             graphStage.run(context);

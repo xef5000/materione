@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Animated glyphs play their frames (#9, M6, runtime-systems §6).** A new frame-cycling provider
+  (`GlyphFrames`, `GlyphFrameText.advance`) rewrites an animated glyph's first-frame codepoint to the frame a
+  surface's clock selects, keeping every style, with no client mod and no pack change. GUI item names and lore play
+  on the window's `refresh:` clock (`RenderDiff` rewrites a slot only when a frame moved). New glyph field
+  `frame_ticks` (ticks per frame, 1 to 1200, default 4, clamped). Text with no clock (chat, signs, books, held-item
+  lore) still shows frame 1. Golden `fixtures/golden/glyphs/animated-cycle-font.json` locks the emitted cycle.
+  Still to do for #9: HUD elements (the HUD system is not built yet; the seam is `GlyphFrameText.advance`) and
+  held-item lore. QA: `glyphs.frame-cycling` (visual, not yet blessed).
+
 - **Self-description carries the engine's grammar and the markers the SDK generator needed (#355, D5, D13).**
   `authoring.describe` gains, additively: on a parameter `valueKind` (`steps`, `condition`, `conditions`, `flow`,
   `arguments`), `expression` (the entry binds the value as an expression), `multiple` (one value or a list: every trigger
@@ -344,6 +353,11 @@ releases may change file formats, settings and the public API.
 
 ### Changed
 
+- **Probe loop: `crash-restart` and `ctx.crashRestart()` (gui-input-durability.md §12 row Q, #312).** The probe kills the server
+  without a save (SIGKILL) and boots it again on the same world with a fresh log; the QA runner's `ctx.crashRestart()` adds the client
+  relaunch and rejoin. New QA entry `guiescrow.recovery-message` (not blessed): a stack in a `durable: required` slot at the crash comes
+  back on the next join with the recovery line, once. Test tooling only; no plugin behavior change.
+
 - **Crash-safe input slots, docs close-out (gui-input-durability.md §12 row Q, #312).** plugin.md §7 gains the escrow row (the account in
   the player's PDC, the ledger in `storage/escrow/`, backed up with `storage/` and restored with the player data); the glossary defines custody,
   durable, escrow account, escrow ledger and owed; logic.md §25 records that row H's kill-boundary IT exists while the word *crash-safe* stays
@@ -385,6 +399,15 @@ releases may change file formats, settings and the public API.
   `texture: block/<id>`, which the references stage reported as `MTR-0009` before the author had uploaded anything.
   It now writes a vanilla `minecraft:block/stone` placeholder that dry-runs clean; the form replaces it. Glyph,
   painting and sound scaffolds still need an uploaded file and are excluded from the clean-scaffold test (issue 380).
+- **A targeted reload no longer quarantines an item for a texture or model of another pack (#362).** Editing an item
+  that referenced `other:gem` from a different pack and reloading just that file reported "unresolved texture" and
+  quarantined it, though a full reload accepted it; the targeted run now validates against the same asset set.
+- **A reference that is not a valid id quarantines its resource instead of aborting the pipeline run (`MTR-0009`).**
+  A `template:`, `model:`, `texture:`, `item:`, `drops:`, `evolution:`, `reference:`, `jukebox_song:`, sound or glyph
+  source, or recipe `result:`/ingredient written as `Alpha Sword` (a space, an upper-case letter) threw out of
+  the reference validator and stopped the whole reload. The referencing resource is now quarantined with a diagnostic
+  naming the field and the value; the rest of the pack loads, and the dry run of an authoring transaction reports the
+  same diagnostic against the operation that wrote it.
 - **A GUI layer skipped for its id or its text now says why (`MTR-0052`).** A layer id YAML reads as
   a boolean (`yes`, `no`, `on`, `off`) or a number used to report only "id must match [a-z0-9_]+"
   with no layer named; it now names the value it read and says to quote it (`id: "yes"`). A text

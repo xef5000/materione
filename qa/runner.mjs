@@ -683,7 +683,9 @@ function spawnAgent() {
 
 // ==================================================================== ctx ==
 
-function makeCtx({ test, agent, testDir, transcript, logOffset }) {
+function makeCtx({ test, agent, testDir, transcript, logOffset: startOffset }) {
+  // Where this test's slice of latest.log starts; a crash restart begins a new log, so it moves to 0.
+  let logOffset = startOffset;
   const started = Date.now();
   const shots = [];
   const browserShots = new Set();
@@ -746,6 +748,16 @@ function makeCtx({ test, agent, testDir, transcript, logOffset }) {
       await new Promise((r) => setTimeout(r, 5000));
       await agentCall('client', 'client', {}, null, 360_000);
       await agentCall('join', 'join', {}, null, 180_000);
+    },
+    // Crash restart: the server is killed without a save (probe crash-restart:
+    // SIGKILL, so no player file or world is written), booted again on the same
+    // world with a fresh log, and the client relaunched and rejoined. Use
+    // `save-all` first to choose what the crash keeps. Log reads after it see
+    // only the new boot.
+    crashRestart: async () => {
+      await agentCall('crash-restart', 'crashRestart', {}, null, 600_000);
+      logOffset = 0;
+      await ctx.rejoin();
     },
     state: () => agentCall('state', 'state', {}, null, 60_000),
     chat: async (limit = 30) => {

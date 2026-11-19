@@ -15,10 +15,23 @@ import java.util.Objects;
  * @param loreMode how the lore lines combine with the source's own lore
  * @param amount how many, 1 to 64
  * @param glint the enchantment glint override, or null to keep the source's own
+ * @param phase the frame its animated glyphs show, or null when nothing in it animates (M6, #9); compared by the
+ *     frames it selects, so a slot is rewritten when an animation moves
  */
 public record Appearance(
         SlotSource source, String name, List<String> lore, ItemComponent.LoreMode loreMode, int amount,
-        Boolean glint) {
+        Boolean glint, GlyphPhase phase) {
+
+    public Appearance(
+            SlotSource source, String name, List<String> lore, ItemComponent.LoreMode loreMode, int amount,
+            Boolean glint) {
+        this(source, name, lore, loreMode, amount, glint, null);
+    }
+
+    /** The same appearance showing the frames {@code phase} selects. */
+    public Appearance withPhase(GlyphPhase phase) {
+        return new Appearance(source, name, lore, loreMode, amount, glint, phase);
+    }
 
     public Appearance {
         Objects.requireNonNull(source, "source");

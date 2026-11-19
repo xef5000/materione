@@ -48,7 +48,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                 validateTemplate(resource, target, environment, problems);
                 continue;
             }
-            NamespacedId targetId = resolve(resource.id().namespace(), target);
+            NamespacedId targetId = tryResolve(resource.id().namespace(), target);
+            if (targetId == null) {
+                reportMalformed(resource, field, target, problems);
+                continue;
+            }
             if (!exists(environment, targetId)) {
                 problems.add(new Diagnostic(
                         DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
@@ -178,8 +182,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if (!path.startsWith("painting/")) {
             path = "painting/" + path;
         }
-        NamespacedId assetId = resolve(resource.id().namespace(),
+        NamespacedId assetId = tryResolve(resource.id().namespace(),
                 colon >= 0 ? cleaned.substring(0, colon + 1) + path : path);
+        if (assetId == null) {
+            return; // a malformed texture is reported by the reference loop
+        }
         int[] size = environment.paintingSizes().get(assetId);
         if (size == null) {
             return; // not a readable painting png: nothing to compare
@@ -207,7 +214,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if (!(definition.get("jukebox_song") instanceof String target) || target.isBlank()) {
             return;
         }
-        NamespacedId soundId = resolve(resource.id().namespace(), target);
+        NamespacedId soundId = tryResolve(resource.id().namespace(), target);
+        if (soundId == null) {
+            reportMalformed(resource, "jukebox_song", target, problems);
+            return;
+        }
         for (ContentPack pack : environment.packs()) {
             if (!pack.id().equals(soundId.namespace())) {
                 continue;
@@ -257,7 +268,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             if (cleaned.toLowerCase(java.util.Locale.ROOT).endsWith(".ogg")) {
                 cleaned = cleaned.substring(0, cleaned.length() - 4);
             }
-            NamespacedId assetId = resolve(resource.id().namespace(), cleaned);
+            NamespacedId assetId = tryResolve(resource.id().namespace(), cleaned);
+            if (assetId == null) {
+                reportMalformed(resource, field, source, problems);
+                continue;
+            }
             if (!assetId.isReservedNamespace() && !environment.knownAssets().contains(assetId)) {
                 problems.add(new Diagnostic(
                         assetDiagnostic(field),
@@ -289,7 +304,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if (!(definition.get("reference") instanceof String target) || target.isBlank()) {
             return;
         }
-        NamespacedId targetId = resolve(resource.id().namespace(), target);
+        NamespacedId targetId = tryResolve(resource.id().namespace(), target);
+        if (targetId == null) {
+            reportMalformed(resource, "reference", target, problems);
+            return;
+        }
         for (ContentPack pack : environment.packs()) {
             if (!pack.id().equals(targetId.namespace())) {
                 continue;
@@ -334,7 +353,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                     || !(mapping.get("target") instanceof String target) || target.isBlank()) {
                 continue;
             }
-            NamespacedId targetId = resolve(resource.id().namespace(), target);
+            NamespacedId targetId = tryResolve(resource.id().namespace(), target);
+            if (targetId == null) {
+                reportMalformed(resource, "evolution", target, problems);
+                continue;
+            }
             if (!isFurniture(environment, targetId)) {
                 problems.add(new Diagnostic(
                         DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
@@ -373,7 +396,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if (!(definition.get("item") instanceof String target) || target.isBlank()) {
             return;
         }
-        NamespacedId targetId = resolve(resource.id().namespace(), target);
+        NamespacedId targetId = tryResolve(resource.id().namespace(), target);
+        if (targetId == null) {
+            reportMalformed(resource, "item", target, problems);
+            return;
+        }
         if (!isItem(environment, targetId)) {
             problems.add(new Diagnostic(
                     DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
@@ -402,7 +429,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             if (!(entry instanceof String target) || target.isBlank()) {
                 continue;
             }
-            NamespacedId targetId = resolve(resource.id().namespace(), target);
+            NamespacedId targetId = tryResolve(resource.id().namespace(), target);
+            if (targetId == null) {
+                reportMalformed(resource, "drops", target, problems);
+                continue;
+            }
             if (!isItem(environment, targetId) && !isPlaceable(environment, targetId)) {
                 problems.add(new Diagnostic(
                         DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
@@ -478,7 +509,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if (!(value instanceof String target) || target.isBlank()) {
             return;
         }
-        NamespacedId targetId = resolve(resource.id().namespace(), target);
+        NamespacedId targetId = tryResolve(resource.id().namespace(), target);
+        if (targetId == null) {
+            reportMalformed(resource, "ingredient".equals(field) ? "ingredients" : field, target, problems);
+            return;
+        }
         if (!exists(environment, targetId) && !isItem(environment, targetId)) {
             problems.add(new Diagnostic(
                     DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
@@ -665,6 +700,30 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         return raw.contains(":")
                 ? NamespacedId.parse(raw)
                 : NamespacedId.of(defaultNamespace, raw);
+    }
+
+    /**
+     * {@link #resolve} for a reference read from content: {@code null} when the text is not an id (a space, an
+     * upper-case letter, two colons). Validation reports that as {@code MTR-0009} on the referencing field, and the
+     * graph stage leaves the edge out, so one malformed reference never aborts the run (#364).
+     */
+    public static NamespacedId tryResolve(String defaultNamespace, String raw) {
+        try {
+            return resolve(defaultNamespace, raw);
+        } catch (IllegalArgumentException malformed) {
+            return null;
+        }
+    }
+
+    /** The diagnostic for a reference that is not a valid id: the resource is quarantined, the run goes on. */
+    private static void reportMalformed(
+            ContentResource resource, String field, String target, List<Diagnostic> problems) {
+        problems.add(new Diagnostic(
+                DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                resource.id() + ": " + field + " '" + target + "' is not a valid id",
+                resource.id(), null,
+                "write the reference as an id: lowercase letters, digits, '_', '-' or '.', optionally as namespace:name",
+                dev.materione.api.diagnostics.DiagnosticTarget.field(field)));
     }
 
 public static ContentEdgeType edgeTypeFor(String field) {

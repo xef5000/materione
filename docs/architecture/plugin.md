@@ -279,6 +279,15 @@ targeted run expands to a full run today. Splicing a targeted run is also unsafe
 it rebuilds the touched pack from the in-scope files alone, which drops that pack's other
 resources. Fingerprinting the manifest and fixing the splice must land together.
 
+**As built (#362): a targeted run validates against a full run's asset set.** Parse indexes `assets/` only for the
+packs it rebuilds, so the assets of a pack the run rides over would be missing and a cross-pack `texture: pack:name`
+(or `model`, sound source, painting) would quarantine falsely. `PipelineRunner` carries the previous run's asset
+index (and painting sizes) for every pack kept by instance and merges it into the run's context right after parse,
+before validation and the graph. No file is re-walked, so a targeted run costs what it did (a set merge); the
+index of a rebuilt pack is always fresh and a removed pack's assets leave with it. The same merged set backs
+`PipelineRunner.lastParsed()`, which a transaction's dry run reads, so the dry run and the real run resolve assets
+identically (D6).
+
 ### 4.2 Parse
 
 - **Discovery is recursive.** Every `*.yml` under a content directory (`templates/`, `items/`,

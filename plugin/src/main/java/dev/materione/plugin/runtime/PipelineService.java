@@ -874,7 +874,8 @@ public final class PipelineService {
                 glyph.tabComplete(),
                 glyph.shadowColor(),
                 glyph.reference(),
-                glyph.indexSpec());
+                glyph.indexSpec(),
+                glyph.isAnimated() ? glyph.frameTicks() : 0);
     }
 
     /**
