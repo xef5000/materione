@@ -199,6 +199,46 @@ class PipelineRunnerTest {
         });
     }
 
+    /**
+     * #364: a reference that is not an id ("Alpha Sword") threw out of the validator and aborted the
+     * whole run. Now each referencing resource is quarantined with MTR-0009 naming the field, and the
+     * run goes on: a clean sibling still reaches the graph.
+     */
+    @Test
+    void aReferenceThatIsNotAnIdQuarantinesItsResourceAndTheRunContinues(@TempDir Path packsRoot)
+            throws IOException {
+        Path pack = packsRoot.resolve("malformed");
+        Files.createDirectories(pack.resolve("items"));
+        Files.createDirectories(pack.resolve("blocks"));
+        Files.createDirectories(pack.resolve("recipes"));
+        Files.writeString(pack.resolve("pack.yml"), "id: malformed\nversion: 1.0.0\nschema_version: 1\n");
+        Files.writeString(pack.resolve("items/bad_template.yml"), "bad_template:\n  template: Alpha Sword\n");
+        Files.writeString(pack.resolve("items/bad_model.yml"),
+                "bad_model:\n  model: Alpha Sword\n  material: PAPER\n");
+        Files.writeString(pack.resolve("items/good.yml"), "good_item:\n  material: PAPER\n");
+        Files.writeString(pack.resolve("blocks/bad_block.yml"), """
+                bad_block:
+                  material: STONE
+                  item: Alpha Sword
+                  drops:
+                    - Alpha Sword
+                """);
+        Files.writeString(pack.resolve("recipes/bad_recipe.yml"), "bad_recipe:\n  result: Alpha Sword\n");
+
+        var result = runner.request(new ReloadScope.Everything(), packsRoot);
+        assertThat(result.completed()).isTrue();
+        // bad_block has two bad references (item and drops), so it is listed once per reason
+        assertThat(quarantine.all()).extracting(entry -> entry.resource().value())
+                .containsOnly("bad_template", "bad_model", "bad_block", "bad_recipe");
+        assertThat(quarantine.all()).allSatisfy(entry -> {
+            assertThat(entry.reason().code()).isEqualTo(DiagnosticCodes.UNRESOLVED_REFERENCE);
+            assertThat(entry.reason().message()).contains("Alpha Sword");
+        });
+        // the id-shaped fields say why; a template name is looked up, so it reports as unresolved
+        assertThat(quarantine.all()).anyMatch(entry -> entry.reason().message().contains("'Alpha Sword' is not a valid id"));
+        assertThat(runner.lastGraph().node(NamespacedId.parse("malformed:good_item"))).isPresent();
+    }
+
     @Test
     void missingManifestExcludesPackResourcesButDoesNotAbort(@TempDir Path packsRoot) throws IOException {
         Path pack = packsRoot.resolve("manifestless");

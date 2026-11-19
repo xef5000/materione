@@ -64,6 +64,9 @@ Server (Paper 26.x, superflat, offline, RCON):
                             opt into a verified local 26.x server jar
   down                      stop it (graceful "stop" via RCON)
   restart                   down + up
+  crash-restart             kill the server without a save (SIGKILL: no shutdown hooks,
+                            no player-data or world save), then up --keep-world --no-build
+                            with a fresh log; the client is left disconnected
   rcon <command...>         send a server-console command, print the reply
 Client (real windowed Minecraft + DebugBridge):
   client                    ensure runtime, launch the windowed probe client
@@ -269,7 +272,7 @@ async function cmdUp() {
   await doUp({ build: !args.includes('--no-build'), keepWorld: args.includes('--keep-world') });
 }
 
-async function doUp({ build = true, keepWorld = false } = {}) {
+async function doUp({ build = true, keepWorld = false, freshLog = false } = {}) {
   const pins = readPins();
   if (pidAlive(readPid('server'))) fail('probe server already running — use: probe restart (or down)');
 
@@ -299,6 +302,11 @@ async function doUp({ build = true, keepWorld = false } = {}) {
     }
     fs.rmSync(path.join(SERVER_DIR, 'plugins', 'Materione', 'generated', 'index'),
       { recursive: true, force: true });
+  }
+  // A crash restart keeps the world (that is the point) but not the log: the
+  // boot wait below reads markers from latest.log and must see only this boot's.
+  if (keepWorld && freshLog) {
+    fs.rmSync(path.join(SERVER_DIR, 'logs', 'latest.log'), { force: true });
   }
   fs.mkdirSync(path.join(SERVER_DIR, 'logs'), { recursive: true });
   const plugins = path.join(SERVER_DIR, 'plugins');
@@ -397,6 +405,24 @@ async function cmdDown() {
     try { process.kill(pid); } catch { /* gone */ }
   }
   log('server stopped.');
+}
+
+// Abrupt termination, the crash the escrow design's kill-boundary rows model
+// (gui-input-durability.md §5.10): SIGKILL runs no JVM shutdown hook, so Paper
+// saves neither the world nor any player file. On Windows process.kill maps
+// every signal to TerminateProcess, which is equally abrupt. What survives is
+// what an earlier autosave or `save-all` already wrote.
+async function cmdKill() {
+  const pid = readPid('server');
+  if (!pidAlive(pid)) { log('server is not running.'); return; }
+  try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ }
+  await waitFor('killed server process to exit', 30_000, async () => !pidAlive(pid));
+  log('server killed (no save).');
+}
+
+async function crashRestart({ build = false } = {}) {
+  await cmdKill();
+  await doUp({ build, keepWorld: true, freshLog: true });
 }
 
 // ---------------------------------------------------------------- rcon ----
@@ -817,6 +843,7 @@ async function cmdAgent() {
     }),
     up: (a) => doUp({ build: a?.build !== false, keepWorld: Boolean(a?.keepWorld) }),
     down: () => cmdDown(),
+    crashRestart: (a) => crashRestart({ build: Boolean(a?.build) }),
     client: () => cmdClient(),
     join: (a) => doJoin(a ?? {}),
     quit: () => cmdQuit(),
@@ -897,6 +924,7 @@ try {
     case 'up': await cmdUp(); break;
     case 'down': await cmdDown(); break;
     case 'restart': await cmdDown(); await cmdUp(); break;
+    case 'crash-restart': await crashRestart({ build: args.includes('--build') }); break;
     case 'client': await cmdClient(); break;
     case 'join': await cmdJoin(); break;
     case 'shot': await cmdShot(); break;
