@@ -1620,6 +1620,12 @@ and `webui/src/lib/codemode/proxy/`) is wired and verified with both the scripte
 
 ## 13. Not verified
 
+- **The deployed slice with a real model (2026-11-18).** The owner ran the assistant on `editor.materione.com` against a real
+  server after deploying the model proxy with the #437 charter (commit `34f03596`), and reported that it worked. Not yet recorded:
+  the evidence of a create, an approval and a revert in that run, with the editor and proxy versions; the spend of those turns
+  measured against the proxy's reservation and settlement, the AI Gateway logs and the D1 ledger; and the limits exercised (a
+  caller's daily allowance, the global pool, the request bounds, and that the gateway spend limit blocks). The benchmark's oracle
+  (§11) is not a substitute for any of these. Tracked in #405.
 - The numbers of §2.4 are as the fetched pages report them: the arXiv page through a mirror, and the daily.dev page is a
   summary of an article that was not read. None was cross-checked against the full papers or the original article.
 - *Resolved by #340 (§4.3, "Measured"):* the embedding (promise-returning host function, interrupt handler, hard memory cap

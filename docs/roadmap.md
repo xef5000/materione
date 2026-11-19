@@ -424,8 +424,9 @@ expansion (parity long tail, then scale), and M8 is very late, so this slice com
 
 - The chatbot layer fixed on the cloud editor page (`editor.materione.com`), whose tools are the editor's existing authoring
   operations over the existing editor protocol, generated from registry self-description (D5). No new endpoint, no new token scope,
-  the relay stays untrusted (architecture §14.8). Who runs and pays for the model is an open owner question under the Cloudflare cost
-  guardrails.
+  the relay stays untrusted (architecture §14.8). The model is called through Cloudflare AI Gateway with unified billing, by a model
+  proxy Worker separate from the relay, paid with Materione AI credits under the Cloudflare cost guardrails' one exception (#351,
+  #385, codemode.md §12.1).
 - **Code mode (D13, architecture §3.2, [`architecture/codemode.md`](architecture/codemode.md)):** the agent's one tool runs a
   TypeScript program against an **SDK generated from the registries** (read API, staged write operations, typed handles, presets
   and addon primitives), in a **browser sandbox** in the editor page; the program's only effect is the editor's own authoring
@@ -446,8 +447,8 @@ tasks, 10 pass on today's registries, and the failures name 13 missing primitive
 work as ranks 1 to 7 (#327 rules without a host and the entity and player triggers, #328 a clock, #329 entity and world verbs,
 #330 commands as content, #331 target addressing, #332 timers, #333 stack-held state), which is what #320's own example needs
 plus the cheap, broad ones; custody transfer, views over state and `/trade` stay after the slice (#334 to #336). The agent
-surface is sequenced as #337 to #349 (agent-benchmark.md §7). Open with the owner: the model provider (#351), the "no separate
-logic DSL" recommendation (#338), content tests (#350). Progress is tracked on the board under milestone **M6.5**, not here.
+surface is sequenced as #337 to #349 (agent-benchmark.md §7). The model provider was decided in #351 and the model in #385. Open with the
+owner: the "no separate logic DSL" recommendation (#338), content tests (#350). Progress is tracked on the board under milestone **M6.5**, not here.
 
 **Exit:** #320's acceptance criteria, shown by the benchmark. It needs the M6 close-out first.
 
