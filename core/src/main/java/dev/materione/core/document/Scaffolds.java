@@ -81,7 +81,7 @@ public final class Scaffolds {
         return "# " + id + " — created by the Materione editor\n"
                 + id + ":\n"
                 + "  technique: note_block # note_block | string | chorus | technical | stairs | slab\n"
-                + "  texture: block/" + id + "\n"
+                + "  texture: minecraft:block/stone # placeholder: upload assets/textures/block/" + id + ".png and point this at it\n"
                 + "  display_name: \"" + display(id) + "\"\n"
                 + "  # item: <item-id> — optional custom placement item; one is generated automatically\n";
     }
@@ -89,7 +89,7 @@ public final class Scaffolds {
     private static String furniture(String id) {
         return "# " + id + " — created by the Materione editor\n"
                 + id + ":\n"
-                + "  texture: block/" + id + "\n"
+                + "  texture: minecraft:block/stone # placeholder: upload assets/textures/block/" + id + ".png and point this at it\n"
                 + "  display_name: \"" + display(id) + "\"\n"
                 + "  rotation: 90\n"
                 + "  hitboxes:\n"

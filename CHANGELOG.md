@@ -395,6 +395,10 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A new block or furniture no longer starts with a texture that resolves to nothing.** The scaffold wrote
+  `texture: block/<id>`, which the references stage reported as `MTR-0009` before the author had uploaded anything.
+  It now writes a vanilla `minecraft:block/stone` placeholder that dry-runs clean; the form replaces it. Glyph,
+  painting and sound scaffolds still need an uploaded file and are excluded from the clean-scaffold test (issue 380).
 - **A targeted reload no longer quarantines an item for a texture or model of another pack (#362).** Editing an item
   that referenced `other:gem` from a different pack and reloading just that file reported "unresolved texture" and
   quarantined it, though a full reload accepted it; the targeted run now validates against the same asset set.

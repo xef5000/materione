@@ -1,6 +1,6 @@
 {
   "golden": "t16-crate",
-  "accepted": false,
+  "accepted": true,
   "applied": false,
   "stages": [
     {
@@ -32,14 +32,7 @@
       "ran": false
     }
   ],
-  "diagnostics": [
-    {
-      "operation": 2,
-      "code": "MTR-0009",
-      "severity": "error",
-      "message": "unresolved texture 'block/crate'"
-    }
-  ],
+  "diagnostics": [],
   "documents": [
     {
       "path": "items/crate_key.yml",
