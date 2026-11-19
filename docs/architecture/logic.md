@@ -2591,7 +2591,7 @@ by the owner.
     clicks are manual, with no deferred mirror, so the W1 window does not exist for them, and a death releases inside
     `PlayerDeathEvent` (W4) for them. The `best_effort` journal described above is unchanged and still not crash-safe (its
     one-tick mirror for server-applied clicks and drags can lose or duplicate an item across an autosave, W1; a death still
-    loses the items of a `best_effort` window). **Row B (#311) built the tier-3 barrier and the tier-2 exit path** (see the design's *Row B as built*); row H is not built, so nothing is called crash-safe yet.
+    loses the items of a `best_effort` window). **Row B (#311) built the tier-3 barrier and the tier-2 exit path** (see the design's *Row B as built*). **Row H (#313) built the kill-boundary IT** (`PaperEscrowCrashIT`; K23 and the real tier-2 rows with #248): every row of the crash-boundary table now has a test against a real kill. The word *crash-safe* stays gated on rows M, L, P, B and H being green on main, the owner's gate (the design's header); until then the product calls a `required` layer tracked and recoverable, no more.
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
 14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real

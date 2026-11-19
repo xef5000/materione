@@ -344,6 +344,11 @@ releases may change file formats, settings and the public API.
 
 ### Changed
 
+- **Crash-safe input slots, docs close-out (gui-input-durability.md §12 row Q, #312).** plugin.md §7 gains the escrow row (the account in
+  the player's PDC, the ledger in `storage/escrow/`, backed up with `storage/` and restored with the player data); the glossary defines custody,
+  durable, escrow account, escrow ledger and owed; logic.md §25 records that row H's kill-boundary IT exists while the word *crash-safe* stays
+  gated on green-on-main. No behavior change. Still open in row Q: a hard-kill restart for the probe loop and the three QA entries that need it.
+
 - **Breaking (GUI files): `rows: N` is replaced by `container: chest_N`, and the other containers are `hopper` and `dispenser` (gui.md §12.4, #290).**
   A GUI names the container profile it is designed in, as a required top-level field: `chest_1` to `chest_6` (the chests, as before), `hopper`
   and `dispenser`. `rows:` is removed outright, with no alias and no second spelling, so a GUI file that still says `rows:` has no container and is
