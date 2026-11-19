@@ -1,6 +1,6 @@
 {
   "golden": "t19-vending-machine",
-  "accepted": false,
+  "accepted": true,
   "applied": false,
   "stages": [
     {
@@ -32,14 +32,7 @@
       "ran": false
     }
   ],
-  "diagnostics": [
-    {
-      "operation": 1,
-      "code": "MTR-0009",
-      "severity": "error",
-      "message": "unresolved texture 'block/vending_machine'"
-    }
-  ],
+  "diagnostics": [],
   "documents": [
     {
       "path": "furnitures/vending_machine.yml",

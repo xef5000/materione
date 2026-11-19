@@ -381,6 +381,10 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A new block or furniture no longer starts with a texture that resolves to nothing.** The scaffold wrote
+  `texture: block/<id>`, which the references stage reported as `MTR-0009` before the author had uploaded anything.
+  It now writes a vanilla `minecraft:block/stone` placeholder that dry-runs clean; the form replaces it. Glyph,
+  painting and sound scaffolds still need an uploaded file and are excluded from the clean-scaffold test (issue 380).
 - **A GUI layer skipped for its id or its text now says why (`MTR-0052`).** A layer id YAML reads as
   a boolean (`yes`, `no`, `on`, `off`) or a number used to report only "id must match [a-z0-9_]+"
   with no layer named; it now names the value it read and says to quote it (`id: "yes"`). A text

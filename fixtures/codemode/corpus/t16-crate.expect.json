@@ -8,6 +8,6 @@
   "result": "pass",
   "gaps": [],
   "replay": {
-    "note": "The dry run reports MTR-0009 for texture 'block/crate', a default the furniture scaffold writes beside a model that resolves to nothing in the pack (benchmark S18). The list is otherwise accepted: the model resolves (the core writes the uploaded asset by the server's path convention since #355), and the rule on furnitures/crate.yml, the key item and the choose all compile (the behavior stage ran)."
+    "note": "Dry run clean since the furniture scaffold stopped writing an unresolvable block/<id> texture (issue 380): it now writes a vanilla minecraft:block/stone placeholder. The list is accepted: the model resolves (the core writes the uploaded asset by the server path convention since #355), and the rule on furnitures/crate.yml, the key item and the choose all compile."
   }
 }
