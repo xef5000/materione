@@ -110,8 +110,10 @@ These are the load-bearing decisions. Everything else in this document follows f
 
 > **Status.** Decided as a direction by the owner on #320 (2026-11). The owner answered the three open questions of the first draft
 > on PR #322 (2026-11): presets are declared by reference and resolved at runtime (§14.7), the agent surface is a chatbot in the
-> cloud editor over the existing protocol (§14.8), and its milestone sits between M6 and M7 (§14.9). **Still open:** the preset
-> reference's spelling and versioning (§14.7), and which model sits behind the chatbot (§14.8; host and billing decided, #351).
+> cloud editor over the existing protocol (§14.8), and its milestone sits between M6 and M7 (§14.9). On PR #450 (2026-11-19) the owner
+> decided that preset definitions are a user-extensible `preset` content type, and the item spelling stays `mechanics: [backpack: {…}]`
+> (§14.7). **Still open:** the preset reference's versioning and its spelling for hosts with no `mechanics:` list (§14.7), and which
+> model sits behind the chatbot (§14.8; host and billing decided, #351).
 > Companion: [`architecture/primitives.md`](architecture/primitives.md), the audit of today's surface against this decision.
 
 **Context.** Minecraft's content tooling is fragmented: each plugin generalizes one area (resource packs, GUIs, mobs) and the
@@ -1068,7 +1070,7 @@ primary method (display entities only; legacy paths only if a converter needs th
 6. **Community pack hub** — whether the project also hosts a public pack registry/marketplace
    (natural extension of constraint #3, but real infrastructure and moderation scope); decide
    after the editor proves out.
-7. **Preset representation (D12) — decided (owner, PR #322); spelling and versioning open.** The owner's answer: *a preset loads
+7. **Preset representation (D12) — decided (owner, PR #322); where definitions live decided (PR #450, 2026-11-19); versioning open.** The owner's answer: *a preset loads
    logic behind the scenes. To get a backpack behavior, the user can either define the exact behavior themselves or declare the preset
    used. At runtime the preset loads all the logic. A backpack should not be a defined "behavior".* Recorded as the **declared reference,
    resolved at runtime** form of option (a):
@@ -1084,12 +1086,20 @@ primary method (display entities only; legacy paths only if a converter needs th
 
    Option (b), writing the full expanded content files into the author's pack, is **not** the representation: it has no upgrade
    path and a copy per instance, and the editor could only show "this is a backpack" by inferring it from the copy (a second truth
-   in waiting, D1). It survives as the model for flow-scale logic recipes (logic.md §4.6). **Still open:** **(i)** the spelling: keep the
-   mechanic-entry shape where one exists (`backpack: {rows, title}` unchanged, so no existing file migrates) or a generic `preset:`
-   key for non-item resources; **(ii)** where definitions live: data in packs (a `preset` content type, recommended by R1 and R7) or
-   Java registry entries like the logic `Recipe` SPI; **(iii)** pinning and versioning, so that a plugin update that improves a
-   built-in preset cannot silently change existing content; **(iv)** a read-only expanded view of what a declaration resolves to, for
-   debugging and for the agent. Tracked in #320 and #304.
+   in waiting, D1). It survives as the model for flow-scale logic recipes (logic.md §4.6).
+
+   **Decided (owner, [PR #450](https://github.com/xef5000/materione/pull/450), 2026-11-19).** The owner's words: *"the materione builtin
+   pack would have the backpack preset, but content makers would be allowed to create their own presets (to streamline the creation of
+   content)."* Recorded as:
+
+   | | Decided |
+   |---|---|
+   | **(ii) Where definitions live** | **A `preset` content type, user-extensible.** Presets are data in packs: the built-in pack ships `materione:backpack`, and content makers author their own presets in their own packs. Not Java registry entries. Presets are therefore files (D1), self-describe and round-trip losslessly (D5, §5.6), are resolved by the one pipeline (D6), take namespaced ids under the ordinary reference rules (§5.1; `materione` stays reserved, §7.3), and a content maker's preset obeys R4 exactly as a built-in one. Design: [`architecture/backpack-preset.md`](architecture/backpack-preset.md) §4.4. |
+   | **(i) The spelling, for items** | **Keep the mechanic-entry shape**: `mechanics: [backpack: {rows, title}]` is the declaration, unchanged, so no existing file migrates. Settled as the backpack design's recommendation; the spelling for hosts with no `mechanics:` list (a generic key) is decided when the first such preset is designed. |
+
+   **Still open:** **(iii)** pinning and versioning, so that a plugin update that improves a built-in preset cannot silently change
+   existing content; **(iv)** a read-only expanded view of what a declaration resolves to, for debugging and for the agent. Tracked in
+   #320 and #304.
 8. **MCP transport and auth (#320) — decided (owner, PR #322); the model's host and billing decided (#351), the model itself open.** The owner's answer: *the MCP
    would get deployed at the level of the cloud editor only. The cloud editor (editor.materione.com) has an extra fixed layer on the
    page that opens a chatbot. The chatbot has full access to content authoring, through tool calls. We do not create a new endpoint;
