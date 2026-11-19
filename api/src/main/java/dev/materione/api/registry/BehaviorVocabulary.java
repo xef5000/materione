@@ -43,6 +43,8 @@ import java.util.Objects;
  * @param listSources registered list sources, sorted by id (logic.md §4.5, §28, §31)
  * @param itemSources registered item sources, sorted by id (logic.md §4.4, §31)
  * @param inputMethods registered input methods of the {@code prompt} step, sorted by id (logic.md §4.5, §29, §31)
+ * @param currencyIntegrations registered currency integrations, sorted by id (logic.md §18): the choices of a
+ *                    currency file's {@code integration:} key, each with the keys that integration reads
  * @param grammar     the rest of the engine's closed grammar as data: the composite conditions, the flow keys of a
  *                    rule and the keys of a guarding action's step (issue 355)
  */
@@ -61,6 +63,7 @@ public record BehaviorVocabulary(
         List<ListSourceEntry> listSources,
         List<ItemSourceEntry> itemSources,
         List<InputMethodEntry> inputMethods,
+        List<CurrencyIntegrationEntry> currencyIntegrations,
         Grammar grammar) {
 
     /** The vocabulary schema version this record models. */
@@ -81,7 +84,29 @@ public record BehaviorVocabulary(
         listSources = listSources == null ? List.of() : List.copyOf(listSources);
         itemSources = itemSources == null ? List.of() : List.copyOf(itemSources);
         inputMethods = inputMethods == null ? List.of() : List.copyOf(inputMethods);
+        currencyIntegrations = currencyIntegrations == null ? List.of() : List.copyOf(currencyIntegrations);
         grammar = grammar == null ? Grammar.NONE : grammar;
+    }
+
+    /** The shape before currency integrations (logic.md §18): the same members, without them. */
+    public BehaviorVocabulary(
+            List<Event> events,
+            List<Action> actions,
+            List<ParameterSchema> ruleOptions,
+            List<ParameterSchema> actionOptions,
+            List<Mechanic> mechanics,
+            List<Trigger> triggers,
+            List<Condition> conditions,
+            List<StepKind> steps,
+            List<LogicCategory> categories,
+            List<Function> functions,
+            List<Recipe> recipes,
+            List<ListSourceEntry> listSources,
+            List<ItemSourceEntry> itemSources,
+            List<InputMethodEntry> inputMethods,
+            Grammar grammar) {
+        this(events, actions, ruleOptions, actionOptions, mechanics, triggers, conditions, steps, categories,
+                functions, recipes, listSources, itemSources, inputMethods, List.of(), grammar);
     }
 
     /** The shape before {@link Grammar} (issue 355): the same members, without it. */
@@ -155,7 +180,7 @@ public record BehaviorVocabulary(
     public BehaviorVocabulary withMechanics(List<Mechanic> registered) {
         return new BehaviorVocabulary(events, actions, ruleOptions, actionOptions, registered,
                 triggers, conditions, steps, categories, functions, recipes, listSources, itemSources, inputMethods,
-                grammar);
+                currencyIntegrations, grammar);
     }
 
     /**
@@ -306,6 +331,23 @@ public record BehaviorVocabulary(
      */
     public record ListSourceEntry(String id, ListSourceDescription description, String registeredBy) {
         public ListSourceEntry {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(description, "description");
+            registeredBy = registeredBy == null ? "" : registeredBy;
+        }
+    }
+
+    /**
+     * One registered currency integration (logic.md §18): how a currency file's money is reached. Its parameters
+     * are the keys a currency file that names it carries, so the editor draws them from here instead of keeping a
+     * list.
+     *
+     * @param id           the integration key as authors write it ({@code vault}, {@code playerpoints})
+     * @param description  its name and the keys it reads
+     * @param registeredBy owning plugin name
+     */
+    public record CurrencyIntegrationEntry(String id, SelfDescription description, String registeredBy) {
+        public CurrencyIntegrationEntry {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(description, "description");
             registeredBy = registeredBy == null ? "" : registeredBy;

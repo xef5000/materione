@@ -1747,6 +1747,22 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     unloadable plugin as `MTR-0061` rather than failing, the whole-number rule is tested, and the
     ExcellentEconomy adapter is exercised against the plugin's real API types (only the economy behind them is
     a proxy). A live check against each real plugin is manual.
+37. **The currency form is drawn from the integration registry.** `BehaviorVocabulary` gains
+    `currencyIntegrations` (additive, like `inputMethods`: the vocabulary stays version 2): one entry per
+    registered integration, `{id, displayName, description, parameters, registeredBy}`, sorted by id and built by
+    `VocabularyBuilder` from the `currency-integrations` registry, so the choices are what this server has: the
+    built-in `custom` and `xp`, `vault` while Vault runs, the five economy plugins above while they run, and an
+    addon's own. The editor (`webui/src/lib/currency-form.ts`) turns that into an ordinary schema: `integration`
+    becomes a choice among them (shown by display name), and the keys drawn beneath it, in a section named for the
+    integration, are the chosen integration's own `parameters`. The studio and the file editor both render the
+    result, and nothing in the editor names a particular integration. A key an integration declares is shown only
+    through it (the currency type's own flat copies of the `custom` keys are dropped from the form, but kept in the
+    schema for the code-mode SDK); a key of an integration that is not the chosen one stays with the file's other
+    unrendered keys, reported rather than lost; an integration the file names that this server does not register is
+    shown as such (`xyz (not registered on this server)`) and its keys stay in the YAML. A server that predates the
+    section sends none, and the form is the old one. **Not covered:** the code-mode SDK still types a currency from
+    the content type's own schema, so it knows only the `custom` integration's keys; typing integration keys from
+    this section is the follow-up.
 
 **For #208 and #212.** `BuiltinLogic.providerActions`, `BuiltinLogic.currencyIntegrations` and
 `BuiltinLogic.currencyFunctions` are separate blocks in `BuiltinLogic`, appended beside the six M2 actions and

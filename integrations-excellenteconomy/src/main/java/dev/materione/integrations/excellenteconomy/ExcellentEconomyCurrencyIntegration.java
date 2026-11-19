@@ -40,7 +40,8 @@ public final class ExcellentEconomyCurrencyIntegration implements CurrencyIntegr
         return new SelfDescription("ExcellentEconomy",
                 "One of the currencies ExcellentEconomy defines. Name it with currency; a player must be online to use it.",
                 List.of(new ParameterSchema("currency", ParameterType.STRING, true, null,
-                        "The ExcellentEconomy currency id, as in its currencies folder (coins, gems)", null, null)),
+                        "The ExcellentEconomy currency id, as in its currencies folder (coins, gems)", null, null)
+                        .withEditor(new ParameterSchema.EditorMetadata("Currency", "economy", 10, false, "text", "", "coins"))),
                 "2.0.0");
     }
 

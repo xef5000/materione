@@ -4,6 +4,7 @@
   import RichTextEditor from './RichTextEditor.svelte';
   import MaterialPicker from './MaterialPicker.svelte';
   import { ops, unwrap } from '../api';
+  import { withCurrencyIntegrations } from '../currency-form';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
   import {
     connection, logActivity, openBlockbench, registerEditorGuard, revealInStudio,
@@ -70,11 +71,13 @@
   // Schemas are keyed by the type's DIRECTORY (where the file lives) — the
   // registry name ("item") never equals the path prefix ("items").
   const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
-  const schema = $derived(
+  const schema = $derived(withCurrencyIntegrations(
     workspace.types.find((t: TypeInfo) => t.directory === typeDirectory) ??
       workspace.types.find((t: TypeInfo) => t.name === resource.type) ??
       workspace.types.find((t: TypeInfo) => t.name === typeDirectory),
-  );
+    workspace.behavior?.currencyIntegrations,
+    (data[rootId] as Record<string, unknown> | undefined)?.integration,
+  ));
   const fields = $derived(schema?.parameters ?? []);
   const sections = $derived([...new Set(
     fields.filter((field) => !field.advanced).map((field) => field.section ?? 'general'),

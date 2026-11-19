@@ -37,9 +37,11 @@ public final class UltraEconomyCurrencyIntegration implements CurrencyIntegratio
                 "One of the currencies UltraEconomy defines, read from the player's bank or from their hand.",
                 List.of(
                         new ParameterSchema("currency", ParameterType.STRING, true, null,
-                                "The UltraEconomy currency name", null, null),
+                                "The UltraEconomy currency name", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata("Currency", "economy", 10, false, "text", "", "Dollars")),
                         new ParameterSchema("balance", ParameterType.ENUM, false, "bank",
-                                "Which part of the account is the currency: bank or hand", PURSES, null)),
+                                "Which part of the account is the currency: bank or hand", PURSES, null)
+                                .withEditor(new ParameterSchema.EditorMetadata("Balance", "economy", 20, false, "text", "", "bank"))),
                 "2.0.0");
     }
 

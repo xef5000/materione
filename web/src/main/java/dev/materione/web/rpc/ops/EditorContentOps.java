@@ -1105,6 +1105,17 @@ public final class EditorContentOps {
             inputMethods.add(json);
         }
         object.add("inputMethods", inputMethods);
+        // the currency integrations (logic.md §18): the choices of a currency file's integration key and the keys each
+        // reads, so the editor's currency form is drawn from the registry and not from a list kept in the editor
+        var currencyIntegrations = new com.google.gson.JsonArray();
+        for (var integration : vocabulary.currencyIntegrations()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", integration.id());
+            describeInto(json, integration.description());
+            json.addProperty("registeredBy", integration.registeredBy());
+            currencyIntegrations.add(json);
+        }
+        object.add("currencyIntegrations", currencyIntegrations);
     }
 
     /** A context schema: each variable's path, value kind, one line and the hosts that fill it. */

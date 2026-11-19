@@ -55,11 +55,14 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
                 "A currency that a command gives and takes, with its balance read from a PlaceholderAPI token",
                 List.of(
                         new ParameterSchema("deposit-command", ParameterType.STRING, true, null,
-                                "Console command that gives money; {player} and {amount} are filled in", null, null),
+                                "Console command that gives money; {player} and {amount} are filled in", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata("Deposit command", "economy", 10, false, "text", "", "gems give {player} {amount}")),
                         new ParameterSchema("withdraw-command", ParameterType.STRING, true, null,
-                                "Console command that takes money; {player} and {amount} are filled in", null, null),
+                                "Console command that takes money; {player} and {amount} are filled in", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata("Withdraw command", "economy", 20, false, "text", "", "gems take {player} {amount}")),
                         new ParameterSchema("balance-placeholder", ParameterType.STRING, true, null,
-                                "PlaceholderAPI token whose value is the balance as a number", null, null)),
+                                "PlaceholderAPI token whose value is the balance as a number", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata("Balance placeholder", "economy", 30, false, "text", "", "%myplugin_balance_gems%"))),
                 "2.0.0");
     }
 

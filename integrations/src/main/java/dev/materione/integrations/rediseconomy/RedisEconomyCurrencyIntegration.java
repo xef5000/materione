@@ -34,7 +34,8 @@ public final class RedisEconomyCurrencyIntegration implements CurrencyIntegratio
         return new SelfDescription("RedisEconomy",
                 "One of the currencies RedisEconomy shares through Redis; its default currency when currency is left out.",
                 List.of(new ParameterSchema("currency", ParameterType.STRING, false, null,
-                        "The RedisEconomy currency name; RedisEconomy's default currency when omitted", null, null)),
+                        "The RedisEconomy currency name; RedisEconomy's default currency when omitted", null, null)
+                        .withEditor(new ParameterSchema.EditorMetadata("Currency", "economy", 10, false, "text", "", "gems"))),
                 "2.0.0");
     }
 

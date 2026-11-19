@@ -29,7 +29,8 @@
         "recipes": [],
         "listSources": [],
         "itemSources": [],
-        "inputMethods": []
+        "inputMethods": [],
+        "currencyIntegrations": []
       }
     }
   },

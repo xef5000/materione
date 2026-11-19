@@ -10,6 +10,7 @@ import dev.materione.api.logic.ItemSourceDescription;
 import dev.materione.api.logic.ListSourceDescription;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.registry.BehaviorVocabulary;
+import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import java.util.List;
@@ -74,11 +75,37 @@ class VocabularySourcesJsonTest {
     }
 
     @Test
+    void currencyIntegrationsCarryTheirNameAndTheKeysTheyRead() {
+        var integration = new BehaviorVocabulary.CurrencyIntegrationEntry("excellenteconomy",
+                new SelfDescription("ExcellentEconomy", "One of its currencies", List.of(
+                        new ParameterSchema("currency", ParameterType.STRING, true, null, "The currency id", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Currency", "economy", 10, false, "text", "", "coins"))), "2.0.0"),
+                "Materione");
+        var vocabulary = new BehaviorVocabulary(
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(integration), null);
+
+        JsonObject json = EditorContentOps.vocabularyJson(vocabulary);
+
+        JsonObject entry = json.getAsJsonArray("currencyIntegrations").get(0).getAsJsonObject();
+        assertThat(entry.get("id").getAsString()).isEqualTo("excellenteconomy");
+        assertThat(entry.get("displayName").getAsString()).isEqualTo("ExcellentEconomy");
+        assertThat(entry.get("registeredBy").getAsString()).isEqualTo("Materione");
+        JsonObject key = entry.getAsJsonArray("parameters").get(0).getAsJsonObject();
+        assertThat(key.get("id").getAsString()).isEqualTo("currency");
+        assertThat(key.get("required").getAsBoolean()).isTrue();
+        assertThat(key.get("label").getAsString()).isEqualTo("Currency");
+        assertThat(key.get("example").getAsString()).isEqualTo("coins");
+    }
+
+    @Test
     void anOlderVocabularyShapeStillWritesEmptySections() {
         JsonObject json = EditorContentOps.vocabularyJson(BehaviorVocabulary.empty());
 
         assertThat(json.getAsJsonArray("listSources")).isEmpty();
         assertThat(json.getAsJsonArray("itemSources")).isEmpty();
         assertThat(json.getAsJsonArray("inputMethods")).isEmpty();
+        assertThat(json.getAsJsonArray("currencyIntegrations")).isEmpty();
     }
 }
