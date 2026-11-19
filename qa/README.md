@@ -155,8 +155,7 @@ node qa/runner.mjs run economy.playerpoints-roundtrip economy.excellenteconomy-t
 ```
 
 Not covered here yet: UltraEconomy (a paid TechsCode plugin, so the jar has to be supplied by whoever runs the
-suite), RedisEconomy (needs a Redis server and a build that runs on 26.x) and TokenManager (its last update was in
-2023 and it reports problems on 1.21, so it is unlikely to run on 26.x).
+suite) and RedisEconomy (needs a Redis server and a build that runs on 26.x).
 
 ### Local native currency callback gate
 

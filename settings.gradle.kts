@@ -58,8 +58,7 @@ dependencyResolutionManagement {
             name = "jitpack"
             content {
                 includeGroup("com.github.MilkBowl")
-                // TokenManager and RedisEconomy publish their APIs here too (currency integrations).
-                includeGroup("com.github.Realizedd")
+                // RedisEconomy publishes its API here too (currency integrations).
                 includeGroup("com.github.Emibergo02")
             }
         }

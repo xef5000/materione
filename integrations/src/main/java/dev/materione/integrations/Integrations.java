@@ -13,7 +13,6 @@ import dev.materione.integrations.luckperms.LuckPermsPermissionProvider;
 import dev.materione.integrations.playerpoints.PlayerPointsCurrencyIntegration;
 import dev.materione.integrations.proxy.BungeeCordTransfer;
 import dev.materione.integrations.rediseconomy.RedisEconomyCurrencyIntegration;
-import dev.materione.integrations.tokenmanager.TokenManagerCurrencyIntegration;
 import dev.materione.integrations.ultraeconomy.UltraEconomyCurrencyIntegration;
 import dev.materione.integrations.vault.VaultCurrencyIntegration;
 import dev.materione.integrations.vault.VaultPermissionProvider;
@@ -44,7 +43,7 @@ import org.bukkit.plugin.Plugin;
  * channel when {@code proxyTransfer} is set; the transfer packet is the plugin's own provider.
  *
  * <p><b>Currency integrations.</b> Each supported economy plugin (PlayerPoints, ExcellentEconomy, UltraEconomy,
- * TokenManager, RedisEconomy) registers its own integration ({@code materione:playerpoints}, ...) while it
+ * RedisEconomy) registers its own integration ({@code materione:playerpoints}, ...) while it
  * runs. A plugin that runs several currencies (ExcellentEconomy, UltraEconomy, RedisEconomy) is one integration
  * that many Materione currencies name, each with its own {@code currency:} key.
  *
@@ -71,8 +70,6 @@ public final class Integrations implements Listener, AutoCloseable {
                     ExcellentEconomyCurrencyIntegration::new),
             new CurrencyAdapter("ultraeconomy", List.of(UltraEconomyCurrencyIntegration.PLUGIN),
                     UltraEconomyCurrencyIntegration::new),
-            new CurrencyAdapter("tokenmanager", List.of(TokenManagerCurrencyIntegration.PLUGIN),
-                    TokenManagerCurrencyIntegration::new),
             new CurrencyAdapter("rediseconomy", List.of(RedisEconomyCurrencyIntegration.PLUGIN),
                     RedisEconomyCurrencyIntegration::new));
 

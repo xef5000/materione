@@ -55,7 +55,6 @@ playerpoints-api = "3.3.2"
 excellenteconomy-api = "2.8.0"
 nightcore-api = "2.16.7" # ExcellentEconomy's base library: test-only, its currency type extends one of its interfaces
 ultraeconomy-api = "1.1.2"
-tokenmanager-api = "3.2.4"
 rediseconomy-api = "4.3.19"
 
 # Harness server pin — single source of truth for CI + integration tests.
@@ -116,7 +115,6 @@ playerpoints-api = { module = "org.black_ixx:playerpoints", version.ref = "playe
 excellenteconomy-api = { module = "su.nightexpress.excellenteconomy:ExcellentEconomy", version.ref = "excellenteconomy-api" }
 nightcore-api = { module = "su.nightexpress.nightcore:main", version.ref = "nightcore-api" }
 ultraeconomy-api = { module = "me.TechsCode:UltraEconomyAPI", version.ref = "ultraeconomy-api" }
-tokenmanager-api = { module = "com.github.Realizedd:TokenManager", version.ref = "tokenmanager-api" }
 rediseconomy-api = { module = "com.github.Emibergo02:RedisEconomy", version.ref = "rediseconomy-api" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }

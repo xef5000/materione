@@ -3,7 +3,7 @@ package dev.materione.integrations.currency;
 import java.util.OptionalLong;
 
 /**
- * Amounts for currencies that only hold whole numbers (PlayerPoints keeps an int, TokenManager a long).
+ * Amounts for currencies that only hold whole numbers (PlayerPoints keeps an int).
  * An amount with a fraction is refused rather than rounded: the engine's contract is that a failed
  * money step changes nothing, and a silently truncated price would charge less than the author wrote.
  */
