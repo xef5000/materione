@@ -7,6 +7,8 @@ import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.behavior.logic.OverlayLogicContext;
 import dev.materione.content.gui.ItemComponent;
+import dev.materione.core.runtime.RuntimeGlyphs;
+import dev.materione.platform.text.GlyphText;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
 import dev.materione.plugin.gui.dynamic.ItemBinding;
@@ -24,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Decides what every slot of a window shows for one viewer (logic.md §6.3, §6.7). Pure: it reads the compiled GUI
@@ -49,10 +52,20 @@ import java.util.Set;
 public final class SlotRenderer {
 
     private final RenderReporter reporter;
+    private final Supplier<RuntimeGlyphs> glyphSource;
 
     /** @param reporter where a worked-around problem goes; {@link RenderReporter#SILENT} drops it */
     public SlotRenderer(RenderReporter reporter) {
+        this(reporter, GlyphText::glyphs);
+    }
+
+    /**
+     * @param reporter where a worked-around problem goes
+     * @param glyphSource the live glyph registry, read once per render (null before the first apply)
+     */
+    public SlotRenderer(RenderReporter reporter, Supplier<RuntimeGlyphs> glyphSource) {
         this.reporter = reporter;
+        this.glyphSource = glyphSource;
     }
 
     /**
@@ -95,6 +108,12 @@ public final class SlotRenderer {
             } else {
                 decideList(pass, listLayers.get(list--), decided, slots, lists);
             }
+        }
+        // animated glyphs play on this window's clock (M6, #9); the resolved map stays phase-free so a partial render
+        // can reuse it, and the phase is stamped on the shown copy only
+        RuntimeGlyphs glyphs = glyphSource.get();
+        if (glyphs != null && glyphs.hasAnimations()) {
+            slots.replaceAll((slot, appearance) -> AnimatedAppearances.at(appearance, glyphs, ticks));
         }
         return new Rendered(slots, hidden, resolved, null, Map.of(), lists.render());
     }

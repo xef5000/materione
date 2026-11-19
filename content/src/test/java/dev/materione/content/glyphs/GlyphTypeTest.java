@@ -147,6 +147,21 @@ class GlyphTypeTest {
     }
 
     @Test
+    void frameTicksDefaultsReadsAndClampsWithoutRejecting() {
+        var frames = List.of("gui/f1", "gui/f2");
+        assertThat(parseGlyph(map("frames", frames)).frameTicks())
+                .isEqualTo(dev.materione.core.text.GlyphFrames.DEFAULT_FRAME_TICKS);
+        assertThat(parseGlyph(map("frames", frames, "frame_ticks", 10)).frameTicks()).isEqualTo(10);
+        // fail-soft: an out-of-range speed is brought into range, the glyph still loads
+        assertThat(parseGlyph(map("frames", frames, "frame_ticks", 0)).frameTicks()).isEqualTo(1);
+        assertThat(parseGlyph(map("frames", frames, "frame_ticks", 99999)).frameTicks()).isEqualTo(1200);
+        // not a number: the default
+        assertThat(parseGlyph(map("frames", frames, "frame_ticks", "fast")).frameTicks())
+                .isEqualTo(dev.materione.core.text.GlyphFrames.DEFAULT_FRAME_TICKS);
+        assertThat(type.describe().parameters()).anySatisfy(p -> assertThat(p.id()).isEqualTo("frame_ticks"));
+    }
+
+    @Test
     void referenceGlyphEmitsNothingAndAllocatesNothing() {
         var glyph = parseGlyph(map("reference", "sample:heart", "index", "1..3"));
         var emitter = new RecordingEmitter();

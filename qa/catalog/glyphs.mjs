@@ -3,7 +3,7 @@
 // chat screenshot is archived evidence (the bitmap itself is judged by the
 // pack compile acceptance and the font-engine readback, not by eyes here).
 
-import { test } from './_lib.mjs';
+import { test, slotType } from './_lib.mjs';
 
 export default [
   test({
@@ -650,6 +650,45 @@ return 'sent'`, 15_000);
       await ctx.sleep(700);
       await ctx.shot('effects-frame-b');
       ctx.needsEyes('the four effect words (rainbow, wave, shake, pulse) render animated by the injected text shader — rainbow cycling hues, wave rippling vertically, shake jittering, pulse fading — visibly DIFFERENT between the two frames while the plain A/B words stay static, and no unshaded fallback (the effect words are not plain solid magenta-family signal text)');
+    },
+  }),
+
+  test({
+    id: 'glyphs.frame-cycling',
+    title: 'the animated sample:spark glyph (two frames, frame_ticks 4) plays in the lore of the paper item in slot 13 of guilogic:glyph_cycle on the window\'s refresh clock, without a client mod: the window opens with the item and screenshots capture the lore across several refresh ticks, where both frames must render the compiled spark bitmaps (never the missing-glyph box)',
+    mode: 'visual',
+    covers: [
+      'content/src/main/java/dev/materione/content/glyphs/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeGlyphs.java',
+      'core/src/main/java/dev/materione/core/text/GlyphFrames.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphFrameText.java',
+      'plugin/src/main/java/dev/materione/plugin/gui/render/**',
+      'fixtures/packs/guilogic/guis/glyph_cycle.yml',
+      'fixtures/packs/sample/glyphs/spark.yml',
+    ],
+    dependsOn: ['glyphs.basic'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+        await ctx.rcon('materione gui open guilogic:glyph_cycle Probe');
+        await ctx.waitForServerLog(/MATERIONE-GLYPH-CYCLE-OPEN guilogic:glyph_cycle/);
+        await ctx.sleep(600); // the client finishes opening the window
+        ctx.expect(await slotType(ctx, 13)).toBe('minecraft:paper');
+        // 5 captures 200 ms apart: the refresh clock (4 ticks) turns the frame over several times
+        for (let i = 0; i < 5; i++) {
+          await ctx.shot(`glyph-cycle-${i}`);
+          await ctx.sleep(200);
+        }
+        ctx.needsEyes(
+          'Hover the paper in slot 13 (second row, fifth column) of the open window. The tooltip lore line starts with the spark glyph: across glyph-cycle-0..4 it must show BOTH spark frames (spark_1 and spark_2) alternating, each a real bitmap rather than the 6-wide missing-glyph box, with the rest of the lore line unchanged.',
+        );
+      } finally {
+        try {
+          await ctx.exec('player.closeContainer(); return "closed"');
+        } catch { /* nothing open */ }
+      }
     },
   }),
 ];
