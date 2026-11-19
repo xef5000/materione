@@ -8,6 +8,6 @@
   "result": "pass",
   "gaps": [],
   "replay": {
-    "note": "The dry run reports MTR-0009 for texture 'block/vending_machine', a default the furniture scaffold writes beside a model that resolves to nothing in the pack (benchmark S18). The list is otherwise accepted: the model and bench:shop GUI reference resolve, and the click rule on furnitures/vending_machine.yml compiles."
+    "note": "Dry run clean since the furniture scaffold stopped writing an unresolvable block/<id> texture (issue 380): it now writes a vanilla minecraft:block/stone placeholder. The list is accepted: the model and bench:shop GUI reference resolve, and the click rule on furnitures/vending_machine.yml compiles."
   }
 }

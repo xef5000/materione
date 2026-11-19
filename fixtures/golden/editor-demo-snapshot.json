@@ -11835,6 +11835,19 @@
           },
           {
             "advanced": true,
+            "default": "4",
+            "description": "Animation speed: ticks each frame shows (1 to 1200; 20 ticks = 1 second). Frames play on surfaces that tick (a GUI's refresh clock); text without a clock shows frame 1",
+            "example": "4",
+            "id": "frame_ticks",
+            "label": "Frame ticks",
+            "order": 46,
+            "required": false,
+            "section": "appearance",
+            "type": "integer",
+            "uiHint": "number"
+          },
+          {
+            "advanced": true,
             "description": "Alias another glyph's bitmaps (no codepoint of its own)",
             "id": "reference",
             "label": "Reference glyph",
@@ -15607,10 +15620,10 @@
   },
   "scaffoldId": "demo_scaffold",
   "scaffolds": {
-    "blocks": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  technique: note_block # note_block | string | chorus | technical | stairs | slab\n  texture: block/demo_scaffold\n  display_name: \"Demo Scaffold\"\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
+    "blocks": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  technique: note_block # note_block | string | chorus | technical | stairs | slab\n  texture: minecraft:block/stone # placeholder: upload assets/textures/block/demo_scaffold.png and point this at it\n  display_name: \"Demo Scaffold\"\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
     "currencies": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  integration: xp # xp | vault | custom\n  display_name: \"Demo Scaffold\"\n  decimals: 0\n",
     "effects": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  kind: rainbow # rainbow | wave | shake | pulse\n  speed: 3.0\n  # colors:\n  #   - \"#FF0000\"\n  #   - \"#0000FF\"\n  # Compiles into the injected text-shader overlay (runtime-systems §6).\n  # Use in text as <effect:demo_scaffold>…</effect>; test with\n  # /materione dev effect demo_scaffold hello.\n",
-    "furnitures": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: block/demo_scaffold\n  display_name: \"Demo Scaffold\"\n  rotation: 90\n  hitboxes:\n    - type: interaction\n      offset: [0, 0, 0]\n      width: 1.0\n      height: 1.0\n  # seats:\n  #   - offset: [0, 0.3, 0]\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
+    "furnitures": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: minecraft:block/stone # placeholder: upload assets/textures/block/demo_scaffold.png and point this at it\n  display_name: \"Demo Scaffold\"\n  rotation: 90\n  hitboxes:\n    - type: interaction\n      offset: [0, 0, 0]\n      width: 1.0\n      height: 1.0\n  # seats:\n  #   - offset: [0, 0.3, 0]\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
     "glyphs": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: gui/demo_scaffold\n  ascent: 8\n  height: 8\n  # placeholders:\n  #   - \":demo_scaffold:\"\n  # emoji: true — chat interception + tab-completion\n  # The codepoint is allocated by the server and shown in the preview.\n",
     "guis": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  title: \"Demo Scaffold\"\n  container: chest_3\n",
     "items": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  material: STICK\n  display_name: \"Demo Scaffold\"\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n",
@@ -17987,6 +18000,19 @@
           "section": "appearance",
           "type": "list",
           "uiHint": "list"
+        },
+        {
+          "advanced": true,
+          "default": "4",
+          "description": "Animation speed: ticks each frame shows (1 to 1200; 20 ticks = 1 second). Frames play on surfaces that tick (a GUI's refresh clock); text without a clock shows frame 1",
+          "example": "4",
+          "id": "frame_ticks",
+          "label": "Frame ticks",
+          "order": 46,
+          "required": false,
+          "section": "appearance",
+          "type": "integer",
+          "uiHint": "number"
         },
         {
           "advanced": true,

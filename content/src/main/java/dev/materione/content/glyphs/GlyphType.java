@@ -11,6 +11,7 @@ import dev.materione.api.content.PackEmitter;
 import dev.materione.api.content.ResourcePresentation;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.text.GlyphCodepoints;
+import dev.materione.core.text.GlyphFrames;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -76,6 +77,9 @@ public final class GlyphType implements ContentType {
                         new ParameterSchema("frames", ParameterType.LIST, false, null,
                                 "Animation frames: one texture per frame, one codepoint each", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Frames", "appearance", 45, true, "list", "", "gui/heart_frame_1")),
+                        new ParameterSchema("frame_ticks", ParameterType.INTEGER, false, "4",
+                                "Animation speed: ticks each frame shows (1 to 1200; 20 ticks = 1 second). Frames play on surfaces that tick (a GUI's refresh clock); text without a clock shows frame 1", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata("Frame ticks", "appearance", 46, true, "number", "", "4")),
                         new ParameterSchema("reference", ParameterType.REFERENCE, false, null,
                                 "Alias another glyph's bitmaps (no codepoint of its own)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Reference glyph", "appearance", 70, true, "reference", "glyph", "")),
@@ -171,7 +175,8 @@ public final class GlyphType implements ContentType {
                 Templates.text(merged, "permission"),
                 boolOf(merged, "emoji", false),
                 boolOf(merged, "tab_complete", false),
-                Templates.text(merged, "shadow_color")));
+                Templates.text(merged, "shadow_color"),
+                GlyphFrames.clampFrameTicks(intOf(merged, "frame_ticks", GlyphFrames.DEFAULT_FRAME_TICKS))));
     }
 
     @Override

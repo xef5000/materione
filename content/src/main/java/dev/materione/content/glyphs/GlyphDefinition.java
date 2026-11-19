@@ -29,7 +29,8 @@ public record GlyphDefinition(
         String permission,
         boolean emoji,
         boolean tabComplete,
-        String shadowColor) {
+        String shadowColor,
+        int frameTicks) {
 
     /** Number of durable codepoints this glyph occupies (0 for pure aliases). */
     public int codepointCount() {

@@ -320,7 +320,8 @@ the live editor loop and asserts every staged artifact on real Paper.
 signal color (runtime-systems §6). Use `<effect:pack:id>…</effect>` in any resolved text;
 `/materione dev effect <pack>:<id> <text>` is the in-game test. Remaining deferred here:
 animated glyphs emit all frames and render frame 1; per-surface frame cycling arrives with
-M6 HUDs.
+M6 HUDs. *(M6, #9, since: the frame-cycling provider and the GUI item name/lore surface shipped, runtime-systems §6
+"Frame cycling"; HUD elements and held-item lore remain.)*
 
 ## M5 — Relay mode & the cloud (zero-config editing anywhere) — ✅ shipped 2026-10-28
 

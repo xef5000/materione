@@ -1,6 +1,8 @@
 package dev.materione.plugin.gui.render;
 
 import dev.materione.platform.items.MaterioneStacks;
+import dev.materione.platform.text.GlyphFrameText;
+import dev.materione.platform.text.GlyphText;
 import dev.materione.platform.text.ItemText;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +26,26 @@ public final class AppearanceStacks {
         ItemStack stack = base(appearance.source());
         stack.setAmount(Math.max(1, Math.min(appearance.amount(), stack.getMaxStackSize())));
         stack.editMeta(meta -> overrides(meta, appearance));
+        if (appearance.phase() != null) {
+            stack.editMeta(meta -> play(meta, appearance.phase()));
+        }
         return stack;
+    }
+
+    /** Shows the frame the phase selects in every animated glyph of the name and lore (M6, #9); the viewer's copy only. */
+    private static void play(ItemMeta meta, GlyphPhase phase) {
+        var glyphs = GlyphText.glyphs();
+        if (glyphs == null) {
+            return;
+        }
+        Component name = meta.displayName();
+        if (name != null) {
+            meta.displayName(GlyphFrameText.advance(name, glyphs, phase.ticks()));
+        }
+        List<Component> lore = meta.lore();
+        if (lore != null) {
+            meta.lore(GlyphFrameText.advance(lore, glyphs, phase.ticks()));
+        }
     }
 
     private static ItemStack base(SlotSource source) {

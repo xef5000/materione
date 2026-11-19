@@ -161,7 +161,7 @@ Content types registered by `content/` (D5), 12 in total (the audit counted 11; 
 |---|---|
 | A **command** type | §3 need 1. |
 | ~~A **rule or flow unit** that is not owned by an item, block, furniture or GUI~~ | **Built in #327** as the `rule` content type (`rules/`, logic.md §37): the exact shape of a host's `behavior:` and `flows:`, and the world fires its triggers with no resource in the way. A command and a timer still have no host (§5.4, #332). Was: Rules live in a host resource today (logic.md §2.1, §2.4: named flows are callable only inside one resource). A command, a world-event rule or a timer has no host. §5.5. |
-| A **preset** type (if presets are data, master §14.7 sub-question ii) | A preset's definition must be content, or presets become an addon-only Java surface (the recommended answer to master §14.7 (ii)). §7. |
+| A **preset** type | A preset's definition must be content, or presets become an addon-only Java surface. **Decided** (master §14.7 (ii), PR #450): a user-extensible `preset` content type; design in [`backpack-preset.md`](backpack-preset.md) §4.4. §7. |
 | Other **view kinds**: dialog (#6), HUD (#7) | They are the GUI's siblings (§5.3). |
 
 ### 4.2 Mechanics (the natives)
@@ -353,6 +353,9 @@ the only thing that stays viewer-local. The container GUI, the dialog (#6) and t
 state model rather than three systems with three kinds of binding. This also answers where "HUD values" (master §8.3's
 persistence table) live: in keyed state.
 
+**Designed in [`views.md`](views.md) (#335):** the view-kind contract, the split of `GuiSession` into binding, viewer-local
+state and state, the reads index and `view.refresh`, and the dialog and HUD as kinds; written before #6 and #7 are built.
+
 ### 5.4 Commands as content
 
 *A command with typed arguments, a gate and a flow.* Today: `open:` on a GUI (logic.md §6.1, §23), including the argument types,
@@ -399,7 +402,7 @@ a re-title if the owner agrees.
 |---|---|---|
 | #247, #311, #312, #313, #314 | Input slots: crash-safe ownership | The custody primitive's proof (§5.1). Work and rows proceed unchanged; the vocabulary generalizes after row H. |
 | #248 | Custody exit primitive | **Built as `custody.consume`** (logic.md §36): the exit verb of custody; with `HAND_OFF`, the `transfer` verb is still to come (§5.1). The trash slot is the recipe `trash_slot` over it. |
-| #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). |
+| #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). Design: [`backpack-preset.md`](backpack-preset.md). |
 | #162 | Item modules: parameter-level modules | The editor surface presets plug into: a preset parameter is a module; derivation stays registry-driven. |
 | #6 | Server-side dialogs | A **view kind** over state with `dialog.submit` as a trigger (§5.3), not a separate dialog system. |
 | #7 | Native HUD system | A **view kind** bound to keyed state (§5.3), not a HUD-specific binding engine. |

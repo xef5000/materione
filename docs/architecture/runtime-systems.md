@@ -409,8 +409,8 @@ Codepoints are durable consecutive runs from the allocation table (kind `glyph-c
 origin 42000, `AllocationTable.range`) — never written back into authoring YAML, unlike the
 incumbents; an explicit `char` field therefore does not exist, and the editor shows the
 allocated codepoint as server-computed browse metadata. Shapes: single texture, `rows`/`columns`
-sheets (chars row-major), `frames` animations (one codepoint per frame; frame cycling surfaces
-arrive with M6), `reference` aliases (pure alias — no allocation, resolved through the target
+sheets (chars row-major), `frames` animations (one codepoint per frame; the runtime cycles them,
+see *Frame cycling* below), `reference` aliases (pure alias — no allocation, resolved through the target
 at text time). The runtime keeps a `RuntimeGlyphs` view in the shadow swap; the text pipeline
 (`platform/text/GlyphText`) resolves markers in item text, chat (decorate-time, previews
 included), signs, books and anvil renames, forces white unless `colorable` (the incumbent
@@ -422,6 +422,30 @@ placeholders resolve only for emoji glyphs.
 so they can sit inside a color or gradient. Effect spans may then nest, and an unclosed span runs
 to the end of the text instead of staying literal. Player-typed text keeps the marker-only path
 described here.)*
+
+**Frame cycling (M6, #9).** An animated glyph's frames are all in the font (one consecutive codepoint each), so
+cycling needs no pack change and no client mod: the runtime rewrites the glyph's first-frame codepoint to the frame a
+surface's clock selects, in the packet it builds for one viewer. The pieces: `core/text/GlyphFrames` (frame index =
+`(tick / frame_ticks) mod frames`, pure), the registry's animation index (`RuntimeGlyphs.animationStartingAt`,
+`frameSignature`; `Entry.frameTicks` is 0 for a still glyph or sheet), and `platform/text/GlyphFrameText` (the
+provider: `advance(component, glyphs, tick)` keeps every style, font, shadow and effect signal, and returns the same
+instance when nothing animates). `frame_ticks` (authored, 1 to 1200, default 4, clamped, never an error) is
+authoring-only: it does not reach the font, and `fixtures/golden/glyphs/animated-cycle-font.json` locks the emitted
+cycle (consecutive codepoints, texture order, font membership). Text resolves to frame 1 everywhere, which is the
+static fallback of every surface with no clock (chat, signs, books, held-item lore). Rewriting is by codepoint, so a
+reference pinned to a later frame (`index:`) stays pinned.
+
+*Surfaces shipped.* **GUI window item names and lore:** `SlotRenderer` stamps a `GlyphPhase` on the appearances that
+carry an animated glyph; the window's own `refresh:` clock re-renders, `RenderDiff` rewrites a slot only when the
+frame signature changed, and `AppearanceStacks` applies the phase to the viewer's stack copy (never to content, D1).
+A GUI that wants its glyphs to play sets `refresh:`; `fixtures/packs/guilogic/guis/glyph_cycle.yml` is the example.
+*Not yet:* the HUD element (§7) does not exist on main, so its per-player clock is not built; the seam is
+`GlyphFrameText.advance(component, glyphs, tick)` with the HUD's own tick. GUI window titles and title/action-bar
+sends are the same call and are left for the HUD slice. A held or inventory item's lore stays on frame 1: the
+Paper API cannot re-send one slot's lore per viewer without mutating the stack, so it waits for a packet layer (an
+owner decision, not made here). Proposal if the owner wants it: an outbound set-slot rewrite using
+`GlyphFrameText.advance`, gated on the viewer having an animated-lore item in an open inventory so it costs nothing
+otherwise.
 
 **Text effects (as of the shader-injection slice).** `effects/*.yml` compile to a durable
 signal color (allocation kind `effect-signal`: the band `#FF00FF` downward, blue channel

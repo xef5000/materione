@@ -158,6 +158,9 @@ class AuthoringTransactionReferencesTest {
 
         assertThat(dry.accepted()).as(String.valueOf(dry.diagnostics())).isFalse();
         assertThat(dry.diagnostics()).isNotEmpty();
+        // #364: the same MTR-0009 the pipeline reports, attributed to the operation that wrote the reference
+        assertThat(unresolved(dry)).anyMatch(found -> found.operation() == 0
+                && found.diagnostic().message().contains("'Alpha Sword' is not a valid id"));
         assertThat(snapshot()).isEqualTo(before);
     }
 
