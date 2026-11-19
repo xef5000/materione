@@ -8,8 +8,8 @@
 > schema-versioned GUI default, since withdrawn; reactive-dialog safeguards, §4.3) with three acceptance cases (§11.1). The
 > same day the owner settled compatibility: **there is no public release with existing GUIs, so no GUI behavior is kept for its
 > own sake** (§7). This document is therefore the clean design, not a fold-down: where the first draft compromised to preserve
-> shipped GUI behavior, it now says what the model would be from scratch and adopts it (§7.1). The decisions are in §14.2; one
-> question is open (Q9).
+> shipped GUI behavior, it now says what the model would be from scratch and adopts it (§7.1). The decisions are in §14.2; every
+> owner question is answered (Q9, the last, on 2026-11-19).
 >
 > **Scope.** The view model that primitives.md §5.3 directs: what a view kind is, what is viewer-local and what is state, how a
 > write to state finds the viewers that read it, how many players view one thing, and how the shipped container GUI, the dialog
@@ -155,7 +155,7 @@ What changes from the shipped GUI, because the clean model wants it:
 |---|---|---|
 | GUIs only | **every `opened` kind**: GUIs and dialogs (a dialog's re-render keeps the instance and its session; a new dialog is a new instance) | one scope for one concept; a dialog with `stay` buttons that toggle a choice needs it as much as a GUI. HUDs have none: they are not opened and have no instance (hud.md §7.1, `MTR-0116`) |
 | two spellings, `vars.session.x` and `gui.session.x` | **one**: `vars.session.x` | two names for one value is a trap for authors and the reads index; `gui.*` is gone as a root (§3.7) |
-| undeclared names (any `set_var session.x` creates a key) | **declared** (default of Q9): a `variable` with `scope: session`, typed and defaulted, like every other scope | a typo then fails at load instead of creating a silent key (U5); the type and default reach the studio and the SDK (U4, D5); the reads index keys on the declared id (§5.2) |
+| undeclared names (any `set_var session.x` creates a key) | **declared** (owner, Q9): a `variable` with `scope: session`, typed and defaulted, like every other scope; an undeclared `vars.session.x` or `set_var session.x` is `MTR-0063` at load | a typo then fails at load instead of creating a silent key (U5); the type and default reach the studio and the SDK (U4, D5); the reads index keys on the declared id (§5.2) |
 | `GuiSession.vars()`, a map beside the store, written by `GuiSessionVariables.put` past the port | **behind the store port** from row V1: a `session` store keyed by the viewer record's identity; one write path for every scope (§5.3) | the port is the one place writes are observed; a bypass is a bug class (acceptance case 2) |
 
 When #333 step 2 restates the scopes as named keys, `session` is the named key whose holder is the view instance; nothing about
@@ -576,7 +576,7 @@ follow and are kept apart:
 | `in_gui` condition | `in_view` (`view:`, `kind:`) | V2 | **Changed**: the same reasoning. |
 | `gui.id`, `gui.args.*`, `gui.page.*` roots | `view.id`, `view.args.*`, `view.page.*` | V0 | **Changed**: one root for view facts (§3.7). |
 | `gui.session.*` | removed; `vars.session.*` only | V0 | **Changed**: one spelling (§3.4). |
-| undeclared session variables | declared, `scope: session` | V1 | **Changed** if Q9 is answered (a) (§3.4). |
+| undeclared session variables | declared, `scope: session`, typed and defaulted; undeclared is `MTR-0063` | V1 | **Changed** (owner, Q9; §3.4). |
 | session state in `GuiSession.vars()`, written past the store port | the `session` store behind the port | V1 | **Changed**: one observed write path (§3.4, §5.3). |
 | `GuiSession`, `SessionHistory`, `GuiSessionPort` | `ViewerRecord` + kind payload; per-player view history across kinds; `ViewRegistry` | V0 | **Changed**: no per-kind session type (§3.8). |
 | `%materione_gui_open%`, `%materione_gui_last%` | `%materione_view_open%`, `%materione_view_last%` | V0 | **Changed** with the registry. |
@@ -622,6 +622,11 @@ fold-down is (master §3.1, consequence 2).
   supportsTarget, supportsKey}`. `gui`, `dialog` and `hud` declare it. It is how the SDK generator and the editor know that a
   type is a view kind, with no list of kinds written anywhere else. **No new registry** (decision D-6): the content-type
   registry already holds the kinds, and an addon view kind needs the internal SPI too, which is not public in v1 (owner answer Q5).
+- **Session declarations.** A `scope: session` declaration is an ordinary `variable` resource, so it is in the `variable`
+  type's self-description and the generated SDK like any other (`p.variables.create(id, { scope: "session", type, default })`,
+  and `vars.session.<pack>.<key>` typed by it). The GUI and dialog studios' Logic tabs offer **declaring a session variable**
+  where a rule or template names an undeclared one (the existing declare-variable path, typed from the self-description), so an
+  author never has to leave the studio to fix `MTR-0063`.
 - **References.** `view.refresh`'s `view:` parameter is a `REFERENCE` whose kinds are the types that declare the facet, so the
   generated type is the union of GUI, dialog and HUD handles; a static id that resolves to nothing is `MTR-0105`, its existing
   meaning (plugin.md §5).
@@ -672,7 +677,7 @@ resolves to nothing).
 | # | Case | What must hold | Row |
 |---|---|---|---|
 | 1 | **A player with no visible HUD shows their first one** | With `visible_if: "${vars.player.rpg.hud_on}"` and `hud_on` false, a `set_var` to true attaches the HUD for that player at the next eligible render, with no rejoin and no unrelated poll (the candidate record, §5.3). Setting it false detaches it. With two visible HUDs, their pieces compose into one boss-bar string and one action-bar string. | V1 (index roles, candidates); #7 row V (composition) |
-| 2 | **Every successful write path notifies the right reader** | A console `/materione var set` (`VariableStore.write`), an atomic server increment (`set_var` `add`, `VariableStore.mutate`) and a session toggle (`set_var session.x` `toggle`, through the `session` store that replaces the `GuiSessionVariables.put` bypass) each re-render exactly the matched viewers. `vars.session.x` is the one spelling of a window-local key (the owner's wording asked that `gui.session.x` index the same key; that spelling is removed, §3.4, and declaration follows Q9). Holds before V5. | V1 |
+| 2 | **Every successful write path notifies the right reader** | A console `/materione var set` (`VariableStore.write`), an atomic server increment (`set_var` `add`, `VariableStore.mutate`) and a session toggle (`set_var session.x` `toggle`, through the `session` store that replaces the `GuiSessionVariables.put` bypass) each re-render exactly the matched viewers. `vars.session.x` is the one spelling of a window-local key (the owner's wording asked that `gui.session.x` index the same key; that spelling is removed, §3.4). Session variables are **declared** (owner, Q9): the index keys on the declared id, an undeclared session read or write is `MTR-0063` at load, and a never-written session variable reads its declared default. Holds before V5. | V1 |
 | 3 | **A wake updates the right window at the next eligible render** | The one-per-tick limit applies to automatic renders only. An explicit refresh while a wake is queued renders once, and the wake is a no-op. A write during a render is shown by a following render (clear, then read). A window replaced before its wake runs is not rendered by that wake; `view.refresh` on a stale record fails `"no open view"` (the shipped `gui.refresh` rule under the new name). Under a held cursor, frame and click targets stay frozen together and the latest state renders after release. No GUI or throttled dialog test asserts visible consistency within one tick. | V1 (scheduler); V2 (explicit refresh) |
 
 ## 12. Required changes to dialogs.md (PR #451) and hud.md (PR #452)
@@ -726,7 +731,7 @@ Haiku). The milestone column is the owner's answer to Q6.
 | Row | Scope | Depends on | Milestone | Size | Agent |
 |---|---|---|---|---|---|
 | **V0** ([#455](https://github.com/xef5000/materione/issues/455)) | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, the generic `ViewerRecord` with kind payloads replacing `GuiSession`/`GuiSessions`/`SessionHistory` (§3.8); `view.open`, `view.close`, `view.back` with the per-player view history across kinds, replacing `gui.open`/`gui.close`/`gui.back`; `view.*` as the one view root, replacing `gui.id`/`gui.args`/`gui.page`/`gui.session` (§3.7); `%materione_view_open%`/`_last%`; the view facet in self-descriptions (`gui` declares it); the built-in browser, recipes, showcase, fixtures, QA catalog and SDK goldens updated in the same PR (§7.1) | #6 row G (the `OpenGate` extraction from `GuiOpener`) merged first, or folded into the same PR | M6 | M | Sonnet, high |
-| **V1** ([#456](https://github.com/xef5000/materione/issues/456)) | Read extraction and `ReadsIndex` built at the shadow swap (with visibility/content roles); the `session` store behind the port (declared `scope: session` per Q9), removing the `GuiSessionVariables.put` bypass; the observer on `write` and `mutate` for `player`, `server`, `session`; `predicate` candidates; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default `on_change`); shipped fixtures and built-in GUIs that relied on no automatic re-render updated in the same PR; acceptance cases 1 to 3 of §11.1; `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
+| **V1** ([#456](https://github.com/xef5000/materione/issues/456)) | Read extraction and `ReadsIndex` built at the shadow swap (with visibility/content roles); the `session` store behind the port (declared `scope: session`, typed and defaulted, owner Q9; `MTR-0063` for an undeclared name), removing the `GuiSessionVariables.put` bypass; the observer on `write` and `mutate` for `player`, `server`, `session`; `predicate` candidates; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default `on_change`); shipped fixtures and built-in GUIs that relied on no automatic re-render updated in the same PR; acceptance cases 1 to 3 of §11.1; `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
 | **V2** ([#457](https://github.com/xef5000/materione/issues/457)) | `view.refresh` (selectors none / `view` / `var`+`holder`), replacing `gui.refresh`; `in_view` replacing `in_gui`; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
 | #6 row S | `DialogOpener` and the dialog payload as the dialog kind on V0, reached through `view.open`/`view.close`; `rerender:` on dialogs via V1, V2; `MTR-V03` | V0 (V1, V2 for `on_change`) | M6 | (dialogs.md) | (dialogs.md) |
 | #7 row V | `HudViewer` as the HUD kind on V0, V1 | V0, V1 | M6 | (hud.md) | (hud.md) |
@@ -750,7 +755,7 @@ QA close-out so their catalog entries can use `view.refresh`.
 **Answered by the owner on 2026-11-19: every default accepted** (option (a) for Q1 to Q7), then **qualified in the owner's review
 on #335 the same day**: Q1 becomes a schema-versioned default, Q7 gains two safeguards and a caveat, Q2's wording is made
 precise, and three acceptance cases are required (§11.1). The review raised Q8, which the owner made moot the same day by settling compatibility (§7): no GUI behavior is kept for its
-own sake, so Q1 is a plain default and Q4's "kept" `gui.refresh` is replaced. Q9 is new. None decides a master §14
+own sake, so Q1 is a plain default and Q4's "kept" `gui.refresh` is replaced. Q9 followed and is answered. None decides a master §14
 question; §6.4 records the requirement §14.2's adapters inherit without choosing one.
 
 | # | Question | Answer (owner, 2026-11-19) | Rationale |
@@ -763,7 +768,7 @@ question; §6.4 records the requirement §14.2's adapters inherit without choosi
 | **Q6** | Milestones | **(a)** Rows V0 to V2 are filed as M6 issues under #335 and ride #6/#7; V3 and V4 are M6.5; #335 itself stays M7 for V5. (Rejected: (b) move #335 to M6 whole.) | M6 gets what dialogs and HUDs need; the keyed part waits for #333 step 2, as #335 says. Filed as #455 (V0), #456 (V1), #457 (V2). |
 | **Q7** | Dialog re-render with typed inputs | **(a), qualified.** The opt-in stays allowed. `MTR-V03` warns for **every editable input** (`text`, `number`, `boolean`, `option`); an automatic wake whose rendered content and submission snapshot are both unchanged keeps the token and sends nothing; the 20-tick floor limits resets but does not protect an unfinished form (§4.3). (Rejected: (b) refused at load.) | A re-send loses a checkbox or option selection as surely as text; a form that must reflect a hot value is rare but legitimate. |
 | **Q8** | Which mechanism versions the GUI default? | **Moot (owner, 2026-11-19):** no public release has GUIs, so there is no versioned default; `pack.yml`'s `schema_version` gets no meaning from this design (§5.5). | — |
-| **Q9** (open) | Session variables: declared or free-form? | (a) **Declared**: a `variable` with `scope: session`, typed and defaulted; an undeclared `vars.session.x` is `MTR-0063`, as for every other scope. (b) Free-form names, as shipped (any `set_var session.x` creates a key). | **Default (a)**: typos fail at load (U5), types and defaults reach the studio and SDK (U4), the reads index keys on ids. It reverses one line of the owner's review ("without requiring a declaration"), which was written while shipped behavior still bound; hence a question, not a decision. |
+| **Q9** | Session variables: declared or free-form? | **(a) Declared** (owner, 2026-11-19): a `variable` with `scope: session`, typed and defaulted; an undeclared `vars.session.x` or `set_var session.x` is `MTR-0063`, as for every other scope. (Rejected: (b) free-form names, as shipped.) The review's "without requiring a declaration" is superseded. | Typos fail at load (U5); types and defaults reach the studio and the SDK (U4, D5); the reads index keys on declared ids (§5.2). |
 
 ### 14.2 Decisions this design takes
 
@@ -787,6 +792,7 @@ question; §6.4 records the requirement §14.2's adapters inherit without choosi
 | D-16 | Every write path notifies (`write`, `mutate`, the session facet); `predicate` kinds keep a candidate record per online player so visibility writes can attach; one-per-tick limits automatic renders only (owner review, acceptance cases 1 to 3) | §5.3, §5.4, §11.1 |
 | D-17 | `view.*` is the one root for view facts; `gui.*` and `dialog.*` roots are replaced; event roots stay | §3.7 |
 | D-18 | One generic `ViewerRecord` with kind payloads replaces `GuiSession`; a per-player view history spans opened kinds; `%materione_view_open%`/`_last%` replace the GUI tokens | §3.8 |
+| D-19 | Session variables are declared (`scope: session`, typed, defaulted); undeclared is `MTR-0063`; declarations reach the self-description, the SDK and a declare action in the GUI and dialog studios (owner, Q9) | §3.4, §9, §11.1 |
 
 D-1 to D-8 were taken by this design and accepted with it on 2026-11-19; D-9 to D-15 are the owner's answers. All remain
 reversible by the owner.
