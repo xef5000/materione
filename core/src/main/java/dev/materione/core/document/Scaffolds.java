@@ -18,7 +18,7 @@ public final class Scaffolds {
     /** Type directories with a scaffold ({@code pack.yml} is createPack's). */
     public static final List<String> SCAFFOLD_TYPES =
             List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs", "sounds", "paintings", "effects",
-                    "guis", "variables", "rules");
+                    "guis", "variables", "currencies", "rules");
 
     /**
      * @param path pack-relative path; the first segment picks the scaffold
@@ -39,6 +39,7 @@ public final class Scaffolds {
             case "effects" -> effect(name);
             case "guis" -> gui(name);
             case "variables" -> variable(name);
+            case "currencies" -> currency(name);
             case "rules" -> rule(name);
             default -> throw new IllegalArgumentException(
                     "no scaffold for '" + dir + "' — create documents under "
@@ -170,6 +171,15 @@ public final class Scaffolds {
                 + "    - on: player.join\n"
                 + "      do:\n"
                 + "        - message: \"<yellow>Welcome, ${player.name}!\"\n";
+    }
+
+    /** The first currency (logic.md section 18): bound to the XP integration, which needs no other plugin. */
+    private static String currency(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  integration: xp # xp | vault | custom\n"
+                + "  display_name: \"" + display(id) + "\"\n"
+                + "  decimals: 0\n";
     }
 
     private static String sound(String id) {
