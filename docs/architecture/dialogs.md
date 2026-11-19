@@ -41,7 +41,7 @@
 | Dialogs during the configuration phase (before the player joins the world) | Paper exposes them (`PlayerCommonConnection`), but nothing in the logic engine runs before a player exists. | Later; the host interface (§9) does not preclude it. |
 | A generated chest-GUI imitation of a dialog for old clients | A second renderer is feature-shaped and duplicates ViaBackwards (§10.3). An author who wants a GUI names one in `fallback:`. | §10.2. |
 | Bedrock forms (Geyser) | Bedrock is not supported by Materione yet; master §14.3 (Geyser timing) stays open. | Owner answer Q2 (§16): not now. |
-| Shared, multi-viewer dialogs ("everyone sees this vote") | Needs keyed state (#333) and target addressing (primitives.md §5.6). A dialog is one modal per player. | §8, when #335 lands. |
+| One dialog screen shared by two players | Vanilla offers no shared modal: a dialog is one modal per player. Many players can each have their own dialog over the **same state** (a vote with a live tally: `rerender: on_change` over a server variable now; bound to a key with `key:` once keyed state, #333 step 2, lands), per the views design (`views.md` §4.3, §6.1, §6.2). | §8; `views.md` row V5 for the key. |
 | Code stored or run as content | D13. | — |
 
 ---
@@ -117,7 +117,7 @@ payload size; the limits of §6.4 are therefore Materione's own.
 | **Body** | An ordered list of read-only elements above the inputs: `text` or `item`. |
 | **Input** | A typed control whose value is submitted: `text`, `boolean`, `option` (vanilla `single_option`), `number` (vanilla `number_range`). |
 | **Button** | An entry the player clicks. A **server button** submits (fires `dialog.submit`); a **client button** does one client-side thing (open a URL, copy, suggest a command, show a static dialog) and the server hears nothing. |
-| **Dialog session** | The server's record of one dialog shown to one player: who, which compiled dialog, its arguments, the token its server buttons carry, its expiry. The viewer-local state of the view (§8). |
+| **Dialog session** | The server's record of one dialog shown to one player: the dialog kind's **viewer record** (`views.md` §3.3). Its **binding** is fixed at open: the compiled dialog, its `args` and (with #333 step 2) its key. Its **viewer-local state** is the token its server buttons carry, the button table, the list and option snapshots and its expiry. It holds no state another player or a rule outside its own runs could need. |
 | **Token** | An unguessable value the server puts in every server button's `additions` and checks on submission (§6.2). |
 
 ---
@@ -132,6 +132,7 @@ report:                                  # one resource per key (master §7.2); 
   external_title: Report                 # optional; the label of a button that leads here
   close_on_escape: true                  # vanilla can_close_with_escape (default true)
   after_submit: close                    # close (default) | stay | wait  (vanilla close | none | wait_for_response)
+  rerender: off                          # off (default) | on_change  (views.md §4.3)
   columns: 2                             # multi_action, dialog_list, server_links
   body:
     - text: "Reports go to staff. Abuse of this form is punished."
@@ -210,6 +211,11 @@ Rules of the format:
 6. **`behavior:` and `flows:` are a host's shape** (logic.md §2.1, §2.4, §37 decision 1): the same compiler, interpreter, trace and
    `LogicEdit` vocabulary. A dialog's layout is sent as data on open, not compiled into the pack; the one exception is an `image`
    body (§4.2), whose bitmap is appearance and compiles into the pack as a glyph like a GUI's raster (D3).
+7. **`rerender: off | on_change`** (default `off`) is the view-kind rerender policy of `views.md` §4.3 and §5.5. With `off`, a
+   dialog renders at open and when a `view.refresh` selects it explicitly (by `view:` or as the run's own viewer); a change to
+   the state it reads, or a `var:`-selected refresh, does not re-send it. With `on_change`, a change to its reads re-sends it, at
+   most once per 20 ticks. `on_change` on a dialog with a `text` or `number` input is a load warning (`MTR-V03`), because a re-send
+   wipes what the player typed (views design, owner answer Q7: allowed, warned).
 
 ### 4.1 Kinds
 
@@ -287,7 +293,8 @@ the others are added. `firedBy`: `dialog`.
 | `dialog.submit` | `button` (an id, or a list) | `dialog.*`, `button.id`, `input.<key>` (typed, §4.3), `entry.*` (a button from a source) | no (a submission already happened client-side) |
 | `dialog.close` | `reason: escape\|replaced\|quit\|expired` | `dialog.*`, `close.reason` | no |
 
-`dialog.*` is `dialog.id`, `dialog.args.*`. The compiler checks `${input.k}` against the host dialog's declared inputs, as it checks
+`dialog.*` is `dialog.id`, `dialog.args.*`. Every dialog run and render also carries the common view subtree `view.*` (`view.id`,
+`view.kind` = `dialog`, `view.args`, `view.key`; `views.md` §3.7); `dialog.args` and `view.args` are one map. The compiler checks `${input.k}` against the host dialog's declared inputs, as it checks
 `gui.args.*` against a GUI's `open.args` (logic.md §2.6); an unknown key is the existing unknown-root warning.
 
 **When the server hears a close.** Vanilla sends nothing when a dialog without a server-bound exit is dismissed. So Materione
@@ -301,10 +308,11 @@ the screen without telling the server; its session simply expires.
 
 | Action | Parameters | Threading | Notes |
 |---|---|---|---|
-| `dialog.open` | `dialog` (id), `args` (map of templates), later `target` (primitives.md §5.6) | `PLAYER_REGION` | The opener of §7.1. `FAILED` when refused or unavailable, so `require`/`else` compose (logic.md §2.2). |
+| `dialog.open` | `dialog` (id), `args` (map of templates), later `target` (primitives.md §5.6, #331) and `key` (`views.md` §6.2, with #333 step 2) | `PLAYER_REGION` | The opener of §7.1. `FAILED` when refused or unavailable, so `require`/`else` compose (logic.md §2.2). |
 | `dialog.close` | — | `PLAYER_REGION` | Closes the player's dialog (Adventure `closeDialog`) and ends the session (`dialog.close` is not fired for a close the flow asked for, as `gui.close` reports `action`). |
 
-Both are ordinary `ActionType`s in `BuiltinLogic` with self-descriptions (D5). Neither names a use case (U1); both work on any
+Both are ordinary `ActionType`s in `BuiltinLogic` with self-descriptions (D5). There is no `dialog.refresh`: the generic
+`view.refresh` (`views.md` §3.6) re-renders dialogs under rule 7 of §4. Neither names a use case (U1); both work on any
 dialog content names (U2).
 
 ### 5.3 The `dialog` input method
@@ -362,7 +370,12 @@ client ─ custom click materione:dialog {mt, mb, <inputs>} ─►  PlayerCustom
 - **Reload while shown.** The session holds the compiled dialog it showed. On submission, rules run from the **live** definition
   when the input declaration's fingerprint is unchanged, so a fixed typo in a rule takes effect; when the inputs changed or the
   dialog was removed, the submission is refused with a one-line "this form changed, please reopen it" and no trigger fires.
-- **The opener is the only issuer.** Sessions are created only by §7.1; nothing else mints tokens.
+- **Re-render (`views.md` §4.3).** A re-render (an `on_change` dialog whose reads changed, or a `view.refresh` that selects it)
+  is a re-open under the same binding: state is re-read, the gates of §7.1 are **not** run again, a **new token** is issued and
+  the old one consumed, the list and option snapshots are retaken, and **no `dialog.close` fires** (it is the same view, not a
+  replacement). A submission carrying the old token is refused as stale (`MTR-D06`).
+- **The opener is the only issuer.** Sessions are created only by §7.1, and only a re-render of a session it created mints a
+  replacement token; nothing else does.
 
 ### 6.3 Input validation (server-side, every submission)
 
@@ -422,6 +435,10 @@ the live view; `open.permission`; parse `args` with the GUI's argument types (`s
 extracted from `GuiOpener` into one `OpenGate` used by both, so the two cannot drift; this is the generalisation primitives.md §5.4
 anticipates ("lift the block into a `command` content type"), done for two view kinds now.
 
+**Viewer registration.** `DialogOpener` attaches the session to the shared `ViewRegistry` (`views.md` row V0, #455) when it
+creates it, and detaches it on every end of §5.1. Row G (the `OpenGate` extraction) and row V0 both touch `GuiOpener`, so G
+lands before V0 or in the same PR.
+
 **Render** resolves every template, item source and list source for the viewer on the player's thread, builds a
 version-independent `RenderedDialog` (data only), and hands it to the platform's `DialogHost` (§9), which maps it to Paper objects
 and calls `showDialog`.
@@ -451,19 +468,17 @@ changes.
 ## 8. A dialog is a view kind (#335, D12)
 
 primitives.md §5.3 and #335 direct that the container GUI, the dialog and the HUD be three **view kinds** over one state model, not
-three systems. #335's design document is not written and depends on keyed state (#333), so this design does not wait for it; it
-builds dialogs to the view contract #335 sketches, so that #335 generalises them in place rather than rebuilding them.
+three systems. The model is designed in **`views.md`** (#335, PR #454; owner answers 2026-11-19), written before this design is
+built (owner answer Q7, §16). A dialog implements its view-kind contract (`views.md` §3.2) with the values of `views.md` §4.1 and
+§4.3; this section keeps only what is specific to dialogs.
 
-| View contract (#335 sketch) | Container GUI today | Dialog (this design) |
+| Dialog-specific | Statement | Where |
 |---|---|---|
-| A content type with a self-described schema | `gui` | `dialog` |
-| An opener with gates | `GuiOpener` | `DialogOpener`, sharing `OpenGate` (§7.1) |
-| It renders **state** at render time | vars, args, sources, conditions | the same: templates, item sources, list sources, `visible_if`, all read at open |
-| Viewer-local state is the only per-viewer state | `GuiSession` (pages, search; *and* session vars, which primitives.md §4.6 classes **F**) | `DialogSession`: token, button table, snapshots, args. **No session variable scope is added**: a wizard's state is `args` (immutable, server-held) or a declared variable; multi-step shared state is keyed state (#333) when it lands |
-| Sibling triggers in its own namespace | `gui.*` | `dialog.*` |
-| Verbs `<kind>.open/close/refresh`, later with `target:` | `gui.open`, `gui.close`, `gui.refresh` | `dialog.open`, `dialog.close`; `target:` when primitives.md §5.6 lands |
-| "Re-render the viewers of key K" | `gui.refresh` | **Re-sending a dialog resets what the player has typed** (vanilla has no update packet), so a dialog is not re-rendered on state change by default. When #335 adds the verb, a dialog opts in per document (`rerender: on_change`), and the default stays off. |
-| Many viewers | no (one session per player and GUI) | no: one modal per player, by vanilla's design; showing "the same dialog to many" is `dialog.open` with a `target:` set |
+| One live dialog per player | The viewer-set rule is `opened`, capped at one: a new open replaces the shown dialog (`dialog.close` `replaced`). | §6.2, `views.md` §3.5 |
+| Re-send resets typing | Vanilla has no update packet, so re-sending is the only re-render and it wipes the inputs. Hence `rerender: off` by default, a 20-tick minimum interval for `on_change`, and `MTR-V03` on `on_change` with typed inputs. | §4 rule 7, `views.md` §4.3 |
+| Re-render semantics | Same binding, no gates, new token, retaken snapshots, no `dialog.close`. | §6.2, `views.md` §4.3 |
+| No session variables | A wizard's state is `args` (immutable, server-held) or a declared variable; shared state is keyed state (#333 step 2). | §15 decision 4, `views.md` §3.4 |
+| Many viewers | Each player has their own modal over shared state; `target:` (#331) opens a dialog for another player and `key:` (#333 step 2) binds it to a key. | §1 non-goals, `views.md` §6 |
 
 Universality tests (master §3.1, primitives.md §2.2) for what this design adds:
 
@@ -474,6 +489,7 @@ Universality tests (master §3.1, primitives.md §2.2) for what this design adds
 | `dialog.open` / `dialog.close` | verbs | any dialog; `target:` later | flow steps, `require` | action descriptions | `FAILED` on refusal; dry-run stages nothing |
 | `materione:dialog` input method | an input method | any prompt | the `prompt` step | input-method description | refuses when unavailable |
 | Buttons from a list source | reuses `ListSource` | any source | — | the source's description | snapshot at open |
+| `rerender:` | a policy, not a use case | any dialog | a key on the document | a schema field with an enum | absent = `off`; `MTR-V03` warns of the typing hazard (`views.md` §8.1) |
 
 Nothing here is named for a use case: no "report form", "rules prompt" or "NPC dialog" exists in the engine. The rules-on-join
 benchmark task (agent-benchmark.md T28) and a confirmation step are **compositions** (a `rule` document on `player.join`, a
@@ -564,6 +580,9 @@ below are names for review only and are never emitted.
 | `MTR-D08` | warning | A rule runs a console or op command whose template reads `${input.*}` (§6.5). Run it as the player or constrain the input. |
 | `MTR-D09` | warning | A submission arrived for a dialog whose input declaration changed or which was removed since it was shown (§6.2); the player was asked to reopen it. |
 
+The views design's placeholder `MTR-V03` (a `rerender: on_change` dialog with a `text` or `number` input; `views.md` §10) applies to
+dialogs and is emitted by row M; it is numbered with the views block, after this one.
+
 Existing codes keep their meaning for dialogs: `MTR-0008` (schema), `MTR-0021`, `MTR-0057`, `MTR-0058`, `MTR-0060` (rules and flows),
 `MTR-0055`, `MTR-0066`–`MTR-0069` (the open block), `MTR-0072` (an item body that cannot be produced), `MTR-0084` (the input method),
 `MTR-0105` (a static id in a rule that does not resolve, now including dialog ids).
@@ -644,18 +663,19 @@ needs the generator to read a document's declared inputs (as it would need for `
 |---|---|---|---|---|
 | **R** | Probes V2, V4, V5 (first, it gates row I), V6, V8 on the 26.x seam (Paper and Folia). V7 is not probed (Q1). Records results in §2.2 and closes the unverified list. | — | S | Haiku |
 | **C** | Capability fix: `DIALOGS` by class detection (§10.1); descriptor tests; the ban test for dialog imports | — | S | Haiku |
-| **M** | `DialogType`: self-description, parse, validate, round-trip, compile to `CompiledDialog`; fixtures and golden files; `MTR-D03` to `D05`, `D08` (numbers assigned here) | — | M | Haiku |
+| **M** | `DialogType`: self-description (including the view facet, `views.md` §9), parse, validate, round-trip, compile to `CompiledDialog`; the `rerender` field; fixtures and golden files; `MTR-D03` to `D05`, `D08`, `MTR-V03` (numbers assigned here) | — | M | Haiku |
 | **G** | Extract `OpenGate` from `GuiOpener`; parity test; no behaviour change for GUIs | — | S | Haiku |
-| **S** | Runtime: `DialogOpener`, `DialogSessions`, `SubmissionValidator`, the rate limiter, taint in the template renderer, the four triggers, `dialog.open`/`close`, admin commands, `fallback:`; `MTR-D01`, `D02`, `D06`, `D07`, `D09` | M, G, C | L | Sonnet, high |
+| **S** | Runtime: `DialogOpener`, `DialogSessions` as the dialog kind's viewer records in `ViewRegistry`, `SubmissionValidator`, the rate limiter, taint in the template renderer, the four triggers, `dialog.open`/`close`, admin commands, `fallback:`, the re-render path of §6.2; `MTR-D01`, `D02`, `D06`, `D07`, `D09`. The `rerender: on_change` path needs views rows V1 (#456) and V2 (#457) | M, G, C, views V0 (#455); V1, V2 for `on_change` | L | Sonnet, high |
 | **H** | `modern`: `PaperDialogHost` mapping and listener; mapping tests | M, C | M | Haiku |
 | **P** | The `materione:dialog` input method; GUI hand-off per V4 | S, H, R | S | Haiku |
 | **W** | Studio: Design form and preview, Logic tab wiring, Preview in game; `webui` specs | M (S for preview in game) | M | Sonnet, high |
 | **I** | The `image` body (§4.2, §14.3): glyph compilation through the GUI raster path, allocation, the studio's image picker, golden pack output | M, R (V5) | M | Haiku |
 | **X** | The studio's **HTML/CSS image source** (§14.3, owner answer Q8): the author writes or imports an HTML/CSS fragment, stored as a pack asset; the editor's browser rasterizes it to the PNG the pack compiler needs, recorded against the HTML's hash; a missing or stale raster is a diagnostic; the `image` body or GUI `paint` layer references the HTML | W, I | M | Sonnet, high |
-| **K** | Code mode: confirm the generated surface, T28 passes in the benchmark harness, the `confirm_dialog` recipe variant | M, S | S | Haiku |
+| **K** | Code mode: confirm the generated surface (including `rerender` and `view.refresh` over dialogs), T28 passes in the benchmark harness, the `confirm_dialog` recipe variant | M, S | S | Haiku |
 | **Q** | QA catalog entries, the showcase pack's dialog page, docs close-out (runtime-systems §8.2, feature-parity §3.10 as built, parity-reconciliation row, glossary, roadmap) | all | S | Haiku |
 
-R, C, M and G can start in parallel; S is the critical path; I follows R's answer to V5.
+R, C, M and G can start in parallel, and so can views row V0 (#455); S is the critical path and starts when G and V0 have
+merged; I follows R's answer to V5.
 
 ---
 
@@ -745,8 +765,8 @@ screens and NPC panels uses, and the design now covers it:
 1. **Every input-reading action is a server flow.** No client `run_command` or `dynamic/run_command` (owner answer Q3).
 2. **`dialog_list` compiles to a gated `multi_action`**, not to vanilla's client-side list (§4.1).
 3. **One custom-click identifier, a random per-session token, single use by default** (§6.1, §6.2); Paper's callback API is not used.
-4. **No session variable scope for dialogs** (§8): wizard state is `args`; shared state waits for keyed state (#333).
-5. **No re-render on state change by default** (§8): re-sending resets the player's typing.
+4. **No session variable scope for dialogs** (§8, `views.md` §3.4): wizard state is `args`; shared state is keyed state (#333 step 2).
+5. **No re-render on state change by default** (§8, `views.md` §4.3): re-sending resets the player's typing; `rerender: on_change` opts in.
 6. **The capability is detected by class presence**, and the unconditional `DIALOGS` is a bug to fix (§10.1).
 7. **Below 1.21.6, content stays valid**; showing runs `fallback:` or fails with a diagnostic (§10.2). No generated GUI imitation.
 8. **Renamed fields** (`option`, `number`, `after_submit`, `close_on_escape`, `client:`) say what the author gets; vanilla's names
@@ -773,6 +793,6 @@ Answered by the owner on 2026-11-19 unless marked open (Q5). None decides a mast
 | **Q4** | Should `rule` documents also receive `dialog.submit`? | **No**; the dialog host only (§15 decision 12). |
 | **Q5** | Pause-menu and quick-actions dialogs: in scope? | **Open.** Vanilla 1.21.6+ lets a server add a button to the pause (Escape) screen that opens a dialog (`pause_screen_additions` tag) and list dialogs under the Quick Actions key (`quick_actions` tag). Tags belong to the dialog registry the client receives while joining, and Paper freezes registries at server start, so adding or removing such a dialog takes a restart. Materione already has a restart-required path for registry paintings (runtime-systems.md, `MTR-0028`/`MTR-0029`), so (b) reuses it; v1 left it out only to keep the first slice reload-only. Options: (a) out of v1; (b) a `pause_menu:` / `quick_actions:` key, restart-required, through the paintings' registry seam, as a late row of #6. |
 | **Q6** | Diagnostic block: the next free block after `MTR-0105` and after the HUD design's (#7), at implementation? | **Yes.** |
-| **Q7** | Sequencing with #335: build now to §8's contract, or wait for #335? | **(c): write #335's design document first, then build #6 to it** (owner, 2026-11-19). The document is pulled forward from M7 so dialogs stay in M6 and are not built twice; §8's table is replaced by references to it once it lands. #335 depends on keyed state #333 (M6.5); what dialogs need from it is small (one modal per player, no re-render by default). |
+| **Q7** | Sequencing with #335: build now to §8's contract, or wait for #335? | **(c): write #335's design document first, then build #6 to it** (owner, 2026-11-19). The document is pulled forward from M7 so dialogs stay in M6 and are not built twice; §8's table is replaced by references to it: the document is **`views.md`** (PR #454), whose owner answers (2026-11-19) are folded into §4 rule 7, §6.2 and §8. #335 depends on keyed state #333 (M6.5); what dialogs need from it is small (one modal per player, no re-render by default). |
 | **Q8** | The studio's HTML/CSS import: keep only the PNG? | **Keep the HTML; derive the PNG when needed.** A PNG alone loses information. The HTML/CSS is the stored asset; the editor's browser rasterizes it when a raster is needed (§14.3, row X). |
 | **Q9** | mcgui's map-drawn wall and fullscreen screens: file a view-kind issue? | **Filed as #453** (M7 with #335; the owner may move it). |
