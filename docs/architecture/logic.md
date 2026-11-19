@@ -1742,27 +1742,18 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     without their transitive dependencies. All of these are public Maven repositories: no jar is downloaded by
     hand. The licences of the upstream projects are not verified here (as with Vault, item 21); they are
     compile-only and not distributed, so Materione takes on no obligation, but verify before any shaded use.
-36. **Not in the QA catalog.** Like Vault (item 29), these need the real plugin and its data on a server
-    the probe does not provision. The adapters are pinned by unit tests: the `Integrations` gate reports each
-    unloadable plugin as `MTR-0061` rather than failing, the whole-number rule is tested, and the
-    ExcellentEconomy adapter is exercised against the plugin's real API types (only the economy behind them is
-    a proxy). A live check against each real plugin is manual.
-37. **The currency form is drawn from the integration registry.** `BehaviorVocabulary` gains
-    `currencyIntegrations` (additive, like `inputMethods`: the vocabulary stays version 2): one entry per
-    registered integration, `{id, displayName, description, parameters, registeredBy}`, sorted by id and built by
-    `VocabularyBuilder` from the `currency-integrations` registry, so the choices are what this server has: the
-    built-in `custom` and `xp`, `vault` while Vault runs, the five economy plugins above while they run, and an
-    addon's own. The editor (`webui/src/lib/currency-form.ts`) turns that into an ordinary schema: `integration`
-    becomes a choice among them (shown by display name), and the keys drawn beneath it, in a section named for the
-    integration, are the chosen integration's own `parameters`. The studio and the file editor both render the
-    result, and nothing in the editor names a particular integration. A key an integration declares is shown only
-    through it (the currency type's own flat copies of the `custom` keys are dropped from the form, but kept in the
-    schema for the code-mode SDK); a key of an integration that is not the chosen one stays with the file's other
-    unrendered keys, reported rather than lost; an integration the file names that this server does not register is
-    shown as such (`xyz (not registered on this server)`) and its keys stay in the YAML. A server that predates the
-    section sends none, and the form is the old one. **Not covered:** the code-mode SDK still types a currency from
-    the content type's own schema, so it knows only the `custom` integration's keys; typing integration keys from
-    this section is the follow-up.
+36. **QA: one test per provider, against the real plugin.** The `economy` suite (`qa/catalog/economy.mjs`, setup in
+    `qa/README.md`) runs `economy.playerpoints-roundtrip` and `economy.excellenteconomy-two-currencies` in the probe:
+    a probe item's right-click pays, charges and refuses against the plugin, and the run then asks the plugin itself,
+    as the player, for the balance (`points me`, `coins balance`, `money balance`), so a pass means the money moved
+    in the provider. They need the pinned jars in the disposable server (PlayerPoints; ExcellentEconomy with
+    nightcore and a Vault API, which it needs even with its Vault integration off, because the JVM must verify
+    `CurrencyFactory`). The ExcellentEconomy test runs two Materione currencies on the one plugin (its whole-number
+    `coins` and decimal `money`). Not covered yet: UltraEconomy (a paid plugin), RedisEconomy (needs Redis and a
+    build that runs on 26.x) and TokenManager. Unit tests still pin the rest: the `Integrations` gate reports each
+    unloadable plugin as `MTR-0061` rather than failing, the whole-number rule is tested, and the adapter is
+    exercised against the plugin's real API types.
+    A `require` that fails runs its `else` and stops the flow (§2.2), so a probe item can hold only one refusal.
 
 **For #208 and #212.** `BuiltinLogic.providerActions`, `BuiltinLogic.currencyIntegrations` and
 `BuiltinLogic.currencyFunctions` are separate blocks in `BuiltinLogic`, appended beside the six M2 actions and

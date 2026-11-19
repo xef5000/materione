@@ -1,0 +1,19 @@
+probe_money_playerpoints:
+  material: COMPASS
+  display_name: "PlayerPoints Probe"
+  behavior:
+    # One right click pays 25, charges 10, tries to pay a fraction (PlayerPoints holds whole points, so the
+    # integration refuses it and the balance stays), then tries to charge more than the balance holds. The
+    # overdraft is last because a failed `require` runs its `else` and stops the flow.
+    - on: click:right
+      do:
+        - give_money: {amount: 25, currency: "probe:qa_playerpoints"}
+        - message: "PP after-give=${balance('probe:qa_playerpoints')}"
+        - take_money: {amount: 10, currency: "probe:qa_playerpoints"}
+        - message: "PP after-take=${balance('probe:qa_playerpoints')}"
+        - give_money: {amount: 2.5, currency: "probe:qa_playerpoints"}
+        - message: "PP after-fraction=${balance('probe:qa_playerpoints')}"
+        - require:
+            - take_money: {amount: 1000, currency: "probe:qa_playerpoints"}
+          else:
+            - message: "PP overdraft-refused balance=${balance('probe:qa_playerpoints')}"

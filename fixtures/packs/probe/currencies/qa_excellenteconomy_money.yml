@@ -1,0 +1,6 @@
+qa_excellenteconomy_money:
+  integration: excellenteconomy
+  currency: money
+  display_name: Money
+  symbol: "$"
+  decimals: 2

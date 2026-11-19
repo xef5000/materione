@@ -118,6 +118,46 @@ testing that integration. The catalog entry checks that PlaceholderAPI is loaded
 the player-visible values. Its filename and hash participate in the boot environment key described
 under the swarm policy; adding or removing it changes the environment of the next server boot.
 
+### Economy-provider tests
+
+The `economy` suite (`qa/catalog/economy.mjs`) has one test per currency integration whose plugin is a real
+third-party plugin (logic.md section 18, items 30-36). Each right-click pays, charges and refuses against the real
+plugin, reads Materione's view from chat, and then asks the plugin itself, as the player, for the balance
+(`points me`, `coins balance`, `money balance`), so a pass means the money moved in the provider.
+
+None of the plugins is bundled. Download each public jar from the source below, check its SHA-256, and place it in
+`harness/build/probe/server/plugins/` (the probe preserves optional jars across resets). Their names and hashes
+join the boot environment key, as for PlaceholderAPI above.
+
+| Jar | Needed by | Source | Bytes | SHA-256 |
+|---|---|---|---|---|
+| `PlayerPoints-3.3.5.jar` | `economy.playerpoints-roundtrip` | Modrinth `playerpoints` (source: Rosewood-Development/PlayerPoints) | 602351 | `4b15ba1654463a3f7363dc3d9b7330d5675b800d55efe70631b32eed03669ac3` |
+| `ExcellentEconomy-2.8.0.jar` | `economy.excellenteconomy-two-currencies` | Hangar NightExpress/ExcellentEconomy 2.8.0 | 173814 | `dfcc93ad4c2ca60a85f1e0e58a02b2a8983ccb15428b0f7a372c86819a8b752a` |
+| `nightcore-2.16.7.jar` | ExcellentEconomy (hard dependency) | Hangar NightExpress/nightcore 2.16.7 | 1581781 | `645c643635ef0add0e38fa82cf6609a2350b5ea28e257ab2fc93a017864bc301` |
+| `VaultUnlocked-2.20.3.jar` | ExcellentEconomy (see below) | Modrinth `vaultunlocked` 2.20.3 | 134932 | `fbc6651aca11e13376c115df66eeffa79592e79517be398299aa6beb49c22695` |
+
+Things the setup runs into:
+
+- **ExcellentEconomy needs a Vault API on the server even with its Vault integration off.** With
+  `Integration.Vault.Enabled: false` and an empty `EconomyCurrency` it still stops at start with
+  `NoClassDefFoundError: net/milkbowl/vault/economy/Economy`, because `CurrencyFactory` references a Vault-typed class
+  and the JVM needs it to verify the class. Install VaultUnlocked (a maintained drop-in that provides the same
+  `net.milkbowl.vault.economy` package). Leave ExcellentEconomy's config at its defaults: it ships two currencies,
+  `coins` (whole numbers) and `money` (decimal), which the test uses.
+- **ExcellentEconomy 2.8.0 runs on Java 25 and Paper 1.21.8 or newer**, which the probe's Paper 26.1.2 and JDK 25
+  satisfy. This is also why its adapter has its own module (logic.md section 18, item 34).
+- **VaultUnlocked collects anonymous usage statistics** after its second start (FastStats). Opt the disposable server
+  out in `plugins/Vault/` metrics config (`enabled=false`) if that matters to you.
+- Run these tests one at a time with the probe client; each one sets the plugin's balance to a known value first.
+
+```
+node qa/runner.mjs run economy.playerpoints-roundtrip economy.excellenteconomy-two-currencies --no-ledger
+```
+
+Not covered here yet: UltraEconomy (a paid TechsCode plugin, so the jar has to be supplied by whoever runs the
+suite), RedisEconomy (needs a Redis server and a build that runs on 26.x) and TokenManager (its last update was in
+2023 and it reports problems on 1.21, so it is unlikely to run on 26.x).
+
 ### Local native currency callback gate
 
 The Paper `logic.currency-custom-placeholders` test additionally uses the **local-only**

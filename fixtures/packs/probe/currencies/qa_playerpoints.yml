@@ -1,0 +1,4 @@
+qa_playerpoints:
+  integration: playerpoints
+  display_name: Points
+  decimals: 0

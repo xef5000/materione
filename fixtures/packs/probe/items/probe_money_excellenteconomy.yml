@@ -1,0 +1,18 @@
+probe_money_excellenteconomy:
+  material: COMPASS
+  display_name: "ExcellentEconomy Probe"
+  behavior:
+    # Two Materione currencies on the one plugin: ExcellentEconomy's whole-number `coins` and its decimal `money`.
+    # One right click pays both, charges both, then tries to charge more coins than the balance holds.
+    - on: click:right
+      do:
+        - give_money: {amount: 30, currency: "probe:qa_excellenteconomy_coins"}
+        - give_money: {amount: 12.5, currency: "probe:qa_excellenteconomy_money"}
+        - message: "EE after-give coins=${balance('probe:qa_excellenteconomy_coins')} money=${balance('probe:qa_excellenteconomy_money')}"
+        - take_money: {amount: 10, currency: "probe:qa_excellenteconomy_coins"}
+        - take_money: {amount: 2.5, currency: "probe:qa_excellenteconomy_money"}
+        - message: "EE after-take coins=${balance('probe:qa_excellenteconomy_coins')} money=${balance('probe:qa_excellenteconomy_money')}"
+        - require:
+            - take_money: {amount: 1000, currency: "probe:qa_excellenteconomy_coins"}
+          else:
+            - message: "EE overdraft-refused coins=${balance('probe:qa_excellenteconomy_coins')}"
