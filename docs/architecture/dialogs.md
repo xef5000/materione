@@ -214,8 +214,12 @@ Rules of the format:
 7. **`rerender: off | on_change`** (default `off`) is the view-kind rerender policy of `views.md` §4.3 and §5.5. With `off`, a
    dialog renders at open and when a `view.refresh` selects it explicitly (by `view:` or as the run's own viewer); a change to
    the state it reads, or a `var:`-selected refresh, does not re-send it. With `on_change`, a change to its reads re-sends it, at
-   most once per 20 ticks. `on_change` on a dialog with a `text` or `number` input is a load warning (`MTR-V03`), because a re-send
-   wipes what the player typed (views design, owner answer Q7: allowed, warned).
+   most once per 20 ticks, and only if something the player would see or submit changed: on an automatic wake, when both the
+   rendered dialog and the server-side submission snapshot (button table, offered option ids, source entries) are unchanged,
+   nothing is sent and the current token is kept. The 20-tick floor limits how often a form resets; it does **not** protect an
+   unfinished form, whose entries a later re-send still wipes. `on_change` on a dialog with **any editable input** (`text`,
+   `number`, `boolean`, `option`) is a load warning (`MTR-V03`), because a re-send loses a checkbox or an option selection as
+   surely as typed text (views design, owner answer Q7 as qualified in the owner's review of #335: allowed, warned).
 
 ### 4.1 Kinds
 
@@ -370,8 +374,9 @@ client ─ custom click materione:dialog {mt, mb, <inputs>} ─►  PlayerCustom
 - **Reload while shown.** The session holds the compiled dialog it showed. On submission, rules run from the **live** definition
   when the input declaration's fingerprint is unchanged, so a fixed typo in a rule takes effect; when the inputs changed or the
   dialog was removed, the submission is refused with a one-line "this form changed, please reopen it" and no trigger fires.
-- **Re-render (`views.md` §4.3).** A re-render (an `on_change` dialog whose reads changed, or a `view.refresh` that selects it)
-  is a re-open under the same binding: state is re-read, the gates of §7.1 are **not** run again, a **new token** is issued and
+- **Re-render (`views.md` §4.3).** A re-render (an `on_change` dialog whose rendered content or submission snapshot changed, or a
+  `view.refresh` that selects it explicitly) is a re-open under the same binding. An automatic wake that finds both unchanged
+  sends nothing and keeps the current token. A re-render that does send is a re-open: state is re-read, the gates of §7.1 are **not** run again, a **new token** is issued and
   the old one consumed, the list and option snapshots are retaken, and **no `dialog.close` fires** (it is the same view, not a
   replacement). A submission carrying the old token is refused as stale (`MTR-D06`).
 - **The opener is the only issuer.** Sessions are created only by §7.1, and only a re-render of a session it created mints a
@@ -475,7 +480,7 @@ built (owner answer Q7, §16). A dialog implements its view-kind contract (`view
 | Dialog-specific | Statement | Where |
 |---|---|---|
 | One live dialog per player | The viewer-set rule is `opened`, capped at one: a new open replaces the shown dialog (`dialog.close` `replaced`). | §6.2, `views.md` §3.5 |
-| Re-send resets typing | Vanilla has no update packet, so re-sending is the only re-render and it wipes the inputs. Hence `rerender: off` by default, a 20-tick minimum interval for `on_change`, and `MTR-V03` on `on_change` with typed inputs. | §4 rule 7, `views.md` §4.3 |
+| Re-send resets inputs | Vanilla has no update packet, so re-sending is the only re-render and it wipes every input (text, numbers, checkboxes, options). Hence `rerender: off` by default; for `on_change`, no re-send when content and submission snapshot are unchanged, a 20-tick minimum interval that limits resets but does not protect an unfinished form, and `MTR-V03` on any editable input. | §4 rule 7, `views.md` §4.3 |
 | Re-render semantics | Same binding, no gates, new token, retaken snapshots, no `dialog.close`. | §6.2, `views.md` §4.3 |
 | No session variables | A wizard's state is `args` (immutable, server-held) or a declared variable; shared state is keyed state (#333 step 2). | §15 decision 4, `views.md` §3.4 |
 | Many viewers | Each player has their own modal over shared state; `target:` (#331) opens a dialog for another player and `key:` (#333 step 2) binds it to a key. | §1 non-goals, `views.md` §6 |
@@ -489,7 +494,7 @@ Universality tests (master §3.1, primitives.md §2.2) for what this design adds
 | `dialog.open` / `dialog.close` | verbs | any dialog; `target:` later | flow steps, `require` | action descriptions | `FAILED` on refusal; dry-run stages nothing |
 | `materione:dialog` input method | an input method | any prompt | the `prompt` step | input-method description | refuses when unavailable |
 | Buttons from a list source | reuses `ListSource` | any source | — | the source's description | snapshot at open |
-| `rerender:` | a policy, not a use case | any dialog | a key on the document | a schema field with an enum | absent = `off`; `MTR-V03` warns of the typing hazard (`views.md` §8.1) |
+| `rerender:` | a policy, not a use case | any dialog | a key on the document | a schema field with an enum | absent = `off`; `MTR-V03` warns of the input-loss hazard (`views.md` §8.1) |
 
 Nothing here is named for a use case: no "report form", "rules prompt" or "NPC dialog" exists in the engine. The rules-on-join
 benchmark task (agent-benchmark.md T28) and a confirmation step are **compositions** (a `rule` document on `player.join`, a
@@ -580,7 +585,7 @@ below are names for review only and are never emitted.
 | `MTR-D08` | warning | A rule runs a console or op command whose template reads `${input.*}` (§6.5). Run it as the player or constrain the input. |
 | `MTR-D09` | warning | A submission arrived for a dialog whose input declaration changed or which was removed since it was shown (§6.2); the player was asked to reopen it. |
 
-The views design's placeholder `MTR-V03` (a `rerender: on_change` dialog with a `text` or `number` input; `views.md` §10) applies to
+The views design's placeholder `MTR-V03` (a `rerender: on_change` dialog with any editable input: `text`, `number`, `boolean` or `option`; `views.md` §10) applies to
 dialogs and is emitted by row M; it is numbered with the views block, after this one.
 
 Existing codes keep their meaning for dialogs: `MTR-0008` (schema), `MTR-0021`, `MTR-0057`, `MTR-0058`, `MTR-0060` (rules and flows),
