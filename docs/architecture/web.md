@@ -440,7 +440,8 @@ answers `{rules, warnings}`, or a refusal with `MTR-0008` for an unknown recipe,
 `MTR-0087` for an expansion that does not validate, logic.md §30, #222). The vocabulary carries `recipes` (each with
 its typed `params`), so the palette and the parameter forms come from the same list the API reads. It also carries
 `listSources`, `itemSources` and `inputMethods` (with `available` and `unavailableReason`) and `takesElse` on the actions that
-ask a question, which the node inspector reads (logic.md §31, #224). A refused edit's error names the step path in its `resource` field (the wire's
+ask a question, which the node inspector reads (logic.md §31, #224), and `currencyIntegrations` (`{id, displayName, description,
+parameters, registeredBy}`), from which the currency form draws its integration choices and each integration's keys (logic.md §18, item 37). A refused edit's error names the step path in its `resource` field (the wire's
 target slot, as the other editor ops use it). The SPA's wrappers
 are `webui/src/lib/logic/server.ts`, which checks `hasCapability(…, 'logic')` before it calls any of them. The frames are
 pinned by `fixtures/protocol/editor-logic-v1.json`: `LogicAuthoringOpsTest` (JVM) regenerates and checks them, and

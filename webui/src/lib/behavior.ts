@@ -106,6 +106,15 @@ export interface MechanicInfo extends Described {
   registeredBy: string;
 }
 
+/**
+ * A registered currency integration (logic.md section 18): a choice of a currency file's `integration:` key. Its
+ * `parameters` are the keys that integration reads, so the currency form draws them from here.
+ */
+export interface CurrencyIntegrationInfo extends Described {
+  id: string;
+  registeredBy?: string;
+}
+
 export interface BehaviorVocabulary {
   events: BehaviorEventInfo[];
   actions: BehaviorActionInfo[];
@@ -122,6 +131,8 @@ export interface BehaviorVocabulary {
   steps?: BehaviorStepKindInfo[];
   categories?: BehaviorCategoryInfo[];
   functions?: BehaviorFunctionInfo[];
+  /** The integrations a currency file can name here; absent from a plugin that predates the section. */
+  currencyIntegrations?: CurrencyIntegrationInfo[];
 }
 
 export type Json = Record<string, unknown>;

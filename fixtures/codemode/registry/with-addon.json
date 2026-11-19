@@ -1970,6 +1970,78 @@
           "sinceVersion": "2.0.0"
         }
       ],
+      "currencyIntegrations": [
+        {
+          "description": "A currency that a command gives and takes, with its balance read from a PlaceholderAPI token",
+          "displayName": "Custom currency",
+          "id": "custom",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Console command that gives money; {player} and {amount} are filled in",
+              "example": "gems give {player} {amount}",
+              "id": "deposit-command",
+              "label": "Deposit command",
+              "order": 10,
+              "required": true,
+              "section": "economy",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Console command that takes money; {player} and {amount} are filled in",
+              "example": "gems take {player} {amount}",
+              "id": "withdraw-command",
+              "label": "Withdraw command",
+              "order": 20,
+              "required": true,
+              "section": "economy",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "PlaceholderAPI token whose value is the balance as a number",
+              "example": "%myplugin_balance_gems%",
+              "id": "balance-placeholder",
+              "label": "Balance placeholder",
+              "order": 30,
+              "required": true,
+              "section": "economy",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "description": "The player's experience, as points (total experience) or as levels",
+          "displayName": "Experience",
+          "id": "xp",
+          "parameters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "points",
+                "levels"
+              ],
+              "default": "points",
+              "description": "What the currency counts",
+              "id": "unit",
+              "label": "Unit",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0"
+        }
+      ],
       "events": [
         {
           "description": "The player left- or right-clicks with the item, or right-clicks the furniture",
@@ -12751,7 +12823,7 @@
           {
             "advanced": true,
             "description": "custom: PlaceholderAPI token that reads the balance as a number",
-            "example": "%coinsengine_balance_raw_gems%",
+            "example": "%myplugin_balance_gems%",
             "id": "balance-placeholder",
             "label": "Balance placeholder",
             "order": 70,

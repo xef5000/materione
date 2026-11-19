@@ -1,0 +1,21 @@
+probe_money_rediseconomy:
+  material: COMPASS
+  display_name: "RedisEconomy Probe"
+  behavior:
+    # Two Materione currencies on the one plugin: RedisEconomy's default currency (named by omitting `currency:`) and
+    # its `dollar` currency. The balances live in Redis and survive between runs, so the item reports where each
+    # started and the test works in changes from there. One right click pays and charges both, then tries to charge
+    # more than the balance holds (last, because a failed `require` stops the flow).
+    - on: click:right
+      do:
+        - message: "RE before default=${balance('probe:qa_rediseconomy_default')} dollar=${balance('probe:qa_rediseconomy_dollar')}"
+        - give_money: {amount: 25, currency: "probe:qa_rediseconomy_default"}
+        - give_money: {amount: 12.5, currency: "probe:qa_rediseconomy_dollar"}
+        - message: "RE after-give default=${balance('probe:qa_rediseconomy_default')} dollar=${balance('probe:qa_rediseconomy_dollar')}"
+        - take_money: {amount: 10, currency: "probe:qa_rediseconomy_default"}
+        - take_money: {amount: 2.5, currency: "probe:qa_rediseconomy_dollar"}
+        - message: "RE after-take default=${balance('probe:qa_rediseconomy_default')} dollar=${balance('probe:qa_rediseconomy_dollar')}"
+        - require:
+            - take_money: {amount: 1000000000, currency: "probe:qa_rediseconomy_default"}
+          else:
+            - message: "RE overdraft-refused default=${balance('probe:qa_rediseconomy_default')}"

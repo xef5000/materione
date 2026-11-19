@@ -464,7 +464,7 @@ step is found at load rather than when a player first triggers it:
 | Code | Severity | Meaning and recovery |
 |---|---|---|
 | `MTR-0057` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
-| `MTR-0061` | warning | An optional integration (Vault economy or permissions, LuckPerms, the BungeeCord plugin channel) could not install its provider: the adapter failed to link against the installed version, or its setup call threw. The server keeps the default provider or none, and the economy, permission and `connect` actions report themselves unavailable (logic.md §4.5). Install a supported version of the plugin, then reload. |
+| `MTR-0061` | warning | An optional integration (Vault economy or permissions, LuckPerms, the BungeeCord plugin channel, or the PlayerPoints, ExcellentEconomy, UltraEconomy or RedisEconomy currency) could not install its provider: the adapter failed to link against the installed version, or its setup call threw. The server keeps the default provider or none, and the economy, permission and `connect` actions report themselves unavailable (logic.md §4.5). Install a supported version of the plugin, then reload. |
 | `MTR-0074` | warning | An input slot's `accept:` condition does not compile (an unknown predicate, a malformed expression), so the layer's slots accept nothing until it is fixed (logic.md §25). The rest of the GUI stays live; the diagnostic targets `layers.<i>.accept`. |
 | `MTR-0075` | warning | A container slot of an input layer also has a static item from an item layer. The player's items take the slot, so the static item is not shown and cannot be taken out (logic.md §25). The GUI loads without it. |
 | `MTR-0076` | warning | An input-slot setting cannot apply: `accept:` on a layer that is not an input (ignored), or a `player_inventory:` that is neither `locked` nor `free` (read as `free`), or `durable: required` on a `slots` layer (ignored on a non-input layer; on an input layer a reminder that crash-safe slots are not in this build yet, so it behaves as `best_effort`; [`gui-input-durability.md`](gui-input-durability.md) §10, #308). The GUI and its other layers still load (logic.md §25). |
@@ -873,6 +873,7 @@ content  → api, core                  behavior → api, core
 pack     → api, core, platform-caps   delivery → api, core
 platform → api (only version-aware module)
 modern   → api, core, content, platform (the 26.x registry seam; platform for MaterioneText only)
+integrations-excellenteconomy → api (the one optional-plugin API compiled for Java 25: JDK 25 toolchain, --release 21, as modern)
 web      → api only (R9)              (nothing depends on web)
 webui    → API contract only          importers/integrations → api, core
 ```

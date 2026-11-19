@@ -1,0 +1,5 @@
+qa_excellenteconomy_coins:
+  integration: excellenteconomy
+  currency: coins
+  display_name: Coins
+  decimals: 0

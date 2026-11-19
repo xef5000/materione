@@ -48,7 +48,7 @@ class CurrencyTypeTest {
                 "decimals", 0,
                 "deposit-command", "gems give {player} {amount}",
                 "withdraw-command", "gems take {player} {amount}",
-                "balance-placeholder", "%coinsengine_balance_raw_gems%")).orElseThrow();
+                "balance-placeholder", "%myplugin_balance_gems%")).orElseThrow();
 
         assertThat(currency.id()).isEqualTo(NamespacedId.of("shop", "gems"));
         assertThat(currency.displayName()).isEqualTo("Gems");
@@ -56,7 +56,7 @@ class CurrencyTypeTest {
         assertThat(currency.decimals()).isZero();
         assertThat(currency.integration()).isEqualTo("custom");
         assertThat(currency.config()).containsOnlyKeys("deposit-command", "withdraw-command", "balance-placeholder")
-                .containsEntry("balance-placeholder", "%coinsengine_balance_raw_gems%");
+                .containsEntry("balance-placeholder", "%myplugin_balance_gems%");
     }
 
     @Test

@@ -70,7 +70,7 @@ public final class CurrencyType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Withdraw command", "economy", 60, true, "text", "", "gems take {player} {amount}")),
                         new ParameterSchema("balance-placeholder", ParameterType.STRING, false, null,
                                 "custom: PlaceholderAPI token that reads the balance as a number", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Balance placeholder", "economy", 70, true, "text", "", "%coinsengine_balance_raw_gems%"))),
+                                .withEditor(new ParameterSchema.EditorMetadata("Balance placeholder", "economy", 70, true, "text", "", "%myplugin_balance_gems%"))),
                 "2.0.0");
     }
 

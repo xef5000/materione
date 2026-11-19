@@ -58,7 +58,25 @@ dependencyResolutionManagement {
             name = "jitpack"
             content {
                 includeGroup("com.github.MilkBowl")
+                // RedisEconomy publishes its API here too (currency integrations).
+                includeGroup("com.github.Emibergo02")
             }
+        }
+        // Currency-integration APIs, each repository admitted for its one group (logic.md section 18).
+        maven("https://repo.rosewooddev.io/repository/public/") {
+            name = "rosewood"
+            content { includeGroup("org.black_ixx") }
+        }
+        maven("https://repo.nightexpressdev.com/releases/") {
+            name = "nightexpress"
+            content {
+                includeGroup("su.nightexpress.excellenteconomy")
+                includeGroup("su.nightexpress.nightcore")
+            }
+        }
+        maven("https://repo.techscode.com/repository/techscode-apis/") {
+            name = "techscode"
+            content { includeGroup("me.TechsCode") }
         }
         maven("https://repo.nexomc.com/releases/") {
             name = "nexomc"
@@ -85,6 +103,7 @@ include(
     ":web",
     ":importers",
     ":integrations",
+    ":integrations-excellenteconomy",
 )
 // Build-infrastructure modules — not product modules, not on any runtime classpath.
 include(

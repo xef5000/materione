@@ -15,6 +15,22 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    PlayerPoints:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    ExcellentEconomy:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    UltraEconomy:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    RedisEconomy:
+      load: BEFORE
+      required: false
+      join-classpath: true
     LuckPerms:
       load: BEFORE
       required: false

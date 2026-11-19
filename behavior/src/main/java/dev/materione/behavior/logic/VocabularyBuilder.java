@@ -7,6 +7,7 @@ import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.InputMethod;
+import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.ItemSource;
 import dev.materione.api.logic.ListSource;
 import dev.materione.api.logic.LogicCategory;
@@ -63,6 +64,7 @@ public final class VocabularyBuilder {
                 listSources(registries),
                 itemSources(registries),
                 inputMethods(registries),
+                currencyIntegrations(registries),
                 StepKinds.grammar());
     }
 
@@ -109,6 +111,24 @@ public final class VocabularyBuilder {
                     entry.registeredBy())));
         }
         out.sort(Comparator.comparing(BehaviorVocabulary.InputMethodEntry::id));
+        return List.copyOf(out);
+    }
+
+    /**
+     * The registered currency integrations, sorted by id (logic.md §18): what a currency file's {@code integration:}
+     * can name here, with the keys each reads. One whose description throws is left out.
+     */
+    private static List<BehaviorVocabulary.CurrencyIntegrationEntry> currencyIntegrations(RegistryView registries) {
+        var out = new ArrayList<BehaviorVocabulary.CurrencyIntegrationEntry>();
+        for (RegistryEntry<?> entry : entries(registries, RegistryKeys.CURRENCY_INTEGRATIONS)) {
+            if (!(entry.entry() instanceof CurrencyIntegration integration)) {
+                continue;
+            }
+            attempt(integration::describe).ifPresent(description -> out.add(
+                    new BehaviorVocabulary.CurrencyIntegrationEntry(
+                            LogicIds.display(entry.id()), description, entry.registeredBy())));
+        }
+        out.sort(Comparator.comparing(BehaviorVocabulary.CurrencyIntegrationEntry::id));
         return List.copyOf(out);
     }
 

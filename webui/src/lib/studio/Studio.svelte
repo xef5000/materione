@@ -51,6 +51,7 @@
     saveDocumentDraft,
     setDraftField,
   } from '../drafts.svelte';
+  import { withCurrencyIntegrations } from '../currency-form';
   import { rootIdForResource, sectionsOf, unrenderableKeys } from '../studio';
   import { localStudioVisual } from '../studio-visual';
   import { documentOf, plainText } from '../rich-text/model';
@@ -133,11 +134,13 @@
         workspace.types.find((type: TypeInfo) => type.name === resource.type),
   );
   /** What the form renders: no raw `template` control anywhere, and nothing required of a template. */
-  const schema = $derived(studioSchema(ownSchema, isTemplate));
+  const schema = $derived(withCurrencyIntegrations(
+    studioSchema(ownSchema, isTemplate), workspace.behavior?.currencyIntegrations, effective.integration));
   const sections = $derived(sectionsOf(schema));
   /** The module layout (display card or Appearance, list, settings panel) fills the form and scrolls by pane. */
   const modulesLayout = $derived(usesModules(schema));
-  const advancedOnly = $derived(unrenderableKeys(loaded, ownSchema));
+  const advancedOnly = $derived(unrenderableKeys(
+    loaded, withCurrencyIntegrations(ownSchema, workspace.behavior?.currencyIntegrations, effective.integration)));
   const takesTemplates = $derived(acceptsTemplates(ownSchema));
   const authoredTemplate = $derived(typeof draft.template === 'string' ? draft.template : '');
   const parents = $derived(

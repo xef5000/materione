@@ -1,0 +1,4 @@
+qa_rediseconomy_default:
+  integration: rediseconomy
+  display_name: Vault
+  decimals: 2

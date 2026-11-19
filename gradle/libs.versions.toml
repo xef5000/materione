@@ -47,6 +47,15 @@ bstats = "3.2.1"
 # verify before relying on it); LuckPerms' API is MIT on Maven Central.
 vault-api = "1.7.1"
 luckperms-api = "5.4"
+# Currency-integration APIs (logic.md section 18), compileOnly like Vault's. Each comes from its own
+# public Maven repository (settings.gradle.kts), so none is downloaded by hand. ExcellentEconomy's API is
+# compiled for Java 25, above our Java 21 floor, so it is compiled in its own :integrations-excellenteconomy
+# module on a JDK 25 toolchain at --release 21, as :modern does for Paper 26.
+playerpoints-api = "3.3.2"
+excellenteconomy-api = "2.8.0"
+nightcore-api = "2.16.7" # ExcellentEconomy's base library: test-only, its currency type extends one of its interfaces
+ultraeconomy-api = "1.1.2"
+rediseconomy-api = "4.3.19"
 
 # Harness server pin — single source of truth for CI + integration tests.
 # The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
@@ -102,6 +111,11 @@ undertow-core = { module = "io.undertow:undertow-core", version.ref = "undertow"
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 vault-api = { module = "com.github.MilkBowl:VaultAPI", version.ref = "vault-api" }
 luckperms-api = { module = "net.luckperms:api", version.ref = "luckperms-api" }
+playerpoints-api = { module = "org.black_ixx:playerpoints", version.ref = "playerpoints-api" }
+excellenteconomy-api = { module = "su.nightexpress.excellenteconomy:ExcellentEconomy", version.ref = "excellenteconomy-api" }
+nightcore-api = { module = "su.nightexpress.nightcore:main", version.ref = "nightcore-api" }
+ultraeconomy-api = { module = "me.TechsCode:UltraEconomyAPI", version.ref = "ultraeconomy-api" }
+rediseconomy-api = { module = "com.github.Emibergo02:RedisEconomy", version.ref = "rediseconomy-api" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }

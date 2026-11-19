@@ -73,6 +73,9 @@ const LABELS: Record<string, { label: string; singular: string }> = {
   effects: { label: 'Text effects', singular: 'effect' },
   guis: { label: 'GUIs', singular: 'GUI' },
   rules: { label: 'Rules', singular: 'rule' },
+  variables: { label: 'Variables', singular: 'variable' },
+  // "currencies" minus its last letter is not a word, which the fallback below would otherwise show as "New currencie"
+  currencies: { label: 'Currencies', singular: 'currency' },
 };
 
 /** Types not built yet, shown so the shape of the product is visible. */

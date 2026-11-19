@@ -65,6 +65,26 @@ class VocabularySourcesTest {
     }
 
     @Test
+    void theCurrencyIntegrationsAreListedWithTheKeysEachReadsAndAnAddonsAppearsBesideThem() {
+        service.currencyIntegrations().register(LogicTestSupport.owner("example"),
+                NamespacedId.of("example", "coin"), new FakeIntegration("coin"));
+
+        BehaviorVocabulary vocabulary = service.vocabulary();
+
+        assertThat(vocabulary.currencyIntegrations()).extracting(BehaviorVocabulary.CurrencyIntegrationEntry::id)
+                .containsExactly("custom", "example:coin", "xp");
+        var xp = vocabulary.currencyIntegrations().get(2);
+        assertThat(xp.registeredBy()).isEqualTo("materione");
+        assertThat(xp.description().parameters()).extracting(parameter -> parameter.id()).containsExactly("unit");
+        var custom = vocabulary.currencyIntegrations().get(0);
+        assertThat(custom.description().parameters()).extracting(parameter -> parameter.id())
+                .containsExactly("deposit-command", "withdraw-command", "balance-placeholder");
+        var coin = vocabulary.currencyIntegrations().get(1);
+        assertThat(coin.registeredBy()).isEqualTo("example");
+        assertThat(coin.description().parameters()).extracting(parameter -> parameter.id()).containsExactly("pouch");
+    }
+
+    @Test
     void anActionThatTakesAnElseSaysSoAndOthersDoNot() {
         service.actions().register(LogicTestSupport.owner("example"), NamespacedId.of("example", "ask"), new Asking());
 
@@ -74,6 +94,22 @@ class VocabularySourcesTest {
                 .extracting(BehaviorVocabulary.Action::id).containsExactly("custody.consume", "example:ask");
         assertThat(vocabulary.actions()).filteredOn(action -> action.id().equals("message"))
                 .singleElement().satisfies(message -> assertThat(message.takesElse()).isFalse());
+    }
+
+    /** A currency integration with one key, for the vocabulary to list. */
+    private record FakeIntegration(String id) implements dev.materione.api.logic.provider.CurrencyIntegration {
+        @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Coin", "A test integration", java.util.List.of(
+                    new dev.materione.api.registry.ParameterSchema("pouch",
+                            dev.materione.api.registry.ParameterType.STRING, false, null, "Which pouch", null, null)),
+                    "2.0.0");
+        }
+
+        @Override
+        public dev.materione.api.logic.provider.CurrencyBackend bind(ParamReader config) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     /** A method that is unavailable when told to be. */
