@@ -38,7 +38,7 @@
 | The title and subtitle channels | Scaled 4× and 2×, and the surface every announcement plugin uses. A `title` action stays an action. |
 | Retexturing vanilla HUD parts (hearts, hunger, hotbar) | A pack concern (resource overrides), not a view. Nexo's Bedrock-only retexture is out of scope here. |
 | Packet-level merging with other plugins' action-bar text | Needs a packet interceptor, a dependency question (Q3). v1 coexists by rules (§11). |
-| HUD-specific actions or triggers (`hud.set`, `hud.threshold`) | Feature-shaped under D12 (§3.3); values are variables, thresholds are conditions. |
+| HUD-specific actions or triggers (`hud.set`, `hud.threshold`, `hud.refresh`) | Feature-shaped under D12 (§3.3); values are variables, thresholds are conditions. The generic `view.refresh` (`views.md` §3.6, row V2, #457) re-renders a HUD's viewers, polled reads included, so no `hud.refresh` is added. |
 | A `behavior:` block on a HUD | A HUD is not a rule host in v1; behavior lives in `rule` documents (logic.md §37). An authored `behavior:` key is preserved as an unknown field (master §5.6) and reported (`MTR-0110`). |
 | Text-display entities as the render surface | Rejected (§5.1): they are world-space, not screen-space. |
 | Bedrock (Geyser) HUDs | Master §14.3, open. |
@@ -55,35 +55,33 @@
 | **Anchor** | The screen point a layer's `x`/`y` are measured from (§5.2). |
 | **Piece** | The compiled form of one layer frame: a run of glyphs that starts and ends with the pen at the channel origin, so pieces concatenate in any order (the GUI's rule, gui.md §11.3 rule 5). |
 | **Viewer** | An online player for whom a HUD's visibility holds and whose loaded pack contains the HUD (§8.4). |
-| **Reads** | The set of state keys a HUD's templates and conditions read, extracted at compile time (§7.2). |
+| **Reads** | The set of state keys a HUD's templates and conditions read, extracted at compile time by the shared views extraction (§7.2, `views.md` §5.2). |
 
 ---
 
 ## 3. Where a HUD sits: a view kind (D12)
 
-### 3.1 The view contract the HUD needs
+### 3.1 The HUD as a view kind
 
-Primitives issue #335 designs *views over state*: a view names the state it renders, its viewers are a set, and "re-render the
-viewers of key K" is a verb (primitives.md §5.3). The container GUI, the dialog (#6) and the HUD are three **kinds** of one view.
-#335's design document is not written yet. This design therefore states the minimum contract a HUD needs from the view model, so
-that whichever lands first, neither is built twice:
+The view model is designed in **`views.md`** (#335, PR #454; owner answers 2026-11-19), written before this design is built so
+that neither is built twice. The HUD implements the view-kind contract of `views.md` §3.2 with these values (`views.md` §4.1,
+§4.4):
 
-```
-ViewKind<D>                                   // D = the compiled definition (here RuntimeHud)
- ├─ reads(D)          : Set<StateKey>         // compile-time: the variables and polled sources the view reads (§7.2)
- ├─ viewers(D, state) : predicate over a player // HUD: visibility (§6); GUI: "has it open"; dialog: "has it shown"
- ├─ render(D, viewer) : Payload               // HUD: one string per channel (§8.2)
- └─ viewerLocal       : per-viewer render state // HUD: last-sent strings, poll cache, animation phase
-StateKey written ──► views whose reads() contain it ──► re-render their viewers (coalesced per tick)
-```
+| Contract member | HUD |
+|---|---|
+| `contentType` | `hud` |
+| `viewerRule` | `predicate`: every online player for whom the HUD's visibility holds (§6, `views.md` §3.5); no open or close verb |
+| Binding | none: no `args`, no subject stack, no key. Keyed reads resolve their key per viewer at render (`views.md` §4.4, §5.3) |
+| `reads(D)` | the variables and polled sources its templates, conditions, `worlds` and `permission` read (§7.2), extracted into the shared reads index |
+| `render` | one string per channel (§8.2) |
+| `deliver` | diff with the last sent string; the channel writers (§8.2) |
+| Rerender policy | always `on_change`; there is no `rerender:` key on a HUD |
+| `minInterval` | 1 tick (2 for server-driven animation, §5.6) |
+| Viewer record | `HudViewer`: last-sent strings, poll cache, animation phase (viewer-local state only) |
 
-The difference between the kinds is only how the viewer set is formed. A GUI's viewers *opened* it; a HUD's viewers are
-**every online player for whom its visibility holds**, so a HUD needs no open or close verb. Showing a HUD to one player is
-content: its `visible_if` reads a variable, and a rule sets that variable (§6.3).
-
-If the HUD lands first, `plugin/hud/` implements this contract privately and #335 lifts it into the shared view model. If #335
-lands first, the HUD implements #335's interface. Either way there is one binding system: the logic engine's templates and the
-variable store (logic.md §2.5, §3). Sequencing is owner question Q4.
+Showing a HUD to one player is content: its `visible_if` reads a variable, and a rule sets that variable (§6.3). There is one
+binding system: the logic engine's templates and the variable store (logic.md §2.5, §3), through `views.md`'s reads index and
+write observer (§7.2).
 
 ### 3.2 The universality tests (primitives.md §2.2)
 
@@ -356,7 +354,8 @@ Goldens pin the emitted fonts, PNGs and pieces (§15).
 
 ### 6.1 The condition
 
-A HUD's visibility for a player is the conjunction, evaluated on the player's owner thread (§9):
+A HUD's viewer-set rule is `predicate` (`views.md` §3.5): its viewers are the players for whom its visibility holds. Visibility
+for a player is the conjunction, evaluated on the player's owner thread (§9):
 
 ```
 inWorld(worlds) ∧ hasPermission(permission) ∧ visible_if ∧ packContains(hud)
@@ -391,18 +390,20 @@ state.
 
 Every value field (`text`, `value`, `max`, a `visible_if`) is a template in the logic engine's syntax (logic.md §2.5): a literal,
 `${expression}`, or a PlaceholderAPI `%token%`. A HUD evaluates templates in a **viewer context**: `player` (the viewer), the
-world, and `vars.player.*` / `vars.server.*` (logic.md §3.3). There is no `local` or `session` scope, because a HUD is not a run
-and not a window; a read of `vars.local.*` or `vars.session.*` skips the layer at load (`MTR-0116`). An undeclared persistent
+world, and `vars.player.*` / `vars.server.*` (logic.md §3.3). A HUD render also carries the common view subtree of `views.md` §3.7 with
+`view.id` and `view.kind` = `hud` (no `view.args`, `view.item` or `view.key`: a HUD has no binding). There is no `local` or
+`session` scope, because a HUD is not a run and not a window (consistent with `views.md` §3.4); a read of `vars.local.*` or `vars.session.*` skips the layer at load (`MTR-0116`). An undeclared persistent
 variable is the existing `MTR-0063`. Keyed and item state (#333) are read through the same `vars.*` paths when they ship; a HUD
 whose run has no stack reads an item variable's default, as #333 specifies.
 
 ### 7.2 Reads, and how a HUD knows to re-render
 
-At compile time the HUD walks its templates and conditions and records its **reads**:
+At compile time the HUD's templates and conditions are walked by the shared extraction of `views.md` §5.2, which records its
+**reads**; the notified and polled classes below are `views.md` §5.1's:
 
 | Read | Example | How a change reaches the HUD |
 |---|---|---|
-| Declared variable | `vars.player.rpg.mana` | **Notified.** The variable store's write path (logic.md §20, which already invalidates snapshots on writes) gains a write observer; a write of key K marks dirty every viewer of every HUD whose reads contain K (§3.1). Row V adds it. |
+| Declared variable | `vars.player.rpg.mana` | **Notified.** The shared reads index and `StateWriteObserver` of `views.md` §5.2 and §5.3 (views row V1, #456): a write is matched by holder (a `player` write to that viewer, a `server` write to every viewer) and marks those viewers dirty. Keyed reads (#333 step 2) resolve their key per viewer at render and match on the resolved key (`views.md` §4.4, §5.3). There is no HUD-specific index. |
 | Viewer facts the engine sees | `player.world`, permission | **Notified** by the events of §6.2. |
 | World or entity state | `player.health`, `player.level` | **Polled** at `refresh`. |
 | PlaceholderAPI token | `%vault_eco_balance%` | **Polled** at `refresh`; each distinct token is read once per viewer per poll, shared across HUDs. |
@@ -421,7 +422,7 @@ reflection path (logic.md §18, decision 23), on the viewer's thread.
 ### 8.1 Shape
 
 ```
-shadow swap ──► RuntimeHuds (compiled HUDs, pieces, reads index: StateKey → HUDs)
+shadow swap ──► RuntimeHuds (compiled HUDs, pieces) + views ReadsIndex (StateKey → definitions)
                         │
 variable store write ───┼──► reads index ──► mark viewers dirty ─┐
 events (join, world…) ──┘                                         │
@@ -433,7 +434,9 @@ events (join, world…) ──┘                                         │
              └─ changed ──► ChannelWriter(bossbar | actionbar) ──► platform text layer
 ```
 
-`plugin/hud/` holds `HudService` (registry of viewers, the reads index), `HudViewer` (per player) and the two `ChannelWriter`s.
+`plugin/hud/` holds `HudService` (the HUD kind: visibility evaluation and attach/detach against `views.md`'s `ViewRegistry`),
+`HudViewer` (the HUD kind's viewer record: viewer-local state only) and the two `ChannelWriter`s. The viewer registry, the reads
+index and the write observer are `plugin/view`'s (`views.md` rows V0, V1; #455, #456), shared with GUIs and dialogs.
 `content/hud/` holds `HudType`, `HudDefinition` and the compiler; it is Bukkit-free so the compiler and goldens run headless
 (gui.md §3's cut). The runtime never sees components, only compiled pieces (gui.md §3: "the runtime does not know about
 components").
@@ -456,12 +459,13 @@ A viewer wakes only when something can have changed:
 
 | Wake | Source |
 |---|---|
-| Dirty (notified read, §7.2) | Coalesced: at most one render per viewer per tick. |
+| Dirty (notified read, §7.2) | The shared `ViewScheduler` of `views.md` §5.4: one dirty bit per viewer, at most one render per viewer per tick. |
 | Poll | Every `refresh` ticks of the smallest `refresh` among its visible HUDs with polled reads. |
 | Animation | The next server-driven frame change (§5.6). |
 | Keepalive | 40 ticks after the last action-bar send, only while an action-bar piece is visible. |
 
-The wake is a **chain of one-shots** scheduled through the gateway (`executeEntityLater`, plugin.md §2), the pattern `gui.tick`
+The poll, animation and keepalive wakes are HUD-specific and run in the same per-viewer chain as the shared dirty wake. The
+wake is a **chain of one-shots** scheduled through the gateway (`executeEntityLater`, plugin.md §2), the pattern `gui.tick`
 uses (logic.md §21, decision 15): each link computes the next wake from the four sources and schedules one task, and stops when
 nothing is visible. There is no global tick loop over players. Latency from a variable write to the next send is at most one tick.
 
@@ -498,11 +502,12 @@ variable or keyed state, whose store already answers off-owner reads with snapsh
 
 ## 10. Performance budget (proposed rows for plugin.md §9)
 
+The variable-write rows (a write no view reads ≤ 250 ns; one matched viewer ≤ 2 µs; fan-out) are shared by every view kind and
+live in `views.md` §5.7. The HUD's own rows:
+
 | Operation | Budget | Test |
 |---|---|---|
 | Render pass, 200 viewers × 1 HUD × 12 layers, every layer dirty (template evaluation, layout, bar slices, diff), PlaceholderAPI and packet IO excluded | ≤ 2 ms per pass, median of three (≈ 10 µs per viewer) | `HudRenderPerfTest` |
-| A variable write that no HUD reads | ≤ 250 ns added to the write (one lookup in the reads index) | `HudReadsIndexTest`, the `WorldEventGate` precedent |
-| A variable write that one HUD reads, for one viewer | ≤ 2 µs to mark dirty and schedule (render excluded) | `HudReadsIndexTest` |
 | Idle viewer (notified reads only, no animation, nothing visible on the action bar) | 0 wakes | `HudCadenceTest` (virtual clock) |
 | Packets per viewer | ≤ 1 boss-bar name update and ≤ 1 action-bar send per tick; an unchanged render sends nothing; keepalive 1 per 40 ticks | `HudCadenceTest` |
 | PlaceholderAPI calls | Each distinct token at most once per viewer per `refresh` (default 5 ticks), shared across HUDs | `HudCadenceTest` with a counting resolver |
@@ -532,7 +537,8 @@ HUD at GUI scale 4.
 
 The next free code on main is `MTR-0106`. #9 (frame cycling) is in flight in parallel and may take the codes after it; to avoid
 a collision this design takes **`MTR-0110` to `MTR-0117`** and leaves `MTR-0106` to `MTR-0109` to #9. Row Q moves them into
-plugin.md §5's catalog; their meaning is API once shipped.
+plugin.md §5's catalog; their meaning is API once shipped. The views design (`views.md` §10) numbers its own codes after this
+block; nothing here changes for it.
 
 | Code | Severity | When | Effect and recovery |
 |---|---|---|---|
@@ -603,10 +609,10 @@ regular implementation on Haiku.
 | **R** | Client probes | On the probe loop (26.x) and the 1.21.4 harness: boss-bar and action-bar draw rows and centring with a zero-advance string; `shadow_color` transparent on both channels; supplementary-plane codepoints in bitmap providers; draw order of different-texture glyphs in one string; channel order; action-bar fade timing; the text-display rejection of §5.1; frame time of a 12-layer HUD. Output: §5 facts marked verified with screenshots, or this doc revised. | none | Sonnet, high |
 | **S** | Schema | `hud` content type (`content/hud/`), parse, self-description, lossless round-trip goldens; `surfaces` in component self-descriptions; `glyph:` on `image`; `align` on `text`; the `bar` component's schema; level 1–3 validation and `MTR-0110`, `MTR-0116`, `MTR-0117`. | none | Haiku |
 | **C** | Compiler | HUD surface profile on `GuiFlatten`/`GuiArt.cut`; anchors → shift and ascent; `hud-glyph` allocation; `<ns>:hud` and offset fonts; bar slicing and segments; placement glyphs; boss-bar sprite overrides; emit invariant (`MTR-0111`, `MTR-0112`, `MTR-0114`); pack goldens and shared vectors. | R (geometry), S | Sonnet, high |
-| **V** | View runtime | `HudService`, `HudViewer`, reads index from the variable store, cadence chain, channel writers, keepalive, actionbar yield, pack gate, join/quit/reload, Folia; `MTR-0113`; the perf rows of §10; `PaperHudIT`. Implements §3.1's contract (or #335's, if landed). | C | Sonnet, high |
+| **V** | View runtime | `HudService` and `HudViewer` as the HUD view kind on `views.md`'s `ViewRegistry`, reads index and `ViewScheduler`; the HUD wakes (poll, animation, keepalive), channel writers, actionbar yield, pack gate, join/quit/reload, Folia; `MTR-0113`; the perf rows of §10; `PaperHudIT`. Implements `views.md` §3.2's contract (§3.1). | C, views V0 (#455), V1 (#456) | Sonnet, high |
 | **A** | Animation | Consume #9's provider (§5.6): client-driven emit once, server-driven frame wakes, clamp and `MTR-0115`. | V, #9 | Haiku |
 | **W** | Studio | The HUD studio of §13 and its `webui` specs; TS layout mirror on the shared vectors; the `hud` session capability. | S, C (vectors) | Sonnet, high (web UI) |
-| **K** | Benchmark check | Regenerate the SDK; turn T20's HUD line green in agent-benchmark.md's harness; no SDK code. | S | Haiku |
+| **K** | Benchmark check | Regenerate the SDK (including the view facet on `hud`, `views.md` §9); turn T20's HUD line green in agent-benchmark.md's harness; no SDK code. | S | Haiku |
 | **Q** | Close-out | `qa/catalog/hud.mjs`; plugin.md §5 codes, §9 rows; runtime-systems §7 "as built"; glossary; roadmap M6 note; CHANGELOG. | V, W, A | Haiku |
 | **X** (later, owner-gated, Q1) | Shader anchoring | A HUD signal in the existing text vertex shader ladder (runtime-systems §6) that moves marked glyphs to edge and centre anchors from the projection matrix; moves every layer onto the boss bar and frees the action bar; shader-free clients fall back to v1 anchors. Its own design note first. | V | Sonnet, high |
 
@@ -619,8 +625,8 @@ regular implementation on Haiku.
 | **Q1** | Shader-free v1, or shader-first? | (a) v1 shader-free: `top` via the boss bar, `bottom` and hotbar anchors via the action bar, centre-relative only; edge anchors in row X. (b) Shader-first: every layer on the boss bar, any anchor, no action-bar use, but only on clients inside the verified shader ladder (46–88). | (a). Works on every client the floor admits and needs no shader; (b) is row X. |
 | **Q2** | Which boss-bar colour does the HUD reserve (its bar sprites become transparent for every plugin)? | A fixed colour, or a server setting with a default. | A setting `hud.bossbar_color`; the default is the owner's call (this doc writes `yellow` as a placeholder in examples only). |
 | **Q3** | Action-bar coexistence with other plugins | (a) Last writer wins, keepalive ≤ 40 ticks, an off switch (§11). (b) Packet-level merge of other plugins' action-bar text into the HUD line, which needs a packet interceptor (a new dependency or a pinned transport like the GUI's rich titles, logic.md §6.4). | (a) for v1; (b) only if users report it, and row X removes the action bar from the HUD altogether. |
-| **Q4** | Sequencing with #335 (views over state) | (a) The HUD lands first and implements the minimal view contract of §3.1 privately; #335 lifts it. (b) #335's design document first, then the HUD on it. | (a). The contract is small and the HUD is its simplest kind (no open, no input). |
-| **Q5** | One component registry for GUIs and HUDs? | (a) HUD layers are `gui-components` entries that declare the HUD surface (§4.3). (b) A separate `hud-elements` registry. | (a): one view-component registry, per D12 and #335; the registry's name (`gui-components`) may later be generalized without changing files. |
+| **Q4** | Sequencing with #335 (views over state) | (a) The HUD lands first and implements the minimal view contract privately; #335 lifts it. (b) #335's design document first, then the HUD on it. | **Answered (owner, 2026-11-19): (b).** The owner chose #335's document first (dialogs design, PR #451, Q7), for both kinds; it is `views.md` (PR #454), and §3.1 implements its contract. |
+| **Q5** | One component registry for GUIs and HUDs? | (a) HUD layers are `gui-components` entries that declare the HUD surface (§4.3). (b) A separate `hud-elements` registry. | (a): one view-component registry, per D12 and #335; the registry's name (`gui-components`) may later be generalized without changing files. `views.md` endorses (a) as the D12 reading of one view model. |
 | **Q6** | Master §8.1 names "HUD thresholds" (event) and "set HUD value" (action); logic.md §11 left `hud.threshold` and `hud.set` seams. | (a) Read them as `set_var` and a future generic variable-change trigger (§3.3); no HUD-specific verbs; amend master §8.1's wording when the HUD ships. (b) Ship `hud.set`/`hud.threshold` as presets over those primitives. | (a). |
 | **Q7** | The screen-centre (crosshair) anchor and the title channel | (a) Out of v1; centre comes with row X. (b) Use the subtitle channel at half-scale fonts for a centre anchor now, accepting conflicts with every title plugin. | (a). |
 
