@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Animated glyphs play their frames (#9, M6, runtime-systems §6).** A new frame-cycling provider
+  (`GlyphFrames`, `GlyphFrameText.advance`) rewrites an animated glyph's first-frame codepoint to the frame a
+  surface's clock selects, keeping every style, with no client mod and no pack change. GUI item names and lore play
+  on the window's `refresh:` clock (`RenderDiff` rewrites a slot only when a frame moved). New glyph field
+  `frame_ticks` (ticks per frame, 1 to 1200, default 4, clamped). Text with no clock (chat, signs, books, held-item
+  lore) still shows frame 1. Golden `fixtures/golden/glyphs/animated-cycle-font.json` locks the emitted cycle.
+  Still to do for #9: HUD elements (the HUD system is not built yet; the seam is `GlyphFrameText.advance`) and
+  held-item lore. QA: `glyphs.frame-cycling` (visual, not yet blessed).
+
 - **Self-description carries the engine's grammar and the markers the SDK generator needed (#355, D5, D13).**
   `authoring.describe` gains, additively: on a parameter `valueKind` (`steps`, `condition`, `conditions`, `flow`,
   `arguments`), `expression` (the entry binds the value as an expression), `multiple` (one value or a list: every trigger

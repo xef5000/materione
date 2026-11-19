@@ -1,0 +1,23 @@
+# Animated glyph frame cycling in a GUI item's lore (M6, #9, runtime-systems §6). The sample pack's
+# `spark` glyph has two frames; the window's refresh clock (refresh: 4) turns the frame over every
+# `frame_ticks` (default 4) ticks, so the glyph in the lore plays without a client mod. The item is
+# vanilla paper, so the pack still holds no Materione items. The open is announced on the server
+# console, which qa/catalog/glyphs.mjs reads as a marker.
+glyph_cycle:
+  title: Glyph cycle
+  container: chest_3
+  refresh: 4
+  layers:
+    - id: spark
+      type: item
+      slot: 13
+      item: minecraft:paper
+      name: "<white>Spark"
+      lore:
+        - "<glyph:spark> plays on the refresh clock"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GLYPH-CYCLE-OPEN ${gui.id}"
+            as: console

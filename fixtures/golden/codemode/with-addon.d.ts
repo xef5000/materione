@@ -311,6 +311,12 @@ interface GlyphFields {
    * @example gui/heart_frame_1
    */
   frames?: JsonValue[];
+  /**
+   * Animation speed: ticks each frame shows (1 to 1200; 20 ticks = 1 second). Frames play on surfaces that tick (a GUI's refresh clock); text without a clock shows frame 1.
+   * @defaultValue 4
+   * @example 4
+   */
+  frame_ticks?: number;
   /** Alias another glyph's bitmaps (no codepoint of its own) */
   reference?: Ref<"glyph">;
   /**

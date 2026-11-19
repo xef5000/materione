@@ -1,0 +1,9 @@
+[
+  {"font":"sample:glyphs","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/spark_1.png","ascent":9,"height":8,"chars":["\ua410"]}},
+  {"font":"sample:glyphs","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/spark_2.png","ascent":9,"height":8,"chars":["\ua411"]}},
+  {"font":"sample:glyphs","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/spark_3.png","ascent":9,"height":8,"chars":["\ua412"]}},
+  {"font":"sample:glyphs","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/pulse_1.png","ascent":8,"height":8,"chars":["\ua413"]}},
+  {"font":"sample:glyphs","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/pulse_2.png","ascent":8,"height":8,"chars":["\ua414"]}},
+  {"font":"sample:fancy","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/flame_1.png","ascent":8,"height":8,"chars":["\ua415"]}},
+  {"font":"sample:fancy","membership":"JOINS_DEFAULT","provider":{"type":"bitmap","file":"sample:gui/flame_2.png","ascent":8,"height":8,"chars":["\ua416"]}}
+]
