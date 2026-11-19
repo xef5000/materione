@@ -763,7 +763,7 @@ screens and NPC panels uses, and the design now covers it:
 
 ## 16. Owner questions and answers
 
-Answered by the owner on 2026-11-19 unless marked open. None decides a master §14 question; Q2 leaves §14.3 open.
+Answered by the owner on 2026-11-19 unless marked open (Q5). None decides a master §14 question; Q2 leaves §14.3 open.
 
 | # | Question | Answer |
 |---|---|---|
@@ -773,6 +773,6 @@ Answered by the owner on 2026-11-19 unless marked open. None decides a master §
 | **Q4** | Should `rule` documents also receive `dialog.submit`? | **No**; the dialog host only (§15 decision 12). |
 | **Q5** | Pause-menu and quick-actions dialogs: in scope? | **Open.** Vanilla 1.21.6+ lets a server add a button to the pause (Escape) screen that opens a dialog (`pause_screen_additions` tag) and list dialogs under the Quick Actions key (`quick_actions` tag). Tags belong to the dialog registry the client receives while joining, and Paper freezes registries at server start, so adding or removing such a dialog takes a restart. Materione already has a restart-required path for registry paintings (runtime-systems.md, `MTR-0028`/`MTR-0029`), so (b) reuses it; v1 left it out only to keep the first slice reload-only. Options: (a) out of v1; (b) a `pause_menu:` / `quick_actions:` key, restart-required, through the paintings' registry seam, as a late row of #6. |
 | **Q6** | Diagnostic block: the next free block after `MTR-0105` and after the HUD design's (#7), at implementation? | **Yes.** |
-| **Q7** | Sequencing with #335: build now to §8's contract, or wait for #335? | **Open; the owner leans to waiting.** #335 is in M7 and its design is not written; it depends on keyed state #333 (M6.5). #335's issue asks to be "sequenced with #6 and #7 so they are not built twice", which this design does by building to #335's sketched contract (§8). A dialog takes little from #335: one modal per player (no viewer sets), and no re-render by default because re-sending resets typing. Options: (a) build now; (b) wait for #335, moving dialogs to M7; (c) write #335's design document first, then build #6 to it. |
+| **Q7** | Sequencing with #335: build now to §8's contract, or wait for #335? | **(c): write #335's design document first, then build #6 to it** (owner, 2026-11-19). The document is pulled forward from M7 so dialogs stay in M6 and are not built twice; §8's table is replaced by references to it once it lands. #335 depends on keyed state #333 (M6.5); what dialogs need from it is small (one modal per player, no re-render by default). |
 | **Q8** | The studio's HTML/CSS import: keep only the PNG? | **Keep the HTML; derive the PNG when needed.** A PNG alone loses information. The HTML/CSS is the stored asset; the editor's browser rasterizes it when a raster is needed (§14.3, row X). |
 | **Q9** | mcgui's map-drawn wall and fullscreen screens: file a view-kind issue? | **Filed as #453** (M7 with #335; the owner may move it). |
