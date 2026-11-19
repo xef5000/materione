@@ -183,7 +183,7 @@ class IntegrationsGuardTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {
-            "PlayerPoints", "CoinsEngine", "ExcellentEconomy", "UltraEconomy", "TokenManager", "RedisEconomy"})
+            "PlayerPoints", "ExcellentEconomy", "UltraEconomy", "TokenManager", "RedisEconomy"})
     void anEnabledEconomyPluginWhoseCurrencyIntegrationCannotBeInstalledIsReportedAndSkippedNotFatal(String plugin) {
         var host = new Host(Set.of(plugin));
         var diagnostics = new Diagnostics();

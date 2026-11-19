@@ -6,7 +6,7 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.provider.CurrencyIntegration;
-import dev.materione.integrations.coinsengine.CoinsEngineCurrencyIntegration;
+import dev.materione.integrations.excellenteconomy.ExcellentEconomyCurrencyIntegration;
 import dev.materione.integrations.items.OptionalItemSource;
 import dev.materione.integrations.items.OptionalItemSources;
 import dev.materione.integrations.luckperms.LuckPermsPermissionProvider;
@@ -43,9 +43,9 @@ import org.bukkit.plugin.Plugin;
  * Vault is enabled, else the session default (not registered here). Transfer: the BungeeCord plugin
  * channel when {@code proxyTransfer} is set; the transfer packet is the plugin's own provider.
  *
- * <p><b>Currency integrations.</b> Each supported economy plugin (PlayerPoints, CoinsEngine, UltraEconomy,
+ * <p><b>Currency integrations.</b> Each supported economy plugin (PlayerPoints, ExcellentEconomy, UltraEconomy,
  * TokenManager, RedisEconomy) registers its own integration ({@code materione:playerpoints}, ...) while it
- * runs. A plugin that runs several currencies (CoinsEngine, UltraEconomy, RedisEconomy) is one integration
+ * runs. A plugin that runs several currencies (ExcellentEconomy, UltraEconomy, RedisEconomy) is one integration
  * that many Materione currencies name, each with its own {@code currency:} key.
  *
  * <p>{@link #refresh} runs at start, on reload, and whenever a watched plugin enables or disables.
@@ -67,8 +67,8 @@ public final class Integrations implements Listener, AutoCloseable {
     private static final List<CurrencyAdapter> CURRENCY_ADAPTERS = List.of(
             new CurrencyAdapter("playerpoints", List.of(PlayerPointsCurrencyIntegration.PLUGIN),
                     PlayerPointsCurrencyIntegration::new),
-            new CurrencyAdapter("coinsengine", CoinsEngineCurrencyIntegration.PLUGINS,
-                    CoinsEngineCurrencyIntegration::new),
+            new CurrencyAdapter("excellenteconomy", List.of(ExcellentEconomyCurrencyIntegration.PLUGIN),
+                    ExcellentEconomyCurrencyIntegration::new),
             new CurrencyAdapter("ultraeconomy", List.of(UltraEconomyCurrencyIntegration.PLUGIN),
                     UltraEconomyCurrencyIntegration::new),
             new CurrencyAdapter("tokenmanager", List.of(TokenManagerCurrencyIntegration.PLUGIN),

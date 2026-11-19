@@ -68,6 +68,13 @@ dependencyResolutionManagement {
             name = "rosewood"
             content { includeGroup("org.black_ixx") }
         }
+        maven("https://repo.nightexpressdev.com/releases/") {
+            name = "nightexpress"
+            content {
+                includeGroup("su.nightexpress.excellenteconomy")
+                includeGroup("su.nightexpress.nightcore")
+            }
+        }
         maven("https://repo.techscode.com/repository/techscode-apis/") {
             name = "techscode"
             content { includeGroup("me.TechsCode") }
@@ -97,6 +104,7 @@ include(
     ":web",
     ":importers",
     ":integrations",
+    ":integrations-excellenteconomy",
 )
 // Build-infrastructure modules — not product modules, not on any runtime classpath.
 include(

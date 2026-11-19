@@ -355,7 +355,7 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 
 | SPI | Used by | Default | Integration |
 |---|---|---|---|
-| `CurrencyCatalog` (named currencies, §18: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`), PlayerPoints, CoinsEngine, UltraEconomy, TokenManager and RedisEconomy (§18, items 30-36); addons register more |
+| `CurrencyCatalog` (named currencies, §18: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`), PlayerPoints, ExcellentEconomy, UltraEconomy, TokenManager and RedisEconomy (§18, items 30-36); addons register more |
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
 | `InputMethod` | `prompt` (§6.6) | chat, anvil; sign registered but unavailable on this build (§29) | dialogs (#6) |
@@ -902,7 +902,7 @@ Each row below names the class of problem, and every one carries a step path whe
 | Bedrock forms (#24) | A Geyser-side renderer of the same GUI and flows. |
 | Importing incumbent menus (#17) | Map DeluxeMenus and CommandPanels YAML onto §1's constructs. The container mapping is fixed (gui.md §12.13 item 6): an imported chest menu's `size` maps to `container: chest_N` (N = size / 9), `HOPPER` and `DISPENSER` (and `DROPPER`, the same menu) to `container: hopper` and `container: dispenser`, and an unsupported `inventory_type` is a skipped GUI with a diagnostic, never a chest. |
 | Item and block rules in the node editor | The canvas is resource-agnostic (§8, `AuthoringApi.logic()`). The item studio's rule editor can switch to it. |
-| Currency integrations beyond those built in (#213, §18) | An addon registers a `CurrencyIntegration` in its own namespace (`example:somecoin`), and a currency file names it. No core change. (PlayerPoints, CoinsEngine, UltraEconomy, TokenManager and RedisEconomy ship as soft-depend adapters, §18 items 30-36.) |
+| Currency integrations beyond those built in (#213, §18) | An addon registers a `CurrencyIntegration` in its own namespace (`example:somecoin`), and a currency file names it. No core change. (PlayerPoints, ExcellentEconomy, UltraEconomy, TokenManager and RedisEconomy ship as soft-depend adapters, §18 items 30-36.) |
 | The `variable` and `item` currency integrations (§18) | A declared player number variable (#211) and an item count in the inventory. Reserved names; not implemented in #213. |
 
 ---
@@ -1688,7 +1688,7 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
 
 **Economy-plugin integrations**
 
-30. **Five more soft-depend adapters, one per plugin.** `playerpoints`, `coinsengine`, `ultraeconomy`,
+30. **Five more soft-depend adapters, one per plugin.** `playerpoints`, `excellenteconomy`, `ultraeconomy`,
     `tokenmanager` and `rediseconomy` each register as `materione:<id>` **only while their plugin is enabled**,
     through the same guarded `Integrations` gate as `vault` (items 12 and 19): an absent plugin loads no class,
     and an enabled plugin whose API cannot link is `MTR-0061` and skipped. A currency file whose integration
@@ -1698,19 +1698,19 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     unsupported read capability (item 25), and never takes anything on a withdrawal it cannot cover.
 31. **Many currencies per plugin: the integration is the plugin, the currency is a key.** A plugin that runs
     several currencies is one integration that any number of Materione currencies name, each with its own
-    `currency:` key, so the same `coinsengine` integration backs `shop:coins` and `shop:gems`:
+    `currency:` key, so the same `excellenteconomy` integration backs `shop:coins` and `shop:gems`:
 
     | Integration | Plugin | Keys | The Materione currency is |
     |---|---|---|---|
     | `playerpoints` | PlayerPoints | none | PlayerPoints' one points balance (whole numbers; offline players work) |
-    | `coinsengine` | CoinsEngine (also loads as ExcellentEconomy) | `currency` (required) | the named CoinsEngine currency (online players only) |
+    | `excellenteconomy` | ExcellentEconomy | `currency` (required) | the named ExcellentEconomy currency (online players only) |
     | `ultraeconomy` | UltraEconomy | `currency` (required), `balance: bank` or `hand` (default `bank`) | the named UltraEconomy currency, on the bank or on the hand |
     | `tokenmanager` | TokenManager | none | TokenManager's one token balance (whole numbers; online players only) |
     | `rediseconomy` | RedisEconomy | `currency` (optional) | the named RedisEconomy currency, or its default currency when omitted (offline players work) |
 
     ```yaml
     # currencies/coins.yml            # currencies/gems.yml
-    integration: coinsengine          integration: coinsengine
+    integration: excellenteconomy     integration: excellenteconomy
     currency: coins                   currency: gems
     display_name: Coins               display_name: Gems
     ```
@@ -1718,30 +1718,35 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     deposit or withdrawal with a fraction (or above the type's range) is `Failed` with a reason and changes
     nothing, rather than rounding: a silently truncated price would charge less than the author wrote. (The
     `xp` integration rounds; these refuse, because points and tokens are the price, not a by-product.)
-33. **Online-only backends say so.** CoinsEngine's and TokenManager's synchronous APIs take a `Player`, so a
+33. **Online-only backends say so.** ExcellentEconomy's and TokenManager's synchronous APIs take a `Player`, so a
     step for an offline player is `Failed` with `needs the player online`, never a zero balance. UltraEconomy
     answers by account; a player with no account yet is `Failed` the same way.
-34. **CoinsEngine is reached by reflection.** Its only published API (`ExcellentEconomy`, group
-    `su.nightexpress.excellenteconomy`) is compiled for Java 25, above the Java 21 floor (D10), so Materione
-    cannot compile against it. `CoinsEngineApi` finds the Bukkit service by the class name
-    `su.nightexpress.excellenteconomy.api.ExcellentEconomyAPI` and calls `getCurrency`, `getBalance`,
-    `deposit` and `withdraw`, resolved once per registered API. A CoinsEngine whose API lacks them reports
-    unavailable with the reason. The test suite stands in test doubles of the same names for the reflection to
-    find (CoinsEngine's own jar is not on the test classpath). `paper-plugin.yml` lists both `CoinsEngine` and
-    `ExcellentEconomy` as optional dependencies, and the gate accepts either as enabling the integration.
+34. **ExcellentEconomy is compiled in its own Java 25 seam module.** ExcellentEconomy publishes its API as a
+    Java 25 jar, which a JDK 21 compiler refuses to read, and the floor is Java 21 (D10). The adapter therefore lives in `:integrations-excellenteconomy`, which
+    compiles on a **JDK 25 toolchain with `--release 21`**, the same exception `:modern` takes for Paper 26: the
+    emitted bytecode is Java 21, so the class files load on the floor, and the module depends on `:api` only.
+    Nothing is reflective: the adapter calls the real `ExcellentEconomyAPI` through Bukkit's service registry,
+    so an API change fails the build, not a purchase. The class is only ever loaded while ExcellentEconomy is
+    enabled, which means on a Java 25 server (ExcellentEconomy 2.8.0 requires Java 25). `:integrations` depends
+    on the module and names its integration in the `Integrations` gate like the others; `paper-plugin.yml`
+    lists `ExcellentEconomy` as an optional dependency. The supported version is the one the adapter is
+    compiled against (2.8.0, see item 35); an older build whose API differs reports `MTR-0061` and is skipped.
 35. **Dependencies (compileOnly, never shaded).** PlayerPoints `org.black_ixx:playerpoints:3.3.2` (Rosewood
     repository), UltraEconomy `me.TechsCode:UltraEconomyAPI:1.1.2` (TechsCode repository), TokenManager
     `com.github.Realizedd:TokenManager:3.2.4` and RedisEconomy `com.github.Emibergo02:RedisEconomy:4.3.19`
-    (JitPack, the groups added to the existing filter). Each repository is admitted for its one group in
+    (JitPack, the groups added to the existing filter), and ExcellentEconomy
+    `su.nightexpress.excellenteconomy:ExcellentEconomy:2.8.0` (NightExpress repository, `:integrations-excellenteconomy`
+    only; its base library `su.nightexpress.nightcore:main` is a test-only dependency there, because the
+    currency type extends one of its interfaces). Each repository is admitted for its groups in
     `settings.gradle.kts`, so nothing else resolves from it. TokenManager and RedisEconomy are resolved
     without their transitive dependencies. All of these are public Maven repositories: no jar is downloaded by
     hand. The licences of the upstream projects are not verified here (as with Vault, item 21); they are
     compile-only and not distributed, so Materione takes on no obligation, but verify before any shaded use.
 36. **Not in the QA catalog.** Like Vault (item 29), these need the real plugin and its data on a server
     the probe does not provision. The adapters are pinned by unit tests: the `Integrations` gate reports each
-    unloadable plugin as `MTR-0061` rather than failing, the whole-number rule is tested, and the CoinsEngine
-    reflection path is exercised end to end against the test doubles. A live check against each real plugin is
-    manual.
+    unloadable plugin as `MTR-0061` rather than failing, the whole-number rule is tested, and the
+    ExcellentEconomy adapter is exercised against the plugin's real API types (only the economy behind them is
+    a proxy). A live check against each real plugin is manual.
 
 **For #208 and #212.** `BuiltinLogic.providerActions`, `BuiltinLogic.currencyIntegrations` and
 `BuiltinLogic.currencyFunctions` are separate blocks in `BuiltinLogic`, appended beside the six M2 actions and

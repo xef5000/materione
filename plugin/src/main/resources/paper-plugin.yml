@@ -19,10 +19,6 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
-    CoinsEngine:
-      load: BEFORE
-      required: false
-      join-classpath: true
     ExcellentEconomy:
       load: BEFORE
       required: false

@@ -132,7 +132,7 @@ interface CurrencyFields {
   "withdraw-command"?: string;
   /**
    * custom: PlaceholderAPI token that reads the balance as a number.
-   * @example %coinsengine_balance_raw_gems%
+   * @example %myplugin_balance_gems%
    */
   "balance-placeholder"?: string;
 }

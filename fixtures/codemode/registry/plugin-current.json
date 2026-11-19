@@ -12670,7 +12670,7 @@
           {
             "advanced": true,
             "description": "custom: PlaceholderAPI token that reads the balance as a number",
-            "example": "%coinsengine_balance_raw_gems%",
+            "example": "%myplugin_balance_gems%",
             "id": "balance-placeholder",
             "label": "Balance placeholder",
             "order": 70,

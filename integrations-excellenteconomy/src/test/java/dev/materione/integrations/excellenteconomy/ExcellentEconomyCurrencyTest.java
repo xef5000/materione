@@ -1,4 +1,4 @@
-package dev.materione.integrations.coinsengine;
+package dev.materione.integrations.excellenteconomy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -11,7 +11,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.Bukkit;
@@ -25,17 +24,17 @@ import su.nightexpress.excellenteconomy.api.ExcellentEconomyAPI;
 import su.nightexpress.excellenteconomy.api.currency.ExcellentCurrency;
 
 /**
- * The CoinsEngine adapter (logic.md §18), driven through the same reflection it uses against the real
- * plugin: a service registered under the real interface's name, four methods found by name and shape. The
- * test doubles in {@code su.nightexpress.excellenteconomy.api} stand in for CoinsEngine, whose API cannot
- * be compiled against.
+ * The ExcellentEconomy adapter (logic.md §18), compiled and run against the plugin's real API types: the
+ * service interface and the currency are the published ones, and only their behaviour is stood in for by
+ * proxies (no ExcellentEconomy server is started). So a method the adapter calls that the API no longer has
+ * fails this module's build, not a player's purchase.
  */
-class CoinsEngineCurrencyTest {
+class ExcellentEconomyCurrencyTest {
 
     private static final UUID ALICE = UUID.fromString("00000000-0000-0000-0000-00000000a11c");
     private static final UUID BOB = UUID.fromString("00000000-0000-0000-0000-0000000000b0");
 
-    /** A CoinsEngine with two currencies and a balance per (currency, player), as the plugin would keep them. */
+    /** An ExcellentEconomy with two currencies and a balance per (currency, player), as the plugin keeps them. */
     private final Map<String, ExcellentCurrency> currencies = new HashMap<>();
     private final Map<String, Double> balances = new HashMap<>();
     private final Player alice = player(ALICE);
@@ -44,24 +43,22 @@ class CoinsEngineCurrencyTest {
 
     @BeforeEach
     void install() throws Exception {
-        for (String id : Set.of("coins", "gems")) {
-            currencies.put(id, () -> id);
+        for (String id : new String[] {"coins", "gems"}) {
+            currencies.put(id, currency(id));
         }
         service = (ExcellentEconomyAPI) Proxy.newProxyInstance(getClass().getClassLoader(),
-                new Class<?>[] {ExcellentEconomyAPI.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "getCurrency" -> currencies.get((String) args[0]);
-                    case "getBalance" -> balance((Player) args[0], (ExcellentCurrency) args[1]);
-                    case "deposit" -> {
-                        balances.merge(key((Player) args[0], (ExcellentCurrency) args[1]), (Double) args[2], Double::sum);
-                        yield true;
-                    }
-                    case "withdraw" -> {
-                        balances.merge(key((Player) args[0], (ExcellentCurrency) args[1]), -(Double) args[2], Double::sum);
-                        yield true;
-                    }
-                    case "hashCode" -> System.identityHashCode(proxy);
-                    case "equals" -> proxy == args[0];
-                    default -> "service";
+                new Class<?>[] {ExcellentEconomyAPI.class}, (proxy, method, args) -> {
+                    boolean player = args != null && args.length > 1 && args[0] instanceof Player
+                            && args[1] instanceof ExcellentCurrency;
+                    return switch (method.getName()) {
+                        case "getCurrency" -> currencies.get((String) args[0]);
+                        case "getBalance" -> player ? balance((Player) args[0], (ExcellentCurrency) args[1]) : fail(method);
+                        case "deposit" -> player ? change((Player) args[0], (ExcellentCurrency) args[1], (Double) args[2]) : fail(method);
+                        case "withdraw" -> player ? change((Player) args[0], (ExcellentCurrency) args[1], -(Double) args[2]) : fail(method);
+                        case "hashCode" -> System.identityHashCode(proxy);
+                        case "equals" -> proxy == args[0];
+                        default -> fail(method);
+                    };
                 });
         registered = true;
         setServer(server());
@@ -74,18 +71,18 @@ class CoinsEngineCurrencyTest {
 
     @Test
     void aCurrencyFileNeedsTheCurrencyKey() {
-        var integration = new CoinsEngineCurrencyIntegration();
+        var integration = new ExcellentEconomyCurrencyIntegration();
 
         assertThatThrownBy(() -> integration.bind(ParamReader.of(Map.of())))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("currency");
         assertThatThrownBy(() -> integration.bind(ParamReader.of(Map.of("currency", "  "))))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThat(integration.id()).isEqualTo("coinsengine");
+        assertThat(integration.id()).isEqualTo("excellenteconomy");
         assertThat(integration.describe().parameters()).extracting(p -> p.id()).containsExactly("currency");
     }
 
     @Test
-    void oneCoinsEngineCurrencyIsOneMaterioneCurrencyAndSeveralCanShareThePlugin() {
+    void oneExcellentEconomyCurrencyIsOneMaterioneCurrencyAndSeveralCanShareThePlugin() {
         CurrencyBackend coins = backend("coins");
         CurrencyBackend gems = backend("gems");
         coins.deposit(ALICE, 100);
@@ -111,7 +108,8 @@ class CoinsEngineCurrencyTest {
     void anUnknownCurrencyIsUnavailableWithTheReasonNotAnError() {
         CurrencyBackend missing = backend("rubies");
 
-        assertThat(missing.availability()).isEqualTo(Availability.unavailable("CoinsEngine has no currency named rubies"));
+        assertThat(missing.availability())
+                .isEqualTo(Availability.unavailable("ExcellentEconomy has no currency named rubies"));
         assertThat(missing.balance(ALICE)).isInstanceOf(EconomyResult.Failed.class);
     }
 
@@ -119,29 +117,49 @@ class CoinsEngineCurrencyTest {
     void aPlayerWhoIsOfflineIsRefusedWithAReason() {
         CurrencyBackend coins = backend("coins");
 
-        assertThat(coins.balance(BOB)).isEqualTo(new EconomyResult.Failed("CoinsEngine currencies need the player online"));
+        assertThat(coins.balance(BOB))
+                .isEqualTo(new EconomyResult.Failed("ExcellentEconomy currencies need the player online"));
         assertThat(coins.availability()).isEqualTo(Availability.AVAILABLE);
     }
 
     @Test
-    void withoutCoinsEngineRunningTheCurrencyIsUnavailable() {
+    void withoutExcellentEconomyRunningTheCurrencyIsUnavailable() {
         registered = false;
         CurrencyBackend coins = backend("coins");
 
-        assertThat(coins.availability()).isEqualTo(Availability.unavailable("CoinsEngine is not running"));
-        assertThat(coins.readBindingIdentity()).isNull();
+        assertThat(coins.availability()).isEqualTo(Availability.unavailable("ExcellentEconomy is not running"));
     }
 
     private CurrencyBackend backend(String currency) {
-        return new CoinsEngineCurrencyIntegration().bind(ParamReader.of(Map.of("currency", currency)));
+        return new ExcellentEconomyCurrencyIntegration().bind(ParamReader.of(Map.of("currency", currency)));
     }
 
     private double balance(Player player, ExcellentCurrency currency) {
         return balances.getOrDefault(key(player, currency), 0d);
     }
 
+    private boolean change(Player player, ExcellentCurrency currency, double delta) {
+        balances.merge(key(player, currency), delta, Double::sum);
+        return true;
+    }
+
+    private static Object fail(java.lang.reflect.Method method) {
+        throw new UnsupportedOperationException(method.getName());
+    }
+
     private static String key(Player player, ExcellentCurrency currency) {
         return currency.getId() + ":" + player.getUniqueId();
+    }
+
+    private static ExcellentCurrency currency(String id) {
+        return (ExcellentCurrency) Proxy.newProxyInstance(ExcellentCurrency.class.getClassLoader(),
+                new Class<?>[] {ExcellentCurrency.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getId" -> id;
+                    case "hashCode" -> id.hashCode();
+                    case "equals" -> proxy == args[0];
+                    case "toString" -> "currency " + id;
+                    default -> fail(method);
+                });
     }
 
     private static Player player(UUID id) {
@@ -151,16 +169,15 @@ class CoinsEngineCurrencyTest {
                     case "hashCode" -> id.hashCode();
                     case "equals" -> proxy == args[0];
                     case "toString" -> "player " + id;
-                    default -> throw new UnsupportedOperationException(method.getName());
+                    default -> fail(method);
                 });
     }
 
     private Server server() {
         ServicesManager services = (ServicesManager) Proxy.newProxyInstance(ServicesManager.class.getClassLoader(),
                 new Class<?>[] {ServicesManager.class}, (proxy, method, args) -> switch (method.getName()) {
-                    case "getKnownServices" -> registered ? Set.of(ExcellentEconomyAPI.class) : Set.of();
-                    case "load" -> registered ? service : null;
-                    default -> throw new UnsupportedOperationException(method.getName());
+                    case "load" -> registered && args[0] == ExcellentEconomyAPI.class ? service : null;
+                    default -> fail(method);
                 });
         return (Server) Proxy.newProxyInstance(Server.class.getClassLoader(), new Class<?>[] {Server.class},
                 (proxy, method, args) -> switch (method.getName()) {
@@ -169,7 +186,7 @@ class CoinsEngineCurrencyTest {
                     case "getLogger" -> Logger.getLogger("test");
                     case "getName" -> "Test";
                     case "getVersion", "getBukkitVersion" -> "test";
-                    default -> throw new UnsupportedOperationException(method.getName());
+                    default -> fail(method);
                 });
     }
 
