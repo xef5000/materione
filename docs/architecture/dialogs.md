@@ -181,7 +181,7 @@ report:                                  # one resource per key (master §7.2); 
     commands: [report]
     permission: myserver.report
   fallback:                              # steps run instead of showing, where dialogs are unavailable (§10.2)
-    - gui.open: myserver:report_menu
+    - view.open: myserver:report_menu
   behavior:                              # rules of the one engine (logic.md §2.1)
     - on: dialog.submit
       button: send
@@ -228,7 +228,7 @@ Rules of the format:
 | `notice` | `button` (a server or client button; default label `OK`, server) | — | vanilla `notice` |
 | `confirmation` | `yes`, `no` (each a button) | — | vanilla `confirmation`; Escape is `no` |
 | `multi_action` | `buttons` (1–64, or a `source:`, §4.4) | `exit`, `columns`, `button_width` | vanilla `multi_action` |
-| `dialog_list` | `dialogs` (a list of dialog ids) | `exit`, `columns`, `button_width` | vanilla **`multi_action`** whose buttons are server buttons that run `dialog.open` (labelled with each target's `external_title`), so every target's `open.permission` and `open.requirement` are checked server-side. Vanilla `dialog_list` would open the targets client-side without those gates. |
+| `dialog_list` | `dialogs` (a list of dialog ids) | `exit`, `columns`, `button_width` | vanilla **`multi_action`** whose buttons are server buttons that run `view.open` (labelled with each target's `external_title`), so every target's `open.permission` and `open.requirement` are checked server-side. Vanilla `dialog_list` would open the targets client-side without those gates. |
 | `server_links` | — | `exit`, `columns`, `button_width` | vanilla `server_links` over the server's links (Paper `ServerLinks`; not Materione content) |
 
 ### 4.2 Bodies
@@ -292,14 +292,15 @@ the others are added. `firedBy`: `dialog`.
 
 | Trigger | Filters | Context (beyond `player.*`, `server.*`) | Cancellable |
 |---|---|---|---|
-| `dialog.opening` | — | `dialog.*` | yes: the dialog is not shown |
-| `dialog.open` | — | `dialog.*` | no |
-| `dialog.submit` | `button` (an id, or a list) | `dialog.*`, `button.id`, `input.<key>` (typed, §4.3), `entry.*` (a button from a source) | no (a submission already happened client-side) |
-| `dialog.close` | `reason: escape\|replaced\|quit\|expired` | `dialog.*`, `close.reason` | no |
+| `dialog.opening` | — | `view.*` | yes: the dialog is not shown |
+| `dialog.open` | — | `view.*` | no |
+| `dialog.submit` | `button` (an id, or a list) | `view.*`, `button.id`, `input.<key>` (typed, §4.3), `entry.*` (a button from a source) | no (a submission already happened client-side) |
+| `dialog.close` | `reason: escape\|replaced\|quit\|expired` | `view.*`, `close.reason` | no |
 
-`dialog.*` is `dialog.id`, `dialog.args.*`. Every dialog run and render also carries the common view subtree `view.*` (`view.id`,
-`view.kind` = `dialog`, `view.args`, `view.key`; `views.md` §3.7); `dialog.args` and `view.args` are one map. The compiler checks `${input.k}` against the host dialog's declared inputs, as it checks
-`gui.args.*` against a GUI's `open.args` (logic.md §2.6); an unknown key is the existing unknown-root warning.
+The view facts are the one view root of `views.md` §3.7: `view.id`, `view.kind` = `dialog`, `view.args.*`, `view.key` (no
+`dialog.*` root: the trigger names are dialog events, the facts are the view's). Session state is `vars.session.*`, per shown
+dialog (§8). The compiler checks `${input.k}` against the host dialog's declared inputs, as it checks
+`view.args.*` against the view's `open.args` (logic.md §2.6); an unknown key is the existing unknown-root warning.
 
 **When the server hears a close.** Vanilla sends nothing when a dialog without a server-bound exit is dismissed. So Materione
 compiles every Escape path it can into a server button: `confirmation`'s `no` and `notice`'s button are already buttons; on the
@@ -312,11 +313,13 @@ the screen without telling the server; its session simply expires.
 
 | Action | Parameters | Threading | Notes |
 |---|---|---|---|
-| `dialog.open` | `dialog` (id), `args` (map of templates), later `target` (primitives.md §5.6, #331) and `key` (`views.md` §6.2, with #333 step 2) | `PLAYER_REGION` | The opener of §7.1. `FAILED` when refused or unavailable, so `require`/`else` compose (logic.md §2.2). |
-| `dialog.close` | — | `PLAYER_REGION` | Closes the player's dialog (Adventure `closeDialog`) and ends the session (`dialog.close` is not fired for a close the flow asked for, as `gui.close` reports `action`). |
+| `view.open` (on a dialog) | `view` (a dialog id), `args` (map of templates), later `target` (primitives.md §5.6, #331) and `key` (`views.md` §6.2, with #333 step 2) | `PLAYER_REGION` | The generic open verb of `views.md` §3.6 dispatching to the opener of §7.1. `FAILED` when refused or unavailable, so `require`/`else` compose (logic.md §2.2). |
+| `view.close` (on a dialog) | optional `view`, later `target` | `PLAYER_REGION` | Closes the player's dialog (Adventure `closeDialog`) and ends the session; the `dialog.close` trigger is not fired for a close the flow asked for (`views.md` §3.6). |
 
-Both are ordinary `ActionType`s in `BuiltinLogic` with self-descriptions (D5). There is no `dialog.refresh`: the generic
-`view.refresh` (`views.md` §3.6) re-renders dialogs under rule 7 of §4. Neither names a use case (U1); both work on any
+Dialogs add **no actions of their own**: `view.open`, `view.close`, `view.back` and `view.refresh` (`views.md` §3.6, owner
+no-legacy answer 2026-11-19) are the verbs of every opened kind, registered once with self-descriptions (D5); the dialog kind
+only declares, through its view facet, that it accepts them. `view.refresh` re-renders dialogs under rule 7 of §4; `view.back`
+from a dialog re-opens the view it replaced (a GUI or another dialog) from the player's view history. Neither names a use case (U1); both work on any
 dialog content names (U2).
 
 ### 5.3 The `dialog` input method
@@ -452,18 +455,18 @@ and calls `showDialog`.
 
 | From | How | Notes |
 |---|---|---|
-| A rule of any host (item, block, furniture, GUI, `rule` document, another dialog) | `dialog.open: <id>` | The NPC case: an integration's interact trigger, or `entity.hit`/`player.join` from a `rule` document (logic.md §37). |
+| A rule of any host (item, block, furniture, GUI, `rule` document, another dialog) | `view.open: <dialog id>` | The NPC case: an integration's interact trigger, or `entity.hit`/`player.join` from a `rule` document (logic.md §37). |
 | A command | the dialog's `open:` block (`commands`, `args`, `permission`, `requirement`, `deny`), Brigadier-registered and re-synced like a GUI's | Same codes and meaning: `MTR-0055`, `MTR-0066` to `MTR-0069`. A command name taken by a GUI or another dialog is `MTR-0067`. |
 | Admin | `/materione dialog open <id> [player] [args…]`, `/materione dialog list` | Permission `materione.dialog.admin`. |
 | The editor | **Preview in game** (shows the open dialog to the editing player), through `RuntimeApi` | As the GUI studio's preview (gui.md §6). |
 | A prompt | `prompt: {method: dialog}` | §5.3. |
-| Another dialog | a server button whose rule runs `dialog.open` (gated), or a client `show_dialog` (static, §4.4) | Server navigation is the default; a wizard carries state forward in `args` (`dialog.open: {dialog: step2, args: {name: "${input.name}"}}`), held server-side. |
+| Another dialog | a server button whose rule runs `view.open` (gated), or a client `show_dialog` (static, §4.4) | Server navigation is the default; a wizard carries state forward in `args` (`view.open: {view: step2, args: {name: "${input.name}"}}`), held server-side, and `view.back` returns to the previous step. |
 
 ### 7.3 Dialogs and open GUIs
 
-A `dialog.open` from a `gui.click` rule shows a dialog while a container is open. What the client does with the container (V4)
+A `view.open` of a dialog from a `gui.click` rule shows a dialog while a container is open. What the client does with the container (V4)
 decides the hand-off. Until row R answers it, the design is: the opener treats the dialog as a window-closing view
-(`GuiLifecycle.hideForPrompt` / `showAfterPrompt`, logic.md §29 decisions 8 to 11), so the GUI session survives, `gui.close` does
+(`GuiLifecycle.hideForPrompt` / `showAfterPrompt`, logic.md §29 decisions 8 to 11), so the GUI's viewer record survives, `gui.close` does
 not fire, and the window returns when the dialog's session ends **if** the dialog's author set `return_to_gui: true` (default true
 when opened from a GUI rule). If V4 shows the client keeps the container underneath, the hide becomes a no-op and nothing else
 changes.
@@ -482,7 +485,7 @@ built (owner answer Q7, §16). A dialog implements its view-kind contract (`view
 | One live dialog per player | The viewer-set rule is `opened`, capped at one: a new open replaces the shown dialog (`dialog.close` `replaced`). | §6.2, `views.md` §3.5 |
 | Re-send resets inputs | Vanilla has no update packet, so re-sending is the only re-render and it wipes every input (text, numbers, checkboxes, options). Hence `rerender: off` by default; for `on_change`, no re-send when content and submission snapshot are unchanged, a 20-tick minimum interval that limits resets but does not protect an unfinished form, and `MTR-V03` on any editable input. | §4 rule 7, `views.md` §4.3 |
 | Re-render semantics | Same binding, no gates, new token, retaken snapshots, no `dialog.close`. | §6.2, `views.md` §4.3 |
-| No session variables | A wizard's state is `args` (immutable, server-held) or a declared variable; shared state is keyed state (#333 step 2). | §15 decision 4, `views.md` §3.4 |
+| Session state per shown dialog | `vars.session.*` is per view instance for every opened kind (`views.md` §3.4): a dialog's session lives while it is shown and survives its re-renders; a new dialog is a new instance; `args` carry a wizard forward; shared state is keyed state (#333 step 2). | §15 decision 4, `views.md` §3.4 |
 | Many viewers | Each player has their own modal over shared state; `target:` (#331) opens a dialog for another player and `key:` (#333 step 2) binds it to a key. | §1 non-goals, `views.md` §6 |
 
 Universality tests (master §3.1, primitives.md §2.2) for what this design adds:
@@ -491,7 +494,7 @@ Universality tests (master §3.1, primitives.md §2.2) for what this design adds
 |---|---|---|---|---|---|
 | `dialog` content type | a view kind, not a use case | any content, any viewer | rules, flows, sources, item sources | registry entry, typed schema | offline-validated like `gui`; quarantine per dialog |
 | `dialog.*` triggers | named for the view event | fired for any dialog | ordinary rules | trigger descriptions with context schemas | no effect of their own |
-| `dialog.open` / `dialog.close` | verbs | any dialog; `target:` later | flow steps, `require` | action descriptions | `FAILED` on refusal; dry-run stages nothing |
+| `view.open` / `view.close` on dialogs | the generic view verbs (`views.md` §3.6) | any dialog, any opened kind; `target:` later | flow steps, `require` | one action description each, the view reference typed by the facet | `FAILED` on refusal; dry-run stages nothing |
 | `materione:dialog` input method | an input method | any prompt | the `prompt` step | input-method description | refuses when unavailable |
 | Buttons from a list source | reuses `ListSource` | any source | — | the source's description | snapshot at open |
 | `rerender:` | a policy, not a use case | any dialog | a key on the document | a schema field with an enum | absent = `off`; `MTR-V03` warns of the input-loss hazard (`views.md` §8.1) |
@@ -545,11 +548,11 @@ string (the pattern of `modern/RegistryCapabilities`). The descriptor is resolve
 | Layer | Behaviour |
 |---|---|
 | Load, validate, compile | **unchanged**: dialogs parse, validate (levels 1–3) and appear in the studio and the SDK on every server. Level 4 (master §5.4) adds one **info** per pack, `MTR-D01`, "this server cannot show dialogs (needs 1.21.6+)", and the studio greys out **Preview in game**. No quarantine: the content is valid and will work after an upgrade. |
-| `dialog.open`, an `open:` command, the admin command | the opener's capability stage runs the dialog's **`fallback:`** steps in the opener's run, if written, and returns `OK` when they succeed; with no `fallback:`, it returns `FAILED`, tells the player one line, and reports `MTR-D02` (rate-limited) |
+| `view.open` of a dialog, an `open:` command, the admin command | the opener's capability stage runs the dialog's **`fallback:`** steps in the opener's run, if written, and returns `OK` when they succeed; with no `fallback:`, it returns `FAILED`, tells the player one line, and reports `MTR-D02` (rate-limited) |
 | `prompt: {method: dialog}` | the method is unavailable; the prompt refuses it before anything is hidden (`MTR-0084`) |
 | `client: show_dialog` inside a GUI? | not applicable: client actions exist only inside a dialog |
 
-`fallback:` is an ordinary flow (logic.md §2), so the alternative is whatever the author writes: `gui.open` of a GUI they designed,
+`fallback:` is an ordinary flow (logic.md §2), so the alternative is whatever the author writes: `view.open` of a GUI they designed,
 a `prompt` over chat, a `message`. It is the same shape as `deny:`. Materione does not generate a GUI from a dialog (§1).
 
 ### 10.3 Clients older than 1.21.6 on a 1.21.6+ server
@@ -617,13 +620,13 @@ part, so a squiggle opens the input or button concerned. Live trace (logic.md §
 
 Nothing is written by hand for the SDK (codemode.md §3.1, §3.5). From the registries the generator emits `p.dialogs.create(id, {...})`
 with the schema's types (kinds as a discriminated union on `type`, so `yes` on a `notice` is a type error), the actions
-`m.actions.dialogOpen(handle, args)` and `dialogClose()`, and the four triggers with their context schemas. agent-benchmark.md T28's
+the generic `m.actions.viewOpen(handle, args)` / `viewClose()` typed to accept dialog handles, and the four triggers with their context schemas. agent-benchmark.md T28's
 program (`p.dialogs.create("rules", …)`, then a `player.join` rule that opens it) type-checks once rows M and S land; its "no
 accept, no play" half composes a declared player variable and `run_command` until the entity verbs (#329) give a kick verb.
 
 **Gap stated, not papered over.** `input.<key>` is typed per *document*, not per registry entry. Today's trigger context schemas are
 per trigger type, so the generated SDK types `input` as `Record<string, string | number | boolean>`; a precise per-dialog type
-needs the generator to read a document's declared inputs (as it would need for `gui.args.*`). That is a generator feature recorded for
+needs the generator to read a document's declared inputs (as it would need for `view.args.*`). That is a generator feature recorded for
 #337's successor, not a reason for hand-written types.
 
 ---
@@ -670,7 +673,7 @@ needs the generator to read a document's declared inputs (as it would need for `
 | **C** | Capability fix: `DIALOGS` by class detection (§10.1); descriptor tests; the ban test for dialog imports | — | S | Haiku |
 | **M** | `DialogType`: self-description (including the view facet, `views.md` §9), parse, validate, round-trip, compile to `CompiledDialog`; the `rerender` field; fixtures and golden files; `MTR-D03` to `D05`, `D08`, `MTR-V03` (numbers assigned here) | — | M | Haiku |
 | **G** | Extract `OpenGate` from `GuiOpener`; parity test; no behaviour change for GUIs | — | S | Haiku |
-| **S** | Runtime: `DialogOpener`, `DialogSessions` as the dialog kind's viewer records in `ViewRegistry`, `SubmissionValidator`, the rate limiter, taint in the template renderer, the four triggers, `dialog.open`/`close`, admin commands, `fallback:`, the re-render path of §6.2; `MTR-D01`, `D02`, `D06`, `D07`, `D09`. The `rerender: on_change` path needs views rows V1 (#456) and V2 (#457) | M, G, C, views V0 (#455); V1, V2 for `on_change` | L | Sonnet, high |
+| **S** | Runtime: `DialogOpener`, `DialogSessions` as the dialog kind's viewer records in `ViewRegistry`, `SubmissionValidator`, the rate limiter, taint in the template renderer, the four triggers, the dialog kind behind `view.open`/`view.close`, admin commands, `fallback:`, the re-render path of §6.2; `MTR-D01`, `D02`, `D06`, `D07`, `D09`. The `rerender: on_change` path needs views rows V1 (#456) and V2 (#457) | M, G, C, views V0 (#455); V1, V2 for `on_change` | L | Sonnet, high |
 | **H** | `modern`: `PaperDialogHost` mapping and listener; mapping tests | M, C | M | Haiku |
 | **P** | The `materione:dialog` input method; GUI hand-off per V4 | S, H, R | S | Haiku |
 | **W** | Studio: Design form and preview, Logic tab wiring, Preview in game; `webui` specs | M (S for preview in game) | M | Sonnet, high |
@@ -719,7 +722,7 @@ across Materione's view kinds where that is the honest answer.
 | Behavior on click | fixed attributes (`data-command`, `data-console`, `data-message`, `data-action`) or a Java event | the full logic engine: conditions, `require`, money, items, variables, waits, GUIs, every registered action (D4) | **exceeds** |
 | Console-command injection | blocks spaces and `;` in substituted values | typed and validated inputs, `pattern`, a load warning for console templates that read inputs, tainted-text rendering (§6.5) | **exceeds** |
 | Forged-click resistance | not described | per-session tokens, player binding, single use, rate limits, server-held state (§6) | **exceeds**, as far as can be compared |
-| Navigation between screens | `page:`, back | `dialog.open` (gated), `args` for wizards, static `show_dialog`, `dialog_list` with gates | **equal or better** |
+| Navigation between screens | `page:`, back | `view.open` (gated), `view.back`, `args` for wizards, static `show_dialog`, `dialog_list` with gates | **equal or better** |
 | Player heads, items | head images | `item` bodies from any item source (Materione items, heads, integrations) | **equal**; custom items **exceed** |
 | Free-form layout and styling (CSS: flex, grid, gradients, fonts, transforms) | **yes, its core strength** | Vanilla dialogs have a fixed layout (title, body column, inputs, button grid). Freedom comes from (a) **`image` bodies** (§4.2): any designed bitmap, drawn in the GUI studio or imported, shown inside the dialog; (b) the text pipeline's styling (colors, gradients, glyphs, shader effects, master §5.7); (c) the **GUI view kind** for screens whose whole surface is designed (gui.md §11, the open canvas: art past the container, pixel layers, buttons, items) | **gap closed for static art** by `image` bodies (row I) and by HTML/CSS image sources (row X, Q8); **not equal** for layout that reflows live, which Materione does not attempt (§14.3) |
 | Animations (CSS, GIF) | yes | text shader effects (master §5.7); no animated images in dialogs | **gap**, recorded; animated glyphs are a pack-compiler question outside #6 |
@@ -770,7 +773,9 @@ screens and NPC panels uses, and the design now covers it:
 1. **Every input-reading action is a server flow.** No client `run_command` or `dynamic/run_command` (owner answer Q3).
 2. **`dialog_list` compiles to a gated `multi_action`**, not to vanilla's client-side list (§4.1).
 3. **One custom-click identifier, a random per-session token, single use by default** (§6.1, §6.2); Paper's callback API is not used.
-4. **No session variable scope for dialogs** (§8, `views.md` §3.4): wizard state is `args`; shared state is keyed state (#333 step 2).
+4. **Session state per shown dialog** (§8, `views.md` §3.4; reversed from "no session scope" by the owner's no-legacy answer of
+   2026-11-19, which made `session` the per-instance scope of every opened kind): wizard state is `args`; shared state is keyed
+   state (#333 step 2).
 5. **No re-render on state change by default** (§8, `views.md` §4.3): re-sending resets the player's typing; `rerender: on_change` opts in.
 6. **The capability is detected by class presence**, and the unconditional `DIALOGS` is a bug to fix (§10.1).
 7. **Below 1.21.6, content stays valid**; showing runs `fallback:` or fails with a diagnostic (§10.2). No generated GUI imitation.
