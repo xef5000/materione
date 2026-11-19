@@ -77,7 +77,7 @@ that neither is built twice. The HUD implements the view-kind contract of `views
 | `deliver` | diff with the last sent string; the channel writers (§8.2) |
 | Rerender policy | always `on_change`; there is no `rerender:` key on a HUD |
 | `minInterval` | 1 tick (2 for server-driven animation, §5.6) |
-| Viewer record | `HudViewer`: last-sent strings, poll cache, animation phase (viewer-local state only) |
+| Viewer record | `HudViewer`: **one per online player, from join to quit**, attached to zero or more visible HUDs and composing them into one output per channel (§8.2); holds last-sent strings, poll cache, animation phase (viewer-local state only) |
 
 Showing a HUD to one player is content: its `visible_if` reads a variable, and a rule sets that variable (§6.3). There is one
 binding system: the logic engine's templates and the variable store (logic.md §2.5, §3), through `views.md`'s reads index and
@@ -371,6 +371,13 @@ On join, world change, respawn, permission recalculation (the permission provide
 §4.5; otherwise the poll clock), a write to any variable in the HUD's reads, the poll clock for polled reads, a reload, and the
 viewer's pack status (§8.4).
 
+**Attach on visibility (`views.md` §5.3, acceptance case 1 of `views.md` §11.1).** A player's `HudViewer` exists from join even
+when no HUD is visible to them: it is the HUD kind's **candidate** record. The shared reads index marks each HUD's `visible_if`,
+`worlds` and `permission` reads as **visibility reads**; a write that matches one marks the candidate dirty (a `player` write:
+that player's record; a `server` write: every online player's), whether or not that HUD is currently attached. The candidate's
+wake re-evaluates the visibility of every HUD for that player, attaches the newly visible, detaches the newly hidden and renders
+one composed output per channel. A candidate with nothing to re-evaluate costs memory, not wakes (§10).
+
 ### 6.3 Per-player show, hide and opt-out are content
 
 There is no `hud.show` action. A HUD that a player can toggle reads a variable, and a rule or command sets it:
@@ -380,7 +387,9 @@ visible_if: "${vars.player.rpg.hud_on}"     # declared: hud_on: {scope: player, 
 ```
 
 The toggle command is content (a rule, or a command once #329 lands). This is the view model of §3.1: the viewer set follows
-state.
+state. Setting `hud_on` from false to true shows the HUD at the player's next eligible render with **no rejoin and no unrelated
+poll**, through the candidate record of §6.2; and when this HUD and another are both visible, their pieces still concatenate into
+one boss-bar string and one action-bar string (§8.2).
 
 ---
 
