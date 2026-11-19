@@ -5,10 +5,11 @@
 // step with the account. Nothing here claims crash-safety: a kill-boundary run is row H (#313), and these entries are
 // not blessed (blessing runs happen on main).
 //
-// Not covered here, by design, because the probe loop cannot do them yet: `guiescrow.refused-unsupported` (a server
-// with player-data saving disabled or an unwritable storage/escrow/), `guiescrow.recovery-message` and the legacy
-// `gui_inputs` migration on a real join after a kill (both need the probe.mjs server-restart verb: row Q, #312). The
-// unit tests (Tier1LifecycleTest, EscrowCapabilityTest) hold their logic.
+// `guiescrow.recovery-message` uses the crash restart (probe.mjs crash-restart, ctx.crashRestart: row Q, #312).
+// Not covered here yet: `guiescrow.refused-unsupported` (a server with player-data saving disabled or an unwritable
+// storage/escrow/: it needs a server-config switch in the probe loop) and the legacy `gui_inputs` migration on a real
+// join (it needs a crash-era journal staged before boot). The unit tests (Tier1LifecycleTest, EscrowCapabilityTest)
+// hold their logic.
 
 import { test } from './_lib.mjs';
 
@@ -24,6 +25,7 @@ const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/logic/action/ConsumeCustodyAction.java',
   'plugin/src/main/resources/recipes/trash_slot.yml',
   'qa/catalog/guiescrow.mjs',
+  'scripts/probe/probe.mjs',
 ];
 
 /** A real container click from the client: button 0 is a left click, 1 a right click. */
@@ -317,6 +319,36 @@ export default [
       } finally {
         await closeWindow(ctx);
       }
+    },
+  }),
+
+  test({
+    id: 'guiescrow.recovery-message',
+    title: 'guilogic:escrow: a stack in a durable: required slot when the server is killed without a save comes back on the next join, with the recovery line, and is not duplicated',
+    covers: COVERS,
+    timeoutMs: 900_000,
+    steps: async (ctx) => {
+      // The runner reset the baseline at the test's start; give after it (openEscrow's own reset would clear the gems).
+      await ctx.rcon('materione give corpus:gem_red Probe 3');
+      await openGui(ctx, 'guilogic:escrow', /MATERIONE-GUIESCROW-OPEN guilogic:escrow/);
+      await click(ctx, 36);
+      await ctx.sleep(400);
+      await click(ctx, 4);
+      await ctx.sleep(400);
+      ctx.expect(await slotStack(ctx, 4)).toBe('Red Gem:3');
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      // Persist the player as an autosave would: the file now holds the inventory without the gems and the escrow
+      // account with them (one compound, one file replace). Then crash: nothing after this point is saved.
+      await ctx.rcon('save-all flush');
+      await ctx.waitForServerLog(/Saved the game|ThreadedAnvilChunkStorage: All dimensions are saved|All dimensions are saved/, { timeoutMs: 60_000 });
+      await ctx.crashRestart();
+      // Recovery runs on join before any interaction and returns the account's stacks.
+      await ctx.waitForChat(/from before the restart were returned/, { timeoutMs: 60_000 });
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+      // A second ordinary rejoin must not return them again (recovery is idempotent).
+      await ctx.rejoin();
+      await ctx.sleep(1500);
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
     },
   }),
 ];
