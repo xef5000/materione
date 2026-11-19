@@ -23,14 +23,18 @@ here.
 | **Code mode** | How an agent authors (D13): it writes a TypeScript program against the SDK, run in a sandbox in the cloud editor's page, whose only effect is staged authoring operations (the editor's own validated edits). The program is one-shot, never stored as content, never run on the server; new content applies on its own, and changing or deleting existing content needs the owner's approval once per object per session. | master §3.2, codemode.md |
 | **Content graph** | The validated network of all resources and their typed references; the heart of the product ("the intertwining, made inspectable"). | master §5.3 |
 | **Content type** | A registered kind of resource (item, block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting, …), extensible by addons. | master §5.1, runtime-systems.md §1 |
+| **Custody** | Items held on a player's behalf by the engine rather than in a vanilla inventory: today the stacks in a `durable: required` input slot, held in the player's escrow account. `custody.consume` is its one atomic exit verb; other holders are a later primitive. | gui-input-durability.md §5.1, logic.md §36, primitives.md §5.1 |
 | **Canned ECA** | A built-in mechanic implemented as a parameterized Event→Condition→Action bundle rather than custom Java; registered identically to third-party mechanics. | runtime-systems.md §2.3 |
 | **Datapack artifact** | Pack output Minecraft requires in datapack form (trims, worldgen modifiers; paintings and jukebox songs on pre-1.21.6 servers) — restart-required content. On 1.21.6+ those two register through Paper's registry events instead, with no world-folder artifact. | plugin.md §4.4, runtime-systems.md §10 |
 | **Definition** | The immutable, validated data of one resource, post-parse. | runtime-systems.md §1 |
 | **Diagnostics** | Structured failure records (`{code, severity, message, resource, file:line, hint}`) with stable `MTR-####` codes; the fail-soft backbone. | plugin.md §5 |
 | **Direct mode** | Editor transport where the plugin serves the API itself on loopback (or reverse-proxied); relay cut out; same protocol. | web.md §4.4 |
 | **D1–D13** | The thirteen binding architectural decisions. | master §3 |
+| **Durable (input layer)** | `durable: required \| best_effort` on a GUI `slots` input layer. `required` takes the escrow path (manual clicks, account, exit ledger, save barrier) and is refused with `MTR-0100` where the platform cannot support it; `best_effort` (the default) is the one-tick journal, not crash-safe. | gui-input-durability.md §5, logic.md §6.5 |
 | **ECA** | Event → Condition → Action: the single behavior model used by items, blocks, furniture, menus, dialogs, HUDs. | master D4, runtime-systems.md §2 |
 | **Envelope** | Standard encrypted container format for store blobs and chunks. | web.md §5.4 |
+| **Escrow account** | The record, inside the player's PDC, of the stacks a player has in `durable: required` input slots. Written in the same owner-thread step as the inventory, so the two are saved atomically; recovered on join before any interaction. | gui-input-durability.md §5.3, §5.7 |
+| **Escrow ledger** | `storage/escrow/<uuid>.ledger`: the append-only, per-player record of exit decisions (a stack returned, consumed or owed) that makes an exit durable before its effect runs; compacted after `escrow_retention_days`, quarantined, never deleted, when unreadable. | gui-input-durability.md §5.3, plugin.md §7 |
 | **Expression engine** | The one universal condition/interpolation language across all content types (single settled decision; PlaceholderAPI resolves inside strings). | runtime-systems.md §2.1 |
 | **Facet** | One of the three aspects of a resource: appearance (pack-bound), behavior (server-side), metadata. | master §5.1 |
 | **Fail-soft** | Content errors quarantine a resource/pack; the server never crashes, wedges, or half-applies. | master D6 |
@@ -50,6 +54,7 @@ here.
 | **Manifest (payload)** | Content-addressed chunk list describing one uploaded asset. | web.md §4.3 |
 | **Marker (harness)** | Stable `MATERIONE-*` log line (BOOT-OK, VERSION, DOCTOR-OK, BYE) asserted by the harness; test API, treated like `MTR-####` codes. | build.md §7, harness/README.md |
 | **Namespace** | Per-pack unique prefix of every resource id (`packid:resource`). One namespace per pack, enforced. | master §5.1 |
+| **Owed** | An escrow stack that could not be returned because the player's inventory was full: it stays in the account, never dropped into the world, until the next close, join or `/materione claim` (`MTR-0103`). | gui-input-durability.md §5.5, plugin.md §5 |
 | **Orphan** | A placed instance whose defining resource was removed: kept, flagged, admin-resolved — never deleted by guess. | plugin.md §4.5, runtime-systems.md §1 |
 | **Pack** | The unit of modularity/distribution: namespace + manifest + content files + assets, zippable as-is. | master §5.2 |
 | **Payload store** | The dumb, opaque, TTL'd encrypted-blob HTTP service (`editor.materione.com/v1/store`, D1-backed). | web.md §3.1 |
