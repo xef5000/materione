@@ -381,6 +381,9 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A targeted reload no longer quarantines an item for a texture or model of another pack (#362).** Editing an item
+  that referenced `other:gem` from a different pack and reloading just that file reported "unresolved texture" and
+  quarantined it, though a full reload accepted it; the targeted run now validates against the same asset set.
 - **A GUI layer skipped for its id or its text now says why (`MTR-0052`).** A layer id YAML reads as
   a boolean (`yes`, `no`, `on`, `off`) or a number used to report only "id must match [a-z0-9_]+"
   with no layer named; it now names the value it read and says to quote it (`id: "yes"`). A text

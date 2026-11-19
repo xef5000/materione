@@ -344,6 +344,34 @@ class PipelineRunnerTest {
         assertThat(runner.lastParsed().packs()).extracting(ContentPack::id).containsExactlyInAnyOrder("ridden", "touched");
     }
 
+    /**
+     * #362: a targeted run validates against the same asset set as a full run, so an item that references a texture
+     * of a pack the run rode over is not quarantined, and the ridden pack's assets stay in the graph and the index.
+     */
+    @Test
+    void targetedRunResolvesAssetsOfPacksItRodeOver(@TempDir Path packsRoot) throws IOException {
+        Path ridden = writeFingerprintedPack(packsRoot, "ridden");
+        Files.createDirectories(ridden.resolve("assets/textures"));
+        Files.write(ridden.resolve("assets/textures/gem.png"), new byte[] {1});
+        Files.writeString(ridden.resolve("items/a.yml"), "a:\n  material: STICK\n");
+        Path touched = writeFingerprintedPack(packsRoot, "touched");
+        Files.writeString(touched.resolve("items/b.yml"), "b:\n  material: STICK\n  texture: ridden:gem\n");
+        fingerprints.record("ridden/pack.yml", FingerprintCache.sha256(ridden.resolve("pack.yml")));
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        assertThat(quarantine.size()).isZero();
+
+        Files.writeString(touched.resolve("items/b.yml"), "b:\n  material: STICK\n  texture: ridden:gem\n  name: B\n");
+        assertThat(runner.request(new ReloadScope.FileSet(Set.of(touched.resolve("items/b.yml"))), packsRoot)
+                .completed()).isTrue();
+
+        assertThat(diagnostics.recent(256).stream().map(Diagnostic::message))
+                .noneMatch(message -> message.startsWith("targeted scope expanded"))
+                .noneMatch(message -> message.contains("unresolved texture"));
+        assertThat(quarantine.size()).isZero();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("touched:b"))).isPresent();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("ridden:gem"), "asset")).isPresent();
+    }
+
     /** A pack with fingerprints recorded by a full run, as the boot path leaves it. */
     private Path writeFingerprintedPack(Path packsRoot, String id) throws IOException {
         fingerprints = FingerprintCache.empty();
