@@ -51,47 +51,49 @@ public final class GraphStage {
         for (String field : ReferenceValidator.REFERENCE_FIELDS) {
             Object value = mapping.get(field);
             if (value instanceof String target && !target.isBlank()) {
-                var targetId = ReferenceValidator.resolve(resource.id().namespace(), target);
-                context.graph().addEdge(
-                        resource.id(), targetId, ReferenceValidator.edgeTypeFor(field));
+                addEdge(context, resource, target, ReferenceValidator.edgeTypeFor(field));
             }
         }
         if (mapping.get("drops") instanceof java.util.List<?> drops) {
             for (Object drop : drops) {
                 if (drop instanceof String target && !target.isBlank()) {
-                    context.graph().addEdge(
-                            resource.id(),
-                            ReferenceValidator.resolve(resource.id().namespace(), target),
-                            dev.materione.core.pipeline.graph.ContentEdgeType.DROPS_ITEM);
+                    addEdge(context, resource, target, dev.materione.core.pipeline.graph.ContentEdgeType.DROPS_ITEM);
                 }
             }
         }
         if ("block".equals(resource.contentType())
                 && mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
-            context.graph().addEdge(
-                    resource.id(),
-                    ReferenceValidator.resolve(resource.id().namespace(), placedBy),
-                    dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
+            addEdge(context, resource, placedBy, dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
         }
         if ("furniture".equals(resource.contentType())) {
             if (mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
-                context.graph().addEdge(
-                        resource.id(),
-                        ReferenceValidator.resolve(resource.id().namespace(), placedBy),
-                        dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
+                addEdge(context, resource, placedBy, dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
             }
             if (mapping.get("evolution") instanceof java.util.List<?> stages) {
                 for (Object stage : stages) {
                     if (stage instanceof java.util.Map<?, ?> step
                             && step.get("target") instanceof String target
                             && !target.isBlank()) {
-                        context.graph().addEdge(
-                                resource.id(),
-                                ReferenceValidator.resolve(resource.id().namespace(), target),
+                        addEdge(context, resource, target,
                                 dev.materione.core.pipeline.graph.ContentEdgeType.FURNITURE_STAGE);
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * One reference edge. A reference that is not an id draws no edge: validation reports it (MTR-0009) and
+     * quarantines the resource, and a resource of a type validation does not check must not abort the run (#364).
+     */
+    private static void addEdge(
+            PipelineContext context,
+            ContentResource resource,
+            String target,
+            dev.materione.core.pipeline.graph.ContentEdgeType type) {
+        var targetId = ReferenceValidator.tryResolve(resource.id().namespace(), target);
+        if (targetId != null) {
+            context.graph().addEdge(resource.id(), targetId, type);
         }
     }
 }

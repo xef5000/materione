@@ -386,6 +386,12 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A reference that is not a valid id quarantines its resource instead of aborting the pipeline run (`MTR-0009`).**
+  A `template:`, `model:`, `texture:`, `item:`, `drops:`, `evolution:`, `reference:`, `jukebox_song:`, sound or glyph
+  source, or recipe `result:`/ingredient written as `Alpha Sword` (a space, an upper-case letter) threw out of
+  the reference validator and stopped the whole reload. The referencing resource is now quarantined with a diagnostic
+  naming the field and the value; the rest of the pack loads, and the dry run of an authoring transaction reports the
+  same diagnostic against the operation that wrote it.
 - **A GUI layer skipped for its id or its text now says why (`MTR-0052`).** A layer id YAML reads as
   a boolean (`yes`, `no`, `on`, `off`) or a number used to report only "id must match [a-z0-9_]+"
   with no layer named; it now names the value it read and says to quote it (`id: "yes"`). A text
