@@ -137,7 +137,7 @@ data. The model splits what it holds into three classes, each with one owner:
 | **State** | the store's (per declaration) | any run, any render, through `vars.*` | the variable store, behind the port (logic.md §20 decision 12) | `vars()` (the `session` scope): see §3.4 |
 
 The rule that makes the split hold: **a value another player's view or a rule outside the viewer's own runs could need is
-state, never viewer-local.** Page and search text are the only per-viewer *navigation* the issue names; the last render, the
+state, never viewer-local.** Page and search text are the only per-viewer *navigation* the issue names; the last render and
 a dialog's token are per-viewer *mechanism*, invisible to content, and so viewer-local by the same rule. The view history
 (§3.6) is not viewer-local: it belongs to the player's navigation across views, and lives in `ViewRegistry` per player.
 
