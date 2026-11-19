@@ -11,4 +11,8 @@ dependencies {
     api(project(":core"))
     compileOnly(libs.vault.api)
     compileOnly(libs.luckperms.api)
+    compileOnly(libs.playerpoints.api)
+    compileOnly(libs.ultraeconomy.api)
+    compileOnly(libs.tokenmanager.api) { isTransitive = false }
+    compileOnly(libs.rediseconomy.api) { isTransitive = false }
 }

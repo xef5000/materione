@@ -181,6 +181,19 @@ class IntegrationsGuardTest {
         assertThat(diagnostics.published.getFirst().code()).isEqualTo(DiagnosticCodes.INTEGRATION_SKIPPED);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "PlayerPoints", "CoinsEngine", "ExcellentEconomy", "UltraEconomy", "TokenManager", "RedisEconomy"})
+    void anEnabledEconomyPluginWhoseCurrencyIntegrationCannotBeInstalledIsReportedAndSkippedNotFatal(String plugin) {
+        var host = new Host(Set.of(plugin));
+        var diagnostics = new Diagnostics();
+
+        new Integrations(host.plugin, logicOf(new RecordingProviders()), diagnostics, false).refresh();
+
+        assertThat(diagnostics.published).hasSize(1);
+        assertThat(diagnostics.published.getFirst().code()).isEqualTo(DiagnosticCodes.INTEGRATION_SKIPPED);
+    }
+
     @Test
     void theBungeeCordChannelNeedsNoProxyPluginOnlyTheSetting() {
         var host = new Host(Set.of());

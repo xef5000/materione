@@ -5,15 +5,22 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.logic.LogicApi;
+import dev.materione.api.logic.provider.CurrencyIntegration;
+import dev.materione.integrations.coinsengine.CoinsEngineCurrencyIntegration;
 import dev.materione.integrations.items.OptionalItemSource;
 import dev.materione.integrations.items.OptionalItemSources;
 import dev.materione.integrations.luckperms.LuckPermsPermissionProvider;
+import dev.materione.integrations.playerpoints.PlayerPointsCurrencyIntegration;
 import dev.materione.integrations.proxy.BungeeCordTransfer;
+import dev.materione.integrations.rediseconomy.RedisEconomyCurrencyIntegration;
+import dev.materione.integrations.tokenmanager.TokenManagerCurrencyIntegration;
+import dev.materione.integrations.ultraeconomy.UltraEconomyCurrencyIntegration;
 import dev.materione.integrations.vault.VaultCurrencyIntegration;
 import dev.materione.integrations.vault.VaultPermissionProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
@@ -36,7 +43,12 @@ import org.bukkit.plugin.Plugin;
  * Vault is enabled, else the session default (not registered here). Transfer: the BungeeCord plugin
  * channel when {@code proxyTransfer} is set; the transfer packet is the plugin's own provider.
  *
- * <p>{@link #refresh} runs at start, on reload, and whenever Vault or LuckPerms enables or disables.
+ * <p><b>Currency integrations.</b> Each supported economy plugin (PlayerPoints, CoinsEngine, UltraEconomy,
+ * TokenManager, RedisEconomy) registers its own integration ({@code materione:playerpoints}, ...) while it
+ * runs. A plugin that runs several currencies (CoinsEngine, UltraEconomy, RedisEconomy) is one integration
+ * that many Materione currencies name, each with its own {@code currency:} key.
+ *
+ * <p>{@link #refresh} runs at start, on reload, and whenever a watched plugin enables or disables.
  */
 public final class Integrations implements Listener, AutoCloseable {
 
@@ -45,6 +57,24 @@ public final class Integrations implements Listener, AutoCloseable {
 
     /** The LuckPerms plugin name as its {@code plugin.yml} declares it. */
     public static final String LUCKPERMS = "LuckPerms";
+
+    /**
+     * One optional economy plugin's currency integration: the plugin names it may run under (any one
+     * enabled is enough) and a factory that is only called while one is enabled.
+     */
+    private record CurrencyAdapter(String id, List<String> plugins, Supplier<CurrencyIntegration> factory) {}
+
+    private static final List<CurrencyAdapter> CURRENCY_ADAPTERS = List.of(
+            new CurrencyAdapter("playerpoints", List.of(PlayerPointsCurrencyIntegration.PLUGIN),
+                    PlayerPointsCurrencyIntegration::new),
+            new CurrencyAdapter("coinsengine", CoinsEngineCurrencyIntegration.PLUGINS,
+                    CoinsEngineCurrencyIntegration::new),
+            new CurrencyAdapter("ultraeconomy", List.of(UltraEconomyCurrencyIntegration.PLUGIN),
+                    UltraEconomyCurrencyIntegration::new),
+            new CurrencyAdapter("tokenmanager", List.of(TokenManagerCurrencyIntegration.PLUGIN),
+                    TokenManagerCurrencyIntegration::new),
+            new CurrencyAdapter("rediseconomy", List.of(RedisEconomyCurrencyIntegration.PLUGIN),
+                    RedisEconomyCurrencyIntegration::new));
 
     private final Plugin host;
     private final LogicApi logic;
@@ -82,6 +112,13 @@ public final class Integrations implements Listener, AutoCloseable {
             attempt("Vault currency integration", () -> installed.add(logic.currencyIntegrations().register(
                     host, NamespacedId.of("materione", "vault"),
                     new VaultCurrencyIntegration())));
+        }
+        for (CurrencyAdapter adapter : CURRENCY_ADAPTERS) {
+            if (adapter.plugins().stream().anyMatch(manager::isPluginEnabled)) {
+                attempt(adapter.id() + " currency integration", () -> installed.add(
+                        logic.currencyIntegrations().register(
+                                host, NamespacedId.of("materione", adapter.id()), adapter.factory().get())));
+            }
         }
         if (manager.isPluginEnabled(LUCKPERMS)) {
             attempt("LuckPerms permissions", () -> installed.add(
@@ -127,7 +164,8 @@ public final class Integrations implements Listener, AutoCloseable {
     }
 
     private static boolean isWatched(String name) {
-        return VAULT.equals(name) || LUCKPERMS.equals(name) || OptionalItemSources.PLUGINS.contains(name);
+        return VAULT.equals(name) || LUCKPERMS.equals(name) || OptionalItemSources.PLUGINS.contains(name)
+                || CURRENCY_ADAPTERS.stream().anyMatch(adapter -> adapter.plugins().contains(name));
     }
 
     private void uninstall() {
