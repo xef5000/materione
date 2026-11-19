@@ -386,6 +386,9 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A targeted reload no longer quarantines an item for a texture or model of another pack (#362).** Editing an item
+  that referenced `other:gem` from a different pack and reloading just that file reported "unresolved texture" and
+  quarantined it, though a full reload accepted it; the targeted run now validates against the same asset set.
 - **A reference that is not a valid id quarantines its resource instead of aborting the pipeline run (`MTR-0009`).**
   A `template:`, `model:`, `texture:`, `item:`, `drops:`, `evolution:`, `reference:`, `jukebox_song:`, sound or glyph
   source, or recipe `result:`/ingredient written as `Alpha Sword` (a space, an upper-case letter) threw out of
