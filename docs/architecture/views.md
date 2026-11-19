@@ -5,8 +5,11 @@
 > that both are built to it once and not twice. The document is therefore pulled forward from M7; dialogs and the HUD stay M6.
 > The parts that need keyed state (#333 step 2) stay M7 and are marked as such (§6, §13). **The owner answered every question
 > on 2026-11-19 by accepting the defaults (§14.1)**, and qualified Q1 and Q7 in a review on #335 the same day (the
-> schema-versioned GUI default, §5.5; reactive-dialog safeguards, §4.3) with three acceptance cases (§11.1). The decisions are
-> listed in §14.2; one question raised by the review is open (Q8).
+> schema-versioned GUI default, since withdrawn; reactive-dialog safeguards, §4.3) with three acceptance cases (§11.1). The
+> same day the owner settled compatibility: **there is no public release with existing GUIs, so no GUI behavior is kept for its
+> own sake** (§7). This document is therefore the clean design, not a fold-down: where the first draft compromised to preserve
+> shipped GUI behavior, it now says what the model would be from scratch and adopts it (§7.1). The decisions are in §14.2; one
+> question is open (Q9).
 >
 > **Scope.** The view model that primitives.md §5.3 directs: what a view kind is, what is viewer-local and what is state, how a
 > write to state finds the viewers that read it, how many players view one thing, and how the shipped container GUI, the dialog
@@ -25,9 +28,9 @@
 > | **D6** | A view renders compiled definitions published by the shadow swap; no editor path changes a live view directly (§5.2). |
 > | **D8** | Every render and every send runs on the viewer's owner thread through the gateway; a write marks viewers dirty from any thread without touching their state (§5.6). |
 > | **D13** | The SDK surface (the verb, the keys, the view references) is generated (§9). |
-> | master §5.5, §5.6 | Every `gui` file keeps its meaning and round-trips byte-identically; every new key is additive with a default equal to today's behavior; the GUI rerender default changes only for packs that declare the new schema version (§5.5, §7, Q1, Q8). |
+> | master §5.5, §5.6 | **Lossless round-trip binds** (load, untouched save, byte-identical; unknown fields kept). **GUI behavior is not preserved** (owner, 2026-11-19: no public release has GUIs); the breaking changes are listed in §7, and shipped fixtures and built-in GUIs are updated by the rows that change them. |
 > | master §14.2 | Not decided here: whether a view's state can live across servers is the store adapter's question (§6.4). |
-> | primitives.md §4.6, §4.7, §5.2, §5.3, §5.6 | `GuiSession` (class F) is split into binding, viewer-local state and state (§3.3); session variables become a named key of keyed state when #333 step 2 lands (§3.4); target addressing reaches views (§3.6). |
+> | primitives.md §4.6, §4.7, §5.2, §5.3, §5.6 | `GuiSession` (class F) is split into binding, viewer-local state and state (§3.3); session variables are declared state behind the store port, per view instance (§3.4); target addressing reaches views (§3.6). |
 > | plugin.md §2, §5, §9 | Threading (§5.6), placeholder diagnostics (§10), new budget rows (§5.7). |
 
 ---
@@ -43,7 +46,7 @@
 | G3 | "**Re-render the viewers of key K**" is a verb (`view.refresh`), and a write to K does it on its own where the kind allows (§5.5). | #335 |
 | G4 | **Many viewers** of one thing, with no shared session object: two players in one trade window are two viewers of the same keyed state (§6). | primitives.md §3 need 3, agent-benchmark.md T02 |
 | G5 | #6 and #7 can be built in M6 against this document without waiting for keyed state (#333 step 2); what waits is named (§6.1, §13). | owner, PR #451 Q7 |
-| G6 | Every shipped `gui` file and behavior keeps its meaning (§7). | master §5.5, §5.6 |
+| G6 | **The cleanest, most extensible model**: it does everything we can think of and extends to what we did not think of (owner, 2026-11-19). Shipped GUI behavior is changed where a cleaner model needs it; lossless round-trip still binds (§7). | owner, master §5.6 |
 | G7 | Budgets stated and CI-tracked, including the fan-out of one write to many viewers (§5.7). | plugin.md §9 |
 
 **Non-goals.**
@@ -65,8 +68,8 @@
 | **View kind** | A content type whose resources render state for viewers: `gui` (shipped), `dialog` (#6), `hud` (#7), later the map canvas (#453). Declared by the **view facet** of the type's self-description (§9). |
 | **View definition** | One resource of a view kind (`shop:menu`, `rpg:mana`), compiled and published by the shadow swap. |
 | **Binding** | What a view was opened *about*, fixed for its lifetime: `args` (logic.md §6.1), the **subject stack** (backpack-preset.md §2.2, P-A), and later the **key** (§6.2). A HUD has no binding. |
-| **Viewer** | One player attached to one view definition under one binding. The record the runtime keeps for it is the kind's **viewer record** (`GuiSession` for GUIs, `DialogSession` for dialogs, `HudViewer` for HUDs). |
-| **Viewer-local state** | What only the viewer's own screen needs: list pages, search text, the last render (the diff base and the layers click routing follows), the back stack, a dialog's token and snapshots, a HUD's last-sent strings and animation phase. Never read by a rule outside that viewer's own runs. |
+| **Viewer** | One player attached to one view definition under one binding. The record the runtime keeps for it is one generic **viewer record** (`ViewerRecord`: identity, binding, session state handle, dirty bit) carrying a kind-specific viewer-local payload (`GuiViewerState`, `DialogViewerState`, `HudViewerState`). `GuiSession` folds into it (§3.8). |
+| **Viewer-local state** | What only the viewer's own screen needs: list pages, search text, the last render (the diff base and the layers click routing follows), a dialog's token and snapshots, a HUD's last-sent strings and animation phase. Never read by a rule outside that viewer's own runs. |
 | **State** | Values in the variable store: the scopes `player`, `server`, `session` (logic.md §20 decision 3), `item` (#333 step 1) and later `keyed` (#333 step 2). |
 | **State key** | One addressable value: a declared variable plus its holder (the player, nothing for `server`, the viewer for `session`, the stack for `item`, the key value for `keyed`). |
 | **Reads** | The state keys and polled sources a view definition's templates and conditions read, extracted at compile time (§5.2) and refined per viewer at render (§5.3). |
@@ -115,9 +118,9 @@ D-13, owner answer Q5).
 | `reads(definition)` | Compile-time read set (§5.2) | templates, `visible_if`, item and list sources, dynamic titles | templates, `visible_if`, item and list sources, at open | layer templates, `visible_if`, `worlds`, `permission` |
 | `render(...)` | Pure: definition, binding, viewer, viewer-local state, the logic context → a frame | slot appearances, title, hidden layers (logic.md §24 decision 13) | `RenderedDialog` (dialogs.md §7.1) | one string per channel (hud.md §8.2) |
 | `deliver(...)` | Owner thread: diff with the last frame, send only what changed | `RenderDiff` (logic.md §24 decision 13) | re-send the dialog, new token (§4.3) | channel writers (hud.md §8.2) |
-| `rerenderDefault` | §5.5 | by pack schema version: `on_change` from the flip version, `off` below it (§5.5, Q1) | `off` | always `on_change` |
+| `rerenderDefault` | §5.5 | `on_change` (owner, Q1) | `off` | always `on_change` |
 | `minInterval` | Fewest ticks between two automatic renders of one viewer | 1 | 20 | 1 (2 for server-driven animation, hud.md §5.6) |
-| Viewer record | Holds the viewer-local state | `GuiSession` (per window) | `DialogSession` (per shown dialog) | `HudViewer`: **one per online player**, from join to quit, attached to zero or more visible HUDs, composing them into one output per channel (§5.3, hud.md §8.2) |
+| Viewer record | The generic `ViewerRecord` with the kind's payload | per window (`GuiViewerState`) | per shown dialog (`DialogViewerState`) | `HudViewerState`: **one per online player**, from join to quit, attached to zero or more visible HUDs, composing them into one output per channel (§5.3, hud.md §8.2) |
 
 The contract is the one sketched in hud.md §3.1 (`reads`, `viewers`, `render`, `viewerLocal`), with `deliver`, the rerender
 policy and the minimum interval added because the dialog needs them (§4.3).
@@ -130,38 +133,40 @@ data. The model splits what it holds into three classes, each with one owner:
 | Class | Lifetime | Who may read it | Where it lives | GUI today (`GuiSession`, logic.md §21 decision 1) |
 |---|---|---|---|---|
 | **Binding** | fixed at open, for the viewer's life | the view's own runs, its renders | the viewer record | `args`; the subject stack (P-A, when #333 step 1 or #304 builds it); the key (§6.2) |
-| **Viewer-local** | the viewer's life; a reload keeps it (logic.md §21 decision 17) | the viewer's own renders and runs only | the viewer record, confined to the owner thread | `pages()`, the search text (logic.md §29), the last render, the back stack (`SessionHistory`), the ticker handles |
+| **Viewer-local** | the viewer's life; a reload keeps it (logic.md §21 decision 17) | the viewer's own renders and runs only | the viewer record, confined to the owner thread | `pages()`, the search text (logic.md §29), the last render, the ticker handles |
 | **State** | the store's (per declaration) | any run, any render, through `vars.*` | the variable store, behind the port (logic.md §20 decision 12) | `vars()` (the `session` scope): see §3.4 |
 
 The rule that makes the split hold: **a value another player's view or a rule outside the viewer's own runs could need is
 state, never viewer-local.** Page and search text are the only per-viewer *navigation* the issue names; the last render, the
-back stack and a dialog's token are per-viewer *mechanism*, invisible to content, and so viewer-local by the same rule.
+a dialog's token are per-viewer *mechanism*, invisible to content, and so viewer-local by the same rule. The view history
+(§3.6) is not viewer-local: it belongs to the player's navigation across views, and lives in `ViewRegistry` per player.
 
 ### 3.4 Session variables
 
-`vars.session.*` is the one piece of data `GuiSession` owns (primitives.md §4.6 classes it F). It keeps its meaning (master
-§5.6): a value private to one viewer's window, alive while the window is open, carried by `gui.back` (logic.md §21 decision 2)
-and through a reload (decision 17).
+**`session` is state whose key is the view instance**: private to one viewer of one opened view, alive while that view is open,
+gone when it closes. A replaced view is a new instance; `view.back` re-opens a snapshot's binding and session values as a new
+instance (§3.6). This is the shipped GUI semantics (logic.md §21 decisions 1, 2, 17), and it stays because it is good design
+on its own merits: per-window UI state (a mode toggle, a selected tab, a draft value) has no other correct home, and it must not
+leak into `player` state or be shared with another viewer.
 
-The model restates it, without changing a file: **`session` is state whose key is the window instance** (one viewer record:
-a replaced window is a new instance; `gui.back` re-opens the snapshot's values as a new instance, exactly as logic.md §21
-decision 2 states). Session variables are undeclared: `vars.session.x` and `gui.session.x` name the same window-local key
-`(window, x)`, with no `variables/` declaration, and the reads index treats them so (§5.2, §11.1 case 2). Until #333 step 2, it stays
-physically in `GuiSession.vars()` and is read through the `VariableFacets.SESSION` facet exactly as today. When #333 step 2
-restates `player`, `server` and `session` as named keys (#333's sketch), the session map moves behind the store port as the
-named key `session` (holder: the viewer record's identity), and the viewer record keeps only a handle to it. A session write
-then reaches the reads index like any other write (§5.3), and the back stack's snapshot copies the key's values as it copies the
-map today.
+What changes from the shipped GUI, because the clean model wants it:
 
-What is **not** added: no session scope for dialogs or HUDs. A dialog wizard carries state in `args` or a declared variable
-(dialogs.md §8, §15 decision 4); a HUD is not a window (hud.md §7.1, `MTR-0116`). A shared view does not share session
-variables: each viewer of a keyed view has its own, and the shared part is keyed state (§6.2). The owner kept the scope (Q2).
+| Shipped | Clean model | Why |
+|---|---|---|
+| GUIs only | **every `opened` kind**: GUIs and dialogs (a dialog's re-render keeps the instance and its session; a new dialog is a new instance) | one scope for one concept; a dialog with `stay` buttons that toggle a choice needs it as much as a GUI. HUDs have none: they are not opened and have no instance (hud.md §7.1, `MTR-0116`) |
+| two spellings, `vars.session.x` and `gui.session.x` | **one**: `vars.session.x` | two names for one value is a trap for authors and the reads index; `gui.*` is gone as a root (§3.7) |
+| undeclared names (any `set_var session.x` creates a key) | **declared** (default of Q9): a `variable` with `scope: session`, typed and defaulted, like every other scope | a typo then fails at load instead of creating a silent key (U5); the type and default reach the studio and the SDK (U4, D5); the reads index keys on the declared id (§5.2) |
+| `GuiSession.vars()`, a map beside the store, written by `GuiSessionVariables.put` past the port | **behind the store port** from row V1: a `session` store keyed by the viewer record's identity; one write path for every scope (§5.3) | the port is the one place writes are observed; a bypass is a bug class (acceptance case 2) |
+
+When #333 step 2 restates the scopes as named keys, `session` is the named key whose holder is the view instance; nothing about
+it changes then, because V1 already put it behind the port. A shared view does not share session state: each viewer of a keyed
+view has its own, and the shared part is keyed state (§6.2).
 
 ### 3.5 Viewer-set rules
 
 | Rule | Attach | Detach | Kinds |
 |---|---|---|---|
-| `opened` | an opener admits the player (`GuiOpener`, `DialogOpener`; the shared `OpenGate`, dialogs.md §7.1) | close, replace, quit, removal, expiry | GUI; dialog (one live dialog per player: a new one replaces it, dialogs.md §6.2) |
+| `opened` | `view.open` admits the player through the kind's opener and the shared `OpenGate` (dialogs.md §7.1) | close, replace, quit, removal, expiry | GUI; dialog (one live dialog per player: a new one replaces it, dialogs.md §6.2) |
 | `predicate` | the visibility condition becomes true, re-evaluated on the events and writes of hud.md §6.2. Every online player is a **candidate** (the kind's per-player record exists from join), so a write to a visibility read reaches a player who sees no HUD yet (§5.3) | the condition becomes false (the record stays, attached to nothing), quit | HUD |
 | `spatial` | reserved: a player comes into range of a placement | out of range, quit | map canvas (#453) |
 
@@ -171,53 +176,64 @@ makes it.
 
 ### 3.6 Verbs and target addressing
 
-| Verb | Parameters | Meaning | Status |
+From scratch, a view verb names what it does to **a view**, not to one kind: the same four verbs serve every `opened` kind, and
+a fifth kind (#453) needs no new verbs. The shipped per-kind verbs (`gui.open`, `gui.close`, `gui.back`, `gui.refresh`) are
+replaced, not aliased: an alias would be a second spelling of one capability (U1), and there are no existing GUIs to keep.
+
+| Verb | Parameters | Meaning | Row |
 |---|---|---|---|
-| `<kind>.open` (`gui.open`, `dialog.open`) | the definition, `args`; later `target:` (primitives.md §5.6, #331) and `key:` (§6.2) | Attach a viewer (the run's player, or the target) under a binding. | `gui.open` shipped; `dialog.open` #6; `target` #331; `key` #333 step 2 |
-| `<kind>.close` | later `target:` | Detach a viewer. | `gui.close` shipped; `dialog.close` #6 |
-| **`view.refresh`** | at most one selector: none (the run's own viewer), `view:` (a definition: all its viewers), `var:` with optional `holder:` (the viewers whose reads contain that state key); later `key:` (§6.2) | Re-render the selected viewers now, on their owner threads. | **New** (row V2) |
-| `gui.refresh` | — | Kept, with its meaning: `view.refresh` with no selector, in a GUI run. A full render (logic.md §24 decision 15). | shipped |
+| **`view.open`** | `view:` (a reference to any definition whose kind is `opened`), `args`; later `target:` (#331) and `key:` (§6.2) | Attach a viewer (the run's player, or the target) under a binding, through the kind's opener and the shared `OpenGate`. `FAILED` when refused or unavailable, so `require`/`else` compose. Naming a `predicate` kind (a HUD) is a load error (`MTR-0057`). | V0 |
+| **`view.close`** | optional `view:` (close only if that definition is the one shown), later `target:` | Detach the run's viewer, or the target's. The kind fires its own close trigger with reason `action`. | V0 |
+| **`view.back`** | — | Re-open the previous view from the player's **view history**, a per-player stack (16 deep) of snapshots (definition, binding, session values) of opened views that another open replaced, **across kinds** (a GUI, then a dialog, then back to the GUI). Any other end drops the stack. `FAILED` "nothing to go back to" when empty. | V0 |
+| **`view.refresh`** | at most one selector: none (the run's own viewer), `view:` (a definition: all its viewers), `var:` with optional `holder:` (the viewers whose reads contain that state key); later `key:` (§6.2) | Re-render the selected viewers. With no selector it is a **full** render of the run's own viewer (logic.md §24 decision 15) and fails `"no open view"` when that viewer's record is stale or closed (the shipped `gui.refresh` rule, kept because it is right: a flow must learn that its window is gone). | V2 |
+
+Kind-specific verbs remain only where the capability belongs to one kind's components: `gui.page` (a `list` component's page)
+and `gui.slot_item` (a `slots` region) stay, because they act on a GUI component, not on a view. The condition `in_gui` becomes
+`in_view` (`view:`, `kind:`), by the same reasoning.
 
 `view.refresh` is the verb #335 names ("re-render the viewers of key K"). Automatic re-render (§5.5) makes it unnecessary for
-writes to declared state; it remains for what the reads index cannot see: a polled read the author knows has changed (a world
-fact, a PlaceholderAPI token), or a definition-wide refresh. It is `FAILED` only when its own selector is invalid (an unknown
-view); selecting zero viewers is `OK`. Threading: `ANY`; the renders it causes run on each viewer's owner thread (§5.6).
+writes to declared state; it remains for what the reads index cannot see (a polled read the author knows has changed) and for a
+definition-wide refresh. Selecting zero viewers is `OK`. Threading: `ANY`; renders run on each viewer's owner thread (§5.6).
 
 **Target addressing.** A view verb with `target:` attaches or detaches *another* player, resolved and checked by the engine
 through the gateway (primitives.md §5.6). That is how a flow run by one player shows a window to two (§6.3). The target design
 is #331's; the view verbs only declare that they accept one in their self-description, so it arrives in the SDK with no view
 code.
 
-### 3.7 The common context: `view.*`
+### 3.7 The view context: `view.*`
 
-Every run a view starts, and every render, carries one context subtree beside its kind's own root (`gui.*`, `dialog.*`):
+From scratch, the facts of "the view this run or render belongs to" have **one root for every kind**. The shipped kind roots
+(`gui.id`, `gui.args.*`, `gui.session.*`, `gui.page.*`) and the planned `dialog.id`, `dialog.args.*` are replaced by:
 
-| Path | Value |
+| Path | Value | Kinds |
+|---|---|---|
+| `view.id` | The definition id | all |
+| `view.kind` | `gui`, `dialog`, `hud` (later the map canvas) | all |
+| `view.args.*` | The binding's arguments | opened kinds |
+| `view.item` | The subject stack (P-A); null when none | opened kinds |
+| `view.key` | The binding key (§6.2); null until #333 step 2 | opened kinds |
+| `view.page.*` | A `list` component's page state, by layer id | GUI |
+
+Event facts keep their own roots, because they describe the event, not the view: `click.*`, `slot.*`, `layer.*`, `entry.*`,
+`close.*` (GUI), `input.*`, `button.*`, `entry.*`, `close.*` (dialog). Session state is `vars.session.*` (§3.4). A logic recipe
+or a preset written against `view.*` works for every kind, which is the extensibility the owner asked for. The compiler's root
+check (`MTR-0060`) admits `view` and no longer admits `gui` or `dialog` as roots.
+
+### 3.8 What becomes of `GuiSession`
+
+| Today (`GuiSession`) | Clean model |
 |---|---|
-| `view.id` | The definition id |
-| `view.kind` | `gui`, `dialog`, `hud` |
-| `view.args.*` | The binding's arguments; the same map as `gui.args.*` / `dialog.args.*` (not a copy) |
-| `view.item` | The subject stack (P-A); null when none |
-| `view.key` | The binding key (§6.2); null until #333 step 2 |
+| GUI id, arguments | the `ViewerRecord`'s definition and **binding** |
+| `vars()` (session variables) | **state**, in the `session` store behind the port (§3.4) |
+| `pages()`, search text, last render, rendered layers | **viewer-local**, in `GuiViewerState` (the click router follows the last render, logic.md §24 decision 14) |
+| `SessionHistory` (GUI back stack) | the per-player **view history** across opened kinds (§3.6) |
+| run identity (cancellation key) | the `ViewerRecord`'s identity |
+| "one per player" (`GuiSessions`) | kept: vanilla shows one container and one dialog at a time, a platform fact, not a compromise. `ViewRegistry` enforces it per kind and is indexed by player, by definition and (step 2) by key |
+| `GuiSessionPort`, `%materione_gui_open%`, `%materione_gui_last%` | `%materione_view_open%` and `%materione_view_last%` (`<kind>:<id>`), answered by `ViewRegistry` and the view history |
+| the unit of sharing | **gone**: nothing is shared through a viewer record (§3.1) |
 
-Kind roots keep their meaning; `view.*` exists so a logic recipe or a preset that works with any kind can be written once,
-and so `key` and `item` have one home instead of three. The compiler's root check (`MTR-0060`, logic.md §24 decision 1) admits
-`view` wherever a kind root is admitted.
-
-### 3.8 What `GuiSession` keeps
-
-| Today (`GuiSession`) | After this design |
-|---|---|
-| GUI id, arguments | the viewer's definition and **binding** |
-| `vars()` (session variables) | **state**, still held here until #333 step 2 moves it behind the store port (§3.4) |
-| `pages()`, search text | **viewer-local** |
-| last render, rendered layers | **viewer-local** (the click router follows it, logic.md §24 decision 14) |
-| run identity (cancellation key) | the viewer record's identity |
-| "one per player" (`GuiSessions`) | unchanged for GUIs: still at most one open GUI per player. The registry is `ViewRegistry`, indexed by player, by definition and (step 2) by key |
-| the unit of sharing | **gone**: nothing is shared through a session (§3.1) |
-
-`GuiSession` keeps its class name and its seams (`GuiSessionPort`, `%materione_gui_open%`, `%materione_gui_last%`, logic.md
-§20 decision 20). Row V0 makes it implement the viewer record without a behavior change (§13).
+`GuiSession` does not survive as a class: the generic record plus a kind payload is what lets a fourth kind arrive without a
+fourth session type. Row V0 makes the change and updates the shipped GUI code, tests and fixtures with it (§13).
 
 ---
 
@@ -230,9 +246,9 @@ and so `key` and `item` have one home instead of three. The compiler's root chec
 | Content type | `gui` | `dialog` | `hud` | to be designed |
 | Viewer-set rule | `opened`, one GUI per player | `opened`, one dialog per player | `predicate` | `spatial` or `opened` |
 | Binding | `args`, subject stack, key | `args`, key | none | to be designed |
-| Viewer-local | pages, search, last render, back stack | token, button table, list snapshots, option snapshots | last-sent strings, poll cache, phase | likely: last frame per map |
+| Viewer-local | pages, search, last render | token, button table, list snapshots, option snapshots | last-sent strings, poll cache, phase | likely: last frame per map |
 | Sibling triggers | `gui.*` | `dialog.*` | none in v1 | to be designed |
-| Rerender default | `on_change` in packs at the flip schema version, `off` below it (§5.5) | `off`; opt-in `rerender: on_change` | always | likely always |
+| Rerender default | `on_change`; `off` per file | `off`; opt-in `rerender: on_change` | always | likely always |
 | What a re-render costs the player | nothing (slots and title rewritten in place) | **their typing** (vanilla has no update packet) | nothing | nothing |
 | Many viewers | yes, via keyed state (§6) | yes, each its own modal | yes, by nature | yes, by nature |
 
@@ -244,7 +260,7 @@ polls. What changes:
 
 1. Its session becomes a viewer record (§3.8); nothing visible.
 2. Its dynamic layers' reads are indexed (§5.2), and a write to one re-renders the viewer with a **partial** render (the dynamic
-   layers and the dynamic title, logic.md §6.4) under the GUI's rerender policy (§5.5: `on_change` by default only in packs that declare the flip schema version).
+   layers and the dynamic title, logic.md §6.4) under the GUI's rerender policy (§5.5: `on_change` by default, `off` per file).
 3. `refresh:` keeps its meaning: the clock re-reads dynamic layers every N ticks. It is now needed only for polled reads; a
    GUI whose dynamic layers read only declared variables updates without one.
 4. A window is never changed in the middle of the player's own click (logic.md §21 decision 8): automatic renders are
@@ -253,10 +269,13 @@ polls. What changes:
    displayed render, its click and input rules and its hitboxes stay frozen together. An automatic render that would change
    the title then does not apply; the dirty bit stays set, and the owned retry after the cursor clears renders the latest
    state. The displayed frame and its click targets never diverge.
-6. **Why the default is schema-versioned (owner, Q1).** The click router follows the last rendered frame (logic.md §24
-   decision 14). In an existing GUI whose author relied on calling `gui.refresh`, an automatic render that reveals a different
-   layer between two clicks makes the same click run a different rule. A new pack opts into the new default by its schema
-   version; an existing pack keeps today's behavior until its author bumps it (§5.5, §7).
+6. **Click targets follow state (a design property, owner review Q1).** The click router follows the last rendered frame
+   (logic.md §24 decision 14). With automatic re-render, a write can reveal or hide a layer between two clicks without the
+   author calling `view.refresh`, so the same click can run a different rule than it did a moment earlier. That is the intended
+   meaning: the player clicks what they see, and what they see is current state. Two rules keep it safe: a frame and its click
+   targets change together, never one without the other (and the held-cursor freeze of item 5 holds both still while the
+   player drags); and an effect never depends on which frame was clicked, only on state the flow re-reads (§6.3 rule 3). An
+   author who wants a window that changes only when a flow says so writes `rerender: off`.
 
 ### 4.3 Dialog
 
@@ -332,8 +351,7 @@ There is no third class and no binding language: a view reads exactly what a rul
 | (b) Author-declared `reads:` | Rejected: a second truth beside the templates that goes stale on the first edit. |
 | (c) Record every read during each render | Rejected as the primary: a render that skips a branch (a hidden layer) would forget a read that un-hides it. Used only as a refinement for concrete keys (§5.3). |
 
-The index maps a **state-key family** (a declared variable id and its scope; for `session`, the undeclared name, which
-`vars.session.x` and `gui.session.x` share) to the set of definitions that read it. For a `predicate` kind it records the
+The index maps a **state-key family** (a declared variable id and its scope, `session` included, §3.4) to the set of definitions that read it. For a `predicate` kind it records the
 family's role too: a **visibility read** (the definition's `visible_if`, `worlds`, `permission`) or a **content read** (its
 layers' templates and conditions). A read
 extraction cannot place (a variable named by a computed id) is classed polled and reported once as an info (`MTR-V01`, §10), so
@@ -350,7 +368,7 @@ code at 305ecdd8; acceptance case 2, §11.1):
 |---|---|---|
 | `VariableStore.write` (set, clear: `set_var` with `set`/`remove`/`reset`, `/materione var set`, `LogicApi.variables().set`) | `api/…/variable/VariableStore.java`; callers `RunVariables.write`, `VariableService` | an observing decorator around each scope's store, the way `SnapshotVariableStore` already wraps the player store |
 | `VariableStore.mutate` (the atomic ops: `add`, `subtract`, `multiply`, `toggle`) | the same port, a separate default method; caller `RunVariables.mutate` | the same decorator overrides `mutate` and notifies when the outcome succeeded |
-| `SessionVariables.put` (`set_var session.x`) | `GuiSessionVariables.put` writes `GuiSession.vars()` directly and **bypasses the store port** | `GuiSessionVariables.put` notifies the window's own viewer record (until #333 step 2 moves sessions behind the port, §3.4) |
+| `SessionVariables.put` (`set_var session.x`) | today `GuiSessionVariables.put` writes `GuiSession.vars()` directly and **bypasses the store port** | removed by row V1: session state moves behind the port as the `session` store (§3.4), so it takes the two rows above; no bypass remains |
 
 A hit narrows to viewers by the written holder:
 
@@ -385,17 +403,17 @@ nothing (§3.2 `deliver`), so the cost is one render, not a packet.
 - **The wake** is a one-shot on the viewer's owner thread through the gateway (`executeEntityLater`, plugin.md §2), at the next
   tick, or later if the kind's `minInterval` since the last automatic render has not passed. There is no global loop over
   viewers; the pattern is `gui.tick`'s chain of one-shots (logic.md §21 decision 15).
-- **The one-per-tick limit applies to automatic renders only.** An explicit `view.refresh` or `gui.refresh` from the viewer's
-  own thread renders at once, as `gui.refresh` does today (logic.md §21 decision 16); from another thread it schedules an
-  immediate wake that ignores `minInterval`.
+- **The one-per-tick limit applies to automatic renders only.** An explicit `view.refresh` from the viewer's own thread renders
+  at once (the shipped `gui.refresh` rule, logic.md §21 decision 16); from another thread it schedules an immediate wake that
+  ignores `minInterval`.
 - **Clear, then read.** A render clears the dirty bit **before** it reads state. A write that arrives during the render sets the
   bit again and schedules another wake, so no write is lost and none is rendered twice for nothing.
 - **Explicit refresh while a wake is queued.** The explicit render clears the bit; the queued wake runs, finds the bit clean and
   does nothing (unless a later write set it again).
 - **The window replaced before the wake runs.** A wake carries its viewer record's identity and checks, on the owner thread,
-  that the record is still live and still the player's current window (the check `gui.refresh` makes). A stale record's wake
-  is dropped: it never renders into the new window, which rendered itself when it opened. `gui.refresh` on a stale session keeps
-  its existing `"no open gui"` failure (logic.md §21 decision 16).
+  that the record is still live and still the player's current window (the check `view.refresh` makes). A stale record's wake
+  is dropped: it never renders into the new window, which rendered itself when it opened. `view.refresh` with no selector on a stale
+  record fails `"no open view"` (§3.6).
 - **Held cursor and throttled dialogs.** A wake that meets the GUI's held-cursor freeze (§4.2 item 5) leaves the bit set and
   applies nothing; a dialog wake inside its 20-tick floor is deferred to the end of the floor (§4.3).
 - **Latency and consistency.** A write is shown at each viewer's **next eligible render**: normally the next tick, later under a
@@ -406,31 +424,18 @@ nothing (§3.2 `deliver`), so the cost is one render, not a packet.
 
 | Kind | Key | Values | Default | Effect |
 |---|---|---|---|---|
-| `gui` | `rerender:` (new, top level) | `on_change`, `off` | **schema-versioned** (below) | `off`: only the clock, `gui.refresh`, `view.refresh` and a reload render, as today |
+| `gui` | `rerender:` (new, top level) | `on_change`, `off` | `on_change` | `off`: only the clock, `view.refresh` and a reload render |
 | `dialog` | `rerender:` (new, top level) | `on_change`, `off` | `off` | §4.3 |
 | `hud` | none | — | always `on_change` | a HUD is continuous |
 
 The key is a schema field of each kind's type, so it self-describes (D5). Absent means the default, so no existing file is
 rewritten.
 
-**The GUI default is schema-versioned (owner, Q1).** Master §5.5 puts the content schema version in the pack manifest, and the
-repo has exactly that mechanism: `pack.yml`'s `schema_version`, parsed by `PackManifest` (`core/…/pipeline/PackManifest.java`,
-`CURRENT_SCHEMA_VERSION = 1`) and written as `schema_version: 1` by every fixture and by the editor's new-pack scaffold
-(`DocumentStore.createPackLocked`). It has no migration steps yet and nothing reads it beyond the parse. This design uses it and
-adds no second mechanism:
-
-| Pack's `schema_version` | A GUI's `rerender:` default |
-|---|---|
-| absent, or `1` | `off`: today's behavior, unchanged |
-| `2` or later | `on_change` |
-
-Three rules keep this honest: (1) **absent means 1 for this default**, although `PackManifest` today substitutes the current
-version for an absent field: row V1 changes that substitution to `1` when it raises `CURRENT_SCHEMA_VERSION` to `2`, so raising
-it never flips a pack that does not say so; (2) **new packs get the new default** because the editor's scaffold writes the
-current version (`2` after V1), and a hand-written `pack.yml` gets it by declaring `schema_version: 2`; (3) **no pack is
-rewritten**: bumping is the author's edit, and the bump from 1 to 2 needs no migration step because it changes only a default
-that `rerender:` states explicitly. The built-in pack (master §7.3) stays at `1` until row V1 checks its GUIs (the content
-browser) under `on_change`. This is the first semantic use of the manifest's schema version; Q8 asks the owner to confirm it.
+**No schema-versioned default (owner, 2026-11-19, Q8).** The review's first form of Q1 asked for a default that flips with the
+pack's `schema_version`. The owner withdrew the need: no public release has GUIs, so `on_change` is simply the GUI default
+everywhere and `off` is a per-file choice. `pack.yml`'s `schema_version` (parsed by `PackManifest`) is left as it is; this
+design gives it no meaning. Shipped fixtures and built-in GUIs that relied on no automatic re-render are updated when row V1
+lands (§13).
 
 ### 5.6 Threading (D8) and Folia regions
 
@@ -474,9 +479,9 @@ second (row V1), so an owner can see which variable drives it.
 |---|---|
 | Many viewers of **server** state (a shop's stock, a season counter, a global event bar) | Any view reading `vars.server.*`: every viewer re-renders on a write (§5.3). |
 | One player's state shown on that player's views, live | `vars.player.*` reads, matched by viewer. |
-| A view shown to another player | `gui.open` / `dialog.open` with `target:` (#331, M6.5). |
+| A view shown to another player | `view.open` with `target:` (#331, M6.5). |
 | Re-render a definition's viewers or a variable's readers on demand | `view.refresh` (row V2). |
-| A dialog vote shown to many, each with a live tally of a server variable | `dialog.open` per player, `rerender: on_change`, buttons only (§4.3). |
+| A dialog vote shown to many, each with a live tally of a server variable | `view.open` of the dialog per player, `rerender: on_change`, buttons only (§4.3). |
 
 ### 6.2 With #333 step 2 (M7, or when T02 is scheduled)
 
@@ -485,9 +490,9 @@ What waits, and what views need of keyed state:
 | Capability | Needs from #333 step 2 | View side (row V5) |
 |---|---|---|
 | Per-instance shared mutable state (two offers, two confirm flags) | `scope: keyed` with `key:` an expression | reads index matches `keyed` writes by key (§5.3) |
-| A view **bound** to a key | — | `key:` on `<kind>.open` (a template); `view.key` in context (§3.7); `ViewRegistry` indexed by key |
+| A view **bound** to a key | — | `key:` on `view.open` (a template); `view.key` in context (§3.7); `ViewRegistry` indexed by key |
 | "Re-render the viewers of key K" | — | `view.refresh: {key: …}` |
-| Close every viewer when the key expires | the `expire` trigger and TTL | a flow on `expire` runs `gui.close` with `target:` per viewer, or `view.refresh` to show "expired"; the close reason stays `action` (no new reason; dialogs keep `expired` for their own session TTL, dialogs.md §6.2) |
+| Close every viewer when the key expires | the `expire` trigger and TTL | a flow on `expire` runs `view.close` with `target:` per viewer, or `view.refresh` to show "expired"; the close reason stays `action` (no new reason; dialogs keep `expired` for their own session TTL, dialogs.md §6.2) |
 | `session` as a named key | the restatement of the four scopes | §3.4 |
 | Off-owner reads of keyed state during renders on other regions | keyed stores answer concurrent reads safely (snapshots or a concurrent map; writes serialised per key) | none: a requirement stated to #333 |
 
@@ -522,8 +527,8 @@ trade:
 
 # commands/trade_accept.yml — opens the view for both under one key
 do:
-  - gui.open: { gui: trade, key: "${args.trade}" }                         # the accepter
-  - gui.open: { gui: trade, key: "${args.trade}", target: "${args.from}" } # the requester (#331)
+  - view.open: { view: trade, key: "${args.trade}" }                         # the accepter
+  - view.open: { view: trade, key: "${args.trade}", target: "${args.from}" } # the requester (#331)
 ```
 
 Three rules make the composition correct, and none is trade-specific:
@@ -550,27 +555,37 @@ learns of the change. That is a requirement on any future adapter, recorded here
 
 ---
 
-## 7. Migration
+## 7. Compatibility: what binds and what breaks
 
-Every existing `gui` file and behavior keeps its meaning (master §5.5, §5.6). Lossless round-trip is untouched: no key is
-renamed or removed, and every new key is additive.
+**Decided (owner, 2026-11-19):** *there is no public release with existing GUIs yet, so we don't have to support older formats;
+the goal is the GUI system that can do everything we can think of and can be extended to what we did not think of.* Two things
+follow and are kept apart:
 
-| Shipped surface | After | Changed? |
-|---|---|---|
-| `guis/*.yml`, every key | loads and round-trips byte-identically | no |
-| `refresh:` (the clock) | same clock; now needed only for polled reads | no |
-| `gui.refresh` | `view.refresh` with no selector; same full render, same failure (`"no open gui"`) | no |
-| `vars.session.*`, `gui.session.*`, `set_var session.x` | same map, same lifetime, carried by `gui.back` | no (moves behind the port with #333 step 2, §3.4) |
-| `gui.open`, `gui.close`, `gui.back`, close reasons, one GUI per player | same | no |
-| Live reload keeps the session (logic.md §21 decision 17, gui.md §5) | same; the viewer record survives a swap | no |
-| `%materione_gui_open%`, `%materione_gui_last%` | same (`GuiSessionPort`) | no |
-| A GUI whose dynamic layers read a declared variable, in a pack at `schema_version` 1 or with none | unchanged: renders on the clock, `gui.refresh`, `view.refresh` and reloads | **no** (§5.5) |
-| The same GUI after its author bumps the pack to `schema_version: 2` | re-renders at the next eligible render after a write | **yes, by the author's edit**: a behavioral migration. Because the click router follows the frame, a click can now meet a layer the write revealed before the author's `gui.refresh`; the GUI writes `rerender: off` to keep the old behavior inside a bumped pack |
-| The `MTR-` codes | unchanged meanings; new codes are additive (§10) | no |
+- **Lossless round-trip still binds** (master §5.6). It is a property of the file layer, not legacy support: a document loaded
+  and saved untouched is byte-identical, and unknown fields survive. Every key this design adds or renames obeys it.
+- **GUI behavior is not preserved for its own sake.** Where the clean model differs from the shipped GUI, the shipped GUI
+  changes, and the row that changes it updates the fixtures, the built-in pack's GUIs (the content browser), the logic recipes,
+  the showcase pack, the QA catalog and the SDK goldens in the same PR.
 
-Fixture rule: no existing GUI fixture changes bytes; the golden render tests gain cases, not edits.
+### 7.1 Breaking changes from the shipped GUI
 
----
+| Shipped | Clean model | Row | Kept or changed, and why |
+|---|---|---|---|
+| `gui.open`, `gui.close`, `gui.back` | `view.open`, `view.close`, `view.back` | V0 | **Changed**: one verb set for every opened kind (§3.6). |
+| `gui.refresh` | `view.refresh` (no selector = full render of the run's own viewer, `"no open view"` when stale) | V2 | **Changed** name; the semantics are kept because they are right (§3.6). |
+| `in_gui` condition | `in_view` (`view:`, `kind:`) | V2 | **Changed**: the same reasoning. |
+| `gui.id`, `gui.args.*`, `gui.page.*` roots | `view.id`, `view.args.*`, `view.page.*` | V0 | **Changed**: one root for view facts (§3.7). |
+| `gui.session.*` | removed; `vars.session.*` only | V0 | **Changed**: one spelling (§3.4). |
+| undeclared session variables | declared, `scope: session` | V1 | **Changed** if Q9 is answered (a) (§3.4). |
+| session state in `GuiSession.vars()`, written past the store port | the `session` store behind the port | V1 | **Changed**: one observed write path (§3.4, §5.3). |
+| `GuiSession`, `SessionHistory`, `GuiSessionPort` | `ViewerRecord` + kind payload; per-player view history across kinds; `ViewRegistry` | V0 | **Changed**: no per-kind session type (§3.8). |
+| `%materione_gui_open%`, `%materione_gui_last%` | `%materione_view_open%`, `%materione_view_last%` | V0 | **Changed** with the registry. |
+| re-render only on the clock, `gui.refresh` or a reload | `rerender: on_change` by default; `off` per file | V1 | **Changed** (owner, Q1, Q8): click targets follow state (§4.2 item 6). |
+| `refresh:` (the clock) | the same key; now only for polled reads | — | **Kept**: the clock is the right tool for what cannot notify, and the HUD uses the same word. |
+| session per window, carried by back, kept across reload | the same, for every opened kind | — | **Kept** as good design (§3.4). |
+| one GUI per player; close reasons; live reload keeps the viewer | the same | — | **Kept**: a platform fact and correct semantics. |
+| `gui.page`, `gui.slot_item` | the same | — | **Kept**: they act on GUI components, not on views. |
+| The `MTR-` codes | unchanged meanings; new codes are additive (§10) | — | **Kept**: codes are API (plugin.md §5). |
 
 ## 8. Universality tests and the D12 audit
 
@@ -591,9 +606,9 @@ composition (§6).
 
 | Surface | Class before | Class after | How |
 |---|---|---|---|
-| `GuiSession` | **F** | **P** (viewer record) + state | split per §3.3; session variables are state, a named key after #333 step 2 |
+| `GuiSession` | **F** | **P** (`ViewerRecord`) + state | replaced per §3.3, §3.8; session variables are declared state behind the port |
 | `session` scope (primitives.md §4.6) | **F** | **P** after #333 step 2 | the viewer's named key (§3.4) |
-| `gui.refresh` (primitives.md §4.4, View row) | P+ | P | an instance of `view.refresh`; `target:` from #331 |
+| `gui.open`, `gui.close`, `gui.back`, `gui.refresh` (primitives.md §4.4, View row) | P+ | P | replaced by `view.open`, `view.close`, `view.back`, `view.refresh` for every opened kind; `target:` from #331 |
 | "Re-render every viewer of key K" (primitives.md §3 need 3) | P+ | P | §5.3, `view.refresh`, row V5 for keys |
 
 The audit document gets a pointer from §5.3 to this design (this PR); its tables are updated when the rows ship, as every
@@ -610,12 +625,12 @@ fold-down is (master §3.1, consequence 2).
 - **References.** `view.refresh`'s `view:` parameter is a `REFERENCE` whose kinds are the types that declare the facet, so the
   generated type is the union of GUI, dialog and HUD handles; a static id that resolves to nothing is `MTR-0105`, its existing
   meaning (plugin.md §5).
-- **Generated surface.** `m.actions.viewRefresh({ view } | { var, holder } | { key })`, the `rerender` field on
-  `p.guis.create` and `p.dialogs.create`, and (with #331 and #333) `target` and `key` on `guiOpen` / `dialogOpen`. Nothing is
+- **Generated surface.** `m.actions.viewOpen(handle, …)`, `viewClose`, `viewBack`, `viewRefresh({ view } | { var, holder } | { key })`, the
+  `rerender` field on `p.guis.create` and `p.dialogs.create`, and (with #331 and #333) `target` and `key` on `viewOpen`. Nothing is
   written by hand (codemode.md §3.5).
 - **codemode.md §9.2** writes the missing primitive as `rpg.guis.get("trade").views.forEachViewer(offers, …)`. Under this design
   the passing program needs no such loop: it opens the GUI with `key:` for both players (§6.3) and freshness follows state. The
-  error that program shows today stays an honest type error (`key` and `target` do not exist on `guiOpen` yet); codemode.md is
+  error that program shows today stays an honest type error (`viewOpen`, `key` and `target` do not exist yet); codemode.md is
   updated when row V5 ships, not here.
 - **Benchmark.** T28 passes with #6 (the dialog kind on rows V0 and the shared opener); T20 with #7 (the HUD kind on V0 and V1),
   #329 and #332; T02's shared window with V5, #330, #331, #333 step 2, and #334 for the swap (agent-benchmark.md §4.2 rank 9).
@@ -645,10 +660,10 @@ resolves to nothing).
 | Tier | What | Where |
 |---|---|---|
 | Unit (pure) | read extraction for every template, condition and source shape; the index for a corpus of GUIs; the matching table of §5.3 row by row; dirty coalescing and `minInterval` on a virtual clock; the "no viewer-local mutation off-owner" rule with a recording gateway | `plugin` `view` tests |
-| Parity | every GUI fixture renders identically before and after row V0 (render goldens) | existing GUI render goldens |
+| Goldens | GUI render goldens updated deliberately by the row that changes a behavior (V0 context roots and verbs, V1 auto re-render); every update names its §7.1 row | existing GUI render goldens |
 | Perf | the rows of §5.7 | `ViewReadsIndexTest`, `ViewFanOutPerfTest`, `ViewSchedulerTest`, `ViewFootprintTest` |
 | Harness IT (1.21.4) | a `server` variable written by the console reaches an open GUI's next render; `view.refresh` by definition; reload keeps viewers | `PaperViewIT` |
-| QA catalog (`qa/catalog/`, qa/README.md) | `view.server-var.live` (auto + visual): two clients have one GUI open; one clicks a button that writes a server variable (in a pack at `schema_version: 2`); both windows show the new value at their next eligible render. `view.refresh.polled` (auto): a polled read changes and `view.refresh` shows it. With row V5: `view.keyed.two-viewers` (visual): T02's shared window renders for both players. Blessed on main. | `qa/catalog/views.mjs` |
+| QA catalog (`qa/catalog/`, qa/README.md) | `view.server-var.live` (auto + visual): two clients have one GUI open; one clicks a button that writes a server variable; both windows show the new value at their next eligible render. `view.refresh.polled` (auto): a polled read changes and `view.refresh` shows it. With row V5: `view.keyed.two-viewers` (visual): T02's shared window renders for both players. Blessed on main. | `qa/catalog/views.mjs` |
 
 ---
 
@@ -657,8 +672,8 @@ resolves to nothing).
 | # | Case | What must hold | Row |
 |---|---|---|---|
 | 1 | **A player with no visible HUD shows their first one** | With `visible_if: "${vars.player.rpg.hud_on}"` and `hud_on` false, a `set_var` to true attaches the HUD for that player at the next eligible render, with no rejoin and no unrelated poll (the candidate record, §5.3). Setting it false detaches it. With two visible HUDs, their pieces compose into one boss-bar string and one action-bar string. | V1 (index roles, candidates); #7 row V (composition) |
-| 2 | **Every successful write path notifies the right reader** | A console `/materione var set` (`VariableStore.write`), an atomic server increment (`set_var` `add`, `VariableStore.mutate`) and a session toggle (`set_var session.x` `toggle`, `GuiSessionVariables.put`, which bypasses the port) each re-render exactly the matched viewers. `vars.session.x` and `gui.session.x` index the same window-local key with no declaration. Holds before V5. | V1 |
-| 3 | **A wake updates the right window at the next eligible render** | The one-per-tick limit applies to automatic renders only. An explicit refresh while a wake is queued renders once, and the wake is a no-op. A write during a render is shown by a following render (clear, then read). A window replaced before its wake runs is not rendered by that wake; `gui.refresh` on a stale session still fails `"no open gui"`. Under a held cursor, frame and click targets stay frozen together and the latest state renders after release. No GUI or throttled dialog test asserts visible consistency within one tick. | V1 (scheduler); V2 (explicit refresh) |
+| 2 | **Every successful write path notifies the right reader** | A console `/materione var set` (`VariableStore.write`), an atomic server increment (`set_var` `add`, `VariableStore.mutate`) and a session toggle (`set_var session.x` `toggle`, through the `session` store that replaces the `GuiSessionVariables.put` bypass) each re-render exactly the matched viewers. `vars.session.x` is the one spelling of a window-local key (the owner's wording asked that `gui.session.x` index the same key; that spelling is removed, §3.4, and declaration follows Q9). Holds before V5. | V1 |
+| 3 | **A wake updates the right window at the next eligible render** | The one-per-tick limit applies to automatic renders only. An explicit refresh while a wake is queued renders once, and the wake is a no-op. A write during a render is shown by a following render (clear, then read). A window replaced before its wake runs is not rendered by that wake; `view.refresh` on a stale record fails `"no open view"` (the shipped `gui.refresh` rule under the new name). Under a held cursor, frame and click targets stay frozen together and the latest state renders after release. No GUI or throttled dialog test asserts visible consistency within one tick. | V1 (scheduler); V2 (explicit refresh) |
 
 ## 12. Required changes to dialogs.md (PR #451) and hud.md (PR #452)
 
@@ -674,13 +689,14 @@ Neither branch is edited by this PR. Each change below is what that design must 
 | D4 | §4 file format, §4.x | Add the top-level key `rerender: off \| on_change` (default `off`), to the schema (row M) and the example, with views.md §4.3's semantics. |
 | D5 | §6.2 session binding | Add: a re-render (an `on_change` dialog, or `view.refresh` that selects it) re-reads state, does not re-run the gates, issues a new token and consumes the old one, retakes the snapshots, and fires no `dialog.close`; a submission with the old token is refused as stale (`MTR-D06`). |
 | D6 | §5.1 triggers | Every `dialog.*` context also carries `view.*` (views.md §3.7); `dialog.args` and `view.args` are one map. |
-| D7 | §5.2 actions | `dialog.open` gains `key` (views.md §6.2, with #333 step 2) beside the planned `target`; note that `view.refresh` applies to dialogs (views.md §3.6, §4.3) and no `dialog.refresh` is added. |
+| D7 | §5.2 actions | The dialog open action (`view.open` after D14) gains `key` (views.md §6.2, with #333 step 2) beside the planned `target`; note that `view.refresh` applies to dialogs (views.md §3.6, §4.3) and no `dialog.refresh` is added. |
 | D8 | §7.1 opener | `DialogOpener` attaches the viewer to `ViewRegistry` (views.md row V0). Row G (`OpenGate` extraction) and row V0 both touch `GuiOpener`: G lands first or in the same PR as V0. |
 | D9 | §11 diagnostics | Add the views placeholder `MTR-V03` (rerender on a dialog with any editable input) to the list of codes that apply to dialogs, or own it there; the numbering stays "at implementation". |
 | D10 | §13.3 rows | Row S depends on views row V0; the `rerender` opt-in depends on V1 and V2; row K's SDK check includes `rerender`. |
 | D11 | §8 universality table | Add the `rerender` key row (views.md §8.1). |
 | D12 | §15 decisions 4 and 5, §16 Q7 | Point decisions 4 (no session scope) and 5 (no re-render by default) and the Q7 answer at views.md (§3.4, §4.3) instead of "when #335 lands". |
 | D13 | §4 rule 7, §6.2 (owner review of #335, Q7 qualified) | `MTR-V03` warns for every editable input, not only `text`/`number`; an automatic wake whose rendered dialog and submission snapshot are both unchanged keeps the token and sends nothing; the 20-tick floor limits resets but does not protect an unfinished form. |
+| D14 | §5.1, §5.2, §7.2, §8, §12.2, §15 decision 4 (owner, 2026-11-19: no legacy) | The clean-model ripple: the actions `dialog.open`/`dialog.close` become `view.open`/`view.close` (the triggers `dialog.opening`, `dialog.open`, `dialog.submit`, `dialog.close` stay: they name dialog events); the `dialog.*` context root becomes `view.*` (`view.id`, `view.args`); dialogs gain the `session` scope per shown dialog, kept across a re-render (reverses decision 4); `dialog_list` and `fallback:` examples run `view.open`; the SDK is `viewOpen`/`viewClose`. |
 
 ### 12.2 `hud.md` (#452)
 
@@ -709,13 +725,13 @@ Haiku). The milestone column is the owner's answer to Q6.
 
 | Row | Scope | Depends on | Milestone | Size | Agent |
 |---|---|---|---|---|---|
-| **V0** ([#455](https://github.com/xef5000/materione/issues/455)) | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, binding / viewer-local split; `GuiSession` implements the viewer record with **no behavior change** (render goldens unchanged); the `view.*` context subtree and the root check; the view facet in self-descriptions (`gui` declares it) | #6 row G (the `OpenGate` extraction from `GuiOpener`) merged first, or folded into the same PR | M6 | M | Sonnet, high |
-| **V1** ([#456](https://github.com/xef5000/materione/issues/456)) | Read extraction and `ReadsIndex` built at the shadow swap (with visibility/content roles); the observer on all three write paths (`write`, `mutate`, `GuiSessionVariables.put`) for `player`, `server`, `session`; `predicate` candidates; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field; default by pack `schema_version`, §5.5: raise `CURRENT_SCHEMA_VERSION` to 2, absent reads as 1, the editor scaffold writes 2); acceptance cases 1 to 3 of §11.1; `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
-| **V2** ([#457](https://github.com/xef5000/materione/issues/457)) | `view.refresh` (selectors none / `view` / `var`+`holder`); `gui.refresh` re-expressed over it; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
-| #6 row S | `DialogOpener` and `DialogSessions` as the dialog kind on V0; `rerender:` on dialogs via V1, V2; `MTR-V03` | V0 (V1, V2 for `on_change`) | M6 | (dialogs.md) | (dialogs.md) |
+| **V0** ([#455](https://github.com/xef5000/materione/issues/455)) | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, the generic `ViewerRecord` with kind payloads replacing `GuiSession`/`GuiSessions`/`SessionHistory` (§3.8); `view.open`, `view.close`, `view.back` with the per-player view history across kinds, replacing `gui.open`/`gui.close`/`gui.back`; `view.*` as the one view root, replacing `gui.id`/`gui.args`/`gui.page`/`gui.session` (§3.7); `%materione_view_open%`/`_last%`; the view facet in self-descriptions (`gui` declares it); the built-in browser, recipes, showcase, fixtures, QA catalog and SDK goldens updated in the same PR (§7.1) | #6 row G (the `OpenGate` extraction from `GuiOpener`) merged first, or folded into the same PR | M6 | M | Sonnet, high |
+| **V1** ([#456](https://github.com/xef5000/materione/issues/456)) | Read extraction and `ReadsIndex` built at the shadow swap (with visibility/content roles); the `session` store behind the port (declared `scope: session` per Q9), removing the `GuiSessionVariables.put` bypass; the observer on `write` and `mutate` for `player`, `server`, `session`; `predicate` candidates; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default `on_change`); shipped fixtures and built-in GUIs that relied on no automatic re-render updated in the same PR; acceptance cases 1 to 3 of §11.1; `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
+| **V2** ([#457](https://github.com/xef5000/materione/issues/457)) | `view.refresh` (selectors none / `view` / `var`+`holder`), replacing `gui.refresh`; `in_view` replacing `in_gui`; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
+| #6 row S | `DialogOpener` and the dialog payload as the dialog kind on V0, reached through `view.open`/`view.close`; `rerender:` on dialogs via V1, V2; `MTR-V03` | V0 (V1, V2 for `on_change`) | M6 | (dialogs.md) | (dialogs.md) |
 | #7 row V | `HudViewer` as the HUD kind on V0, V1 | V0, V1 | M6 | (hud.md) | (hud.md) |
 | **V3** | `item` scope matching by subject stack (§5.3) | V1, #333 step 1 (or #304's P-A) | M6.5 | S | Haiku |
-| **V4** | `target:` on `gui.open`, `gui.close`, `dialog.open`, `dialog.close` (the view side of #331) | V0, #331 | M6.5 | S | Haiku |
+| **V4** | `target:` on `view.open` and `view.close` (the view side of #331) | V0, #331 | M6.5 | S | Haiku |
 | **V5** | `key:` binding on opens, `ViewRegistry` by key, `view.refresh {key}`, `keyed` matching with per-render resolved keys (≤ 16, `MTR-V02`), `MTR-V04`; `session` moved behind the store port as a named key (§3.4); T02's shared window in the benchmark harness; QA `view.keyed.two-viewers` | V1, #333 step 2 | M7 | L | Sonnet, high |
 | **V6** | The map canvas kind | #453's design, V0, V1 | M7 | (#453) | (#453) |
 | **VQ** | Close-out: plugin.md §5 codes and §9 rows; primitives.md §4.4, §4.6, §4.7 tables; logic.md §21 and §24 cross-references; glossary; roadmap notes; codemode.md §9.2 when V5 ships | each row's own PR, final pass after V2 and V5 | M6, M7 | S | Haiku |
@@ -733,19 +749,21 @@ QA close-out so their catalog entries can use `view.refresh`.
 
 **Answered by the owner on 2026-11-19: every default accepted** (option (a) for Q1 to Q7), then **qualified in the owner's review
 on #335 the same day**: Q1 becomes a schema-versioned default, Q7 gains two safeguards and a caveat, Q2's wording is made
-precise, and three acceptance cases are required (§11.1). The review raised one new question (Q8). None decides a master §14
+precise, and three acceptance cases are required (§11.1). The review raised Q8, which the owner made moot the same day by settling compatibility (§7): no GUI behavior is kept for its
+own sake, so Q1 is a plain default and Q4's "kept" `gui.refresh` is replaced. Q9 is new. None decides a master §14
 question; §6.4 records the requirement §14.2's adapters inherit without choosing one.
 
 | # | Question | Answer (owner, 2026-11-19) | Rationale |
 |---|---|---|---|
-| **Q1** | Should an existing GUI re-render on its own when a declared variable it reads changes? | **(a), qualified.** `on_change` is the default **for new packs**; for existing packs the default is **schema-versioned**: packs at `schema_version` 2 or later default to `on_change`, packs at 1 or without the field keep `off` (§5.5). A bump is a documented behavioral migration, and `rerender: off` restores the old behavior per file (§7). | The click router follows the last rendered frame (logic.md §24 decision 14), so a retroactive default could make the same click run a different rule in an existing GUI. |
-| **Q2** | The `session` scope | **(a) Keep it, per window instance**, including `gui.back`'s snapshot semantics; restated as that window's named key when #333 step 2 lands (§3.4); no deprecation. (Rejected: (b) deprecate it for keyed state.) | It has real uses (a per-window mode toggle) and costs nothing once it is a named key. |
+| **Q1** | Should a GUI re-render on its own when a declared variable it reads changes? | **(a): `rerender: on_change` is the GUI default everywhere; `off` is a per-file choice** (owner, 2026-11-19, after Q8). The review's schema-versioned form is withdrawn: there are no existing GUIs. | The click router follows the last rendered frame (logic.md §24 decision 14), so click targets follow state; that is kept as a stated design property (§4.2 item 6), not a migration. |
+| **Q2** | The `session` scope | **(a) Keep it, per window instance**, including the back snapshot semantics (`gui.back`, now `view.back`); widened to every opened kind by the no-legacy answer (§3.4); restated as that window's named key when #333 step 2 lands (§3.4); no deprecation. (Rejected: (b) deprecate it for keyed state.) | It has real uses (a per-window mode toggle) and costs nothing once it is a named key. |
 | **Q3** | How many players share one view | **(a) No shared session object**: a key binding is a label; all shared data is keyed state (§6.2). (Rejected: (b) a shared session per key.) | (b) would be a second state store with its own lifetime, TTL and Folia owner problem: a feature-shaped copy of keyed state. |
-| **Q4** | The re-render verb | **(a) One generic `view.refresh`** with selectors; `gui.refresh` kept as its no-selector form. (Rejected: (b) per-kind refresh verbs.) | One verb passes U2 across kinds; per-kind copies would be wrong in the next kind (#453). |
+| **Q4** | The re-render verb | **(a) One generic `view.refresh`** with selectors (Rejected: (b) per-kind refresh verbs). Revised the same day under the no-legacy answer: `gui.refresh` is **replaced**, not kept as an alias, and the same reasoning makes `view.open`, `view.close` and `view.back` the verbs of every opened kind (§3.6, §7.1). | One verb per capability passes U1 and U2 across kinds; per-kind copies would be wrong in the next kind (#453). |
 | **Q5** | Addon view kinds | **(a) Internal SPI plus the self-description facet now**; a public `api` SPI when #453 or an addon forces the shape. (Rejected: (b) public now.) | One shape built on three kinds is safer to publish after the fourth. |
 | **Q6** | Milestones | **(a)** Rows V0 to V2 are filed as M6 issues under #335 and ride #6/#7; V3 and V4 are M6.5; #335 itself stays M7 for V5. (Rejected: (b) move #335 to M6 whole.) | M6 gets what dialogs and HUDs need; the keyed part waits for #333 step 2, as #335 says. Filed as #455 (V0), #456 (V1), #457 (V2). |
 | **Q7** | Dialog re-render with typed inputs | **(a), qualified.** The opt-in stays allowed. `MTR-V03` warns for **every editable input** (`text`, `number`, `boolean`, `option`); an automatic wake whose rendered content and submission snapshot are both unchanged keeps the token and sends nothing; the 20-tick floor limits resets but does not protect an unfinished form (§4.3). (Rejected: (b) refused at load.) | A re-send loses a checkbox or option selection as surely as text; a form that must reflect a hot value is rare but legitimate. |
-| **Q8** (open) | Which mechanism versions the GUI default? | (a) The pack manifest's existing `schema_version` (master §5.5): `2` flips the default; absent reads as `1`; the editor scaffold writes `2`; no migration step (§5.5). This is the first semantic meaning given to `schema_version`. (b) No flip yet: `off` stays the default everywhere until the project defines what schema version 2 means as a whole, and new packs write `rerender: on_change` through the editor's GUI starter. | **Default (a)**: it is the mechanism master §5.5 names and the code already parses; (b) keeps `schema_version` unused but makes the new default per file rather than per pack. Row V1 implements whichever the owner picks. |
+| **Q8** | Which mechanism versions the GUI default? | **Moot (owner, 2026-11-19):** no public release has GUIs, so there is no versioned default; `pack.yml`'s `schema_version` gets no meaning from this design (§5.5). | — |
+| **Q9** (open) | Session variables: declared or free-form? | (a) **Declared**: a `variable` with `scope: session`, typed and defaulted; an undeclared `vars.session.x` is `MTR-0063`, as for every other scope. (b) Free-form names, as shipped (any `set_var session.x` creates a key). | **Default (a)**: typos fail at load (U5), types and defaults reach the studio and SDK (U4), the reads index keys on ids. It reverses one line of the owner's review ("without requiring a declaration"), which was written while shipped behavior still bound; hence a question, not a decision. |
 
 ### 14.2 Decisions this design takes
 
@@ -759,14 +777,16 @@ question; §6.4 records the requirement §14.2's adapters inherit without choosi
 | D-6 | No new registry: a view facet on the content type's self-description | §9 |
 | D-7 | A common `view.*` context subtree beside each kind's root | §3.7 |
 | D-8 | Close on expiry is content (a flow on #333's `expire` trigger); no new close reason | §6.2 |
-| D-9 | GUIs default to `rerender: on_change` in packs at `schema_version` 2 or later, `off` below (owner, Q1 as qualified; mechanism pending Q8) | §4.2, §5.5, §7 |
-| D-10 | `session` is kept per window instance, `gui.back` snapshot semantics included, and becomes that window's named key with #333 step 2 (owner, Q2) | §3.4 |
+| D-9 | GUIs default to `rerender: on_change` everywhere; `off` per file (owner, Q1, Q8 moot) | §4.2, §5.5, §7 |
+| D-10 | `session` is per view instance, back-snapshot semantics included, for every opened kind (GUI and dialog), behind the store port, one spelling (`vars.session.*`) (owner, Q2; widened by the no-legacy answer) | §3.4 |
 | D-11 | Sharing is through keyed state only; a key binding holds no data (owner, Q3) | §3.1, §6.2 |
-| D-12 | One generic `view.refresh`; `gui.refresh` is its no-selector form (owner, Q4) | §3.6 |
+| D-12 | One verb set for every opened kind: `view.open`, `view.close`, `view.back`, `view.refresh`; the `gui.*` view verbs and `in_gui` are replaced; component verbs (`gui.page`, `gui.slot_item`) stay (owner, Q4; widened by the no-legacy answer) | §3.6, §7.1 |
 | D-13 | The view-kind SPI is internal in v1; the facet is public through self-description (owner, Q5) | §3.2, §9 |
 | D-14 | Rows V0 to V2 are M6, V3 and V4 M6.5, V5 M7 with #335 (owner, Q6) | §13 |
 | D-15 | `rerender: on_change` is allowed on any dialog, with `MTR-V03` for any editable input; an unchanged automatic wake keeps the token and sends nothing (owner, Q7 as qualified) | §4.3, §10 |
 | D-16 | Every write path notifies (`write`, `mutate`, the session facet); `predicate` kinds keep a candidate record per online player so visibility writes can attach; one-per-tick limits automatic renders only (owner review, acceptance cases 1 to 3) | §5.3, §5.4, §11.1 |
+| D-17 | `view.*` is the one root for view facts; `gui.*` and `dialog.*` roots are replaced; event roots stay | §3.7 |
+| D-18 | One generic `ViewerRecord` with kind payloads replaces `GuiSession`; a per-player view history spans opened kinds; `%materione_view_open%`/`_last%` replace the GUI tokens | §3.8 |
 
 D-1 to D-8 were taken by this design and accepted with it on 2026-11-19; D-9 to D-15 are the owner's answers. All remain
 reversible by the owner.
