@@ -399,7 +399,7 @@ a re-title if the owner agrees.
 |---|---|---|
 | #247, #311, #312, #313, #314 | Input slots: crash-safe ownership | The custody primitive's proof (§5.1). Work and rows proceed unchanged; the vocabulary generalizes after row H. |
 | #248 | Custody exit primitive | **Built as `custody.consume`** (logic.md §36): the exit verb of custody; with `HAND_OFF`, the `transfer` verb is still to come (§5.1). The trash slot is the recipe `trash_slot` over it. |
-| #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). |
+| #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). Design: [`backpack-preset.md`](backpack-preset.md). |
 | #162 | Item modules: parameter-level modules | The editor surface presets plug into: a preset parameter is a module; derivation stays registry-driven. |
 | #6 | Server-side dialogs | A **view kind** over state with `dialog.submit` as a trigger (§5.3), not a separate dialog system. |
 | #7 | Native HUD system | A **view kind** bound to keyed state (§5.3), not a HUD-specific binding engine. |
