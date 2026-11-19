@@ -895,7 +895,7 @@ Each row below names the class of problem, and every one carries a step path whe
 | Later | Seam |
 |---|---|
 | Dialogs (#6) | `dialog.submit` is a trigger, `dialog` is an `InputMethod`, and dialog buttons run flows. |
-| HUDs (#7) | `hud.threshold` is a trigger, and `hud.set` is an action. |
+| HUDs (#7) | Designed in [`hud.md`](hud.md): HUD values are declared variables written by `set_var`, and a threshold is a condition (or a future generic variable-change trigger), so the `hud.threshold` and `hud.set` seams are not built (hud.md §3.3, owner question Q6). |
 | Non-chest containers | `container:` (gui.md §12). The hopper and the dispenser are built (rows P and S), and the furnaces, the anvil and the rest are later phases with a design each (gui.md §12.3, §12.11). v1 needs no click-kind mapping: the click kinds are Bukkit's and the v1 menus are plain slots. A container's own behaviour (rename, buttons, trades, progress) becomes triggers and components of that container when it is designed. |
 | Cross-resource flow libraries | `call` already takes a namespaced id. |
 | Loops | A `repeat` step with a hard iteration cap, if real menus need it. |

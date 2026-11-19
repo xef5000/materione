@@ -483,6 +483,13 @@ in-game with `/materione dev effect <pack>:<id> <text>`.
 
 ## 7. HUDs
 
+> **Design detail for M6 lives in [`hud.md`](hud.md)** (#7, awaiting the owner's approval): a HUD
+> is a view kind over state (D12, primitives.md §5.3), its layers are `gui-components` entries on a
+> HUD surface, and it is delivered as custom-font text on the boss-bar and action-bar channels.
+> That design **corrects the sketch below**: text-display entities are world-space, not
+> screen-space, so they are not the render surface (hud.md §5.1); and values are declared
+> variables written by `set_var`, not a `hud.set` value store (hud.md §3.3).
+
 The ItemsAdder-gap differentiator (master §3.8). Rendered via the font/glyph system + per-
 player packet-driven text displays, not boss bars.
 

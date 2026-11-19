@@ -46,7 +46,7 @@ here.
 | **Host block** | The vanilla block whose states are hijacked to represent a custom block (note block, tripwire, chorus plant, technical bases). | runtime-systems.md §4.1 |
 | **ItemModel tree** | Declarative model-definition tree (reference / range_dispatch / select / condition / composite / empty nodes) enabling per-context, per-state, time-based item models; the supported alternative to hand-writing item model JSON. | runtime-systems.md §3.1 |
 | **Key-confirmation digest** | Handshake step where both sides verify they derived the same session symmetric key, catching mismatches at handshake rather than first use. | web.md §4.1 |
-| **HUD** | Player-visible overlay (image/text/bar layers) rendered via the font/packet system — a native system, not boss-bar tricks. | runtime-systems.md §7 |
+| **HUD** | Player-visible overlay (image/text/bar layers): a view kind over state, compiled to custom-font text and delivered on the boss-bar and action-bar channels. A native engine (layer model, layout compiler, bindings, viewer sets); the boss bar is only the wire, not the design. | architecture/hud.md, runtime-systems.md §7 |
 | **Knowledge tiers (T1–T4)** | Installer / Assembler / Creator / Power-user-dev — the progressive-disclosure user model. | master §2 |
 | **Lossless round-trip** | Load → untouched save is byte-identical (comments, ordering, unknown fields); the dual-surface invariant. | master §5.6 |
 | **Mechanic** | Named reusable behavior attachable to content (soulbound, backpack, lifeleech…) — canned ECA or native, same registry either way. | runtime-systems.md §2.3 |
