@@ -353,6 +353,9 @@ the only thing that stays viewer-local. The container GUI, the dialog (#6) and t
 state model rather than three systems with three kinds of binding. This also answers where "HUD values" (master §8.3's
 persistence table) live: in keyed state.
 
+**Designed in [`views.md`](views.md) (#335):** the view-kind contract, the split of `GuiSession` into binding, viewer-local
+state and state, the reads index and `view.refresh`, and the dialog and HUD as kinds; written before #6 and #7 are built.
+
 ### 5.4 Commands as content
 
 *A command with typed arguments, a gate and a flow.* Today: `open:` on a GUI (logic.md §6.1, §23), including the argument types,
