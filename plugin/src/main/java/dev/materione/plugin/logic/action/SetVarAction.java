@@ -92,10 +92,10 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     @Override
     public ActionDescription describe() {
         return ActionDescription.of(new SelfDescription("Set variable",
-                "Stores a value in a run-local, session or declared player or server variable",
+                "Stores a value in a run-local, session or declared player, server or item variable",
                 List.of(
                         new ParameterSchema("var", ParameterType.STRING, false, null,
-                                "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+                                "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("name", ParameterType.STRING, false, null,
                                 "Run-local variable name (the M2 spelling of var:)", null, null),
@@ -111,12 +111,11 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         return Threading.ANY;
     }
 
-    /** Player variables use their region; server mutations are atomic in the shared store. */
+    /** Player and item variables use the player's region; server mutations are atomic in the shared store. */
     @Override
     public Threading threading(Params params) {
         if (params.target() instanceof PersistentTarget persistent) {
-            return persistent.declaration().scope() == VariableScope.PLAYER
-                    ? Threading.PLAYER_REGION : Threading.ANY;
+            return persistent.declaration().scope() != VariableScope.SERVER ? Threading.PLAYER_REGION : Threading.ANY;
         }
         return Threading.ANY;
     }
@@ -139,6 +138,9 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         }
         VariableOp op = legacy ? VariableOp.SET : opOf(params);
         Target target = targetOf(ref, params.environment());
+        if (target instanceof PersistentTarget persistent && persistent.declaration().scope() == VariableScope.ITEM) {
+            params.requireRoot("item", "set_var writes the item variable " + persistent.declaration().id());
+        }
         Value value = valueOf(params, op, target);
         return new Params(target, op, value);
     }
@@ -223,8 +225,7 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
             case SessionTarget session -> prepared.session().put(session.name(), result.value());
             case PersistentTarget persistent -> {
                 if (!prepared.binding().store(persistent.declaration(), result.value())) {
-                    return ActionOutcome.failed(name + ": no holder for this "
-                            + persistent.declaration().scope().id() + " variable (is the player online?)");
+                    return ActionOutcome.failed(name + ": " + noHolder(persistent.declaration()));
                 }
             }
         }
@@ -367,10 +368,14 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
             return ActionOutcome.failed(declaration.id() + ": " + result.reason());
         }
         if (!binding.store(declaration, result.value())) {
-            return ActionOutcome.failed(declaration.id() + ": no holder for this " + declaration.scope().id()
-                    + " variable (is the player online?)");
+            return ActionOutcome.failed(declaration.id() + ": " + noHolder(declaration));
         }
         return ActionOutcome.OK;
+    }
+
+    private static String noHolder(VariableDeclaration declaration) {
+        return declaration.scope() == VariableScope.ITEM ? "no item stack to hold this item variable (this run has none)"
+                : "no holder for this " + declaration.scope().id() + " variable (is the player online?)";
     }
 
     private static ActionOutcome mutateServer(

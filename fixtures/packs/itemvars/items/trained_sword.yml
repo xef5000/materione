@@ -1,0 +1,18 @@
+# An item whose entity.hit rule levels up the stack that was swung (logic.md section 38). `item.level` is the variable
+# declared in variables/sword.yml with scope: item, so it is the sword's, not the player's: the run's item is the one
+# this rule hangs on. The step's effect is visible to the rest of the run, so the announcement reads the new level.
+trained_sword:
+  material: IRON_SWORD
+  display_name: "Trained Sword"
+  behavior:
+    - id: train
+      on: entity.hit
+      do:
+        - set_var: {var: item.level, op: add, value: 1}
+        - run_command: "say MATERIONE-ITEMVARS-HIT ${player.name} level=${vars.item.itemvars.level}"
+        - chat: "CHECK hit level=${vars.item.itemvars.level}"
+    - id: earn_title
+      on: entity.hit
+      if: "vars.item.itemvars.level >= 3"
+      do:
+        - set_var: {var: "itemvars:title", value: "Veteran"}

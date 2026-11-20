@@ -1,0 +1,6 @@
+# A stackable item with no rules of its own, so the harness can hold item variables on a stack that Minecraft would merge
+# (logic.md section 38): two tokens with the same state stack, two whose item variables differ do not. The state is
+# written with `/materione var set <player> itemvars:level <n>`, which addresses the stack in the player's main hand.
+token:
+  material: GOLD_NUGGET
+  display_name: "Token"

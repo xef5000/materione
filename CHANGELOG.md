@@ -9,6 +9,20 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Item-scoped variables: state held by the item stack (#333 step 1, D12, logic.md §38).** A `variable` declaration gains
+  `scope: item`: its value lives in the data of the item stack the run is about, read as `vars.item.<pack>.<key>`, written by
+  `set_var` (`item.level`, `item.rpg.level` or `rpg:level`, every op) and compared by the `var` condition. Two swords keep two
+  levels, and the value survives a drop, a pick-up, a chest and a restart; stacks whose values differ do not stack, and a value
+  equal to the default clears the key so equal states are equal bytes. The trigger declares the run's item (the item bridge's
+  triggers, `entity.hit`, `entity.kill` and `player.hurt` on an item or, in a rule document, the main hand). A run with no
+  stack reads the default and reports `MTR-0065` (rate-limited); a trigger that cannot name a stack, and every GUI until a GUI
+  can be opened about one, is `MTR-0060` at load, offline (a step announces such a need with the new
+  `ParamReader.requireRoot`). `/materione var`, `api.logic().variables()` and `%materione_var_<pack>_<key>%` read and write the
+  stack the player holds in the main hand. **`item` is now a reserved scope word:** a run-local named `item` is `MTR-0063`
+  (nothing shipped used one). API: `VariableScope.ITEM`, `StackRef`, `StackVariableStore`, `ParamReader.requireRoot`. The
+  keyed store (`scope: keyed`, `ttl`, `expire`, the entity holder) is designed in logic.md §38 and not built (step 2). New
+  fixture pack `itemvars`. QA: `itemvars.*` (not yet blessed).
+
 - **Animated glyphs play their frames (#9, M6, runtime-systems §6).** A new frame-cycling provider
   (`GlyphFrames`, `GlyphFrameText.advance`) rewrites an animated glyph's first-frame codepoint to the frame a
   surface's clock selects, keeping every style, with no client mod and no pack change. GUI item names and lore play

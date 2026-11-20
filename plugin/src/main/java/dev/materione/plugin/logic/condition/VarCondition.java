@@ -87,10 +87,10 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
     @Override
     public ConditionDescription describe() {
         return new ConditionDescription(new SelfDescription("Variable",
-                "Compares a run-local, session or declared player or server variable with a value",
+                "Compares a run-local, session or declared player, server or item variable with a value",
                 List.of(
                         new ParameterSchema("var", ParameterType.STRING, true, null,
-                                "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+                                "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("op", ParameterType.ENUM, false, "==", "How to compare", SYMBOLS, null),
                         new ParameterSchema("value", ParameterType.STRING, true, null,
@@ -110,6 +110,9 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
         Source source = sourceOf(params);
         if (source instanceof DeclaredSource declared) {
             check(declared.declaration(), compare, params.raw("value").orElse(null));
+            if (declared.declaration().scope() == dev.materione.api.logic.variable.VariableScope.ITEM) {
+                params.requireRoot("item", "the var condition reads the item variable " + declared.declaration().id());
+            }
         }
         Object raw = params.raw("value").orElseThrow();
         return new Params(source, compare, raw instanceof String ? params.template("value") : literal(raw));

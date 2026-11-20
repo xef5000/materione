@@ -107,7 +107,7 @@ public final class WorldEvents {
         if (fire.withItem()) {
             root.put("item", BehaviorService.itemContext(stack));
         }
-        var event = new BehaviorEvent(fire.trigger(), "", behavior.logicContext(root, fire.player()),
+        var event = new BehaviorEvent(fire.trigger(), "", behavior.logicContext(root, fire.player(), fire.withItem() ? stack : null),
                 fire.cancellable(), fire.player());
         event.withFilterFacts(FilterFacts.of(fire.facts()));
         if (fire.cancellable() != null) {

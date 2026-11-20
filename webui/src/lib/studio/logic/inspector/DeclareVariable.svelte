@@ -27,7 +27,7 @@
 
   // the hint seeds the field once; the author edits it from there
   // svelte-ignore state_referenced_locally
-  let key = $state(start.replace(/^[^:]*:/, '').replace(/^(player|server|session|local)\./, '').toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+  let key = $state(start.replace(/^[^:]*:/, '').replace(/^(player|server|item|session|local)\./, '').toLowerCase().replace(/[^a-z0-9_]/g, '_'));
   let scope = $state<VariableScope>('player');
   let type = $state<VariableType>('number');
   let initial = $state('');
@@ -69,7 +69,7 @@
   <div class="row">
     <label for="{uid}-scope">Stored</label>
     <select id="{uid}-scope" bind:value={scope}>
-      {#each VARIABLE_SCOPES as option (option)}<option value={option}>{option === 'player' ? 'per player' : 'for the server'}</option>{/each}
+      {#each VARIABLE_SCOPES as option (option)}<option value={option}>{option === 'player' ? 'per player' : option === 'item' ? 'on the item stack' : 'for the server'}</option>{/each}
     </select>
   </div>
   <div class="row">

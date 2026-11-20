@@ -443,6 +443,19 @@ public final class MaterionePlugin extends JavaPlugin {
         // rules resolve their actions against these registries when they are parsed (logic.md §4)
         // persistent variables (logic.md §3): the player's data container and the server file, with
         // the live declarations of whichever shadow is applied
+        // whether this thread may touch a player (and so the stacks that player holds): offline, owned here, or a
+        // player of another region; the player store and the item store (logic.md §38) ask the same question
+        java.util.function.Function<java.util.UUID, dev.materione.plugin.logic.variable.PdcVariableStore.Access>
+                variableAccess = uuid -> {
+                    var player = org.bukkit.Bukkit.getPlayer(uuid);
+                    if (player == null) {
+                        return dev.materione.plugin.logic.variable.PdcVariableStore.Access.OFFLINE;
+                    }
+                    return (descriptorOrNull() != null && !descriptorOrNull().folia())
+                                    || org.bukkit.Bukkit.isOwnedByCurrentRegion(player)
+                            ? dev.materione.plugin.logic.variable.PdcVariableStore.Access.OWNED
+                            : dev.materione.plugin.logic.variable.PdcVariableStore.Access.UNOWNED;
+                };
         variables = new dev.materione.plugin.logic.variable.VariableService(
                 new dev.materione.plugin.logic.variable.PdcVariableStore(uuid -> java.util.Optional.ofNullable(
                         org.bukkit.Bukkit.getPlayer(uuid)).map(player -> {
@@ -454,18 +467,25 @@ public final class MaterionePlugin extends JavaPlugin {
                             }
                             return player.getPersistentDataContainer();
                         }),
-                        uuid -> {
-                            var player = org.bukkit.Bukkit.getPlayer(uuid);
-                            if (player == null) {
-                                return dev.materione.plugin.logic.variable.PdcVariableStore.Access.OFFLINE;
-                            }
-                            return (descriptorOrNull() != null && !descriptorOrNull().folia())
-                                            || org.bukkit.Bukkit.isOwnedByCurrentRegion(player)
-                                    ? dev.materione.plugin.logic.variable.PdcVariableStore.Access.OWNED
-                                    : dev.materione.plugin.logic.variable.PdcVariableStore.Access.UNOWNED;
-                        }, descriptorOrNull() == null || descriptorOrNull().folia()),
+                        variableAccess, descriptorOrNull() == null || descriptorOrNull().folia()),
                 new dev.materione.plugin.logic.variable.ServerVariableStore(
                         getDataFolder().toPath().resolve("storage").resolve("variables.json"), getLogger()::warning),
+                new dev.materione.plugin.logic.variable.PdcStackVariableStore(variableAccess),
+                uuid -> {
+                    // the stack in a player's main hand, for /materione var and the API (a run is given its own)
+                    if (variableAccess.apply(uuid) == dev.materione.plugin.logic.variable.PdcVariableStore.Access.OFFLINE) {
+                        return java.util.Optional.empty();
+                    }
+                    if (variableAccess.apply(uuid) != dev.materione.plugin.logic.variable.PdcVariableStore.Access.OWNED) {
+                        throw new dev.materione.api.logic.ReadUnavailableException(
+                                "item variable access requires the player's region");
+                    }
+                    var player = org.bukkit.Bukkit.getPlayer(uuid);
+                    return player == null ? java.util.Optional.<dev.materione.api.logic.variable.StackRef>empty()
+                            : java.util.Optional.<dev.materione.api.logic.variable.StackRef>ofNullable(
+                                    dev.materione.plugin.logic.variable.BukkitStackRef.of(
+                                    player.getInventory().getItemInMainHand(), uuid));
+                },
                 this::liveDeclarations,
                 diagnostics::publish);
         logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish,

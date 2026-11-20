@@ -22,8 +22,8 @@ import java.util.function.UnaryOperator;
  *
  * <p>Reading {@code vars} follows the scopes of logic.md §3.3: a bare {@code vars.x} and
  * {@code vars.local.x} are the run's locals, {@code vars.session.x} is the GUI session's variable,
- * and {@code vars.player.<pack>.<key>} / {@code vars.server.<pack>.<key>} are declared persistent
- * variables. A declared variable that was never written reads as its default; an undeclared one
+ * and {@code vars.player.<pack>.<key>} / {@code vars.server.<pack>.<key>} / {@code vars.item.<pack>.<key>} (held by
+ * the item stack the run is about, logic.md §38) are declared persistent variables. A declared variable that was never written reads as its default; an undeclared one
  * reads as absent.
  *
  * <p>One instance belongs to one run and is not thread-safe (see {@link LogicContext}). The root
@@ -131,6 +131,7 @@ public final class MapLogicContext implements LogicContext, EvaluationAware {
             case "session" -> session(rest);
             case "player" -> persistent(VariableScope.PLAYER, rest);
             case "server" -> persistent(VariableScope.SERVER, rest);
+            case "item" -> persistent(VariableScope.ITEM, rest);
             default -> walk(root, path);
         };
     }

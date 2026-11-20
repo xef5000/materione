@@ -136,6 +136,12 @@ The bleed is written with the shipped `potion` verb aimed at the struck entity, 
 a *true-damage* bleed would add VERB. With level and XP held by the **player** instead of the stack the state lines pass, but
 that is a different feature (two Bloodfangs share one level), so it is not offered as the solution.
 
+*Since #333 step 1 ([`logic.md`](logic.md) §38) the stack holder exists:* the declaration is spelled `scope: "item"` (the sketch's `holder: "item"`
+above is the draft spelling, kept so the corpus program stays the benchmark's record until T01 passes), `vars.item.<pack>.<key>` reads it and
+`set_var` writes it, with the run's item declared by the `entity.hit` and `entity.kill` triggers. T01 stays Fail on TARGET (the struck entity) and on
+the GUI half: the upgrade button reads and writes the sword's level from a GUI, which needs the GUI opened about a stack (P-A of
+[`backpack-preset.md`](backpack-preset.md), unbuilt).
+
 ### T02 `/trade <player>` — Fail (CMD, STATE, VIEW, TARGET, CUSTODY)
 
 The program is codemode.md §9.2: five errors, one per need of primitives.md §3 (`p.commands`, keyed state with a TTL, a view

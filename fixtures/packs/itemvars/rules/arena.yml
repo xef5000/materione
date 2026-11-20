@@ -1,0 +1,10 @@
+# A rule document has no item of its own: on entity.kill its `item` is the stack in the player's main hand, so it can read
+# that stack's variables (logic.md section 37 decision 6, section 38). With an empty hand the read is the default.
+arena:
+  description: "QA and harness: reads the level of the sword that made the kill"
+  behavior:
+    - id: kill_with_level
+      on: entity.kill
+      do:
+        - run_command: "say MATERIONE-ITEMVARS-KILL ${player.name} level=${vars.item.itemvars.level} title=${vars.item.itemvars.title}"
+        - chat: "CHECK kill level=${vars.item.itemvars.level}"
