@@ -1343,16 +1343,15 @@ const offers = rpg.state.keyed("trade", { key: m.expr`${m.arg("other")}`, ttl: "
 rpg.guis.get("trade").views.forEachViewer(offers, (v) => /* ... */ );
 //                    ^^^^^ error TS2339: Property 'views' does not exist on type 'GuiWriter'.
 
-m.actions.message({ text: "Trade request sent", target: "other" });
-//                                               ^^^^^^ error TS2322: Type '"other"' is not assignable to type
-//                                                      '"player" | "actionbar" | "broadcast"'.
+m.actions.message({ text: "Trade request sent", target: { arg: "other" } });
+//   passes since #331 (logic.md §39): `target` is on every action whose description says `targetable`
 
 m.actions.transfer({ from: m.holder.player("a"), to: m.holder.player("b"), items: offers });
 //        ^^^^^^^^ error TS2339: Property 'transfer' does not exist on type 'ActionCatalog'.
 ```
 
-Each error is a row of the audit table (commands as content, keyed state, views over state, target addressing, atomic transfer:
-five of the nine needs), reported by the checker without a server round trip, and each says what the agent must **not** do:
+Each error is a row of the audit table (commands as content, keyed state, views over state, atomic transfer: four of the nine
+needs; target addressing shipped with #331), reported by the checker without a server round trip, and each says what the agent must **not** do:
 fake it with a global variable and a session map. The agent's reply to the owner is the gap list, with what it *can* build today
 (the request flow without the shared window, say) offered as a separate proposal. When the primitives land, the **same program
 text** type-checks and the benchmark task passes with no engine feature named "trade". That is D12's test, run automatically.

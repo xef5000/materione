@@ -9,6 +9,22 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Target addressing: an action on another player or entity (#331, M6.5, logic.md section 39).** An action that can act on
+  something other than the player the rule runs for takes an optional `target:`: `self` (the default), `event.target` (the entity
+  an `entity.hit` or `entity.kill` carries), `{arg: <name>}` (a player a command or GUI argument named), `{player: "<template>"}`
+  (a name or uuid, online only) or `{nearby: {radius, type, limit}}` (up to `limit` entities within `radius` blocks of the run's
+  player, nearest first; radius to 64, limit to 16). It is one parsed value (`TargetSpec`) for every action, resolved by the engine
+  through the thread gateway: the action runs on each subject's own region (Folia), and the run continues on its own. A target that
+  does not resolve fails the action (`require` and the trace see it), it never falls back to the run's own player. Built-in actions
+  that take it: `message`, `actionbar`, `title`, `sound`, `potion` (any living entity), `give_item`, `give_money`, `take_money`,
+  `teleport`. The trace shows who an action touched (`on player Bob`). API: `ActionDescription.targetable` and `withTargets`
+  (declaring it adds the shared `target` parameter, so the editor form, `logic.vocabulary` and the SDK pick it up with no code of their
+  own), `TargetSpec`, `TargetKind`, `ResolvedTarget`, `TargetResolver`, `Subjects`, `Facets.EVENT_TARGET`; `logic.vocabulary` gains
+  `targetable` on an action, additively. Benchmark: T01 (the bleed), T02 (the message) and T21 (`/pay`) no longer fail on TARGET;
+  T21 now fails on commands alone. Harness `PaperTargetAddressingIT`; QA `targets.*` (auto assertions; not run, not blessed); fixture pack
+  `targets`. Not built: an offline-player target, a holder target (#333), #329's `heal`/`damage`/`velocity` (not landed), a typed
+  target in the SDK, `view.open target:` (views V4).
+
 - **Animated glyphs play their frames (#9, M6, runtime-systems §6).** A new frame-cycling provider
   (`GlyphFrames`, `GlyphFrameText.advance`) rewrites an animated glyph's first-frame codepoint to the frame a
   surface's clock selects, keeping every style, with no client mod and no pack change. GUI item names and lore play
@@ -352,6 +368,12 @@ releases may change file formats, settings and the public API.
   permission provider or a transfer.
 
 ### Changed
+
+- **`message` no longer takes a channel under `target:` (#331, breaking before release; logic.md section 39).** `target: player|actionbar|broadcast`
+  is gone: `target` is now the address every targetable action shares, and the action bar and the whole server are the actions
+  `actionbar` and `broadcast`. A `message` step that still writes one of the three words is skipped at load (`MTR-0057`) with the
+  replacement named; its file is untouched. An action that cannot act on a target and is given a `target:` is skipped the same way, so a
+  target is never silently ignored.
 
 - **Probe loop: `crash-restart` and `ctx.crashRestart()` (gui-input-durability.md §12 row Q, #312).** The probe kills the server
   without a save (SIGKILL) and boots it again on the same world with a fresh log; the QA runner's `ctx.crashRestart()` adds the client

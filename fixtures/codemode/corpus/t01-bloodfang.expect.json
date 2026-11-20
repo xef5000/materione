@@ -6,7 +6,7 @@
   "prompt": "Make a Bloodfang sword in pack bench with custom model models/bloodfang.json, only usable with permission rpg.weapons. Hits apply bleed scaled by the sword's own level; kills with the sword grant XP up to level 5; sneak-right-clicking opens an upgrade GUI showing level and XP with a 500-coin upgrade button.",
   "registry": "plugin-current",
   "result": "fail",
-  "gaps": ["STATE", "TARGET"],
+  "gaps": ["STATE"],
   "diagnostics": [
     {
       "code": 2353,
@@ -14,13 +14,6 @@
       "gap": "STATE",
       "messageContains": ["holder", "VariableFields"],
       "missingPrimitive": { "member": "holder", "catalog": "VariableFields" }
-    },
-    {
-      "code": 2353,
-      "line": 19,
-      "gap": "TARGET",
-      "messageContains": ["target", "PotionActionParams"],
-      "missingPrimitive": { "member": "target", "catalog": "PotionActionParams" }
     }
   ]
 }

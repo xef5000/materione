@@ -65,6 +65,8 @@ public final class FlowRun {
     int stage;
     /** Set while resuming from a hop: the step runs where the scheduler put it, whatever the check says. */
     boolean hopped;
+    /** What the step being executed resolved its target to, for the trace; empty when it has none (logic.md section 39). */
+    volatile String targetNote = "";
 
     FlowRun(long id, Rule rule, LogicContext context, RunOwner owner,
             RunScheduler scheduler, BooleanSupplier synchronousOnly) {

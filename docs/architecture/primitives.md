@@ -104,7 +104,7 @@ shipped:
 | 4 | Items each player offers, held safely | **Item custody** | The escrow of #247: an account inside the player's own data and `storage/escrow/<uuid>.ledger` (gui-input-durability.md §5). It is reachable only through a `slots` layer with `input: true` and `durable: required`, plus the GUI's close and death paths. | P+ |
 | 5 | The swap is atomic and crash-safe | **Atomic transfer between holders** | The ledger's record kinds are `CONSUME = 1` and `HAND_OFF = 2` (`HAND_OFF` reserved; gui-input-durability.md §5.1 *Exit*, §12 ambiguity 1). Recovery is per player. | G |
 | 6 | An unanswered request expires; a disconnect cancels | State TTL, `gui.close` with `reason: quit`, and a trigger on expiry | Close reasons exist (logic.md §6.2). There is no expiry trigger; `wait` parks a run per player (budget 64, logic.md §5.3). | G |
-| 7 | "Tell the other player", "give to the other player" | **Target addressing** in actions: act on another player or holder by reference | `message` takes `target: player\|actionbar\|broadcast` only (`MessageAction`); `give_item`, `teleport` and the rest act on the run's own player. | G |
+| 7 | "Tell the other player", "give to the other player" | **Target addressing** in actions: act on another player or holder by reference | `message` took `target: player\|actionbar\|broadcast` only (`MessageAction`); `give_item`, `teleport` and the rest acted on the run's own player. **Built by #331** (§5.6, logic.md §39). | G |
 | 8 | A request and accept handshake | A second command with a `player` argument, plus 2 and 6 | Follows from 1, 2 and 6. | Composition |
 | 9 | Both confirmed, so run the effects once | `require`, plus 5 | `require` exists (logic.md §2.2). | Composition |
 
@@ -219,7 +219,7 @@ rules too (logic.md §37).
 
 | Finding | Class | Direction |
 |---|---|---|
-| **Actions have an implicit subject.** Each acts on the run's own player (and window). There is no way to say "this player, the other player, the holder of this key". | **G** | Target addressing (§5.6): an optional target on actions that make sense on another subject, resolved and permission-checked by the engine. |
+| **Actions have an implicit subject.** Each acts on the run's own player (and window). There is no way to say "this player, the other player, the holder of this key". | **G** | Target addressing (§5.6): an optional target on actions that make sense on another subject, resolved by the engine. **Built by #331** (logic.md §39). |
 | The verb set stops at players, items and messages. Nothing damages or heals an entity, applies an attribute modifier, spawns a particle, launches or kills. A combat-spell catalog (#13: lunge, lifeleech, bleed, fireball, knockback) cannot be data until these exist. | **G** | New verbs as primitives (and #21 for particles), each universal (any entity), not each spell. |
 | No `emit` and no cross-resource `call`. | **G** | §5.5. |
 
@@ -380,6 +380,17 @@ tool that edits a host edits it). The shipped triggers are `entity.hit`, `entity
 *Actions on a subject other than the run's own player.* Direction: an optional, typed `target` on the actions where it makes
 sense, resolved by the engine (a player argument, a holder, an entity selector), permission- and region-checked through the
 thread gateway (D8), and visible in the self-description so an agent sees which actions take one.
+
+**As built (#331, logic.md §39):** `target:` is one optional parameter with one parsed value type (`TargetSpec`: `self`, `event.target`,
+`arg: <name>`, `player: <template>` and `nearby: {radius, type, limit}`), declared by an action as `targetable: [player, entity]` in
+its self-description, which also adds the shared `target` parameter to its schema. The engine resolves it once per step through
+one platform resolver and runs the action on each subject's own region (D8); an unresolved target fails the action (a `require`
+and the trace see it). Nine actions take it: `message`, `actionbar`, `title`, `sound`, `potion`, `give_item`, `give_money`,
+`take_money`, `teleport`; `view.open`/`view.close` take it on the same value in views.md row V4, and #329's verbs when they land.
+**Permission is deliberately not a check the engine adds** (a rule is the author's, not the player's; logic.md §39 "Permission and
+ownership"), which is the one place this section's direction ("permission-checked") was narrowed: the author's own `if:` composes with
+every action, and the owner's question is whether an opt-out node is wanted. `message` lost its old channel spelling of `target`
+(`actionbar` and `broadcast` are their own actions).
 
 ### 5.7 Entity and world verbs
 

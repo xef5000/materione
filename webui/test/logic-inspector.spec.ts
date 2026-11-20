@@ -44,6 +44,14 @@ describe('the vocabulary the inspector reads', () => {
     expect(vocabulary.actions.get('message')!.takesElse).toBe(false);
   });
 
+  it('says which actions can act on another player or entity (targetable, logic.md section 39)', () => {
+    expect(vocabulary.actions.get('potion')!.targetable).toEqual(['player', 'entity']);
+    expect(vocabulary.actions.get('message')!.targetable).toEqual(['player']);
+    expect(vocabulary.actions.get('run_command')!.targetable).toEqual([]);
+    const target = vocabulary.actions.get('potion')!.parameters.find((parameter) => parameter.id === 'target')!;
+    expect(target.type).toBe('raw');
+  });
+
   it('lists an unavailable input method with the server\'s reason', () => {
     const sign = vocabulary.inputMethods.get('sign')!;
     expect(sign.available).toBe(false);

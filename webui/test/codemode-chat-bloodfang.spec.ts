@@ -70,23 +70,22 @@ describe('the Bloodfang conversation with the scripted provider', () => {
     return result;
   }
 
-  it('first request: looks, tries the sword as asked, and reports the two missing primitives instead of working around them', async () => {
+  it('first request: looks, tries the sword as asked, and reports the missing primitive instead of working around it', async () => {
     const result = await say(BLOODFANG_PROMPTS[0]);
     expect(result.stop).toBe('done');
     expect(outcomes.map((outcome) => outcome.status)).toEqual(['read', 'type-error']);
     // the read ran in the sandbox against the world and returned what is there
     expect((JSON.parse(outcomes[0]!.content) as { result: { value: unknown } }).result.value).toEqual(['ruby_sword']);
-    // the checker names both gaps as missing primitives of generated catalogs
-    expect(outcomes[1]!.missingPrimitives.map((gap) => `${gap.catalog}.${gap.member}`).sort()).toEqual(['PotionActionParams.target', 'VariableFields.holder']);
+    // the checker names the gap as a missing primitive of a generated catalog (the bleed's target exists since #331)
+    expect(outcomes[1]!.missingPrimitives.map((gap) => `${gap.catalog}.${gap.member}`).sort()).toEqual(['VariableFields.holder']);
     expect(outcomes[1]!.diagnostics.every((found) => found.phase === 'type-check' && found.line !== undefined)).toBe(true);
-    // nothing reached the server, and the assistant's last word names both gaps and asks
+    // nothing reached the server, and the assistant's last word names the gap and asks
     expect(server.calls).toEqual([]);
     expect(store.snapshot().proposals).toEqual([]);
     const last = result.added.at(-1) as { role: string; text: string; toolCalls: unknown[] };
     expect(last.toolCalls).toEqual([]);
     expect(last.text).toContain('holder');
-    expect(last.text).toContain('target');
-    expect(last.text).toContain('I will not fake either one');
+    expect(last.text).toContain('I will not fake it');
     expect(last.text.trim().endsWith('?')).toBe(true);
     expect(result.failedCalls).toBe(1);
   }, 120_000);
@@ -116,7 +115,7 @@ describe('the Bloodfang conversation with the scripted provider', () => {
     expect(apply.origin).toBe('code-mode');
     expect(apply.program).toContain('p.items.create("bloodfang"');
     expect(apply.operations).toEqual(server.calls[0]!.call.operations);
-    expect(apply.operations.map((operation) => operation.kind)).toEqual(['create', 'create', 'create', 'logicEdit', 'create', 'logicEdit', 'logicEdit']);
+    expect(apply.operations.map((operation) => operation.kind)).toEqual(['create', 'create', 'create', 'logicEdit', 'create', 'logicEdit', 'logicEdit', 'logicEdit']);
     // the server says the economy verb is not available: a warning that goes back to the model
     expect(applied.diagnostics.some((found) => found.code === 'SDK-0016' && found.severity === 'warning')).toBe(true);
     expect(store.snapshot().log).toHaveLength(1);

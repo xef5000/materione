@@ -91,6 +91,8 @@ export interface ActionEntry extends Availability {
   registeredBy?: string;
   /** The step may carry an `else:` that runs when the action goes unanswered (the `prompt` action; logic.md section 29). */
   takesElse: boolean;
+  /** The kinds of target the action accepts (`player`, `entity`); empty when it always acts on the run's own player (logic.md section 39). */
+  targetable: string[];
 }
 
 export interface ConditionEntry extends Availability {
@@ -235,6 +237,7 @@ export function readVocabulary(raw: unknown): Vocabulary | null {
       parameters: params(entry.parameters),
       registeredBy: typeof entry.registeredBy === 'string' ? entry.registeredBy : undefined,
       takesElse: entry.takesElse === true,
+      targetable: strings(entry.targetable),
       ...availability(entry),
     });
   }

@@ -133,6 +133,10 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         // the live trace (logic.md §7.6, §32): the sink is installed only while a subscription exists
         this.traces = new TraceHub(TraceLimits.DEFAULT, System::currentTimeMillis, this::tracing);
         this.pump = engine == null ? null : new TracePump(host, scheduling, engine.interpreter(), traces);
+        if (engine != null) {
+            // the one resolver behind every action's `target:` (logic.md section 39)
+            engine.interpreter().targetsFrom(new dev.materione.plugin.logic.target.BukkitTargetResolver());
+        }
         this.actions = new LogicRegistryImpl<>(registries, RegistryKeys.ACTIONS, erased(ActionType.class),
                 "action", ActionType::id, type -> type.describe().self());
         this.conditions = new LogicRegistryImpl<>(registries, RegistryKeys.CONDITIONS, erased(ConditionType.class),

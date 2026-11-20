@@ -6,7 +6,7 @@
   "prompt": "Create /pay <player> <amount> to transfer coins from the sender to another player.",
   "registry": "plugin-current",
   "result": "fail",
-  "gaps": ["CMD", "TARGET"],
+  "gaps": ["CMD"],
   "diagnostics": [
     {
       "code": 2339,
@@ -14,13 +14,6 @@
       "gap": "CMD",
       "messageContains": ["commands", "PackWriter"],
       "missingPrimitive": { "member": "commands", "catalog": "PackWriter" }
-    },
-    {
-      "code": 2353,
-      "line": 9,
-      "gap": "TARGET",
-      "messageContains": ["target", "GiveMoneyActionParams"],
-      "missingPrimitive": { "member": "target", "catalog": "GiveMoneyActionParams" }
     }
   ]
 }

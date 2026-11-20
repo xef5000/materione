@@ -3138,6 +3138,11 @@ interface ActionbarActionParams extends ActionOptions {
    * Accepts an expression: `m.expr` or an `m.fn` result.
    */
   text: string | Expr;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `broadcast`. */
@@ -3224,6 +3229,11 @@ interface GiveItemActionParams extends ActionOptions {
    * @defaultValue 1
    */
   amount?: number | Expr;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `give_money`. */
@@ -3232,6 +3242,11 @@ interface GiveMoneyActionParams extends ActionOptions {
   amount: number;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
   currency?: string | Ref<"currency">;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `give_permission`. */
@@ -3296,10 +3311,10 @@ interface MessageActionParams extends ActionOptions {
    */
   text: string | Expr;
   /**
-   * Where the text appears.
-   * @defaultValue player
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
    */
-  target?: "player" | "actionbar" | "broadcast";
+  target?: JsonValue;
 }
 
 /** Parameters of `potion`. */
@@ -3316,6 +3331,11 @@ interface PotionActionParams extends ActionOptions {
    * @defaultValue 0
    */
   amplifier?: number;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `prompt`. */
@@ -3398,6 +3418,11 @@ interface SoundActionParams extends ActionOptions {
    * @defaultValue player
    */
   scope?: "player" | "world" | "server";
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `stop_sound`. */
@@ -3451,6 +3476,11 @@ interface TakeMoneyActionParams extends ActionOptions {
   amount: number;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
   currency?: string | Ref<"currency">;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `take_permission`. */
@@ -3491,6 +3521,11 @@ interface TeleportActionParams extends ActionOptions {
    * Accepts an expression: `m.expr` or an `m.fn` result.
    */
   pitch?: number | Expr;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 /** Parameters of `title`. */
@@ -3520,6 +3555,11 @@ interface TitleActionParams extends ActionOptions {
    * @defaultValue 20
    */
   fade_out?: number;
+  /**
+   * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
+   * @defaultValue self
+   */
+  target?: JsonValue;
 }
 
 interface ActionCatalog {
@@ -3639,14 +3679,14 @@ interface ActionCatalog {
    */
   guiSlotItem(params: GuiSlotItemActionParams): ActionStep<"gui.slot_item">;
   /**
-   * Shows text to the player, on the action bar, or to everyone.
+   * Shows text to the player, or to another player given as a target.
    * @since 2.0.0
    * @registeredBy materione
    * @category player
    */
   message(params: MessageActionParams | string | Expr, options?: ActionOptions): ActionStep<"message">;
   /**
-   * Applies a potion effect to the player.
+   * Applies a potion effect to the player, or to another entity given as a target.
    * @since 2.0.0
    * @registeredBy materione
    * @category player

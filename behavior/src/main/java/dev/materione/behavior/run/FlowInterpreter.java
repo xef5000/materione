@@ -2,6 +2,7 @@ package dev.materione.behavior.run;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.TargetResolver;
 import dev.materione.api.logic.Threading;
 import dev.materione.behavior.flow.ActionStep;
 import dev.materione.behavior.flow.CallStep;
@@ -116,6 +117,14 @@ public final class FlowInterpreter extends FlowContinuations {
     /** Installs (or, with null, removes) the sink step-boundary events go to. */
     public void traceTo(TraceSink sink) {
         this.trace = sink;
+    }
+
+    /**
+     * Installs the platform's resolver for {@code target:} (logic.md §39). Until it is installed, an action step with a
+     * target fails with a reason instead of acting on the wrong player.
+     */
+    public void targetsFrom(TargetResolver resolver) {
+        this.targets = resolver;
     }
 
     /** The rate-limited diagnostics reporter, shared with the rule gate. */

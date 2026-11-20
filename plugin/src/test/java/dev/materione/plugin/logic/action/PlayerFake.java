@@ -31,7 +31,7 @@ public final class PlayerFake {
 
     public final List<String> calls = new ArrayList<>();
     /** The player's unique id, answered by {@code getUniqueId()} (the money backends are keyed by it). */
-    public final UUID uuid = UUID.fromString("00000000-0000-0000-0000-00000000a1e7");
+    public final UUID uuid;
     public int totalExperience;
     public int level;
     public boolean teleportAccepted = true;
@@ -55,6 +55,16 @@ public final class PlayerFake {
         case "getContents" -> new ItemStack[41];
         default -> throw new AssertionError("unexpected inventory call: " + method.getName());
     });
+
+    /** A stand-in with the shared test uuid. */
+    public PlayerFake() {
+        this(UUID.fromString("00000000-0000-0000-0000-00000000a1e7"));
+    }
+
+    /** A stand-in with its own uuid (a second player in the same test). */
+    public PlayerFake(UUID uuid) {
+        this.uuid = uuid;
+    }
 
     /** The player itself. */
     public final Player player = proxy(Player.class, this::answer);

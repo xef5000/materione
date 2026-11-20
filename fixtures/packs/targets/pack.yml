@@ -1,0 +1,9 @@
+# The targets fixture pack (#331, logic.md section 39): a rule document whose actions act on another player or entity.
+# Every rule announces itself with a line the harness reads from the console (`say MATERIONE-TARGETS-...`, via
+# run_command). The harness (PaperTargetAddressingIT), the QA catalog (qa/catalog/targets.mjs) and the plugin's own
+# TargetsPipelineTest are the only readers; the pack holds one rule document and no item, so the fixture corpora's
+# item counts stay their own.
+id: targets
+version: 1.0.0
+schema_version: 1
+depends: []

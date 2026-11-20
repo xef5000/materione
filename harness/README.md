@@ -239,6 +239,14 @@ node --test harness\protocol\floor-bot.test.mjs
   `MTR-0021`, `MTR-0022`, `MTR-0023` or bridge-failure line. A player who has just joined is invulnerable for three seconds, so the hurt
   step waits.
 
+- **Target addressing** (`PaperTargetAddressingIT`, `TargetAddressingRunner`, logic.md section 39, #331). Runs by default (one boot). The `targets`
+  fixture pack holds a rule document: a hit on a zombie puts the wither effect on the struck zombie (`target: event.target`), striking a husk
+  slows the nearest zombie within eight blocks (`target: {nearby: ...}`), and a flow messages a player named by its argument (`{arg: to}`).
+  The runner reads each rule's `say MATERIONE-TARGETS-...` line and reads the effect back from the server (`data get entity ... active_effects`);
+  a message to a player cannot be read back without a client, so it is proved by its outcome: a message to an offline player fails and the flow's
+  `require` runs its else, one to an online player goes through. Paper only: the cross-region dispatch of the same code is proved at the
+  scheduler seam by `TargetedDispatchTest`, and nothing here ran on Folia.
+
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 
 The tiers above are headless — the opt-in protocol client does not render, so visual failure modes

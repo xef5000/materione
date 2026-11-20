@@ -117,7 +117,7 @@ class ActionResumableTest {
             }
         };
         var compiler = EngineExpressions.with(name -> Optional.of(function));
-        var params = new MessageAction.Params(compiler.template("value ${hop()}"), MessageAction.Target.PLAYER);
+        var params = new MessageAction.Params(compiler.template("value ${hop()}"));
         var player = new PlayerFake();
         var result = new MessageAction().executeResumable(params, player.context(), reads).toCompletableFuture();
 

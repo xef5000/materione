@@ -3,12 +3,13 @@ package dev.materione.plugin.logic.action;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
-import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
+import dev.materione.api.logic.Subjects;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -56,7 +57,7 @@ public final class TitleAction implements ActionType<TitleAction.Params> {
                                 "Time fully shown, in ticks", null, null),
                         new ParameterSchema("fade_out", ParameterType.INTEGER, false, "20",
                                 "Fade-out in ticks", null, null)),
-                "2.0.0"), LogicCategory.PLAYER, "title");
+                "2.0.0"), LogicCategory.PLAYER, "title").withTargets(TargetKind.PLAYER);
     }
 
     @Override
@@ -76,7 +77,7 @@ public final class TitleAction implements ActionType<TitleAction.Params> {
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Player player = Subjects.player(context).orElse(null);
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
@@ -95,13 +96,13 @@ public final class TitleAction implements ActionType<TitleAction.Params> {
 
     @Override
     public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
-        if (context.facet(Facets.PLAYER).isEmpty()) {
+        if (Subjects.player(context).isEmpty()) {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }
         var scoped = reads.captureOrigin();
         return ResolvedText.resolve(params.title(), context, scoped)
                 .thenCompose(title -> ResolvedText.resolve(params.subtitle(), context, scoped)
-                        .thenCompose(subtitle -> scoped.on(threading(), () -> execute(
+                        .thenCompose(subtitle -> reads.on(threading(), () -> execute(
                                 new Params(title, subtitle, params.fadeIn(), params.stay(), params.fadeOut()), context))));
     }
 }

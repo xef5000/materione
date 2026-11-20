@@ -76,6 +76,24 @@ class VocabularySourcesTest {
                 .singleElement().satisfies(message -> assertThat(message.takesElse()).isFalse());
     }
 
+    @Test
+    void theVocabularySaysWhichActionsAreTargetable() {
+        BehaviorVocabulary vocabulary = service.vocabulary();
+
+        assertThat(vocabulary.actions()).filteredOn(action -> !action.targetable().isEmpty())
+                .extracting(BehaviorVocabulary.Action::id)
+                .containsExactlyInAnyOrder("message", "actionbar", "title", "sound", "potion", "give_item", "give_money",
+                        "take_money", "teleport");
+        assertThat(vocabulary.actions()).filteredOn(action -> action.id().equals("potion"))
+                .singleElement().satisfies(potion -> {
+                    assertThat(potion.targetable()).containsExactly("player", "entity");
+                    // the shared parameter is in the same self-description the editor form and the SDK read
+                    assertThat(potion.description().parameters()).extracting(parameter -> parameter.id()).contains("target");
+                });
+        assertThat(vocabulary.actions()).filteredOn(action -> action.id().equals("run_command"))
+                .singleElement().satisfies(command -> assertThat(command.targetable()).isEmpty());
+    }
+
     /** A method that is unavailable when told to be. */
     private record FakeMethod(String id, boolean unavailable, boolean keepsWindow) implements InputMethod {
         @Override
