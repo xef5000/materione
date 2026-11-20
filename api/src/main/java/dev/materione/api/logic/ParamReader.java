@@ -36,11 +36,18 @@ public final class ParamReader {
     private final ExpressionCompiler compiler;
     private final CompileEnvironment environment;
     private final Set<String> expressionKeys = new java.util.LinkedHashSet<>();
+    private final Map<String, String> requiredRoots;
 
     private ParamReader(Map<String, Object> params, ExpressionCompiler compiler, CompileEnvironment environment) {
+        this(params, compiler, environment, new java.util.LinkedHashMap<>());
+    }
+
+    private ParamReader(Map<String, Object> params, ExpressionCompiler compiler, CompileEnvironment environment,
+                        Map<String, String> requiredRoots) {
         this.params = params;
         this.compiler = compiler;
         this.environment = environment;
+        this.requiredRoots = requiredRoots;
     }
 
     /**
@@ -221,6 +228,23 @@ public final class ParamReader {
         return Collections.unmodifiableSet(expressionKeys);
     }
 
+    /**
+     * Declares that this step reads or writes something that exists only when the trigger provides the variable root
+     * {@code root} ({@code item} for an item-scoped variable, logic.md §38). The engine checks it against the
+     * trigger's roots when the step loads and reports {@code MTR-0060} when the trigger provides none, the check
+     * {@code ${root.x}} gets, for a reference that is not written as a template.
+     *
+     * @param reason what needs the root, for the message ("set_var writes item.rpg.level")
+     */
+    public void requireRoot(String root, String reason) {
+        requiredRoots.putIfAbsent(Objects.requireNonNull(root, "root"), reason == null ? "" : reason);
+    }
+
+    /** The roots this step declared with {@link #requireRoot}, each with its reason, in declaration order. */
+    public Map<String, String> requiredRoots() {
+        return Collections.unmodifiableMap(requiredRoots);
+    }
+
     // --- collections ------------------------------------------------------------
 
     /** A list of non-blank strings; empty when absent. */
@@ -247,7 +271,7 @@ public final class ParamReader {
             throw missing(key);
         }
         if (params.get(key) instanceof Map<?, ?> map) {
-            return new ParamReader(stringKeys(map), compiler, environment);
+            return new ParamReader(stringKeys(map), compiler, environment, requiredRoots);
         }
         throw new IllegalArgumentException(key + " must be a mapping");
     }
@@ -265,7 +289,7 @@ public final class ParamReader {
             if (!(entry instanceof Map<?, ?> map)) {
                 throw new IllegalArgumentException(key + " must contain mappings");
             }
-            result.add(new ParamReader(stringKeys(map), compiler, environment));
+            result.add(new ParamReader(stringKeys(map), compiler, environment, requiredRoots));
         }
         return List.copyOf(result);
     }

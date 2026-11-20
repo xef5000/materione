@@ -132,6 +132,60 @@ class MapLogicContextVariablesTest {
     }
 
     @Nested
+    class ItemScope {
+
+        private final NamespacedId level = NamespacedId.of("rpg", "level");
+        private final VariableDeclaration declaration =
+                new VariableDeclaration(level, VariableScope.ITEM, VariableType.NUMBER, 1, "Weapon level");
+
+        /** A binding whose one declaration is item-scoped, with the stored value of the run's stack. */
+        private VariableBinding binding(Object stored) {
+            return new VariableBinding() {
+                @Override
+                public Optional<VariableDeclaration> declaration(NamespacedId id) {
+                    return id.equals(level) ? Optional.of(declaration) : Optional.empty();
+                }
+
+                @Override
+                public Optional<Object> stored(VariableDeclaration found) {
+                    return Optional.ofNullable(stored);
+                }
+
+                @Override
+                public boolean store(VariableDeclaration found, Object value) {
+                    return false;
+                }
+            };
+        }
+
+        @Test
+        void anItemVariableReadsTheStacksValueOrItsDefault() {
+            assertThat(new MapLogicContext(Map.of()).withVariables(binding(null)).value("vars.item.rpg.level"))
+                    .isEqualTo(1.0);
+            assertThat(new MapLogicContext(Map.of()).withVariables(binding(4.0)).value("vars.item.rpg.level"))
+                    .isEqualTo(4.0);
+        }
+
+        @Test
+        void theScopeMustMatchTheDeclarationAndTheNameMustBeDeclared() {
+            var context = new MapLogicContext(Map.of()).withVariables(binding(4.0));
+
+            assertThat(context.value("vars.player.rpg.level")).isNull();
+            assertThat(context.value("vars.item.rpg.xp")).isNull();
+            assertThat(context.value("vars.item.level")).isNull(); // reads spell the pack (logic.md section 20 decision 6)
+        }
+
+        @Test
+        void theItemRootOfTheTreeIsNotTheItemScope() {
+            var context = new MapLogicContext(Map.of("item", Map.of("id", "rpg:sword")))
+                    .withVariables(binding(4.0));
+
+            assertThat(context.value("item.id")).isEqualTo("rpg:sword");
+            assertThat(context.value("vars.item.rpg.level")).isEqualTo(4.0);
+        }
+    }
+
+    @Nested
     class Session {
 
         @Test

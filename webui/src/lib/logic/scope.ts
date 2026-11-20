@@ -83,7 +83,7 @@ function written(graph: Graph, owner: string, vocabulary: Vocabulary): ScopeEntr
     if (!name || name.includes('${')) continue;
     if (name.startsWith('session.')) note(`vars.session.${name.slice('session.'.length)}`, 'session', 'A session variable of this GUI');
     else if (name.startsWith('local.')) note(`vars.${name.slice('local.'.length)}`, 'local', 'Written earlier in this run');
-    else if (!/^(player|server)\./.test(name) && !name.includes(':')) note(`vars.${name}`, 'local', 'Written earlier in this run');
+    else if (!/^(player|server|item)\./.test(name) && !name.includes(':')) note(`vars.${name}`, 'local', 'Written earlier in this run');
   }
   return out;
 }

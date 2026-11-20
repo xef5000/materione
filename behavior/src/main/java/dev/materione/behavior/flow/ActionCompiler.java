@@ -90,6 +90,7 @@ final class ActionCompiler {
                 : "action '" + key + "' binds " + reader.expressionKeys()
                         + " as expressions; its description must declare each with acceptingExpression()";
         recorder.check(unit, path);
+        unit.checkRequiredRoots(reader.requiredRoots(), path);
         return step;
     }
 

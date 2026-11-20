@@ -23,6 +23,7 @@ import java.util.Optional;
  * coins:         { scope: player, type: number, default: 0, description: "Shop coins" }
  * daily_claimed: { scope: player, type: boolean, default: false }
  * season:        { scope: server, type: string, default: "spring" }
+ * level:         { scope: item,   type: number, default: 1 }     # held by the run's item stack (logic.md §38)
  * }</pre>
  *
  * <p>The declaration is pack-namespaced by its resource id ({@code shop:coins}). It produces no pack
@@ -52,11 +53,13 @@ public final class VariablesType implements ContentType {
     public SelfDescription describe() {
         return new SelfDescription(
                 "Variable",
-                "A declared persistent variable: stored per player or on the server, typed, with a default",
+                "A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. "
+                        + "An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together",
                 List.of(
                         new ParameterSchema("scope", ParameterType.STRING, true, null,
-                                "Where the value is stored: player (per player) or server (one for the server)",
-                                List.of(VariableScope.PLAYER.id(), VariableScope.SERVER.id()), null, null),
+                                "Where the value is stored: player (per player), server (one for the server) or item (on the item stack the "
+                                        + "run is about; stacks whose values differ do not stack)",
+                                List.of(VariableScope.PLAYER.id(), VariableScope.SERVER.id(), VariableScope.ITEM.id()), null, null),
                         new ParameterSchema("type", ParameterType.STRING, true, null,
                                 "The value's type: number, string or boolean",
                                 List.of(VariableType.NUMBER.id(), VariableType.STRING.id(), VariableType.BOOLEAN.id()),

@@ -24,6 +24,9 @@ final class CompileUnit {
     /** Roots every run has, whatever the trigger (logic.md §2.6). */
     static final Set<String> UNIVERSAL_ROOTS = Set.of("player", "server", "vars");
 
+    /** The root of the stack a run is about; a trigger on an item host provides it (logic.md section 38). */
+    static final String ITEM_ROOT = "item";
+
     final CompileContext context;
     private final String subject;
     /** The roots a path may start with, or {@code null} when the trigger's schema is unknown. */
@@ -87,13 +90,36 @@ final class CompileUnit {
         warnUnknown(found, path);
     }
 
+    /**
+     * Checks the roots a step declared it needs ({@code ParamReader.requireRoot}): a step that names an item-scoped
+     * variable needs a trigger that provides {@code item} (logic.md §38). The same warning as an unknown root in a
+     * template, so a reference that is not written as {@code ${...}} gets the check a read does.
+     */
+    void checkRequiredRoots(java.util.Map<String, String> required, StepPath path) {
+        if (roots == null) {
+            return;
+        }
+        for (var need : required.entrySet()) {
+            String root = need.getKey();
+            if (!roots.contains(root) && warned.add(path + "|" + root)) {
+                problem(DiagnosticCodes.FLOW_UNKNOWN_CONTEXT_ROOT, Severity.WARN, path,
+                        "'" + root + "' is not a variable " + rootsOrigin + ": " + need.getValue(),
+                        "known roots: " + String.join(", ", new TreeSet<>(roots))
+                                + "; the step cannot name an item stack here and fails when it runs");
+            }
+        }
+    }
+
     private void warnUnknown(Set<String> found, StepPath path) {
         for (String root : found) {
             if (!roots.contains(root) && warned.add(path + "|" + root)) {
                 problem(DiagnosticCodes.FLOW_UNKNOWN_CONTEXT_ROOT, Severity.WARN, path,
                         "'" + root + "' is not a variable " + rootsOrigin,
                         "known roots: " + String.join(", ", new TreeSet<>(roots))
-                                + "; the value reads as empty until fixed");
+                                + (ITEM_ROOT.equals(root)
+                                        ? "; item.* and an item-scoped variable (vars.item.*) need a trigger that is about"
+                                                + " an item stack, and read as empty or as their default until fixed"
+                                        : "; the value reads as empty until fixed"));
             }
         }
     }

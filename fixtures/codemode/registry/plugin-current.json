@@ -801,13 +801,13 @@
           "available": true,
           "category": "data",
           "deferred": false,
-          "description": "Stores a value in a run-local, session or declared player or server variable",
+          "description": "Stores a value in a run-local, session or declared player, server or item variable",
           "displayName": "Set variable",
           "id": "set_var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+              "description": "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -1880,13 +1880,13 @@
         {
           "available": true,
           "category": "data",
-          "description": "Compares a run-local, session or declared player or server variable with a value",
+          "description": "Compares a run-local, session or declared player, server or item variable with a value",
           "displayName": "Variable",
           "id": "var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+              "description": "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -12264,7 +12264,7 @@
         ]
       },
       {
-        "description": "A declared persistent variable: stored per player or on the server, typed, with a default",
+        "description": "A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together",
         "directory": "variables",
         "displayName": "Variable",
         "expressionForm": "vars.{scope}.{pack}.{id}",
@@ -12274,9 +12274,10 @@
             "advanced": false,
             "allowedValues": [
               "player",
-              "server"
+              "server",
+              "item"
             ],
-            "description": "Where the value is stored: player (per player) or server (one for the server)",
+            "description": "Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack)",
             "id": "scope",
             "label": "Scope",
             "order": 0,

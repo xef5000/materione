@@ -42,6 +42,21 @@ class VariableRefTest {
             assertThatThrownBy(() -> VariableRef.parse("player.coins", null))
                     .hasMessageContaining("names no variable");
         }
+
+        @Test
+        void anItemNameResolvesInTheOwnPackOrNamesItsPack() {
+            assertThat(VariableRef.parse("item.level", "rpg"))
+                    .isEqualTo(new VariableRef.Persistent(VariableScope.ITEM, NamespacedId.of("rpg", "level")));
+            assertThat(VariableRef.parse("item.weapons.level", "rpg"))
+                    .isEqualTo(new VariableRef.Persistent(VariableScope.ITEM, NamespacedId.of("weapons", "level")));
+        }
+
+        @Test
+        void itemIsAReservedScopeWordNotALocalName() {
+            assertThat(VariableRef.RESERVED).contains("item");
+            assertThatThrownBy(() -> VariableRef.parse("item", "rpg")).hasMessageContaining("reserved scope word");
+            assertThatThrownBy(() -> VariableRef.parse("local.item", "rpg")).hasMessageContaining("reserved scope word");
+        }
     }
 
     @Nested

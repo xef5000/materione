@@ -24,7 +24,8 @@ import org.bukkit.entity.Player;
  * {@code /materione var get|set|list <player> [<var>] [<value>]} — reads and writes declared
  * persistent variables (logic.md §3.3; permission {@code materione.var}). A player variable is held by
  * the named player, who must be online; a server variable ignores the player argument, so write
- * {@code -} for it. The command calls the API, so it shares the checks and the stores the flows use.
+ * {@code -} for it. An item variable (logic.md §38) is held by the stack the named player has in the main hand, and
+ * that player must be online. The command calls the API, so it shares the checks and the stores the flows use.
  */
 public final class VarCommand {
 
@@ -146,14 +147,19 @@ public final class VarCommand {
 
     /** The holder of a declaration for this command: the named player for player scope, nobody for server. */
     private static UUID holderFor(VariableDeclaration declared, Target target) {
-        return declared.scope() == VariableScope.PLAYER && target != null ? target.uuid() : null;
+        return declared.scope() != VariableScope.SERVER && target != null ? target.uuid() : null;
     }
 
     private static String holderNote(VariableDeclaration declared, Target target) {
         if (declared.scope() == VariableScope.SERVER) {
             return " (server)";
         }
-        return target == null || target.name() == null ? "" : " (player: " + target.name() + ")";
+        if (target == null || target.name() == null) {
+            return "";
+        }
+        return declared.scope() == VariableScope.ITEM
+                ? " (the item " + target.name() + " holds in the main hand)"
+                : " (player: " + target.name() + ")";
     }
 
     /**
@@ -168,7 +174,7 @@ public final class VarCommand {
             if (declared == null) {
                 return new Target(null, null);
             }
-            sender.sendMessage(Component.text("'" + declared.id() + "' is a player variable: name a player",
+            sender.sendMessage(Component.text("'" + declared.id() + "' is " + (declared.scope() == VariableScope.ITEM ? "an item" : "a player") + " variable: name a player",
                     NamedTextColor.RED));
             return null;
         }

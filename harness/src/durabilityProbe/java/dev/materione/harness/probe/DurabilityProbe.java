@@ -73,6 +73,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe mode &lt;none|close|event&gt;             how the death scenario releases the window (see below)
  *   dprobe die &lt;name&gt; / respawn &lt;name&gt;        setHealth(0) / PERFORM_RESPAWN
  *   dprobe items                                dropped item entities in the first world
+ *   dprobe pickup <name>                        every dropped item entity touches the player (ItemEntity#playerTouch, the pick-up path a ticking player takes)
  * </pre>
  *
  * Every answer is one log line containing {@code MATERIONE-DPROBE}. The crash gate is the product's own
@@ -145,6 +146,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "die" -> die(player(args[1]));
                 case "respawn" -> respawn(player(args[1]));
                 case "items" -> items();
+                case "pickup" -> pickup(player(args[1]));
                 default -> throw new IllegalArgumentException("unknown stage '" + stage + "'");
             }
         } catch (Throwable failure) {
@@ -439,6 +441,13 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
         Player now = Bukkit.getPlayerExact(player.getName());
         log("respawn ok=" + (now != null && !now.isDead()) + " player=" + player.getName()
                 + " sameObject=" + (now == player));
+    }
+
+    private void pickup(Player player) throws Exception {
+        for (Item item : Bukkit.getWorlds().get(0).getEntitiesByClass(Item.class)) {
+            R.call(R.call(item, "getHandle"), "playerTouch", handle(player));
+        }
+        log("pickup ok=true player=" + player.getName());
     }
 
     private void items() {

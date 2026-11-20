@@ -1,0 +1,13 @@
+# Item-scoped variables (logic.md section 38): the value lives in the item stack's own data, not on the player. Two stacks
+# of the same item keep two values, the value survives a drop, a pick-up, a chest and a restart, and stacks whose values
+# differ do not stack together.
+level:
+  scope: item
+  type: number
+  default: 1
+  description: "QA and harness: the level of this sword (two swords, two levels)"
+title:
+  scope: item
+  type: string
+  default: ""
+  description: "QA and harness: a name the sword earned"

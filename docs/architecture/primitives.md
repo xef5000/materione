@@ -241,6 +241,7 @@ rules too (logic.md §37).
 | `player` | the player's PDC (`materione:var.<pack>.<key>`) | P as a *key choice* (the key is the player) |
 | `server` | `storage/variables.json` | P as a key choice (a constant key) |
 | `session` | `GuiSession.vars`, alive while one player's window is open | **F** |
+| `item` (added by #333 step 1, logic.md §38) | the stack's own PDC (`materione:var.<pack>.<key>`) behind `StackVariableStore` | P (the key is the stack a run is about) |
 
 **Finding.** `player` and `server` are *special cases of a keyed store* (the key is the player's id, or nothing), and `session`
 is the key "this GUI window". The four reserved words (`MTR-0063`, logic.md §20 decision 3) are a closed set because the key is
@@ -344,6 +345,12 @@ is the part with an open design problem (the joint decision across two snapshots
 `player`, `server` and `session` become named special cases; every existing `variables/` file and `vars.*` read keeps its meaning.
 Needs the checks of master §5.5 (additive schema). The durability class of a keyed store (memory only, or durable) is a
 per-declaration choice, not a hidden property.
+
+**Designed and step 1 built ([`logic.md`](logic.md) §38, #333).** Step 1 adds the stack holder as `scope: item` (a fifth reserved
+scope word): `vars.item.<pack>.<key>`, written by `set_var`, held in the stack's own data, with a second store port beside the
+shipped one and the checks of a run that cannot name a stack. Step 2 (`scope: keyed` with an expression key, `ttl:`, an `expire`
+trigger, the entity holder, one generalized port, `player`/`server`/`session` restated as named keys) is designed there and not built.
+The `durability` mechanic's counters stay where they are; folding it onto the item scope is a follow-up.
 
 ### 5.3 Views over state
 

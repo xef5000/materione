@@ -224,19 +224,21 @@ schema to autocomplete. One schema serves both checking and editing (D5).
 | `session` | one open GUI (survives refresh, `gui.back` restores it) | `GuiSession` (§6) | CommandPanels session data |
 | `player` | permanent, per player | player PDC, `materione:var.<pack>.<key>` | DeluxeMenus meta, CommandPanels data |
 | `server` | permanent, server-wide | `storage/variables.json` (runtime state, not content: master §8.3) | CommandPanels data (global use) |
+| `item` | permanent, with the item stack the run is about (§38) | the stack's own data (PDC), `materione:var.<pack>.<key>` | n/a (the benchmark's Bloodfang sword, T01) |
 
 Cross-server variables use the storage interface of master §8.3. Adapters are #25, and nothing in
 this doc assumes a single server beyond the default adapter.
 
 ### 3.2 Declared, typed variables
 
-`player` and `server` variables are **declared** in a pack's `variables/` content type:
+`player`, `server` and `item` variables are **declared** in a pack's `variables/` content type:
 
 ```yaml
 # content/packs/shop/variables/shop.yml
 coins:      { scope: player, type: number, default: 0, description: "Shop coins" }
 daily_claimed: { scope: player, type: boolean, default: false }
 season:     { scope: server, type: string,  default: "spring" }
+level:      { scope: item,   type: number,  default: 1, description: "Weapon level, held by the sword stack" }
 ```
 
 Declaring them is what makes three things possible: type checks at compile time (`set_var` of a
@@ -251,8 +253,8 @@ within the resource's own pack.
 - **Actions.** `set_var: {var, op, value}`, where `op` is one of `set`, `add`, `subtract`,
   `multiply`, `toggle`, `remove` or `reset`. `value` is a template. Arithmetic on a non-number is a
   failed action, not a crash.
-- **Expressions.** `vars.local.x`, `vars.session.x`, `vars.player.shop.coins` and
-  `vars.server.shop.season`. Bare `vars.x` keeps meaning local, so M2 behaviour is unchanged.
+- **Expressions.** `vars.local.x`, `vars.session.x`, `vars.player.shop.coins`,
+  `vars.server.shop.season` and `vars.item.rpg.level` (the item stack the run is about, §38). Bare `vars.x` keeps meaning local, so M2 behaviour is unchanged.
 - **PlaceholderAPI.** The expansion provides `%materione_var_<pack>_<key>%`,
   `%materione_var_<pack>_<key>_<player>%`, `%materione_gui_open%` and `%materione_gui_last%`.
 - **Admin.** `/materione var get|set|list <player> [<var>] [<value>]`, permission
@@ -779,7 +781,7 @@ Everything the studio does is an API call first (the #204 rule: web → api only
 | Expand a recipe | `AuthoringApi.logic().instantiate(recipe, params)` | `logic.instantiate` |
 | GUI open spec, `visible_if`, `refresh` | `GuiEdit.SetOpen`, `PatchLayer` (existing) | `gui.edit` |
 | Declared variables | the `variables` content type, through ordinary authoring | existing `authoring.*` |
-| Read and write player or server variables | `MaterioneAPI.logic().variables()` (needs `materione.var`) | `logic.variables.get/set` (admin-gated) |
+| Read and write player, server or item variables (item: the stack in a player's main hand, §38) | `MaterioneAPI.logic().variables()` (needs `materione.var`) | `logic.variables.get/set` (admin-gated) |
 | Open a GUI with args | `RuntimeApi.gui().open(player, id, args)` | `runtime.openGui` (gains `args`) |
 | Live trace | `MaterioneAPI.logic().traces().subscribe(filter, listener)` | `logic.trace.subscribe` and `logic.trace.unsubscribe`, streaming `push.logic.trace` frames (§32) |
 
@@ -1807,7 +1809,8 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
 **Scopes and the spelling of a reference**
 
 3. **Four words are reserved as scopes.** `local`, `session`, `player` and `server` cannot be run-local names,
-   so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error).
+   so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error). *(§38 adds a fifth
+   reserved word, `item`, for the stack holder, and designs the open key that restates all of them.)*
 4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.x` is the GUI
    session's variable, read through the `VariableFacets.SESSION` facet (absent: empty). `vars.player.<pack>.<key>`
    and `vars.server.<pack>.<key>` read a declared variable: the stored value, or the default when nothing is
@@ -3907,3 +3910,167 @@ choice between "hop and lose cancel" and "stay as is" is the owner's. (2) *The g
 item's rules, in the node editor needs `LogicCanvasState` to stop assuming a GUI document. The form editor covers rule documents meanwhile.
 (3) *Kills by something other than a player* (a mob kills a mob, a trap kills a zombie) fire no trigger, because a run needs a subject; a
 subject-less run is a different primitive (a `world`-scoped run) and is not proposed here.
+
+---
+
+## 38. Decisions taken in #333 (keyed state: step 1, the item scope; step 2 designed, not built)
+
+[#333](https://github.com/xef5000/materione/issues/333) is rank 7 of the benchmark ([`agent-benchmark.md`](agent-benchmark.md) §4.2, the `STATE`
+gap) and the last blocker of #320's own example: Bloodfang's level lives on the sword, not on the player. The variable store of §3 and §20 has
+four scopes whose holders are fixed (the run, a GUI window, a player, the server). The primitive the benchmark asks for is **state by holder**
+([`primitives.md`](primitives.md) §4.6, §5.2: `player` and `server` are special cases of a keyed store), delivered in two steps. **Step 1 (built here)
+adds one holder, the item stack a run is about.** **Step 2 (designed here, not built) opens the key.** Neither adds a feature: nothing in the engine
+is named for a weapon, a level or a trade. The code of step 1 is in `api.logic.variable` (`VariableScope.ITEM`, `StackRef`, `StackVariableStore`),
+`behavior` (`MapLogicContext`, `ExprRoots`, `CompileUnit`), `content.variable` (`VariablesType`), `plugin.logic.variable` (`PdcStackVariableStore`,
+`BukkitStackRef`, `RunVariables`, `VariableService`), `plugin.runtime.behavior` (`BehaviorService`, `WorldEvents`) and `plugin.command.VarCommand`; the
+fixtures are `fixtures/packs/itemvars/`. Traces: D1 (the value is runtime state, never content, and files stay the source of truth), D5 (a registry
+entry with self-description puts the scope in the editor and the code-mode SDK with no SDK code), D6 (one pipeline: the declaration is a file, the checks
+are the compiler's), D8 (every read and write goes through the thread rule of the owner), D12 (a primitive; the universality tests are below), D13 (the
+SDK is generated from the same description). Each decision is reversible by the owner.
+
+### Step 1: the stack holder (built)
+
+**The declaration and the spelling**
+
+1. **`scope: item` in the `variable` content type.** The declaration is the `{id, scope, type, default, description}` of §20 decision 2 with a third
+   scope, `item`: `VariableScope.ITEM`, and `item` joins the enum the schema lists. `type` and `default` mean what they mean for the other scopes (a never-written
+   variable reads its default). The `description` of the content type and of its `scope` field say, in the self-description every consumer reads, that
+   stacks whose item variables differ do not stack (decision 7).
+2. **`item` is a fifth reserved scope word** (§20 decision 3). Reads are `vars.item.<pack>.<key>` (pack spelled, like every persistent read, §20 decision 6).
+   Writes spell the target as for the other scopes: `item.level` (pack = the resource's own pack), `item.rpg.level`, or the qualified `rpg:level`
+   (scope from the declaration). `set_var` (all seven ops) and the `var` condition take it with no change of shape; the editor's variable picker lists
+   the declaration and writes the qualified spelling.
+3. **`vars.item.*` is not the `item.*` root.** `item.id`, `item.material`, `item.amount` are the facts of the stack (§37 decision 6); `vars.item.rpg.level` is
+   the state the stack holds. They share a name on purpose: both are about "the run's item".
+
+**The run's item**
+
+4. **The trigger declares it, the variable does not.** A run has an item stack when its trigger puts one in the run: every trigger fired by the item
+   bridge (`click`, `break`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage`, and `death` for an item) passes the stack the event is about; `entity.hit`,
+   `entity.kill` and `player.hurt` pass the stack that hosts the rule, or, in a rule document, the item in the player's main hand (§37 decision 6). The
+   bridge hands it to the binding of the run (`VariableService.bind(player, stack)`; `WorldEvents`, `BehaviorService.logicContext`). The stack is **a handle, not
+   a copy**: a read sees the stack's current data, a write lands on the stack. An empty hand is no stack. A trigger is "about an item" for the compiler
+   exactly when its context schema provides the `item` root, so one declaration (the trigger's, §2.6) serves the runtime, the check and the editor's autocomplete.
+5. **A handle belongs to one run and is checked at every access.** A run parked by `wait` or `delay` resumes against the same stack object; the handle
+   remembers the Materione identity the stack had, and an access whose stack now holds another identity (the object was reused for another item), or that
+   no longer exists, reads absent and refuses a write. A handle is never kept past its run.
+
+**The store**
+
+6. **A second port beside `VariableStore`, with the same contract.** `StackVariableStore` (api) is `read(declaration, stack)` and `write(declaration, stack, value)`
+   (null clears), values and never defaults. It is a separate interface because the holder is a `StackRef`, not a player id; the cross-server adapters of #25
+   implement the `UUID`-keyed `VariableStore` and are untouched. Generalizing the holder of `VariableStore` itself is step 2's design (below), so that there
+   is one port once there are more than two kinds of holder. `PdcStackVariableStore` (plugin) keeps each value in the **stack's own persistent data** under
+   `materione:var.<pack>.<key>`, the key the player scope uses in a player's container, next to where `durability` keeps `materione:durability-used`. The value
+   therefore travels with the stack, with no store of its own: through a drop, a pick-up, a chest, a hopper, an ender chest and a restart. `RunVariables`
+   routes an `item`-scope declaration to it, and the `VariableService` API to the main-hand stack (decision 12).
+7. **A stack with state does not stack with one that differs, and the store keeps state minimal.** Minecraft merges two stacks only when their data components are
+   equal; the persistent data is the `custom_data` component, so two stacks whose item variables differ are never merged by a player, a hopper or
+   a pick-up. The store maintains the converse: **a value equal to the declared default clears its key** instead of storing it, so two stacks in the same effective
+   state carry the same bytes and stack together, and a stack whose variables are all at their defaults is byte-identical to one that never had any
+   (a `reset`, or levelling down to the default, returns the untouched bytes). It follows that the state is **the stack's, not each item's**: a stack of 16
+   shares one value, and splitting it copies the state to both halves, as Minecraft copies every component. Materione adds no behavior to what vanilla does with
+   custom data in a crafting grid, an anvil or a grindstone.
+8. **Threads (D8).** `set_var` of an item variable is `PLAYER_REGION` (`threading(P)`, as for player scope): the stack is touched on the thread of the player the run
+   belongs to. The store asks the same question as the player store (`Access`: offline, owned here, or on another region): an offline owner reads absent and
+   refuses a write; an owner on another region throws `ReadUnavailableException` for a read (the caller degrades as for a player variable) and refuses a write.
+   No store call touches a world or an entity off its owner's thread, and the item store never schedules anything itself.
+9. **Atomic mutation is not offered.** `mutate` (§20 decision 12) is for the server store, where concurrent writers exist; every write of a stack happens on its owner's
+   thread, and `set_var` reads the current value and stores the result there, as it does for a player variable.
+
+**Checks, at load and at run time**
+
+10. **A run that cannot name a stack is a diagnostic at load, with the existing code.** `MTR-0060` ("not a variable the trigger provides", §2.6) already checks every
+    `${root.x}`; step 1 teaches it two more spellings of "this needs a stack": `vars.item.*` in a template, condition or call argument (`ExprRoots` adds `item` for
+    it), and a declared write or condition that is not written as a template, which a step announces with `ParamReader.requireRoot("item", why)` (`set_var` and
+    `var` do; any addon action may). A trigger that provides no `item` root (`player.join`, `place`) gets the warning with the trigger's name, the
+    variable named and the hint "needs a trigger that is about an item stack"; the rule still loads, as for any unknown root. **A GUI has no stack today**, so every
+    `vars.item.*` in a GUI template, `visible_if`, item or title is the same warning until the GUI is opened about a stack ([`backpack-preset.md`](backpack-preset.md)
+    P-A, `view.item` of [`views.md`](views.md) §3.7): that work adds `item` to the GUI's roots and passes the subject stack to the GUI run's binding, the two seams step 1 built.
+    The offline validation (`logic.validate`, a transaction's dry run) runs the same compiler and reports the same warning. No code was added ([`plugin.md`](plugin.md) §5).
+    *A known gap:* the roots are the trigger's, not the host's, so `vars.item.*` in a rule document on `death` (whose `item.*` is provided to item hosts only) passes the
+    check and reads the default at run time.
+11. **A run that has no stack reads the default, writes nothing and says so.** `RunVariables` answers an item-scope read of a stackless run with the default
+    and refuses the write (the step fails with "no item stack to hold this item variable"), and reports `MTR-0065` once per variable per ten seconds
+    (`VariableService.MISS_INTERVAL_MS`), because a hot trigger would otherwise report on every event. The author asked a stack for something it cannot answer.
+
+**Readers that are not runs**
+
+12. **The held item.** `LogicApi.variables().get/set(…, player, …)` (§20 decision 16) and `/materione var get|set|list <player> <pack:key>` address an item variable by
+    **the stack the named player holds in the main hand** (`HeldStacks`); the player must be online for a write. An empty hand reads the default and refuses a write
+    (`MTR-0065`); an owner on another region is an unavailable result, not the default. `%materione_var_<pack>_<key>%` and `…_<player>` read the viewer's (or the named
+    player's) main hand the same way. The GUI `variable` list source refuses an item variable (it needs a run's stack).
+
+**The universality tests (master §3.1) for step 1**
+
+| Test | How it passes |
+|---|---|
+| U1 name | `item` names the holder (the stack a run is about), the same word the trigger context uses; the scope says nothing about a weapon, a level or an RPG. Bloodfang is two declarations (`level`, `xp`) and rules in a pack |
+| U2 generality | any declared variable of any type on any stack the item bridge or a rule document's trigger names; a vanilla stack holds one as well as a Materione item (the key is the variable's, the identity is only checked for staleness) |
+| U3 composition | read by the expressions and conditions every other scope uses, written by `set_var` (every op) with no engine code: `fixtures/packs/itemvars` is YAML only |
+| U4 self-description | a value of the `scope` enum of the `variable` type in the registry; the editor's picker, `authoring.describe` and the SDK read it from there. No hand-written schema, no SDK code |
+| U5 safety | offline-validated (`MTR-0060` at load for a run that cannot name a stack, `MTR-0063`/`MTR-0064` as for every scope); a run with no stack, an offline owner, another region, a vanished stack and a reused object all degrade to default and a rate-limited diagnostic, never an exception into the server |
+
+### Step 2: the open key (designed here, built when T02 or F1 is scheduled)
+
+The issue's step 2 and [`primitives.md`](primitives.md) §5.2 describe it in a paragraph; this is the design the build will start from. Nothing below is implemented, and
+nothing in step 1 needs it.
+
+13. **The holder becomes a value and the port becomes one.** `VariableHolder` is a sealed type: `Player(uuid)`, `Server`, `Session(id)`, `Stack(StackRef)`, `Entity(uuid)`, `Key(text)`. `VariableStore.read/write/mutate(declaration, holder, …)` takes it, and the
+    `(declaration, UUID)` methods stay as default adapters (`Player`, or `Server` for a null id) so a cross-server adapter written against the shipped port (#25) keeps working. `StackVariableStore` folds into it,
+    and `SnapshotVariableStore`-style wrappers (the views observer, [`views.md`](views.md) §5.3) decorate the one port once. The store registry maps each scope to its store (memory, a PDC, the server file, a #25 adapter).
+14. **`scope: keyed`, with the key an expression on the declaration.** `offer_ready: { scope: keyed, key: "${args.trade}", type: boolean, default: false, ttl: 60s }`. The key is evaluated in the context of every read and write
+    of the variable, so the compiler checks its roots at each use (`MTR-0060`) and a reader that cannot supply `args.trade` is a diagnostic at load, offline. The reads are `vars.keyed.<pack>.<name>` and the writes `keyed.<pack>.<name>`
+    (or `<pack>:<name>`); the key never appears in the spelling, so one declaration is one family of values and the key stays with the declaration, which is where views bind it ([`views.md`](views.md) §6.2, §6.3).
+15. **`ttl:` and the `expire` trigger.** A keyed value stores an expiry (epoch milliseconds, the server clock) beside it; a read past it is absent (lazy, so a reader never sees a stale value even between sweeps), and a sweeper on the
+    global scheduler removes expired entries in bounded batches and fires `expire` once per entry (context `variable.id`, `key`, `value`). `expire` has no player, so it is a run with no subject: it waits for the subject-less
+    run that §37 owner question 3 leaves open, and until that exists the sweeper only removes. A write refreshes the expiry unless the write says otherwise (`set_var` gains no new key: `ttl:` is the declaration's, per-write expiry is a later
+    option).
+16. **The durability class is the declaration's, stated.** `durable: false` (memory; gone on restart, no disk growth; the default for a keyed variable, because the trade offer and the cooldown are the use cases) or `durable: true` (the
+    keyed file of `storage/`, written like `variables.json`, §20 decision 14). It is a field of the schema, never a hidden property of a scope (primitives.md §5.2). Owner question 4.
+17. **The entity holder is `scope: entity`**, the stack's sibling: the holder is the entity the run is about (the `target` of #331, or the struck entity of `entity.hit`), the value lives in that entity's persistent data (a player, a mob,
+    an armor stand), and an unloaded or dead entity reads absent. It exists for F1 (bleed stacks on the struck entity): a `ttl:` on it is the same lazy-expiry rule with the expiry stored beside the value. Owner question 5.
+18. **`player`, `server` and `session` are restated as named keys, not rewritten.** The four shipped words stay as they are in every file; the doc names them the instances of the one primitive: `player` is the key `${player.uuid}` in the player's
+    container, `server` the constant key in `variables.json`, `session` the key "this window" in the GUI session store (views.md V1). A pack that wants the same value under another key declares a `keyed` variable; nothing is deprecated.
+19. **Budgets.** A keyed read is one map lookup and one clock compare; the sweeper is bounded per tick and runs only while entries with a `ttl` exist; the key expression is compiled once at load (§15). The store is concurrent-read-safe
+    (a concurrent map, writes serialised per key) so a view on another region may read it (views.md §6.2's last row).
+
+### Migration statement
+
+Every existing `variables/` file keeps its meaning and its bytes: the schema is additive (master §5.5), unknown keys are still preserved (§5.6), and `scope: player` and `scope: server` are read exactly as before. Every existing
+`vars.local`, `vars.session`, `vars.player.*` and `vars.server.*` read keeps its meaning; the bare `vars.x` is still a local. **One narrowing:** `item` becomes a reserved scope word, so a run-local named `item` (`vars.item`,
+`set_var: {var: item}`) is `MTR-0063` where it used to be a local. No shipped pack, fixture or test names one (searched), and the owner confirmed (2026-11-19) that there is no public release to protect; step 2 will reserve `keyed`
+and `entity` the same way, and a pack that used them as local names is told by `MTR-0063` at load, not at run time. The `durability` mechanic is untouched (its counters stay `materione:durability-used`/`-max`); folding it onto this scope is a follow-up
+the issue names, not part of step 1.
+
+### Deviations from the issue's sketch
+
+| Sketch | As built | Why |
+|---|---|---|
+| "the GUI can read the stack a click or an `open` was about" | Every GUI reads `vars.item.*` as `MTR-0060` today; the seams are built (a binding takes a stack; the GUI roots are one set) | A GUI opened about a stack is P-A of the backpack design (#304, `view.item` of views.md), not shipped; building a private subject-stack concept here would be the second source of that truth. T01's upgrade button needs P-A. Owner question 1 |
+| "the store port generalized" in step 1's "stack store behind the existing store port" | A second port, `StackVariableStore`, with the same contract; the generalization is step 2's design (decision 13) | The holder is not a player id; widening `VariableStore` changes every adapter and every test for a holder only step 2 needs a general form of |
+| "a run with no stack that reads `vars.item.*` gets the default and a rate-limited diagnostic" | As sketched, plus a load-time `MTR-0060` when the trigger cannot provide a stack at all | Most of those mistakes are visible offline, which is the whole point of D6's checks |
+
+### Not built, on purpose
+
+Step 2 in full (`keyed`, `ttl`, `expire`, the entity holder, the generalized port). A GUI that reads the stack it was opened about (P-A). Folding `durability` onto the item scope. A holder id written to stacks for the views observer (V3
+matches by P-A's stack id; step 1 writes no bytes to a stack except a variable's own value). Atomic `mutate` for stacks. An `item`-scope `variable` list source.
+
+### Verification
+
+`VariableRefTest` and `MapLogicContextVariablesTest` (the spelling, the reserved word, the read), `ItemScopeRootsTest` (`MTR-0060` for a read, a condition and a declared write on a trigger with no item, clean on one with it),
+`StackVariablesTest` (the store: round trips, two stacks, the default clears the key, a vanished stack, a reused object, the owner's thread; the run: no stack, the rate limit; the API and the held item), `ItemScopeFlowTest` (two swords, two levels through `set_var`
+and the `var` condition, `reset` returns the untouched bytes), `ItemVarsPipelineTest` (the `itemvars` fixture pack from files to the shadow with no diagnostics; the offline `MTR-0060`), `ItemLayerCompilerTest` (a GUI cannot name a stack), `VariablesTypeTest` and the
+editor demo snapshot and code-mode registry goldens (the schema), `PaperItemVarsIT` on Paper 1.21.4 (two swords, two levels; a vanilla copy that carries its state; a drop and a pick-up; tokens that do and do not merge; a restart; a rule document reading the held stack; the pick-up is `ItemEntity#playerTouch` through the new `dprobe pickup`, because a fake-connection player is not ticked into collecting items) and the QA catalog's `itemvars` suite
+(**not run and not blessed**: it needs the local 26.x probe, and blessing runs happen on main).
+
+### Owner questions
+
+1. **The GUI subject stack (P-A).** T01's upgrade button writes the sword's level from a GUI. That needs the GUI opened about a stack, which is P-A of #304 and not built. Is P-A part of the M6.5 slice? Until it ships, a GUI cannot read or write an
+   item variable, and T01's GUI half stays blocked on it, not on #333.
+2. **Per stack, not per item.** The state is the stack's: a stack of 16 shares one value, and a split copies it (decision 7). That is the only definition vanilla's own stacking allows. If a pack wants one value per item, the item must not stack (`max_stack_size: 1`), which
+   is content. Should the declaration warn when an `item` variable is read by an item whose stack size can exceed one?
+3. **`death` in a rule document.** The `item` root is provided by the trigger, not the host, so the compile-time check cannot tell a rule document's `death` (no stack) from an item's. Per-host roots would fix it and change the compiler's contract for every
+   trigger; it is cheap to do later and not needed by the benchmark. Leave it, or do it with step 2?
+4. **Step 2: the default durability of a keyed variable.** Memory (decision 16) or file. Memory is safe and cheap, and the wrong default for a "HUD value" ([master §8.3](../architecture.md)); the field exists either way.
+5. **Step 2: `scope: entity` or `scope: keyed` with `holder: entity`.** A sixth reserved word is the symmetric choice with `item` and reads best (`vars.entity.rpg.bleed`); a `holder` on `keyed` keeps the word list closed at five. Needed by F1.

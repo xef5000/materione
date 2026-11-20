@@ -197,7 +197,7 @@ public final class VariablePlaceholders {
             return null;
         }
         UUID holder = null;
-        if (match.scope() == VariableScope.PLAYER) {
+        if (match.scope() == VariableScope.PLAYER || match.scope() == VariableScope.ITEM) { // item: the holder's main hand
             if (playerName != null) {
                 Optional<UUID> named = playerNamed.apply(playerName);
                 if (named.isEmpty()) {

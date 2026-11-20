@@ -1,0 +1,9 @@
+# The itemvars fixture pack (#333 step 1, logic.md section 38): variables held by the item stack a run is about. One item
+# whose rule levels it up on every hit, and one rule document that reads the level of the sword in the player's hand.
+# Every rule announces itself with a console line (`say MATERIONE-ITEMVARS-...`, via run_command) for the headless
+# harness, or a chat line (`CHECK ...`) for the QA catalog's real client. The plugin's own tests read the same files
+# through ItemVarsPipelineTest. No other fixture suite loads this pack, so their pinned counts stay their own.
+id: itemvars
+version: 1.0.0
+schema_version: 1
+depends: []

@@ -14,17 +14,19 @@ import java.util.Set;
  *   player.coins     declared player variable, pack = the resource's own pack
  *   player.shop.coins   the same, pack named
  *   server.shop.season  declared server variable
+ *   item.level       declared item variable, held by the run's stack; pack = the resource's own pack
+ *   item.rpg.level   the same, pack named
  *   shop:coins       declared variable, scope taken from its declaration
  * </pre>
  *
  * <p>A bare name is always local. Only a qualified spelling can reach a persistent variable, so a
- * typo in a bare name never creates a stored key. The four scope words are reserved and cannot be
+ * typo in a bare name never creates a stored key. The five scope words are reserved and cannot be
  * local names.
  */
 public sealed interface VariableRef permits VariableRef.Local, VariableRef.Session, VariableRef.Persistent {
 
     /** The words an expression or a reference reads as a scope, never as a local name. */
-    Set<String> RESERVED = Set.of("local", "session", "player", "server");
+    Set<String> RESERVED = Set.of("local", "session", "player", "server", "item");
 
     /** A run-local variable. */
     record Local(String name) implements VariableRef {}

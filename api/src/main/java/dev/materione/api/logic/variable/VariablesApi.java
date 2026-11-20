@@ -33,7 +33,9 @@ public interface VariablesApi {
      * On Folia an off-owner read may return the latest acknowledged immutable snapshot; use
      * {@link #getResult} to distinguish an unavailable read from an undeclared variable.
      *
-     * @param player the holder for player scope; ignored for server scope (pass null)
+     * @param player the holder for player scope; ignored for server scope (pass null). For item scope (logic.md §38)
+     *        the stack is the one {@code player} holds in the main hand: an empty hand, an offline player or null reads
+     *        as the default
      */
     Optional<Object> get(NamespacedId id, UUID player);
 
@@ -46,7 +48,8 @@ public interface VariablesApi {
 
     /**
      * Stores {@code value} for {@code player}; {@code null} clears it, so the next read returns the
-     * default.
+     * default. For item scope the write lands on the stack {@code player} holds in the main hand, and fails
+     * (MTR-0065) when the hand is empty.
      *
      * @return the stored value on success; a failure carries MTR-0055 (no {@code materione.var}),
      *         MTR-0063 (undeclared), MTR-0064 (the value does not fit the type) or MTR-0065 (no holder,

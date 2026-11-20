@@ -74,7 +74,7 @@ public final class VariableListSource implements ListSource<VariableListSource.P
             throw new IllegalStateException(parameters.variable() + " is not a string variable");
         }
         if (declaration.scope() != VariableScope.PLAYER && declaration.scope() != VariableScope.SERVER) {
-            throw new IllegalStateException(parameters.variable() + " is not a player or server variable");
+            throw new IllegalStateException(parameters.variable() + " is not a player or server variable (an item variable needs a stack)");
         }
         String value = context.variables().stored(declaration)
                 .map(String::valueOf)

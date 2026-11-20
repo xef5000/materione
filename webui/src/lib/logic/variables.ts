@@ -14,10 +14,10 @@
 import { ops, unwrap, type FieldEditPayload, type ResourceRef, type RpcChannel } from '../api';
 import { isRecord } from './tree';
 
-export type VariableScope = 'player' | 'server';
+export type VariableScope = 'player' | 'server' | 'item';
 export type VariableType = 'number' | 'string' | 'boolean';
 
-export const VARIABLE_SCOPES: readonly VariableScope[] = ['player', 'server'];
+export const VARIABLE_SCOPES: readonly VariableScope[] = ['player', 'server', 'item'];
 export const VARIABLE_TYPES: readonly VariableType[] = ['number', 'string', 'boolean'];
 
 export interface DeclaredVariable {
@@ -48,7 +48,7 @@ const KEY = /^[a-z][a-z0-9_]*$/;
 export function keyProblem(key: string, existing: readonly DeclaredVariable[], pack: string): string | null {
   if (!key) return 'Name the variable.';
   if (!KEY.test(key)) return 'Use lowercase letters, digits and underscores, starting with a letter.';
-  if (['local', 'session', 'player', 'server'].includes(key)) return `"${key}" is a scope name and cannot be a variable.`;
+  if (['local', 'session', 'player', 'server', 'item'].includes(key)) return `"${key}" is a scope name and cannot be a variable.`;
   if (existing.some((variable) => variable.pack === pack && variable.key === key)) return `${pack}:${key} is already declared.`;
   return null;
 }
@@ -64,7 +64,7 @@ export function declarationsOf(pack: string, path: string, parsed: unknown): Dec
   const out: DeclaredVariable[] = [];
   for (const [key, body] of Object.entries(parsed)) {
     if (!isRecord(body)) continue;
-    const scope = body.scope === 'player' || body.scope === 'server' ? body.scope : null;
+    const scope = body.scope === 'player' || body.scope === 'server' || body.scope === 'item' ? body.scope : null;
     const type = body.type === 'number' || body.type === 'string' || body.type === 'boolean' ? body.type : null;
     if (!scope || !type) continue;
     out.push({

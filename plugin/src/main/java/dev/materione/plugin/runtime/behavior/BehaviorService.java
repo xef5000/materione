@@ -182,7 +182,7 @@ public final class BehaviorService {
     private MapLogicContext buildContext(Player player, ItemStack stack) {
         var root = baseRoot(player, player.getLocation());
         root.put("item", itemContext(stack));
-        return logicContext(root, player);
+        return logicContext(root, player, stack);
     }
 
     /**
@@ -236,12 +236,24 @@ public final class BehaviorService {
      * facet and PlaceholderAPI resolution for that player.
      */
     MapLogicContext logicContext(Map<String, Object> root, Player player) {
+        return logicContext(root, player, null);
+    }
+
+    /**
+     * As above for a run about an item stack: the stack is what {@code vars.item.*} reads and {@code set_var item.*}
+     * writes (logic.md §38), declared by the trigger that fires the run. Null when the run has no stack (a trigger
+     * that is not about an item, an empty hand); its item variables then read as their default.
+     */
+    MapLogicContext logicContext(Map<String, Object> root, Player player, ItemStack stack) {
         return new MapLogicContext(root)
                 .with(Facets.PLAYER, player)
                 .withPlaceholders(text -> PlaceholderResolver.apply(player, text))
                 .withVariables(variables == null
                         ? dev.materione.api.logic.variable.VariableBinding.NONE
-                        : variables.bind(player == null ? null : player.getUniqueId()));
+                        : variables.bind(player == null ? null : player.getUniqueId(),
+                                stack == null || player == null ? null
+                                        : dev.materione.plugin.logic.variable.BukkitStackRef.of(
+                                                stack, player.getUniqueId())));
     }
 
     static Map<String, Object> itemContext(ItemStack stack) {
