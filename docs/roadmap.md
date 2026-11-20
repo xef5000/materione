@@ -408,6 +408,10 @@ Worker is unchanged — no new endpoint, no cost-model change.
 - Server-side dialogs (1.21+ wrapper, dialog.submit → ECA).
 - Native HUD system (image/text/bar layers, bindings, per-world conditions).
 - In-game content browser GUI (categories, search, get-item).
+- **The benchmark-ranked primitives** (moved from M6.5 by the owner, 2026-11-19): #329 entity and world verbs, #330 commands as
+  content, #331 target addressing, #332 timers, #333 keyed state (step 1, state held by the item stack), and the GUI subject stack
+  (P-A of the backpack design, #304). They are engine primitives (D12), not the assistant, and the views (#335 V0 to V2, #455 to
+  #457), dialogs and HUDs build on them.
 
 **Exit:** a datapack-free "server GUI" — menus + dialogs + HUDs built entirely in Materione.
 
@@ -444,14 +448,23 @@ expansion (parity long tail, then scale), and M8 is very late, so this slice com
   primitive (codemode.md §11).
 
 **Scope pass (2026-11, [`architecture/agent-benchmark.md`](architecture/agent-benchmark.md)).** The benchmark was run on paper: 29
-tasks, 10 pass on today's registries, and the failures name 13 missing primitives. Its ranking proposes the slice's primitive
+tasks, 10 pass on today's registries, and the failures name 13 missing primitives. Its ranking proposed the slice's primitive
 work as ranks 1 to 7 (#327 rules without a host and the entity and player triggers, #328 a clock, #329 entity and world verbs,
 #330 commands as content, #331 target addressing, #332 timers, #333 stack-held state), which is what #320's own example needs
-plus the cheap, broad ones; custody transfer, views over state and `/trade` stay after the slice (#334 to #336). The agent
+plus the cheap, broad ones (#327 and #328 shipped in the slice; #329 to #333 moved to M6 by the re-scope below); custody transfer, views over state and `/trade` stay after the slice (#334 to #336). The agent
 surface is sequenced as #337 to #349 (agent-benchmark.md §7). The model provider was decided in #351 and the model in #385. Open with the
 owner: the "no separate logic DSL" recommendation (#338), content tests (#350). Progress is tracked on the board under milestone **M6.5**, not here.
 
-**Exit:** #320's acceptance criteria, shown by the benchmark. It needs the M6 close-out first.
+**Re-scope (owner, 2026-11-19).** M6.5 is limited to the AI assistant: the chatbot, code mode, the model path and its spend
+bounds. The primitives it was to pull in (#329 to #333, and the GUI subject stack) moved to M6, because they are engine work that
+every surface uses, not the assistant. The assistant authors with whatever primitives exist; each one that lands raises its
+benchmark score without assistant work (D5, codemode.md §3.5).
+
+**Exit:** on `editor.materione.com`, the chatbot builds benchmark tasks that today's primitives can express: a real model writes
+the program, it is type-checked, run in the sandbox, dry-run on the server and applied, an existing-object change is approved and a
+transaction reverted, and the spend is bounded by the allowance, the pool and the gateway limit, **shown by measurement** (#405).
+#320's full acceptance criteria (its example end to end, content tests per #350) are re-checked by re-running the benchmark once
+the M6 primitives land, tracked on #320.
 
 ## M7 — Parity close-out (the long tail)
 
