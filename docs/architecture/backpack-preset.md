@@ -82,6 +82,14 @@ preset mechanism, which every later preset reuses.
 an `open` was about". P-A is that concept for views, and it is **one** concept shared with #333: whichever issue lands first builds
 it and the other reuses it.
 
+> **As built by #333 step 1 ([`logic.md`](logic.md) §38).** Step 1 landed first and built the *run's* half only: the stack of a run is
+> a `StackRef` (api, an opaque handle with its owner player) given to the run's variable binding by the trigger that fired it, and the
+> item-scope store reads and writes through it. It did **not** build the GUI half: no session records a subject stack, `gui.open` does
+> not carry one, and every `vars.item.*` in a GUI is `MTR-0060` at load. P-A reuses the handle rather than adding a second one: the
+> subject reference of the table below (owner, slot, holder id, checked at each use) is a `StackRef` implementation that resolves the
+> live stack and refuses on a mismatch; the GUI run's binding is built with it (`VariableService.bind(player, stack)`), and `item`
+> is added to the GUI's variable roots. Nothing in the store changes.
+
 | | Statement |
 |---|---|
 | What it is | `gui.open` run from a flow that has an item records that stack as the session's **subject stack**: a reference made of the owner player, the inventory slot index and the stack's holder id (§5.1). |

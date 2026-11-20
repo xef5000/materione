@@ -162,7 +162,7 @@ public final class RecipeTemplate implements Recipe {
         if (type == RecipeParamType.VARIABLE) {
             String word = optionalText(spec.get("scope"), name + ".scope");
             scope = VariableScope.of(word == null ? "" : word).orElseThrow(() -> new IllegalArgumentException(
-                    "parameter '" + name + "' needs scope player or server"));
+                    "parameter '" + name + "' needs scope player, server or item"));
             String kind = optionalText(spec.get("value_type"), name + ".value_type");
             valueType = VariableType.of(kind == null ? "" : kind).orElseThrow(() -> new IllegalArgumentException(
                     "parameter '" + name + "' needs value_type number, string or boolean"));

@@ -127,7 +127,7 @@ class RecipeTemplateTest {
         assertRejected(withParam("layer", Map.of("type", "colour")), "needs a type");
         assertRejected(withParam("layer", Map.of("type", "string", "colour", 1)), "unknown key 'colour'");
         assertRejected(withParam("amount", Map.of("type", "integer", "default", "lots")), "does not fit");
-        assertRejected(withParam("slot", Map.of("type", "variable")), "needs scope player or server");
+        assertRejected(withParam("slot", Map.of("type", "variable")), "needs scope player, server or item");
         assertRejected(withParam("Bad-Name", Map.of("type", "string")), "lower-case letters");
     }
 

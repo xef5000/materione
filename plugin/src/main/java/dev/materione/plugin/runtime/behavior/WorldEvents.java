@@ -118,7 +118,7 @@ public final class WorldEvents {
         if (fire.withItem()) {
             root.put("item", BehaviorService.itemContext(stack));
         }
-        var context = behavior.logicContext(root, fire.player());
+        var context = behavior.logicContext(root, fire.player(), fire.withItem() ? stack : null);
         if (fire.target() != null) {
             context.with(Facets.EVENT_TARGET, fire.target());
         }

@@ -7,6 +7,8 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.StackRef;
+import dev.materione.api.logic.variable.StackVariableStore;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
@@ -20,7 +22,9 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -40,6 +44,10 @@ public final class VariableService implements AutoCloseable {
     private final SnapshotVariableStore playerSnapshots;
     private final Supplier<RuntimeVariables> declarations;
     private final Consumer<Diagnostic> diagnostics;
+    private final StackVariableStore stackStore;
+    private final HeldStacks held;
+    private final LongSupplier clock;
+    private final Map<String, Long> stackMisses = new ConcurrentHashMap<>();
     private final VariablesApi api = new Api();
     private volatile GuiSessionPort guiSessions = GuiSessionPort.NONE;
     private volatile boolean closed;
@@ -55,6 +63,33 @@ public final class VariableService implements AutoCloseable {
             VariableStore serverStorage,
             Supplier<RuntimeVariables> declarations,
             Consumer<Diagnostic> diagnostics) {
+        this(playerStorage, serverStorage, null, HeldStacks.NONE, declarations, diagnostics, System::currentTimeMillis);
+    }
+
+    /**
+     * As above, with the item scope (logic.md §38).
+     *
+     * @param stackStorage the item scope's store (the stack PDC adapter in the server; a fake in tests), or null for none
+     * @param held finds the stack a player holds, for the command and the API (a run is given its stack by its trigger)
+     */
+    public VariableService(
+            VariableStore playerStorage,
+            VariableStore serverStorage,
+            StackVariableStore stackStorage,
+            HeldStacks held,
+            Supplier<RuntimeVariables> declarations,
+            Consumer<Diagnostic> diagnostics) {
+        this(playerStorage, serverStorage, stackStorage, held, declarations, diagnostics, System::currentTimeMillis);
+    }
+
+    VariableService(
+            VariableStore playerStorage,
+            VariableStore serverStorage,
+            StackVariableStore stackStorage,
+            HeldStacks held,
+            Supplier<RuntimeVariables> declarations,
+            Consumer<Diagnostic> diagnostics,
+            LongSupplier clock) {
         if (playerStorage.scope() != VariableScope.PLAYER || serverStorage.scope() != VariableScope.SERVER) {
             throw new IllegalArgumentException("each store must hold its own scope");
         }
@@ -63,11 +98,49 @@ public final class VariableService implements AutoCloseable {
         stores.put(VariableScope.SERVER, serverStorage);
         this.declarations = declarations;
         this.diagnostics = diagnostics;
+        this.stackStore = stackStorage;
+        this.held = held == null ? HeldStacks.NONE : held;
+        this.clock = clock;
     }
 
     /** The binding a run for {@code player} (null for a run with no player) reads and writes through. */
     public VariableBinding bind(UUID player) {
-        return new RunVariables(this::declaration, stores, player);
+        return bind(player, null);
+    }
+
+    /**
+     * The binding a run for {@code player} about {@code stack} reads and writes through. The stack is what the run's
+     * trigger declared (logic.md §38); null for a run with no stack, whose item variables read as their default and
+     * report it.
+     */
+    public VariableBinding bind(UUID player, StackRef stack) {
+        return new RunVariables(this::declaration, stores, player, stackStore, stack, this::stackMiss);
+    }
+
+    /** Minimum milliseconds between two reports for the same variable of a run that has no stack. */
+    static final long MISS_INTERVAL_MS = 10_000;
+
+    /**
+     * An item variable was read or written in a run with no stack: {@code MTR-0065}, once per variable per interval,
+     * because a hot trigger would otherwise report it on every event.
+     */
+    private void stackMiss(VariableDeclaration declaration, String what) {
+        long now = clock.getAsLong();
+        boolean[] emit = {false};
+        stackMisses.compute(declaration.id().toString(), (id, last) -> {
+            if (last == null || now - last >= MISS_INTERVAL_MS) {
+                emit[0] = true;
+                return now;
+            }
+            return last;
+        });
+        if (emit[0]) {
+            diagnostics.accept(new Diagnostic(DiagnosticCodes.VARIABLE_STORE_FAILED, Severity.WARN,
+                    "item variable " + declaration.id() + " was " + what + " in a run with no item stack",
+                    declaration.id(), null,
+                    "vars.item.* needs a trigger that is about an item stack (click, entity.hit, ...) and a non-empty"
+                            + " hand; the read is the default and the write is dropped. Repeated reports are rate-limited"));
+        }
     }
 
     /** The live declaration of {@code id}, or empty. */
@@ -209,6 +282,9 @@ public final class VariableService implements AutoCloseable {
                 return ApiResult.fail(DiagnosticCodes.VARIABLE_UNDECLARED, id + " is not a declared variable");
             }
             VariableDeclaration declared = found.get();
+            if (declared.scope() == VariableScope.ITEM) {
+                return getItem(declared, player);
+            }
             VariableStore store = stores.get(declared.scope());
             UUID holder = declared.scope() == VariableScope.PLAYER ? player : null;
             try {
@@ -219,6 +295,46 @@ public final class VariableService implements AutoCloseable {
                         .orElseGet(() -> ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
                                 id + " is unavailable: " + unavailable.getMessage()));
             }
+        }
+
+        /** An item variable of the stack the player holds in the main hand (logic.md §38); an empty hand reads the default. */
+        private ApiResult<Object> getItem(VariableDeclaration declared, UUID player) {
+            if (stackStore == null) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                        declared.id() + ": item variables are not available");
+            }
+            try {
+                Optional<StackRef> stack = player == null ? Optional.empty() : held.mainHand(player);
+                if (stack.isEmpty()) {
+                    return ApiResult.ok(declared.defaultValue());
+                }
+                return ApiResult.ok(stackStore.read(declared, stack.get()).orElse(declared.defaultValue()));
+            } catch (ReadUnavailableException unavailable) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                        declared.id() + " is unavailable: " + unavailable.getMessage());
+            }
+        }
+
+        private ApiResult<Object> setItem(VariableDeclaration declared, NamespacedId id, UUID player, Object stored) {
+            if (stackStore == null) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED, id + ": item variables are not available");
+            }
+            if (player == null) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                        id + " is an item variable: name the player holding the item");
+            }
+            Optional<StackRef> stack;
+            try {
+                stack = held.mainHand(player);
+            } catch (ReadUnavailableException unavailable) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                        id + " is unavailable: " + unavailable.getMessage());
+            }
+            if (stack.isEmpty() || !stackStore.write(declared, stack.get(), stored)) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                        id + " could not be written (the player is offline, holds nothing, or the store refused)");
+            }
+            return ApiResult.ok(stored == null ? declared.defaultValue() : stored);
         }
 
         @Override
@@ -239,6 +355,9 @@ public final class VariableService implements AutoCloseable {
                             "'" + value + "' is not a " + declared.type().id() + " (" + id + ")");
                 }
                 stored = coerced.get();
+            }
+            if (declared.scope() == VariableScope.ITEM) {
+                return setItem(declared, id, player, stored);
             }
             if (declared.scope() == VariableScope.PLAYER && player == null) {
                 return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED, id + " is a player variable: name a player");

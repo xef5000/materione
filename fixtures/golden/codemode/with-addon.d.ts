@@ -629,11 +629,11 @@ interface SoundFields {
 interface SoundHandle extends ResourceHandle<"sound", SoundFields> {}
 
 /**
- * A declared persistent variable: stored per player or on the server, typed, with a default.
+ * A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together.
  * Content type `variable`, stored under `variables/`.
  */
 interface VariableFields {
-  /** Where the value is stored: player (per player) or server (one for the server) */
+  /** Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack) */
   scope: string;
   /** The value's type: number, string or boolean. */
   type: string;
@@ -3448,7 +3448,7 @@ interface RunCommandActionParams extends ActionOptions {
 
 /** Parameters of `set_var`. */
 interface SetVarActionParams extends ActionOptions {
-  /** Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>. */
+  /** Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>. */
   var?: string | Ref<"variable">;
   /** Run-local variable name (the M2 spelling of var:) */
   name?: string;
@@ -3783,7 +3783,7 @@ interface ActionCatalog {
    */
   runCommand(params: RunCommandActionParams | string | Expr, options?: ActionOptions): ActionStep<"run_command">;
   /**
-   * Stores a value in a run-local, session or declared player or server variable.
+   * Stores a value in a run-local, session or declared player, server or item variable.
    * @since 2.0.0
    * @registeredBy materione
    * @category data
@@ -3998,7 +3998,7 @@ interface SlotHasConditionParams {
 
 /** Parameters of the `var` condition. */
 interface VarConditionParams {
-  /** Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>. */
+  /** Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>. */
   var: string | Ref<"variable">;
   /**
    * How to compare.
@@ -4078,7 +4078,7 @@ interface ConditionCatalog {
    */
   slotHas(params: SlotHasConditionParams): Condition<"slot_has">;
   /**
-   * Compares a run-local, session or declared player or server variable with a value.
+   * Compares a run-local, session or declared player, server or item variable with a value.
    * @since 2.0.0
    * @registeredBy materione
    * @category data
