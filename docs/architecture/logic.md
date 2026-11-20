@@ -4047,7 +4047,7 @@ the issue names, not part of step 1.
 
 | Sketch | As built | Why |
 |---|---|---|
-| "the GUI can read the stack a click or an `open` was about" | Every GUI reads `vars.item.*` as `MTR-0060` today; the seams are built (a binding takes a stack; the GUI roots are one set) | A GUI opened about a stack is P-A of the backpack design (#304, `view.item` of views.md), not shipped; building a private subject-stack concept here would be the second source of that truth. T01's upgrade button needs P-A. Owner question 1 |
+| "the GUI can read the stack a click or an `open` was about" | Every GUI reads `vars.item.*` as `MTR-0060` today; the seams are built (a binding takes a stack; the GUI roots are one set) | A GUI opened about a stack is P-A of the backpack design (#304, `view.item` of views.md), not shipped; building a private subject-stack concept here would be the second source of that truth. T01's upgrade button needs P-A, which is M6 work with #304 (owner question 1, answered) |
 | "the store port generalized" in step 1's "stack store behind the existing store port" | A second port, `StackVariableStore`, with the same contract; the generalization is step 2's design (decision 13) | The holder is not a player id; widening `VariableStore` changes every adapter and every test for a holder only step 2 needs a general form of |
 | "a run with no stack that reads `vars.item.*` gets the default and a rate-limited diagnostic" | As sketched, plus a load-time `MTR-0060` when the trigger cannot provide a stack at all | Most of those mistakes are visible offline, which is the whole point of D6's checks |
 
@@ -4066,7 +4066,7 @@ editor demo snapshot and code-mode registry goldens (the schema), `PaperItemVars
 
 ### Owner questions
 
-1. **The GUI subject stack (P-A).** T01's upgrade button writes the sword's level from a GUI. That needs the GUI opened about a stack, which is P-A of #304 and not built. Is P-A part of the M6.5 slice? Until it ships, a GUI cannot read or write an
+1. **The GUI subject stack (P-A).** T01's upgrade button writes the sword's level from a GUI. That needs the GUI opened about a stack, which is P-A of #304 and not built. **Answered (owner, 2026-11-19): P-A is M6 work, with the backpack (#304); M6.5 is limited to the AI assistant.** Until it ships, a GUI cannot read or write an
    item variable, and T01's GUI half stays blocked on it, not on #333.
 2. **Per stack, not per item.** The state is the stack's: a stack of 16 shares one value, and a split copies it (decision 7). That is the only definition vanilla's own stacking allows. If a pack wants one value per item, the item must not stack (`max_stack_size: 1`), which
    is content. Should the declaration warn when an `item` variable is read by an item whose stack size can exceed one?
