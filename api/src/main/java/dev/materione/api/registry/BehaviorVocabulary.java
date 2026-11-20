@@ -212,14 +212,26 @@ public record BehaviorVocabulary(
      * @param registeredBy owning plugin name, or blank when unknown
      * @param takesElse    true when the step may carry an {@code else:} that runs when the action goes
      *                     unanswered (logic.md §29, {@code ActionType.takesElse()}); the editor draws it as a branch
+     * @param targetable   the kinds of target the action accepts ({@code player}, {@code entity}); empty when it
+     *                     always acts on the run's own player (logic.md §39). The action's {@code target} parameter
+     *                     is in its self-description
      */
     public record Action(String id, SelfDescription description, String shorthand, boolean deferred,
             LogicCategory category, Threading threading, Availability availability, String registeredBy,
-            boolean takesElse) {
+            boolean takesElse, List<String> targetable) {
         public Action {
             Objects.requireNonNull(id, "id");
             availability = availability == null ? Availability.AVAILABLE : availability;
             registeredBy = registeredBy == null ? "" : registeredBy;
+            targetable = targetable == null ? List.of() : List.copyOf(targetable);
+        }
+
+        /** The shape before {@code targetable} (logic.md §39): an action that acts on the run's own player only. */
+        public Action(String id, SelfDescription description, String shorthand, boolean deferred,
+                LogicCategory category, Threading threading, Availability availability, String registeredBy,
+                boolean takesElse) {
+            this(id, description, shorthand, deferred, category, threading, availability, registeredBy, takesElse,
+                    List.of());
         }
 
         /** The shape before {@code takesElse} (logic.md §31): an action with no {@code else:} branch. */

@@ -16,7 +16,7 @@ const sword = p.items.create("bloodfang", {
 
 sword.rules.add(m.triggers.entityHit(), () => ({
   if: m.conditions.hasPermission("rpg.weapons"),
-  do: [m.actions.potion({ type: "wither", duration: 100, target: "struck" })],
+  do: [m.actions.potion({ type: "wither", duration: 100, target: "event.target" })],
 }));
 
 sword.rules.add(m.triggers.entityKill(), () => ({

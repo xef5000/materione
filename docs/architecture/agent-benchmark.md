@@ -61,8 +61,8 @@
 
 | # | Task (the prompt, shortened) | Area | Verdict | Fails on |
 |---|---|---|---|---|
-| T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Fail | STATE, TARGET |
-| T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | CMD, STATE, VIEW, TARGET, CUSTODY |
+| T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Fail | STATE |
+| T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | CMD, STATE, VIEW, CUSTODY |
 | T03 | **Backpack**: a 3-row backpack item that keeps its contents | item | Pass (preset route) | by-hand route: CUSTODY |
 | T04 | **Kits**: `/kits` menu with Starter (once) and Daily (every 24 h) | GUI, items | Pass (#328) | |
 | T05 | **Healing wand**: right-click heals 4 hearts, 30 s cooldown, tells the time left | ability | Pass (#328) | |
@@ -81,7 +81,7 @@
 | T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Fail | CUSTODY |
 | T19 | **Vending machine**: a furniture that opens a shop when right-clicked | furniture | Pass | |
 | T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | TIMER, VIEW, VERB |
-| T21 | **`/pay <player> <amount>`** | command, economy | Fail | CMD, TARGET |
+| T21 | **`/pay <player> <amount>`** | command, economy | Fail | CMD |
 | T22 | **Arena region**: entering `arena` gives the PvP kit, leaving removes it | integration | Fail | PROVIDER |
 | T23 | **Rank-up**: `/rankup` pays 10 000 coins for the next rank and announces it | GUI, economy | Pass | |
 | T24 | **Ruby ore**: a custom block that drops a ruby and 5 XP, 10% chance of a second ruby | block | Pass | |
@@ -114,7 +114,7 @@ verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-s
 Conventions: `const p = m.pack("bench")`. A `✗` comment is the error the generated surface would give. Lines without one
 type-check against today's registries. Summaries (`m.summary`) are omitted where they add nothing.
 
-### T01 Bloodfang sword — Fail (STATE, TARGET)
+### T01 Bloodfang sword — Fail (STATE)
 
 The program is codemode.md §9.1. Its `✗` lines, restated against today's surface (the `entity.hit` and `entity.kill` triggers
 pass since #327: an item holds them and `target.*` and `damage.*` are in their context):
@@ -125,27 +125,29 @@ const level = p.variables.create("bloodfang_level", { type: "number", holder: "i
 //                                                                      "player" | "server"                       [STATE]
 sword.rules.add({
   on: m.triggers.entityHit,
-  do: [ m.actions.potion({ effect: "wither", seconds: 5, amplifier: m.expr`${level} - 1`, target: m.target.struck }) ],
-});                                  // ✗ TS2353 'target' does not exist in type 'PotionParams'                  [TARGET]
+  do: [ m.actions.potion({ type: "wither", duration: 100, amplifier: 1, target: "event.target" }) ],
+});                                  // passes since #331 (the amplifier is a number, so the bleed cannot read the level yet)
 sword.rules.add({ on: m.triggers.entityKill, do: [ m.actions.setVar(xp, { op: "add", value: 10 }) ] });
 ```
 
 What passes today: the item, the model reference, the two combat triggers, the GUI with its text and button, `has_money`/`take_money` under `require`,
 the sneak-right-click rule (`click` with `player.sneaking`), the permission test (`has_permission` as each rule's condition).
-The bleed is written with the shipped `potion` verb aimed at the struck entity, so it needs TARGET and not a new damage verb;
-a *true-damage* bleed would add VERB. With level and XP held by the **player** instead of the stack the state lines pass, but
+The bleed is written with the shipped `potion` verb aimed at the struck entity (`target: event.target`, #331, logic.md §39), so it
+needed TARGET and not a new damage verb; a *true-damage* bleed would add VERB. Scaling it by the level also needs the level in an
+expression the potion's amplifier accepts, which is STATE's business (#333), not a separate gap. With level and XP held by the **player** instead of the stack the state lines pass, but
 that is a different feature (two Bloodfangs share one level), so it is not offered as the solution.
 
 *Since #333 step 1 ([`logic.md`](logic.md) §38) the stack holder exists:* the declaration is spelled `scope: "item"` (the sketch's `holder: "item"`
 above is the draft spelling, kept so the corpus program stays the benchmark's record until T01 passes), `vars.item.<pack>.<key>` reads it and
-`set_var` writes it, with the run's item declared by the `entity.hit` and `entity.kill` triggers. T01 stays Fail on TARGET (the struck entity) and on
+`set_var` writes it, with the run's item declared by the `entity.hit` and `entity.kill` triggers. With #331 (§39) the struck entity is addressable too, so T01 stays Fail only on
 the GUI half: the upgrade button reads and writes the sword's level from a GUI, which needs the GUI opened about a stack (P-A of
 [`backpack-preset.md`](backpack-preset.md), unbuilt).
 
-### T02 `/trade <player>` — Fail (CMD, STATE, VIEW, TARGET, CUSTODY)
+### T02 `/trade <player>` — Fail (CMD, STATE, VIEW, CUSTODY)
 
-The program is codemode.md §9.2: five errors, one per need of primitives.md §3 (`p.commands`, keyed state with a TTL, a view
-for two viewers, `message` to the other player, `transfer` between holders). Nothing of the two-player core passes today.
+The program is codemode.md §9.2: five errors when it was written (four since #331), one per need of primitives.md §3 (`p.commands`, keyed state with a TTL, a view
+for two viewers, `message` to the other player, `transfer` between holders). Since #331 `message` to the other player is
+`target: { arg: "target" }` and passes; nothing else of the two-player core does.
 What an agent can offer instead: nothing honest. A single-player "offer window" is not a trade.
 
 ### T03 Backpack — Pass by the preset route; the by-hand route fails (CUSTODY)
@@ -445,14 +447,14 @@ wand.rules.add({ on: m.triggers.click({ detail: "right" }), do: [
 The mana variable and the spend-or-refuse rule pass. An `actionbar` line on every tick would imitate a HUD; it is a
 workaround and it still needs TIMER.
 
-### T21 `/pay <player> <amount>` — Fail (CMD, TARGET)
+### T21 `/pay <player> <amount>` — Fail (CMD)
 
 ```ts
 p.commands.create("pay", {                                                // ✗ TS2339 'commands'                [CMD]
   args: { to: { type: "player" }, amount: { type: "number", min: 1 } },
   do: [ m.steps.require([ m.actions.takeMoney({ amount: m.expr`args.amount` }) ], { else: [ m.actions.message("<red>Not enough coins.") ] }),
-        m.actions.giveMoney({ amount: m.expr`args.amount`, target: m.target.arg("to") }),   // ✗ TS2353 'target' [TARGET]
-        m.actions.message({ text: m.expr`player.name + " paid you " + args.amount`, target: m.target.arg("to") }) ] });  // ✗ [TARGET]
+        m.actions.giveMoney({ amount: m.expr`args.amount`, target: { arg: "to" } }),         // passes since #331
+        m.actions.message({ text: m.expr`player.name + " paid you " + args.amount`, target: { arg: "to" } }) ] });  // passes since #331
 ```
 
 `open.args` already has the `player` argument type, the Brigadier sync and `suggest:`; they are reachable only from a GUI.
@@ -567,7 +569,7 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **VERB** | Entity and world verbs: heal, damage, velocity, particle, launch, break or set a block, edit a stack | §5.7 | T12 T13 T14 T20, F2 F5 (4) | T13 T14 |
 | **TIME** | A clock in expressions (`now()`), durations, and a cooldown that persists and can be read | new | T04 T05 T07 (3) | **Closed by #328** (`now()`, `today()`, `on_cooldown` with `${cooldown.remaining}`); T04 T05 T07 pass |
 | **CMD** | Commands as content | §5.4 | T02 T21 T27 (3) | T27 |
-| **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | with CMD: T21 |
+| **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | **Closed by #331** (`target:` on `message`, `actionbar`, `title`, `sound`, `potion`, `give_item`, `give_money`, `take_money`, `teleport`; logic.md §39); T21 keeps CMD |
 | **VIEW** | Views over state: more than one viewer; the dialog and HUD view kinds | §5.3 | T02 T20 T28 (3) | none alone |
 | **STATE** | Keyed state: a holder other than player or server (a stack, an entity, a key), a TTL, an expiry trigger | §5.2 | T01 T02, F1 (2) | none alone |
 | **TIMER** | A trigger that fires on a schedule | §5.5 | T20 T26, F5 (2) | with RULE: T26 |
@@ -589,8 +591,8 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 16 | T04 T05 T07 | Small: expression functions and one rule option |
 | 3 | **Entity and world verbs** (#329) | VERB | 19 | T12 T13 T14 | Medium: about eight actions, each small; protection checks |
-| 4 | **Commands as content** (#330) | CMD | 20 | T27 | Small to medium: lift the `open:` block |
-| 5 | **Target addressing** (#331) | TARGET | 21 | T21 | Medium: a cross-cutting parameter on the actions that admit it |
+| 4 | **Commands as content** (#330) | CMD | 21 | T27 T21 | Small to medium: lift the `open:` block |
+| 5 | **Target addressing** (#331), **shipped** | TARGET | 21 | none: T21 needs only CMD (rank 4) | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
 | 6 | **Timers** (rides #327's rule unit) (#332) | TIMER | 22 | T26 | Small once RULE exists; budgets matter |
 | 7 | **Keyed state: holders, keys, TTL** (#333) | STATE | 23 | T01 (needs 1 and 5) | Large: the store port, stack and entity holders, migration checks |
 | 8 | **Custody holders and transfer** (#334) | CUSTODY | 24 | T18 | Large, with an open design problem (primitives.md §3) |

@@ -3,12 +3,13 @@ package dev.materione.plugin.logic.action;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
-import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
+import dev.materione.api.logic.Subjects;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -23,7 +24,7 @@ import java.util.OptionalDouble;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
 
 /**
  * {@code teleport: {x, y, z, world, yaw, pitch}}: moves the player. Coordinates may be templates
@@ -58,7 +59,7 @@ public final class TeleportAction implements ActionType<TeleportAction.Params> {
                                 "Facing, degrees; default keeps the current facing", null, null).acceptingExpression(),
                         new ParameterSchema("pitch", ParameterType.DECIMAL, false, null,
                                 "Look up or down, degrees; default keeps the current pitch", null, null).acceptingExpression()),
-                "2.0.0"), LogicCategory.WORLD, null);
+                "2.0.0"), LogicCategory.WORLD, null).withTargets(TargetKind.PLAYER, TargetKind.ENTITY);
     }
 
     @Override
@@ -79,7 +80,7 @@ public final class TeleportAction implements ActionType<TeleportAction.Params> {
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Entity player = Subjects.entity(context).orElse(null);
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
@@ -106,7 +107,7 @@ public final class TeleportAction implements ActionType<TeleportAction.Params> {
         return teleport(player, world, x, y, z, yaw, pitch);
     }
 
-    private static ActionOutcome teleport(Player player, World world, OptionalDouble x, OptionalDouble y,
+    private static ActionOutcome teleport(Entity player, World world, OptionalDouble x, OptionalDouble y,
             OptionalDouble z, OptionalDouble yaw, OptionalDouble pitch) {
         var destination = new Location(world, x.getAsDouble(), y.getAsDouble(), z.getAsDouble(),
                 (float) yaw.getAsDouble(), (float) pitch.getAsDouble());
@@ -123,7 +124,7 @@ public final class TeleportAction implements ActionType<TeleportAction.Params> {
 
     @Override public CompletionStage<ActionOutcome> executeResumable(
             Params params, LogicContext context, ReadExecutor reads) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Entity player = Subjects.entity(context).orElse(null);
         if (player == null) {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }

@@ -202,25 +202,25 @@ class BuiltinActionsTest {
         private final MessageAction action = new MessageAction();
 
         @Test
-        void parsesTextAndTargetAndRejectsBadOnes() {
-            var parsed = action.parse(reader(params("text", "&aHi", "target", "ActionBar")));
+        void parsesTextAndRetiresTheOldChannelSpellings() {
+            var parsed = action.parse(reader(params("text", "&aHi")));
             assertThat(parsed.text().source()).isEqualTo("&aHi");
-            assertThat(parsed.target()).isEqualTo(MessageAction.Target.ACTIONBAR);
-            assertThat(action.parse(reader(params("text", "x"))).target()).isEqualTo(MessageAction.Target.PLAYER);
 
             assertThatThrownBy(() -> action.parse(reader(params()))).hasMessage("text is required");
-            assertThatThrownBy(() -> action.parse(reader(params("text", "x", "target", "everyone"))))
-                    .hasMessage("target must be one of player, actionbar, broadcast");
+            for (String retired : new String[] {"player", "actionbar", "broadcast"}) {
+                assertThatThrownBy(() -> action.parse(reader(params("text", "x", "target", retired))))
+                        .hasMessageContaining("was a message channel")
+                        .hasMessageContaining("actionbar and broadcast");
+            }
         }
 
         @Test
-        void sendsTheRenderedTextToThePlayerOrTheActionBar() {
+        void sendsTheRenderedTextToThePlayer() {
             var recorded = new Recorded();
             action.execute(action.parse(reader(params("text", "Hi ${player.name} x${item.amount} on %server%"))),
                     recorded.context());
-            action.execute(action.parse(reader(params("text", "bar", "target", "actionbar"))), recorded.context());
 
-            assertThat(recorded.calls).containsExactly("message:Hi Alex x3 on Lobby", "actionbar:bar");
+            assertThat(recorded.calls).containsExactly("message:Hi Alex x3 on Lobby");
         }
 
         @Test

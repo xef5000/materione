@@ -1,5 +1,6 @@
 package dev.materione.api.logic;
 
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 /**
@@ -18,6 +19,13 @@ public final class Facets {
      * {@link ActionOutcome#failed}.
      */
     public static final ContextFacet<Player> PLAYER = ContextFacet.of("materione:player", Player.class);
+
+    /**
+     * The entity the trigger carries, for {@code target: event.target} (logic.md §39): the entity struck by
+     * {@code entity.hit} or killed by {@code entity.kill}. Absent for a trigger that carries none, which a
+     * {@code target: event.target} on such a rule reports at load.
+     */
+    public static final ContextFacet<Entity> EVENT_TARGET = ContextFacet.of("materione:event_target", Entity.class);
 
     /** The cancellation handle of the event that fired the rule; see {@link Cancellation}. */
     public static final ContextFacet<Cancellation> CANCELLATION = Cancellation.FACET;

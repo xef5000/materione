@@ -4,8 +4,11 @@ import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.TargetKind;
+import dev.materione.api.logic.TargetSpec;
 import dev.materione.api.logic.Threading;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * One action after typed parse: the registered {@link ActionType}, the immutable parameter object
@@ -22,10 +25,12 @@ import java.util.Objects;
  * @param params the object {@code type.parse} produced
  * @param chance probability from 0 to 1 that the step runs
  * @param delayTicks ticks to wait before the step runs
+ * @param target who or what the action acts on, parsed once at load (logic.md §39); {@code null} when the step wrote
+ *        none or wrote {@code self}, which runs the action as it always did, with no resolution step at all
  * @param <P> the type's parameter object
  */
-public record ActionStep<P>(StepPath path, String id, ActionType<P> type, P params, double chance, long delayTicks)
-        implements Step {
+public record ActionStep<P>(StepPath path, String id, ActionType<P> type, P params, double chance, long delayTicks,
+        StepTarget target) implements Step {
 
     /** Key of the universal chance property on an action map. */
     public static final String CHANCE_KEY = "chance";
@@ -39,6 +44,11 @@ public record ActionStep<P>(StepPath path, String id, ActionType<P> type, P para
         Objects.requireNonNull(type, "type");
     }
 
+    /** A step with no target: the action acts on the run's own player. */
+    public ActionStep(StepPath path, String id, ActionType<P> type, P params, double chance, long delayTicks) {
+        this(path, id, type, params, chance, delayTicks, null);
+    }
+
     /**
      * Parses {@code reader} with {@code type} and binds the result.
      *
@@ -50,7 +60,16 @@ public record ActionStep<P>(StepPath path, String id, ActionType<P> type, P para
         if (params == null) {
             throw new IllegalArgumentException("the action produced no parameters");
         }
-        return new ActionStep<>(path, id, type, params, chance, delayTicks);
+        return new ActionStep<>(path, id, type, params, chance, delayTicks, null);
+    }
+
+    /**
+     * This step acting on {@code spec}, which the action accepts the kinds {@code admits} of. {@code self} (and an
+     * absent spec) is no target at all: the step keeps no resolution to run.
+     */
+    public ActionStep<P> withTarget(TargetSpec spec, Set<TargetKind> admits) {
+        StepTarget resolved = spec == null || spec instanceof TargetSpec.Self ? null : new StepTarget(spec, admits);
+        return new ActionStep<>(path, id, type, params, chance, delayTicks, resolved);
     }
 
     /** The thread this step must run on, which may depend on its parameters. */
@@ -76,6 +95,9 @@ public record ActionStep<P>(StepPath path, String id, ActionType<P> type, P para
         }
         if (delayTicks > 0) {
             out.append(" delay=").append(delayTicks);
+        }
+        if (target != null) {
+            out.append(" target=").append(target.spec().describe());
         }
         return out.toString();
     }

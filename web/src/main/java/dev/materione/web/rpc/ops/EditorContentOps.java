@@ -952,6 +952,10 @@ public final class EditorContentOps {
                 // only the types that ask a question carry it (logic.md §29, §31): the editor draws an else: branch
                 json.addProperty("takesElse", true);
             }
+            if (!action.targetable().isEmpty()) {
+                // only the actions that can act on another player or entity carry it (logic.md section 39)
+                json.add("targetable", strings(action.targetable()));
+            }
             actions.add(json);
         }
         object.add("actions", actions);

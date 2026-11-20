@@ -58,6 +58,42 @@ public final class RunReadExecutor implements ReadExecutor, AutoCloseable {
 
     @Override
     public <T> CompletionStage<T> on(Threading owner, Supplier<T> operation) {
+        return on(anchor, owner, operation);
+    }
+
+    /**
+     * An executor for one targeted action (logic.md §39): the action's own-region work ({@link Threading#PLAYER_REGION})
+     * runs on the thread that owns {@code subject}, the entity it acts on, while everything else, and every read of
+     * the run's own state made through {@link ReadExecutor#captureOrigin()}, stays with the run: {@code origin} is the
+     * capture the caller made on the run's own thread before the first subject was touched, so a later subject's thread
+     * is never mistaken for the run's. It shares this executor's lifetime: cancelling the run retires its pending reads.
+     */
+    ReadExecutor aimedAt(Object subject, ReadExecutor origin) {
+        RunReadExecutor run = this;
+        return new ReadExecutor() {
+            @Override
+            public boolean active() {
+                return run.active();
+            }
+
+            @Override
+            public <T> CompletionStage<T> on(Threading owner, Supplier<T> operation) {
+                return run.on(owner == Threading.PLAYER_REGION ? subject : run.anchor, owner, operation);
+            }
+
+            @Override
+            public ReadExecutor captureOrigin() {
+                return origin;
+            }
+
+            @Override
+            public <T> CompletionStage<T> onOrigin(Supplier<T> operation) {
+                return origin.onOrigin(operation);
+            }
+        };
+    }
+
+    private <T> CompletionStage<T> on(Object anchor, Threading owner, Supplier<T> operation) {
         var read = new Pending<T>();
         if (closed.get()) {
             read.cancel();
@@ -127,7 +163,7 @@ public final class RunReadExecutor implements ReadExecutor, AutoCloseable {
 
         void retire() {
             state.getAndSet(CANCELLED);
-            result.completeExceptionally(new ReadRetiredException("player retired before the read"));
+            result.completeExceptionally(new ReadRetiredException("the entity retired before the read"));
         }
 
         void preventStart() {

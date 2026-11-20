@@ -11,6 +11,7 @@ import dev.materione.api.logic.ItemSource;
 import dev.materione.api.logic.ListSource;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.Recipe;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
@@ -167,7 +168,8 @@ public final class VocabularyBuilder {
                     threading,
                     availability(type::availability),
                     entry.registeredBy(),
-                    attempt(type::takesElse).orElse(false)));
+                    attempt(type::takesElse).orElse(false),
+                    description.map(d -> d.targetable().stream().map(TargetKind::id).toList()).orElse(List.of())));
         }
         out.sort(Comparator.comparing(BehaviorVocabulary.Action::id));
         return List.copyOf(out);

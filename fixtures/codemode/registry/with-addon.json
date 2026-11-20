@@ -73,11 +73,27 @@
               "section": "general",
               "type": "string",
               "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "text",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "player_region"
         },
         {
@@ -330,11 +346,27 @@
               "section": "general",
               "type": "integer",
               "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "item",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "player_region"
         },
         {
@@ -367,11 +399,27 @@
               "section": "general",
               "type": "string",
               "uiHint": "reference"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "amount",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "global",
           "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
         },
@@ -589,7 +637,7 @@
           "available": true,
           "category": "player",
           "deferred": false,
-          "description": "Shows text to the player, on the action bar, or to everyone",
+          "description": "Shows text to the player, or to another player given as a target",
           "displayName": "Send message",
           "id": "message",
           "parameters": [
@@ -606,33 +654,32 @@
               "uiHint": "text"
             },
             {
-              "advanced": false,
-              "allowedValues": [
-                "player",
-                "actionbar",
-                "broadcast"
-              ],
-              "default": "player",
-              "description": "Where the text appears",
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
               "id": "target",
               "label": "Target",
               "order": 0,
               "required": false,
               "section": "general",
-              "type": "enum",
-              "uiHint": "select"
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "text",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "player_region"
         },
         {
           "available": true,
           "category": "player",
           "deferred": false,
-          "description": "Applies a potion effect to the player",
+          "description": "Applies a potion effect to the player, or to another entity given as a target",
           "displayName": "Give potion effect",
           "id": "potion",
           "parameters": [
@@ -670,10 +717,27 @@
               "section": "general",
               "type": "integer",
               "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
+          ],
           "threading": "player_region"
         },
         {
@@ -925,11 +989,27 @@
               "section": "general",
               "type": "enum",
               "uiHint": "select"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "sound",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "global"
         },
         {
@@ -1104,11 +1184,27 @@
               "section": "general",
               "type": "string",
               "uiHint": "reference"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "amount",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "global",
           "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
         },
@@ -1216,10 +1312,27 @@
               "section": "general",
               "type": "decimal",
               "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
+          ],
           "threading": "player_region"
         },
         {
@@ -1289,11 +1402,27 @@
               "section": "general",
               "type": "integer",
               "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "title",
           "sinceVersion": "2.0.0",
+          "targetable": [
+            "player"
+          ],
           "threading": "player_region"
         },
         {

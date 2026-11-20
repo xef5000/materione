@@ -3,10 +3,11 @@ package dev.materione.plugin.logic.action;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
-import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Subjects;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -15,7 +16,8 @@ import java.util.List;
 import java.util.Locale;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
@@ -36,7 +38,7 @@ public final class PotionAction implements ActionType<PotionAction.Params> {
 
     @Override
     public ActionDescription describe() {
-        return ActionDescription.of(new SelfDescription("Give potion effect", "Applies a potion effect to the player",
+        return ActionDescription.of(new SelfDescription("Give potion effect", "Applies a potion effect to the player, or to another entity given as a target",
                 List.of(
                         new ParameterSchema("type", ParameterType.STRING, true, null,
                                 "Effect type, e.g. speed", null, null),
@@ -44,7 +46,7 @@ public final class PotionAction implements ActionType<PotionAction.Params> {
                                 "Duration in ticks", null, null),
                         new ParameterSchema("amplifier", ParameterType.INTEGER, false, "0",
                                 "Amplifier; 0 is level I", null, null)),
-                "2.0.0"), LogicCategory.PLAYER);
+                "2.0.0"), LogicCategory.PLAYER).withTargets(TargetKind.PLAYER, TargetKind.ENTITY);
     }
 
     @Override
@@ -68,15 +70,18 @@ public final class PotionAction implements ActionType<PotionAction.Params> {
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
-        if (player == null) {
+        Entity subject = Subjects.entity(context).orElse(null);
+        if (subject == null) {
             return ActionOutcome.failed("event has no player");
+        }
+        if (!(subject instanceof LivingEntity living)) {
+            return ActionOutcome.failed("a potion effect needs a living entity");
         }
         PotionEffectType effect = Registry.EFFECT.get(params.effect());
         if (effect == null) {
             return ActionOutcome.failed("unknown potion effect '" + params.effect().getKey() + "'");
         }
-        boolean added = player.addPotionEffect(new PotionEffect(effect, params.duration(), params.amplifier()));
+        boolean added = living.addPotionEffect(new PotionEffect(effect, params.duration(), params.amplifier()));
         return added
                 ? ActionOutcome.OK
                 : ActionOutcome.failed("potion effect '" + params.effect().getKey() + "' was not applied");

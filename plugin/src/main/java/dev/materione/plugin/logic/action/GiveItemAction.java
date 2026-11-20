@@ -3,12 +3,13 @@ package dev.materione.plugin.logic.action;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
-import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
+import dev.materione.api.logic.Subjects;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -57,7 +58,7 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
                                 "Materione item id, or minecraft:<material>", null, null).acceptingExpression().withWidget("item", ""),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
                                 "How many", null, null).acceptingExpression()),
-                "2.0.0"), LogicCategory.PLAYER, "item");
+                "2.0.0"), LogicCategory.PLAYER, "item").withTargets(TargetKind.PLAYER);
     }
 
     @Override
@@ -74,7 +75,7 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Player player = Subjects.player(context).orElse(null);
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
@@ -107,7 +108,7 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
 
     @Override public CompletionStage<ActionOutcome> executeResumable(
             Params params, LogicContext context, ReadExecutor reads) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Player player = Subjects.player(context).orElse(null);
         if (player == null) {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }

@@ -3,12 +3,13 @@ package dev.materione.plugin.logic.action;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
-import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
+import dev.materione.api.logic.Subjects;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -37,7 +38,7 @@ public final class ActionbarAction implements ActionType<ActionbarAction.Params>
                 "Shows text above the player's hotbar",
                 List.of(new ParameterSchema("text", ParameterType.STRING, true, null,
                         "Message text; formatting and & colour codes allowed", null, null).acceptingExpression()),
-                "2.0.0"), LogicCategory.PLAYER, "text");
+                "2.0.0"), LogicCategory.PLAYER, "text").withTargets(TargetKind.PLAYER);
     }
 
     @Override
@@ -52,7 +53,7 @@ public final class ActionbarAction implements ActionType<ActionbarAction.Params>
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Player player = Subjects.player(context).orElse(null);
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
@@ -62,7 +63,7 @@ public final class ActionbarAction implements ActionType<ActionbarAction.Params>
 
     @Override
     public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
-        if (context.facet(Facets.PLAYER).isEmpty()) {
+        if (Subjects.player(context).isEmpty()) {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }
         return ResolvedText.resolve(params.text(), context, reads)

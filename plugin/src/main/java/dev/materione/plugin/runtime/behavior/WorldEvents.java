@@ -1,5 +1,6 @@
 package dev.materione.plugin.runtime.behavior;
 
+import dev.materione.api.logic.Facets;
 import dev.materione.behavior.rule.FilterFacts;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.runtime.BehaviorEvent;
@@ -11,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.inventory.ItemStack;
@@ -62,6 +64,7 @@ public final class WorldEvents {
      * @param itemHosts the stacks whose item rules answer this event, in order; read only when an item has a
      *        rule on the trigger
      * @param withItem whether the tree carries {@code item.*}
+     * @param target the entity the trigger carries, for {@code target: event.target} (logic.md §39), or null
      */
     public record Fire(
             String trigger,
@@ -71,7 +74,15 @@ public final class WorldEvents {
             Supplier<Map<String, Map<String, Object>>> roots,
             Cancellable cancellable,
             Supplier<List<ItemStack>> itemHosts,
-            boolean withItem) {
+            boolean withItem,
+            Entity target) {
+
+        /** A fire whose trigger carries no entity. */
+        public Fire(String trigger, Player player, Supplier<Location> where, Map<String, String> facts,
+                Supplier<Map<String, Map<String, Object>>> roots, Cancellable cancellable,
+                Supplier<List<ItemStack>> itemHosts, boolean withItem) {
+            this(trigger, player, where, facts, roots, cancellable, itemHosts, withItem, null);
+        }
 
         public Fire {
             facts = facts == null ? Map.of() : facts;
@@ -107,8 +118,11 @@ public final class WorldEvents {
         if (fire.withItem()) {
             root.put("item", BehaviorService.itemContext(stack));
         }
-        var event = new BehaviorEvent(fire.trigger(), "", behavior.logicContext(root, fire.player(), fire.withItem() ? stack : null),
-                fire.cancellable(), fire.player());
+        var context = behavior.logicContext(root, fire.player(), fire.withItem() ? stack : null);
+        if (fire.target() != null) {
+            context.with(Facets.EVENT_TARGET, fire.target());
+        }
+        var event = new BehaviorEvent(fire.trigger(), "", context, fire.cancellable(), fire.player());
         event.withFilterFacts(FilterFacts.of(fire.facts()));
         if (fire.cancellable() != null) {
             event.withSynchronousPreEvent();

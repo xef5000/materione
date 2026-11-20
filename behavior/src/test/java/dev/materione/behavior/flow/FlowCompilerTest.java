@@ -39,7 +39,7 @@ class FlowCompilerTest {
                 "if", List.of("player.sneaking == false"),
                 "do", List.of(
                         Map.of("run_command", "say hi", "chance", 0.5, "delay", 10),
-                        Map.of("message", Map.of("value", "&aDone", "target", "actionbar"))),
+                        Map.of("message", Map.of("value", "&aDone", "volume", 2))),
                 "cooldown", 1000,
                 "charges", 3,
                 "per", "global")));

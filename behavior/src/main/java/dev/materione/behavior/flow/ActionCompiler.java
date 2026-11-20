@@ -2,8 +2,12 @@ package dev.materione.behavior.flow;
 
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
+import dev.materione.api.logic.TargetKind;
+import dev.materione.api.logic.TargetSpec;
 import java.util.Map;
 import java.util.Optional;
 
@@ -83,15 +87,46 @@ final class ActionCompiler {
     private <P> Step bind(
             String key, ActionType<P> type, Object payload, double chance, long delayTicks, StepPath path) {
         var recorder = new RecordingExpressions(unit.context.lookup.functions());
+        ActionDescription description = type.describe();
         var reader = Shapes.reader(
-                Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder, unit.context.environment);
+                Shapes.paramsOf(key, description.shorthand(), payload), recorder, unit.context.environment);
         ActionStep<P> step = ActionStep.bind(path, key, type, reader, chance, delayTicks);
+        step = target(step, description, reader);
         assert Shapes.declaresExpressions(type.describe().self().parameters(), reader.expressionKeys())
                 : "action '" + key + "' binds " + reader.expressionKeys()
                         + " as expressions; its description must declare each with acceptingExpression()";
         recorder.check(unit, path);
         unit.checkRequiredRoots(reader.requiredRoots(), path);
         return step;
+    }
+
+    /**
+     * Reads the step's {@code target:} (logic.md §39) once, here, for an action that declared itself targetable. An
+     * action that did not, and that has no parameter of its own called {@code target}, is told so: a target it would
+     * silently ignore is worse than a skipped step.
+     */
+    private <P> ActionStep<P> target(ActionStep<P> step, ActionDescription description, ParamReader reader) {
+        if (!description.isTargetable()) {
+            boolean ownParameter = description.self().parameters().stream()
+                    .anyMatch(parameter -> parameter.id().equals(TargetSpec.KEY));
+            if (reader.has(TargetSpec.KEY) && !ownParameter) {
+                throw new IllegalArgumentException("this action cannot act on a target; only the actions the "
+                        + "vocabulary marks targetable take one");
+            }
+            return step;
+        }
+        TargetSpec spec = TargetSpec.read(reader).orElse(null);
+        if (spec instanceof TargetSpec.Event && !unit.mayRead("target")) {
+            throw new IllegalArgumentException("target: event.target needs a trigger that carries an entity "
+                    + "(entity.hit or entity.kill); this rule's trigger does not");
+        }
+        var admits = java.util.EnumSet.noneOf(TargetKind.class);
+        for (TargetKind kind : TargetKind.values()) {
+            if (description.admits(kind)) {
+                admits.add(kind);
+            }
+        }
+        return step.withTarget(spec, admits);
     }
 
     private double ratio(Object value, StepPath path) {

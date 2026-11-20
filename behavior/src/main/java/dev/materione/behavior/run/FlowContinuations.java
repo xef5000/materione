@@ -2,6 +2,7 @@ package dev.materione.behavior.run;
 
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.ActionOutcome;
+import dev.materione.api.logic.TargetResolver;
 import dev.materione.api.logic.Threading;
 import dev.materione.behavior.flow.ActionStep;
 import dev.materione.behavior.flow.StepPath;
@@ -13,6 +14,8 @@ import java.util.function.Supplier;
 /** Nonblocking suspension, owner handoff and evaluation continuations for the flow interpreter. */
 abstract class FlowContinuations extends ControlSteps {
     final RunRegistry registry = new RunRegistry();
+    /** Resolves the {@code target:} of an action step (logic.md section 39); null until the platform installs one. */
+    volatile TargetResolver targets;
 
     FlowContinuations(RunScheduler scheduler, RunBudget budget, RunReporter reporter) {
         super(scheduler, budget, reporter);
@@ -48,8 +51,9 @@ abstract class FlowContinuations extends ControlSteps {
         boolean thrown = false;
         ActionOutcome outcome;
         try {
-            if (!await(run, action.path(), () ->
-                    action.type().executeResumable(action.params(), run.view(), run.reads.captureOrigin()))) {
+            if (!await(run, action.path(), () -> action.target() != null
+                    ? TargetedAction.run(run, action, targets)
+                    : action.type().executeResumable(action.params(), run.view(), run.reads.captureOrigin()))) {
                 return false;
             }
             outcome = take(run);
@@ -64,11 +68,14 @@ abstract class FlowContinuations extends ControlSteps {
             thrown = true;
             outcome = ActionOutcome.failed(reasonOf(e));
         }
+        String note = run.targetNote; // what the target resolved to, for the trace (logic.md section 39)
+        run.targetNote = "";
         consume(run, frame);
         if (outcome instanceof ActionOutcome.Failed failed) {
-            return failure(run, action.path(), "action '" + action.id() + "' failed: " + failed.reason(), thrown);
+            return failure(run, action.path(), "action '" + action.id() + "' failed: " + failed.reason()
+                    + (note.isEmpty() ? "" : " (" + note + ")"), thrown);
         }
-        emit(run, action.path(), TraceEvent.Type.STEP_OK, "");
+        emit(run, action.path(), TraceEvent.Type.STEP_OK, note);
         return true;
     }
 

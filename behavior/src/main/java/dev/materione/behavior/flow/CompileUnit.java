@@ -58,6 +58,19 @@ final class CompileUnit {
 
     // --- variable roots ---------------------------------------------------------
 
+    /**
+     * Whether a path may start with {@code root} here: true when the trigger's schema is unknown. {@code event.target}
+     * asks it of {@code target}, the root the entity triggers add (logic.md §39).
+     */
+    boolean mayRead(String root) {
+        return roots == null || roots.contains(root);
+    }
+
+    /** What the roots belong to, for a message ({@code the trigger entity.hit does not provide}). */
+    String rootsOrigin() {
+        return rootsOrigin;
+    }
+
     /** Checks the roots of every {@code ${...}} in a template. */
     void checkTemplate(String source, StepPath path) {
         if (roots == null || source == null || !source.contains("${")) {
