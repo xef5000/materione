@@ -1,0 +1,78 @@
+{
+  "task": "T14",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "dash_blade",
+      "edits": [
+        {
+          "field": [
+            "dash_blade",
+            "material"
+          ],
+          "value": "IRON_SWORD"
+        },
+        {
+          "field": [
+            "dash_blade",
+            "display_name"
+          ],
+          "value": "<aqua>Dash Blade"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/dash_blade.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "click:right",
+            "cooldown": 5000,
+            "do": [
+              {
+                "velocity": {
+                  "forward": 1.6,
+                  "up": 0.3
+                }
+              },
+              {
+                "particle": {
+                  "particle": "cloud",
+                  "count": 20
+                }
+              },
+              {
+                "sound": "entity.ender_dragon.flap"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 23
+    },
+    {
+      "line": 7,
+      "column": 13
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

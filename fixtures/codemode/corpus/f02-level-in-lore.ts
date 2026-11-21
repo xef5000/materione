@@ -1,6 +1,6 @@
 // F2 Level in lore (agent-benchmark.md section 2): "Show the level in the sword's lore."
-// Requires a runtime stack-mutation action (VERB).
+// One step that edits the stack the rule is about (stack.edit, #329): the kill rule hangs on the sword, so the stack is the sword.
 const sword = m.edit(m.ref.item("bench:bloodfang"));
 sword.rules.add(m.triggers.entityKill(), () => ({
-  do: [m.actions.setItemLore({ lore: ["Level: ${vars.player.bench.bloodfang_level}"] })],
+  do: [m.actions.stackEdit({ lore: ["Level: ${vars.player.bench.bloodfang_level}"] })],
 }));

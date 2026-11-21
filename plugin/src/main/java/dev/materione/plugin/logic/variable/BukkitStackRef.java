@@ -41,8 +41,18 @@ public final class BukkitStackRef implements StackRef {
         return pdc;
     }
 
-    /** The identity the stack had when this handle was made. */
-    String identity() {
+    /** The identity the stack had when this handle was made; blank for a vanilla item. */
+    public String identity() {
         return identity;
+    }
+
+    /**
+     * Edits the stack's item meta in place (the stack-editing verb, logic.md §41), through the same checks every access
+     * of this handle makes: the stack must still exist and still hold the identity the handle was given.
+     *
+     * @return false when the stack is gone or is now another item, or could not be edited
+     */
+    public boolean editMeta(java.util.function.Consumer<org.bukkit.inventory.meta.ItemMeta> edit) {
+        return identity.equals(pdc.identity()) && pdc.editMeta(edit);
     }
 }

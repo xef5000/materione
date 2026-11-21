@@ -1,0 +1,13 @@
+# T13: a pickaxe that mines a 3 by 3 area. `break_blocks` goes through the player's own break path (as_player is the
+# default), so a protection plugin is asked for every block; the block the player broke is left to vanilla. The box here is
+# flat (radius 1 on x and z, 0 on y) so the harness can place it on one layer.
+excavator:
+  material: DIAMOND_PICKAXE
+  display_name: "<aqua>Excavator"
+  behavior:
+    - id: dig
+      on: break
+      do:
+        - break_blocks: {shape: [1, 0, 1]}
+        - run_command: "say MATERIONE-WORLDVERBS-DUG ${location.x} ${location.y} ${location.z}"
+        - chat: "CHECK dug"

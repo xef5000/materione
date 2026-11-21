@@ -6,6 +6,8 @@ import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.behavior.rule.EventTypes;
 import dev.materione.platform.entity.EntityPalette;
+import dev.materione.plugin.logic.world.ProjectileTags;
+import dev.materione.plugin.logic.world.VerbScope;
 import dev.materione.plugin.runtime.behavior.WorldEvents.Fire;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -60,8 +62,8 @@ public final class WorldEventListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent event) {
-        if (!events.subscribes(EventTypes.ENTITY_HIT)) {
-            return;
+        if (!events.subscribes(EventTypes.ENTITY_HIT) || VerbScope.isDamaging()) {
+            return; // damage a world verb deals is the rule's own effect, not a new blow (logic.md section 41)
         }
         Player attacker = attackerOf(event.getDamager());
         Entity target = event.getEntity();
@@ -72,7 +74,7 @@ public final class WorldEventListener implements Listener {
             events.fire(new Fire(EventTypes.ENTITY_HIT, attacker, target::getLocation,
                     Map.of("type", EntityPalette.typeOf(target), "cause", EntityPalette.causeOf(event.getCause())),
                     () -> Map.of("target", target(target, true), "damage", damage(event)), event,
-                    () -> List.of(attacker.getInventory().getItemInMainHand()), true, target));
+                    () -> hosts(attacker, event.getDamager()), true, target));
         } catch (RuntimeException e) {
             reportBridgeFailure(attacker, e);
         }
@@ -81,7 +83,7 @@ public final class WorldEventListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onHurt(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player) || !events.subscribes(EventTypes.PLAYER_HURT)
-                || !ownedHere(player)) {
+                || VerbScope.isDamaging() || !ownedHere(player)) {
             return;
         }
         try {
@@ -177,6 +179,35 @@ public final class WorldEventListener implements Listener {
     }
 
     // --- conversion -----------------------------------------------------------------
+
+    /**
+     * The stacks whose rules answer a hit: the main hand, except for a projectile a {@code launch} step shot, which
+     * carries the id of the item that launched it (logic.md section 41): the stack with that identity in the shooter's
+     * inventory, so the rules run whatever the shooter holds by the time it lands. When the item is gone, none.
+     */
+    static List<ItemStack> hosts(Player attacker, Entity damager) {
+        if (damager instanceof Projectile projectile) {
+            var launcher = ProjectileTags.itemOf(projectile);
+            if (launcher.isPresent()) {
+                ItemStack held = attacker.getInventory().getItemInMainHand();
+                if (identityOf(held).filter(launcher.get()::equals).isPresent()) {
+                    return List.of(held);
+                }
+                for (ItemStack stack : attacker.getInventory().getStorageContents()) {
+                    if (identityOf(stack).filter(launcher.get()::equals).isPresent()) {
+                        return List.of(stack);
+                    }
+                }
+                return List.of();
+            }
+        }
+        return List.of(attacker.getInventory().getItemInMainHand());
+    }
+
+    private static java.util.Optional<String> identityOf(ItemStack stack) {
+        return stack == null ? java.util.Optional.empty()
+                : dev.materione.platform.items.MaterioneStacks.identityOf(stack).map(Object::toString);
+    }
 
     /** The player who dealt the damage: the damager itself, or the shooter of a projectile. */
     static Player attackerOf(Entity damager) {

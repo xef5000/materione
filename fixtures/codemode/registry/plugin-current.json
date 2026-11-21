@@ -98,6 +98,67 @@
         },
         {
           "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Breaks the blocks of a box around a location, as the player by default so protection is asked",
+          "displayName": "Break blocks",
+          "id": "break_blocks",
+          "parameters": [
+            {
+              "advanced": true,
+              "default": "0",
+              "description": "The box's radius in blocks per axis, 0 to 4: one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box",
+              "id": "shape",
+              "label": "Shape",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": true,
+              "default": "event",
+              "description": "The centre: event (the broken block, for a break rule), player, or {of, x, y, z}",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Break through the player's own break path so protection is asked; false is the world acting with no actor and asks nobody",
+              "id": "as_player",
+              "label": "As Player",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Whether the blocks drop their items",
+              "id": "drops",
+              "label": "Drops",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
           "category": "server",
           "deferred": true,
           "description": "Sends a message to the whole server, one world, or the holders of a permission",
@@ -270,6 +331,111 @@
           "shorthand": "slot",
           "sinceVersion": "1.0.0",
           "takesElse": true,
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Hurts the player, or another entity given as a target; attributed to the run's player when there is one",
+          "displayName": "Damage",
+          "id": "damage",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Health points of damage (2 is one heart); an expression is allowed",
+              "expression": true,
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "A vanilla damage type such as magic, fire or player_attack; default is a player attack when attributed, generic otherwise",
+              "id": "cause",
+              "label": "Cause",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
+          ],
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Drops items into the world at a location",
+          "displayName": "Drop item",
+          "id": "drop_item",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Materione item id, or minecraft:<material>",
+              "expression": true,
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "item"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many",
+              "expression": true,
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "event",
+              "description": "Where: event, player, or {of, x, y, z} with a world-axis offset in blocks",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "item",
+          "sinceVersion": "2.0.0",
           "threading": "player_region"
         },
         {
@@ -637,6 +803,130 @@
           "available": true,
           "category": "player",
           "deferred": false,
+          "description": "Restores health to the player, or to another living entity given as a target, up to its maximum",
+          "displayName": "Heal",
+          "id": "heal",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Health points to restore (2 is one heart); an expression is allowed; 0 does nothing",
+              "expression": true,
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
+          ],
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Shoots a projectile from the player's eyes, or from another entity given as a target; the projectile remembers the item the rule belongs to",
+          "displayName": "Launch projectile",
+          "id": "launch",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "An entity type that can be launched: arrow, snowball, small_fireball, trident, ...",
+              "id": "projectile",
+              "label": "Projectile",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1.5",
+              "description": "Blocks per tick, 0.05 to 10",
+              "expression": true,
+              "id": "speed",
+              "label": "Speed",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "0",
+              "description": "A cone around the aim, in degrees, 0 to 45",
+              "expression": true,
+              "id": "spread",
+              "label": "Spread",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many, 1 to 16",
+              "expression": true,
+              "id": "count",
+              "label": "Count",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "projectile",
+          "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
+          ],
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
           "description": "Shows text to the player, or to another player given as a target",
           "displayName": "Send message",
           "id": "message",
@@ -672,6 +962,121 @@
           "sinceVersion": "2.0.0",
           "targetable": [
             "player"
+          ],
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Spawns particles at a location: the player, or another entity given as a target, by default",
+          "displayName": "Particle",
+          "id": "particle",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "A vanilla particle such as cloud, flame, heart or dust",
+              "id": "particle",
+              "label": "Particle",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many, 1 to 500 per step",
+              "expression": true,
+              "id": "count",
+              "label": "Count",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "description": "Spread in blocks: one number, [x, y, z], or {x, y, z}",
+              "id": "offset",
+              "label": "Offset",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "default": "0",
+              "description": "The particle's own motion; its unit depends on the particle",
+              "expression": true,
+              "id": "speed",
+              "label": "Speed",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "target",
+              "description": "Where: event, player, target, or {of, x, y, z} with a world-axis offset in blocks",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "description": "#rrggbb, for particles that carry a colour (dust, entity_effect)",
+              "id": "color",
+              "label": "Color",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "The size of a dust particle, 0.1 to 4",
+              "expression": true,
+              "id": "size",
+              "label": "Size",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "particle",
+          "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
           ],
           "threading": "player_region"
         },
@@ -863,6 +1268,72 @@
         },
         {
           "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Replaces one block with a vanilla block or a Materione block, as the player by default so protection is asked",
+          "displayName": "Set block",
+          "id": "set_block",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "A vanilla block (stone, minecraft:oak_stairs[facing=north]) or a Materione block id",
+              "expression": true,
+              "id": "block",
+              "label": "Block",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "default": "event",
+              "description": "Where: event, player, or {of, x, y, z} with a world-axis offset in blocks",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Ask the player's placement path so protection is asked; false asks nobody",
+              "id": "as_player",
+              "label": "As Player",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "any",
+                "air"
+              ],
+              "default": "any",
+              "description": "any overwrites whatever is there; air only fills an empty space",
+              "id": "replace",
+              "label": "Replace",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "block",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
           "category": "data",
           "deferred": false,
           "description": "Stores a value in a run-local, session or declared player, server or item variable",
@@ -1011,6 +1482,66 @@
             "player"
           ],
           "threading": "global"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Patches the item stack the rule is about: name, lore, item model or damage; the stack itself is kept",
+          "displayName": "Edit item",
+          "id": "stack.edit",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The item's custom name (MiniMessage; templates allowed)",
+              "expression": true,
+              "id": "name",
+              "label": "Name",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The lore lines (MiniMessage; ${...} templates allowed); an empty list clears them",
+              "expression": true,
+              "id": "lore",
+              "label": "Lore",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "list",
+              "uiHint": "list"
+            },
+            {
+              "advanced": false,
+              "description": "The item model to show, as a namespaced id",
+              "id": "model",
+              "label": "Model",
+              "order": 0,
+              "required": false,
+              "section": "appearance",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Durability used (the vanilla damage); an expression is allowed",
+              "expression": true,
+              "id": "damage",
+              "label": "Damage",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
         },
         {
           "available": true,
@@ -1422,6 +1953,136 @@
           "sinceVersion": "2.0.0",
           "targetable": [
             "player"
+          ],
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Pushes the player, or another entity given as a target: relative to its facing (forward, up, strafe) or along the world axes (x, y, z)",
+          "displayName": "Velocity",
+          "id": "velocity",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Blocks per tick along the facing (horizontal unless follow_pitch)",
+              "expression": true,
+              "id": "forward",
+              "label": "Forward",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Blocks per tick upward",
+              "expression": true,
+              "id": "up",
+              "label": "Up",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Blocks per tick to the right of the facing",
+              "expression": true,
+              "id": "strafe",
+              "label": "Strafe",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Blocks per tick along the world X axis (not with forward, up or strafe)",
+              "expression": true,
+              "id": "x",
+              "label": "X",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Blocks per tick along the world Y axis (not with forward, up or strafe)",
+              "expression": true,
+              "id": "y",
+              "label": "Y",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Blocks per tick along the world Z axis (not with forward, up or strafe)",
+              "expression": true,
+              "id": "z",
+              "label": "Z",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "set",
+                "add"
+              ],
+              "default": "set",
+              "description": "set replaces the velocity, add adds to it",
+              "id": "mode",
+              "label": "Mode",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            },
+            {
+              "advanced": false,
+              "default": "false",
+              "description": "Whether forward follows where the subject looks, up or down, not only its heading",
+              "id": "follow_pitch",
+              "label": "Follow Pitch",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": true,
+              "default": "self",
+              "description": "Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "target"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0",
+          "targetable": [
+            "player",
+            "entity"
           ],
           "threading": "player_region"
         }

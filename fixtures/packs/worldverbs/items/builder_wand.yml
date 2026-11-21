@@ -1,0 +1,11 @@
+# set_block and drop_item as plain world verbs: a left click puts glass two blocks above the player and drops a diamond there;
+# `as_player` is the default, so the player's placement is asked first and a protected spot stays as it was.
+builder_wand:
+  material: STICK
+  display_name: "<green>Builder Wand"
+  behavior:
+    - id: cap
+      on: click:left
+      do:
+        - set_block: {block: minecraft:glass, at: {of: player, y: 2}, replace: air}
+        - drop_item: {item: "minecraft:diamond", amount: 1, at: {of: player, y: 2}}

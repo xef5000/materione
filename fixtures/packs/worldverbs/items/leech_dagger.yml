@@ -1,0 +1,15 @@
+# T12 and F2: heal the wielder for 20% of the damage dealt, and show the running total in the lore. `heal` clamps at the
+# maximum health and takes an expression; `stack.edit` patches the stack this rule hangs on (the one `vars.item.*` reads)
+# and never replaces it.
+leech_dagger:
+  material: IRON_SWORD
+  display_name: "<dark_red>Leech"
+  behavior:
+    - id: leech
+      on: entity.hit
+      do:
+        - heal: {amount: "${damage.final * 0.2}"}
+        - stack.edit:
+            lore:
+              - "<gray>Last hit: ${damage.final}"
+        - run_command: "say MATERIONE-WORLDVERBS-LEECH ${player.name} ${damage.final}"

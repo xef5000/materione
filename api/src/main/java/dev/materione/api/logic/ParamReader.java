@@ -265,6 +265,18 @@ public final class ParamReader {
         return List.copyOf(result);
     }
 
+    /**
+     * A list of strings, each compiled as a template (a lore line, a list of messages), or empty when the key is absent.
+     * Every entry is checked at load like a single {@link #template}; a non-string entry is rejected.
+     */
+    public List<TemplateText> templates(String key) {
+        var result = new ArrayList<TemplateText>();
+        for (String entry : strings(key)) {
+            result.add(compileTemplate(key, entry));
+        }
+        return List.copyOf(result);
+    }
+
     /** A nested mapping read with the same accessors. */
     public ParamReader section(String key) {
         if (isAbsent(key)) {

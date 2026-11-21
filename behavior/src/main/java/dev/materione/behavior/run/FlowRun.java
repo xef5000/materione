@@ -2,6 +2,7 @@ package dev.materione.behavior.run;
 
 import dev.materione.api.logic.ContextFacet;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.RunMeter;
 import dev.materione.behavior.expr.EvaluationContext;
 import dev.materione.behavior.flow.Step;
 import dev.materione.behavior.logic.EvaluationAware;
@@ -67,6 +68,23 @@ public final class FlowRun {
     boolean hopped;
     /** What the step being executed resolved its target to, for the trace; empty when it has none (logic.md section 39). */
     volatile String targetNote = "";
+    /** The run's tally of what its verbs have spent against their caps (logic.md section 41). */
+    final Meter meter = new Meter();
+
+    /** The run's {@link RunMeter}: totals by key; only the thread that currently owns the run touches it. */
+    static final class Meter implements RunMeter {
+        private final java.util.HashMap<String, Long> totals = new java.util.HashMap<>(4);
+
+        @Override
+        public synchronized long add(String key, long amount) {
+            return totals.merge(key, amount, Long::sum);
+        }
+
+        @Override
+        public synchronized long total(String key) {
+            return totals.getOrDefault(key, 0L);
+        }
+    }
 
     FlowRun(long id, Rule rule, LogicContext context, RunOwner owner,
             RunScheduler scheduler, BooleanSupplier synchronousOnly) {
@@ -154,6 +172,9 @@ public final class FlowRun {
 
         @Override
         public <T> Optional<T> facet(ContextFacet<T> facet) {
+            if (RunMeter.FACET.equals(facet)) {
+                return Optional.of(facet.cast(run.meter));
+            }
             return base.facet(facet);
         }
 

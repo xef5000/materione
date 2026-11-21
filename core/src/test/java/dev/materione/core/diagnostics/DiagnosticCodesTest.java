@@ -54,7 +54,9 @@ class DiagnosticCodesTest {
         // MTR-0102 a strict input transfer could not be recorded, MTR-0103 recovery left stacks owed:
         // gui-input-durability.md section 5.9, #309 and #310;
         // MTR-0104 a transaction cannot be reverted: codemode.md section 10, #344;
-        // MTR-0105 a rule step names content no pack declares: codemode.md section 10, #363)
-        assertThat(DiagnosticCodes.all()).hasSize(104);
+        // MTR-0105 a rule step names content no pack declares: codemode.md section 10, #363;
+        // MTR-0118 a world verb spent its per-run budget, MTR-0119 a world verb skipped a location in another region:
+        // logic.md section 41, #329)
+        assertThat(DiagnosticCodes.all()).hasSize(106);
     }
 }

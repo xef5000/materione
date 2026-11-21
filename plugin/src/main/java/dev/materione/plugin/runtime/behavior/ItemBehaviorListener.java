@@ -77,11 +77,17 @@ public final class ItemBehaviorListener implements Listener {
                 && event.isCancelled();
     }
 
+    @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBreak(org.bukkit.event.block.BlockBreakEvent event) {
+        if (dev.materione.plugin.logic.world.VerbScope.isBreaking()) {
+            return; // a block a world verb broke is the rule's own effect, not a new swing of the tool (logic.md section 41)
+        }
         ItemStack tool = event.getPlayer().getInventory().getItemInMainHand();
-        try {
-            behavior.fireItemEvent("break", "", event.getPlayer(), tool, event);
+        // the event's location is the broken block, and that block is still in the world while the rules run: a
+        // break_blocks step leaves it alone, because vanilla finishes breaking it
+        try (var scope = dev.materione.plugin.logic.world.VerbScope.breakEvent(event.getBlock())) {
+            behavior.fireItemEvent("break", "", event.getPlayer(), tool, event, event.getBlock().getLocation());
         } catch (RuntimeException e) {
             reportBridgeFailure(event.getPlayer(), e);
         }

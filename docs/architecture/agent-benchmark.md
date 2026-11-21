@@ -72,15 +72,15 @@
 | T09 | **Warp menu**: `/warps` with spawn, mines, arena, and a link to the survival server | GUI | Pass | |
 | T10 | **Welcome**: greet players on join; first join gets the starter kit and a broadcast | server | Pass (#327) | |
 | T11 | **Golden berry**: food that gives regeneration and speed for 5 s | item | Pass | |
-| T12 | **Lifesteal dagger**: heal the wielder for 20% of the damage dealt | weapon | Fail | VERB |
-| T13 | **Excavator pickaxe**: mines a 3x3 area | tool | Fail | VERB |
-| T14 | **Dash blade**: right-click launches the player forward with a particle trail, 5 s cooldown | ability | Fail | VERB |
+| T12 | **Lifesteal dagger**: heal the wielder for 20% of the damage dealt | weapon | Pass (#329) | |
+| T13 | **Excavator pickaxe**: mines a 3x3 area | tool | Pass (#329) | |
+| T14 | **Dash blade**: right-click launches the player forward with a particle trail, 5 s cooldown | ability | Pass (#329) | |
 | T15 | **Mob drop**: zombies have a 5% chance to drop a Rotten Heart | mobs | Pass (#327) | |
 | T16 | **Crate**: a placed crate opened with a key gives one of five weighted rewards and announces rare ones | furniture | Pass | |
 | T17 | **Leaderboard**: `/top` shows the ten players with the most kills | GUI, progression | Fail | QUERY |
 | T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Fail | CUSTODY |
 | T19 | **Vending machine**: a furniture that opens a shop when right-clicked | furniture | Pass | |
-| T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | TIMER, VIEW, VERB |
+| T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | TIMER, VIEW |
 | T21 | **`/pay <player> <amount>`** | command, economy | Fail | QTY |
 | T22 | **Arena region**: entering `arena` gives the PvP kit, leaving removes it | integration | Fail | PROVIDER |
 | T23 | **Rank-up**: `/rankup` pays 10 000 coins for the next rank and announces it | GUI, economy | Pass | |
@@ -91,10 +91,10 @@
 | T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**17 pass, 0 partial, 12 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
-`now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`) and #330 (commands as content, logic.md §40): T04, T05 and T07 flipped to Pass
-alongside T06, T10 and T15, and T27 with #330. The count was 10, 2 and 17 when the page was written, 13, 2 and 14 after #327, and 16, 13
-before #330. "Fails on" lists what the honest program needs, not everything that would be nice.
+**20 pass, 0 partial, 9 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
+`now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41) and #330 (commands as content, logic.md §40): T04, T05 and T07 flipped to Pass
+alongside T06, T10 and T15, T12, T13 and T14 with #329, and T27 with #330. The count was 10, 2 and 17 when the page was written, 13, 2 and 14 after #327, and 16, 13
+before #329 and #330. "Fails on" lists what the honest program needs, not everything that would be nice.
 
 **The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built (and
 verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-seeded on a player-scoped Bloodfang world):
@@ -102,10 +102,10 @@ verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-s
 | # | Follow-up | Program shape | Verdict |
 |---|---|---|---|
 | F1 | "Make bleed stack up to 3 times" | one variable held by the *struck entity*, one changed rule | Fail: STATE (entity holder) |
-| F2 | "Show the level in the sword's lore" | one step that edits the held stack | Fail: VERB (stack edit) |
+| F2 | "Show the level in the sword's lore" | one step that edits the held stack | Pass (#329: `stack.edit`) |
 | F3 | "The upgrade costs 500 times the level" | one `setFields` on the button's rule | Pass once T01 passes |
 | F4 | "Rename the permission to `rpg.bloodfang`" | `findReferences`, then `setFields` on each hit | Pass once T01 passes |
-| F5 | "Level 5 swords emit red particles when held" | one rule on `equip` with a repeating particle | Fail: VERB, TIMER |
+| F5 | "Level 5 swords emit red particles when held" | one rule on `equip` with a repeating particle | Fail: TIMER (`particle` exists since #329) |
 
 ---
 
@@ -317,37 +317,39 @@ berry.rules.add({ on: m.triggers.consume, do: [
   m.actions.potion({ effect: "regeneration", seconds: 5, amplifier: 1 }), m.actions.potion({ effect: "speed", seconds: 5 }) ] });
 ```
 
-### T12 Lifesteal dagger — Fail (VERB)
+### T12 Lifesteal dagger — Pass (#329)
 
 ```ts
 const dagger = p.items.create("lifesteal_dagger", { material: "iron_sword", display_name: "<dark_red>Leech" });
 dagger.rules.add({
   on: m.triggers.entityHit,                                              // passes since #327: `damage.final` is in context
-  do: [ m.actions.heal({ amount: m.expr`damage.final * 0.2` }) ],        // ✗ TS2339 'heal'                     [VERB]
+  do: [ m.actions.heal({ amount: m.expr`damage.final * 0.2` }) ],        // passes since #329: `heal` takes an expression
 });
 ```
 
-`potion: instant_health` heals in fixed steps of 4 and cannot express "20% of the damage"; using it would change the feature.
+`potion: instant_health` heals in fixed steps of 4 and cannot express "20% of the damage"; using it would change the feature. `heal` clamps at the maximum health and
+an amount of 0 (a hit that did no damage) is a heal that did nothing, not a failure (logic.md §41).
 
-### T13 Excavator pickaxe — Fail (VERB)
+### T13 Excavator pickaxe — Pass (#329)
 
 ```ts
 const pick = p.items.create("excavator", { material: "diamond_pickaxe", display_name: "Excavator" });
 pick.rules.add({ on: m.triggers.break, do: [
-  m.actions.breakBlocks({ around: m.where.event, shape: { box: [1, 1, 1] }, asPlayer: true, drops: true }) ] });
-//          ^^^^^^^^^^^ ✗ TS2339 'breakBlocks' does not exist on type 'ActionCatalog'                           [VERB]
+  m.actions.breakBlocks({ shape: [1, 1, 1], as_player: true, drops: true }) ] });   // passes since #329 (`at` defaults to the event)
 ```
 
-The trigger exists (`break` fires for the held item). No verb changes a block. The verb must act *as the player* so that
-protection plugins are asked (D8's gateway, primitives.md §5.6), which is why it is a primitive and not a `run_command`.
+The trigger exists (`break` fires for the held item). The verb acts *as the player* so that protection plugins are asked (D8's gateway,
+primitives.md §5.6), which is why it is a primitive and not a `run_command`. As built (logic.md §41) `break_blocks` goes through the player's own
+break path per block, leaves the block of the break event to vanilla, is capped at 9 by 9 by 9 a step and 2,048 blocks a run, and `at: event` is the
+broken block (the item bridge now passes it; it used to pass the player's position).
 
-### T14 Dash blade — Fail (VERB)
+### T14 Dash blade — Pass (#329)
 
 ```ts
 const blade = p.items.create("dash_blade", { material: "iron_sword", display_name: "<aqua>Dash Blade" });
 blade.rules.add({ on: m.triggers.click({ detail: "right" }), cooldown: 5_000, do: [
-  m.actions.velocity({ forward: 1.6, up: 0.3 }),                         // ✗ TS2339 'velocity'                 [VERB]
-  m.actions.particle({ particle: "cloud", count: 20 }),                  // ✗ TS2339 'particle' (#21)           [VERB]
+  m.actions.velocity({ forward: 1.6, up: 0.3 }),                         // passes since #329
+  m.actions.particle({ particle: "cloud", count: 20 }),                  // passes since #329 (the integration point of #21)
   m.actions.sound("entity.ender_dragon.flap") ] });
 ```
 
@@ -429,7 +431,7 @@ const machine = p.furnitures.create("vending_machine", { model: m.ref.asset("mod
 machine.rules.add({ on: m.triggers.click({ detail: "right" }), do: [ m.actions.guiOpen(shop), m.actions.sound("block.note_block.chime") ] });
 ```
 
-### T20 Mana and a fire wand — Fail (TIMER, VIEW, VERB)
+### T20 Mana and a fire wand — Fail (TIMER, VIEW)
 
 ```ts
 const mana = p.variables.create("mana", { scope: "player", type: "number", default: 100, min: 0, max: 100 });
@@ -442,10 +444,11 @@ const wand = p.items.create("fire_wand", { material: "blaze_rod", display_name: 
 wand.rules.add({ on: m.triggers.click({ detail: "right" }), do: [
   m.steps.if(m.expr`${mana} >= 20`, { else: [ m.actions.actionbar("<blue>Not enough mana"), m.steps.stop() ] }),
   m.actions.setVar(mana, { op: "subtract", value: 20 }),
-  m.actions.launch({ projectile: "small_fireball", speed: 1.5 }) ] });    // ✗ TS2339 'launch'                  [VERB]
+  m.actions.launch({ projectile: "small_fireball", speed: 1.5 }) ] });    // passes since #329
 ```
 
-The mana variable and the spend-or-refuse rule pass. An `actionbar` line on every tick would imitate a HUD; it is a
+The mana variable, the spend-or-refuse rule and the `launch` pass (the projectile carries the wand's id, so the wand's own `entity.hit` rule answers when it lands).
+An `actionbar` line on every tick would imitate a HUD; it is a
 workaround and it still needs TIMER.
 
 ### T21 `/pay <player> <amount>` — Fail (QTY)
@@ -577,7 +580,7 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **RULE** | A rule unit with no host: behavior not attached to an item, block, furniture or GUI | §5.5 | T06 T10 T15 T17 T20 T22 T26 T28 (8) | **Closed by #327** (the `rule` content type, logic.md §37); with the triggers below it flipped T06 T10 T15 |
 | **TRIG-ENTITY** | Triggers for entity events with the entity and the damage in context: hit, hurt, kill | §4.3, §5.5 | T01 T06 T12 T15 T17 (5) | **Closed by #327** (`entity.hit`, `entity.kill`, `player.hurt`); T06 T15 pass, the rest keep other gaps |
 | **TRIG-PLAYER** | Triggers for a player's lifecycle: join, quit, respawn, death | §5.5 | T10 T28 (2) | **Closed by #327** (`player.join`, `player.quit`, `player.respawn`, `player.death`); T10 passes, T28 keeps VIEW |
-| **VERB** | Entity and world verbs: heal, damage, velocity, particle, launch, break or set a block, edit a stack | §5.7 | T12 T13 T14 T20, F2 F5 (4) | T13 T14 |
+| **VERB** | Entity and world verbs: heal, damage, velocity, particle, launch, break or set a block, edit a stack | §5.7 | T12 T13 T14 T20, F2 F5 (4) | **Closed by #329** (`heal`, `damage`, `velocity`, `particle`, `launch`, `break_blocks`, `set_block`, `drop_item`, `stack.edit`; logic.md §41); T12 T13 T14 and F2 pass, T20 and F5 keep TIMER (and VIEW) |
 | **TIME** | A clock in expressions (`now()`), durations, and a cooldown that persists and can be read | new | T04 T05 T07 (3) | **Closed by #328** (`now()`, `today()`, `on_cooldown` with `${cooldown.remaining}`); T04 T05 T07 pass |
 | **CMD** | Commands as content | §5.4 | T02 T21 T27 (3) | **Closed by #330** (the `command` content type, `commands/`, with `open:` defined as its sugar; logic.md §40); T27 passes, T21 keeps QTY, T02 keeps its other gaps |
 | **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | **Closed by #331** (`target:` on `message`, `actionbar`, `title`, `sound`, `potion`, `give_item`, `give_money`, `take_money`, `teleport`; logic.md §39); T21 passes it, and keeps QTY |
@@ -602,7 +605,7 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 17 | T04 T05 T07 | Small: expression functions and one rule option |
-| 3 | **Entity and world verbs** (#329) | VERB | 20 | T12 T13 T14 | Medium: about eight actions, each small; protection checks |
+| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 20 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
 | 4 | **Commands as content** (#330), **shipped** | CMD | 20 | none: T27 passes at ship, T21 keeps QTY (rank 12) | Small to medium: lift the `open:` block (as built: logic.md §40) |
 | 5 | **Target addressing** (#331), **shipped** | TARGET | 20 | none: T21 needs QTY as well (rank 12) | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
 | 6 | **Timers** (rides #327's rule unit) (#332) | TIMER | 21 | T26 | Small once RULE exists; budgets matter |
@@ -816,7 +819,7 @@ acceptance is re-checked after the M6 primitives land (roadmap M6.5 re-scope).
   and hard picodollar budget guard supports owner-budgeted runs (#385, #349). The measured arms and their scope are in §7.1 and
   §7.2; they run the oracle, not the deployed editor. The deployed editor and gateway were measured once, separately
   (codemode.md §12.3). Not run: other models in the baseline arm, repeated runs, a human review of the vague-request verdicts.
-- **Live runtime execution of all 16 passing tasks on Paper.** `CodemodeReplayTest` proves that every staged transaction
+- **Live runtime execution of all 19 passing tasks on Paper.** `CodemodeReplayTest` proves that every staged transaction
   validates and compiles cleanly through `authoring.transaction(dryRun=true)` (except T16 and T19 which hit S18 `MTR-0009` on the
   furniture scaffold's default texture); end-to-end in-game execution is covered by the harness and QA catalog.
 - **Costs in §4.2** are estimates from the audit, not from designs. Each issue's design may move its rank.

@@ -1,0 +1,45 @@
+{
+  "task": "F2",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "logicEdit",
+      "path": "items/bloodfang.yml",
+      "rev": 0,
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "entity.kill",
+            "do": [
+              {
+                "stack.edit": {
+                  "lore": [
+                    "Level: ${vars.player.bench.bloodfang_level}"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 13
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 1,
+    "documents": 1
+  }
+}

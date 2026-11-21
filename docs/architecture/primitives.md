@@ -220,7 +220,7 @@ rules too (logic.md §37).
 | Finding | Class | Direction |
 |---|---|---|
 | **Actions have an implicit subject.** Each acts on the run's own player (and window). There is no way to say "this player, the other player, the holder of this key". | **G** | Target addressing (§5.6): an optional target on actions that make sense on another subject, resolved by the engine. **Built by #331** (logic.md §39). |
-| The verb set stops at players, items and messages. Nothing damages or heals an entity, applies an attribute modifier, spawns a particle, launches or kills. A combat-spell catalog (#13: lunge, lifeleech, bleed, fireball, knockback) cannot be data until these exist. | **G** | New verbs as primitives (and #21 for particles), each universal (any entity), not each spell. |
+| The verb set stops at players, items and messages. Nothing damages or heals an entity, applies an attribute modifier, spawns a particle, launches or kills. A combat-spell catalog (#13: lunge, lifeleech, bleed, fireball, knockback) cannot be data until these exist. | **G** | New verbs as primitives (and #21 for particles), each universal (any entity), not each spell. **Built by #329** (§5.7, logic.md §41): nine actions, `heal`, `damage`, `velocity`, `particle`, `launch`, `break_blocks`, `set_block`, `drop_item` and `stack.edit`; `spawn`, `kill` and attribute modifiers are not built. |
 | No `emit` and no cross-resource `call`. | **G** | §5.5. |
 
 ### 4.5 Conditions and expression functions
@@ -411,6 +411,8 @@ every action, and the owner's question is whether an opt-out node is wanted. `me
 *The missing verbs* (damage, heal, attribute modifier, velocity, particle, spawn, kill), added once each as a primitive that
 works on any entity. #21 (particles) is already one. This is what #13's combat spells need and what the bleed of #320's example
 needs; each spell then is a preset.
+
+**As built (#329, logic.md §41):** nine verbs, each one registry entry, none named for a spell: `heal`, `damage`, `velocity`, `particle`, `launch`, `break_blocks`, `set_block`, `drop_item`, `stack.edit`. The five that act on an entity are `targetable` (§5.6) and take `at: target` for a location; the world verbs share one `at` value (`event`, `player`, `target`, offsets). `break_blocks` and `set_block` go through the player's own break and placement paths by default (`as_player: true`), so protection plugins are asked; every world mutation runs on the thread that owns its location. Quantities take the expression marker, and every verb that multiplies work is capped per step and per run (`MTR-0118`, `MTR-0119`). `stack.edit` acts on the one "stack the run is about" of logic.md §38. #21 (particles) is covered for its action only; #13's entries are presets over these and are not built.
 
 ### 5.8 Open provider kinds
 

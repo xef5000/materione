@@ -80,6 +80,7 @@ public final class MaterionePlugin extends JavaPlugin {
     /** The crash-safe input runtime (row P): capability, recovery gate, death release, claim; built once. */
     private dev.materione.plugin.escrow.runtime.EscrowRuntime escrowRuntime;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
+    private dev.materione.plugin.logic.world.WorldVerbs worldVerbs;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
     private dev.materione.core.storage.RestartStaging restartStaging;
     private dev.materione.plugin.runtime.DatapackService datapackService;
@@ -496,9 +497,11 @@ public final class MaterionePlugin extends JavaPlugin {
         boolean folia = descriptorOrNull() == null || descriptorOrNull().folia();
         var threadProbe = dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER;
         var currencyReads = new dev.materione.plugin.logic.currency.CurrencyReads(folia, threadProbe);
+        // the world verbs act through one platform (logic.md section 41); the custom-block runtime binds into it below
+        worldVerbs = dev.materione.plugin.logic.world.WorldVerbs.server(this, scheduling, diagnostics::publish);
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
-                guiBridge, currencyReads);
+                guiBridge, currencyReads, dev.materione.platform.entity.EntityPalette.entityTypes(), worldVerbs);
         // the prompt step and its three input methods (logic.md §6.6); the listener feeds the methods the chat,
         // sign and anvil events they wait for
         var prompts = dev.materione.plugin.gui.prompt.PromptRuntime.create(this, scheduling, guiBridge,
@@ -867,6 +870,9 @@ public final class MaterionePlugin extends JavaPlugin {
         customBlocks = new dev.materione.plugin.runtime.blocks.CustomBlockService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior, placements);
         getServer().getPluginManager().registerEvents(customBlocks, this);
+        if (worldVerbs != null) {
+            worldVerbs.bindCustomBlocks(customBlocks); // set_block and break_blocks reach Materione blocks through it
+        }
         // spawn-area chunks loaded before this listener existed: rebuild any
         // index entries they carry now, straight from chunk-PDC truth (§4.2)
         customBlocks.reconcileLoadedChunks();

@@ -46,6 +46,15 @@ public interface VariableBinding {
      */
     boolean store(VariableDeclaration declaration, Object value);
 
+    /**
+     * The item stack this run is about (logic.md §38), as the handle the item scope reads and writes through, or empty
+     * when the run has none. The stack-editing verb acts on this same handle (logic.md §41), so "the run's item" is one
+     * notion: the trigger declares it, the binding holds it, and every consumer asks here.
+     */
+    default Optional<StackRef> stack() {
+        return Optional.empty();
+    }
+
     /** Atomically applies a pure operation with respect to every writer of this variable. */
     default VariableOps.Outcome mutate(VariableDeclaration declaration, VariableOp operation, Object operand) {
         return new VariableOps.Outcome(false, null, "atomic variable mutation is unsupported");

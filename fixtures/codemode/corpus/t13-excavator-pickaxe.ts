@@ -5,5 +5,5 @@ const pick = p.items.create("excavator", {
   display_name: m.mm("Excavator"),
 });
 pick.rules.add(m.triggers.break(), () => ({
-  do: [m.actions.breakBlocks({ shape: [1, 1, 1], asPlayer: true, drops: true })],
+  do: [m.actions.breakBlocks({ shape: [1, 1, 1], as_player: true, drops: true })],
 }));
