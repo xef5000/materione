@@ -1,0 +1,49 @@
+{
+  "task": "T27",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": "Adds a /discord command that prints the invite link to the player.",
+  "operations": [
+    {
+      "kind": "create",
+      "type": "commands",
+      "id": "discord",
+      "edits": [
+        {
+          "field": [
+            "discord",
+            "names"
+          ],
+          "value": [
+            "discord"
+          ]
+        },
+        {
+          "field": [
+            "discord",
+            "do"
+          ],
+          "value": [
+            {
+              "message": "<blue>Join us: <u>discord.gg/example</u>"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 12
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 1,
+    "documents": 1
+  }
+}

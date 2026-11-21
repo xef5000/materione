@@ -99,6 +99,24 @@ class ArgParserTest {
                 .isEqualTo("missing item. usage: /give <item:string>");
     }
 
+    /** A command document's {@code args.*} are typed for the expression engine; a GUI's {@code gui.args} stay text. */
+    @Test
+    void typedValuesAreNumbersAndBooleansForTheExpressionEngineAndTextOtherwise() {
+        ArgParser.Result result = ArgParser.parse(PLAN,
+                Map.of("amount", "007", "ratio", "2.5", "vip", "TRUE", "target", "alice"), PLAYERS);
+
+        Map<String, Object> typed = ArgParser.typed(PLAN, result.values());
+
+        assertThat(typed).containsEntry("category", "all").containsEntry("amount", 7).containsEntry("ratio", 2.5)
+                .containsEntry("vip", true).containsEntry("target", "Alice");
+        assertThat(typed.get("amount")).isInstanceOf(Integer.class);
+        assertThat(typed.get("ratio")).isInstanceOf(Double.class);
+        assertThat(typed.keySet()).containsExactly("category", "amount", "ratio", "vip", "target");
+        // text is the safe reading of anything that does not read as its type (a dropped default never gets here)
+        assertThat(ArgParser.typed(PLAN, Map.of("amount", "x"))).containsEntry("amount", "x");
+        assertThat(ArgParser.typed(PLAN, Map.of("undeclared", "y"))).containsEntry("undeclared", "y");
+    }
+
     @Test
     void theArgumentTypesReadTheirAuthorWords() {
         assertThat(ArgType.of("int")).contains(ArgType.INT);

@@ -5,15 +5,6 @@
   "area": "command",
   "prompt": "Create a /discord command that prints the Discord invite link to the player.",
   "registry": "plugin-current",
-  "result": "fail",
-  "gaps": ["CMD"],
-  "diagnostics": [
-    {
-      "code": 2339,
-      "line": 4,
-      "gap": "CMD",
-      "messageContains": ["commands", "PackWriter"],
-      "missingPrimitive": { "member": "commands", "catalog": "PackWriter" }
-    }
-  ]
+  "result": "pass",
+  "gaps": []
 }

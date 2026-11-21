@@ -575,14 +575,25 @@ is left out of the live shadow, and the rest of its pack loads.
 
 The GUI open commands ([`logic.md`](logic.md) §23, #215) add four codes. A malformed `open:` block (a non-mapping,
 an unknown key, a bad command name, an argument of an unknown type) is `MTR-0021` at `open`, like a malformed
-`behavior:`. The other problems of the block are these:
+`behavior:`. The other problems of the block are these. Since #330 they apply to the `command` content type as well
+(logic.md §40): its names, arguments and gate are the same block compiled by the same code, so a command document keeps these
+four numbers and says `command`, or the document's id, where an `open:` block says `open`:
 
 | Code | Severity | Meaning and recovery |
 |---|---|---|
-| `MTR-0066` | warning | An `open.args` entry cannot be read as its declared type: a `default:` that is not a whole number for an `int`, not a number for a `number`, not `true` or `false` for a `boolean`, not one of the `suggest:` values for a `choice`. The default is dropped and the argument keeps its other settings. A `choice` with no `suggest:` list reads as a `string`, with the same code. Fix the default or the list. |
-| `MTR-0067` | warning | An open command cannot be registered because its name is already a command: vanilla, another plugin, or another GUI's open command. Paper would let a main label override it, so the alias is skipped before anything is registered; the GUI's other aliases and `/materione gui open` still work. Rename one of the two. Reported at boot and at each reload that sees the conflict. |
-| `MTR-0068` | error | A GUI's `open.requirement` does not load (an unknown condition, a malformed expression, a broken predicate). The open fails closed: every player without the bypass node `materione.gui.bypass.<pack>.<id>` is refused, so a broken check never grants what it guards. Fix the condition named beside it. |
-| `MTR-0069` | warning | A content swap asked for a server data reload to add an open command to the live tree, or to rebuild one whose argument names or types changed (logic.md §23, decision 15), and the reload did not put it there. The alias is not in the tree until the next restart, and no further reload is asked for it until the next COMMANDS event. Restart the server to apply it. |
+| `MTR-0066` | warning | An `open.args` (or a command's `args`) entry cannot be read as its declared type: a `default:` that is not a whole number for an `int`, not a number for a `number`, not `true` or `false` for a `boolean`, not one of the `suggest:` values for a `choice`. The default is dropped and the argument keeps its other settings. A `choice` with no `suggest:` list reads as a `string`, with the same code. Fix the default or the list. |
+| `MTR-0067` | warning | An open command, or a name a command document declares, cannot be registered because it is already a command: vanilla, another plugin, another GUI's open command, or another command document's name. Paper would let a main label override it, so the alias is skipped before anything is registered; the GUI's other aliases and `/materione gui open` still work, and a document's other names still run it. The earlier claim keeps the name: GUIs' aliases claim first, then command documents in the order the pipeline met them, so a document is never the one that shadows. A document all of whose names are refused claims nothing (its quarantine). Rename one of the two. Reported at boot and at each reload that sees the conflict. |
+| `MTR-0068` | error | A GUI's `open.requirement` (or a command document's `requirement`) does not load (an unknown condition, a malformed expression, a broken predicate). The open or the command fails closed: every sender without the bypass node `materione.gui.bypass.<pack>.<id>` (`materione.command.bypass.<pack>.<id>` for a command) is refused, so a broken check never grants what it guards. Fix the condition named beside it. |
+| `MTR-0069` | warning | A content swap asked for a server data reload to add an open command, or a command document's name, to the live tree, or to rebuild one whose argument names or types changed (logic.md §23, decision 15), and the reload did not put it there. The alias is not in the tree until the next restart, and no further reload is asked for it until the next COMMANDS event. Restart the server to apply it. |
+
+The `command` content type ([`logic.md`](logic.md) §40, #330) takes no new code either. The flow compiler checks its `do:` and
+`flows:` with the codes a host's rules get (`MTR-0021`, `MTR-0057`, `MTR-0058`, `MTR-0060`), at the paths the author wrote (`do.1`,
+`flows.thank.0`, `requirement`, `deny.0`). The cases a command document adds are `MTR-0021` warnings on the document that leave
+its siblings and the document's valid names live: a name that is not `[a-z0-9_-]+`, a malformed argument or permission, a `console:`
+that is not a boolean. Two keep the document out of the command tree: one with no usable name, and one with no `do:` step that
+loads (a command that did nothing must not claim a name). A document whose `do:` is not a list, or whose `flows:` is not a mapping, is
+not a command document: it is reported with `MTR-0008` ("failed to parse as command"), is left out of the live shadow, and the rest
+of its pack loads.
 
 ---
 

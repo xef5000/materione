@@ -840,6 +840,19 @@ public final class MaterionePlugin extends JavaPlugin {
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(logic.engine(), pipeline.runtime(), variables);
+        // commands as content (logic.md section 40): the command tree and its thread hop are the open path's; the
+        // gate and the flow are the command runner's. Installed here, in onEnable, so the COMMANDS lifecycle event
+        // (which fires after it) registers the documents' names from the built registries.
+        if (guiStack != null) {
+            guiStack.commandDocuments(
+                    new dev.materione.plugin.commands.CommandRuns(
+                            getLogger(), () -> pipeline.runtime().registries(),
+                            dev.materione.plugin.commands.CommandRuns.over(behavior), logic.engine(),
+                            dev.materione.plugin.gui.open.PlayerNames.server()),
+                    () -> dev.materione.plugin.commands.RuntimeCommands.declarations(
+                            pipeline.runtime().registries()),
+                    () -> dev.materione.plugin.commands.RuntimeCommands.declarations(pipeline.builtRegistries()));
+        }
         getServer().getPluginManager().registerEvents(new ItemBehaviorListener(behavior, diagnostics), this);
         // the world events (logic.md section 37): entity hit and kill, player hurt, join, quit, death, respawn;
         // a trigger no rule answers costs one set lookup per event

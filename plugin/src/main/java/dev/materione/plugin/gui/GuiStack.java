@@ -24,7 +24,9 @@ import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.LoggingRenderReporter;
 import dev.materione.plugin.gui.open.GuiOpener;
+import dev.materione.plugin.gui.open.DocumentCommands;
 import dev.materione.plugin.gui.open.OpenCommandHandler;
+import dev.materione.plugin.gui.open.OpenDeclaration;
 import dev.materione.plugin.gui.open.OpenCommandRegistrar;
 import dev.materione.plugin.gui.open.OpenSpecGate;
 import dev.materione.plugin.gui.open.PlayerNames;
@@ -57,6 +59,7 @@ public final class GuiStack {
     private final ClickRouter router;
     private final GuiWindowListener windowListener;
     private final OpenCommandRegistrar openCommands;
+    private final OpenCommandHandler openHandler;
     private final GuiBridge.Services services;
     private final InputSlotClicks inputClicks;
 
@@ -115,8 +118,8 @@ public final class GuiStack {
         opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
-        var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
-        this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics, scheduling);
+        this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
+        this.openCommands = new OpenCommandRegistrar(plugin, openHandler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);
         this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal, strict);
@@ -141,6 +144,17 @@ public final class GuiStack {
     /** The open commands: registered from the server's COMMANDS event, and re-synced after every content swap. */
     public OpenCommandRegistrar openCommands() {
         return openCommands;
+    }
+
+    /**
+     * Gives the command tree the command documents (logic.md §40): what runs one when its name is typed, and where its
+     * names are read from (the applied registries after a swap, the built ones at the server's COMMANDS event). Called
+     * once the flow runtime exists; until then a name that belongs to a document runs nothing.
+     */
+    public void commandDocuments(
+            DocumentCommands runner, Supplier<List<OpenDeclaration>> live, Supplier<List<OpenDeclaration>> built) {
+        openHandler.documents(runner);
+        openCommands.commandDocuments(live, built);
     }
 
     public GuiLiveRefresh refresh() {

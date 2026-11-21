@@ -22,22 +22,29 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 /**
- * What an open command does when it runs (logic.md §6.1): it reads the arguments the client sent, types them
- * with the GUI's live block, and opens the GUI through the one open path ({@link GuiOpener} via
- * {@link OpenRequest}). A usage problem answers the sender with the usage line of the alias they typed, and
- * a console sender, which has no window, is told it must be a player.
+ * What a declared command name does when it runs (logic.md §6.1, §40). A name belongs to a GUI's {@code open:} block
+ * or to a {@code command} document, and the first is defined as the sugar of the second: both are names with typed
+ * arguments and a gate whose flow is "open this GUI" or "run these steps". For a GUI it reads the arguments the client
+ * sent, types them with the GUI's live block, and opens the GUI through the one open path ({@link GuiOpener} via
+ * {@link OpenRequest}); a usage problem answers the sender with the usage line of the alias they typed, and a console
+ * sender, which has no window, is told it must be a player. For a command document it hands the sender and the raw
+ * arguments to {@link DocumentCommands}, which gates and runs the flow.
  *
  * <p>It also owns which aliases are declared ({@link #rebind}), so the Brigadier {@code requires} predicate and
  * the executor agree. The registrar changes the bindings; nothing else does.
  */
 public final class OpenCommandHandler {
 
+    /** What a declared alias runs. */
+    public record Binding(OpenDeclaration.Kind kind, NamespacedId id) {}
+
     private final Plugin plugin;
     private final SchedulingGateway scheduling;
     private final Supplier<RuntimeGuis> live;
     private final GuiOpener opener;
     private final PlayerNames players;
-    private volatile Map<String, NamespacedId> bindings = Map.of();
+    private volatile Map<String, Binding> bindings = Map.of();
+    private volatile DocumentCommands documents = DocumentCommands.NONE;
 
     public OpenCommandHandler(
             Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeGuis> live, GuiOpener opener,
@@ -49,13 +56,18 @@ public final class OpenCommandHandler {
         this.players = players;
     }
 
-    /** Replaces the declared aliases: each names the GUI it opens. Read by every command and suggestion. */
-    public void rebind(Map<String, NamespacedId> declared) {
+    /** Installs what runs command documents; until it is, a name that belongs to one runs nothing. */
+    public void documents(DocumentCommands documents) {
+        this.documents = documents == null ? DocumentCommands.NONE : documents;
+    }
+
+    /** Replaces the declared aliases: each names what it runs. Read by every command and suggestion. */
+    public void rebind(Map<String, Binding> declared) {
         bindings = Map.copyOf(declared);
     }
 
-    /** The declared aliases and the GUI each opens. */
-    public Map<String, NamespacedId> bindings() {
+    /** The declared aliases and what each runs. */
+    public Map<String, Binding> bindings() {
         return bindings;
     }
 
@@ -64,13 +76,41 @@ public final class OpenCommandHandler {
         return bindings.containsKey(alias);
     }
 
-    /** The GUI an alias opens, if it is declared. */
+    /** The GUI an alias opens, if it is declared and belongs to a GUI. */
     public Optional<NamespacedId> gui(String alias) {
-        return Optional.ofNullable(bindings.get(alias));
+        return Optional.ofNullable(bindings.get(alias))
+                .filter(binding -> binding.kind() == OpenDeclaration.Kind.GUI)
+                .map(Binding::id);
     }
 
-    /** Runs an open command: the Brigadier executor for every prefix of its arguments. */
+    /** Runs a declared command: the Brigadier executor for every prefix of its arguments. */
     public int run(String alias, CommandContext<CommandSourceStack> context) {
+        Binding binding = bindings.get(alias);
+        if (binding == null) {
+            return 0;
+        }
+        return binding.kind() == OpenDeclaration.Kind.COMMAND ? runDocument(alias, binding.id(), context)
+                : runGui(alias, context);
+    }
+
+    /** A command document's name: hop to the sender's thread, then the documents' own gate and flow. */
+    private int runDocument(String alias, NamespacedId command, CommandContext<CommandSourceStack> context) {
+        Optional<OpenPlan> plan = documents.plan(command);
+        if (plan.isEmpty()) {
+            return 0;
+        }
+        Map<String, String> raw = rawArguments(context, plan.get());
+        CommandSender sender = context.getSource().getSender();
+        Runnable task = () -> documents.run(command, alias, sender, raw);
+        if (sender instanceof Player player) {
+            scheduling.executeEntity(plugin, player, task);
+        } else {
+            scheduling.executeGlobal(plugin, task);
+        }
+        return 1;
+    }
+
+    private int runGui(String alias, CommandContext<CommandSourceStack> context) {
         Optional<RuntimeGuis.Live> gui = gui(alias).flatMap(id -> live.get().gui(id));
         if (gui.isEmpty() || gui.get().open() == null) {
             return 0;
@@ -109,9 +149,7 @@ public final class OpenCommandHandler {
     public SuggestionProvider<CommandSourceStack> suggestions(String alias, String argument) {
         return (CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) -> {
             String prefix = builder.getRemainingLowerCase();
-            Optional<OpenArgSpec> arg = gui(alias).flatMap(id -> live.get().gui(id))
-                    .map(RuntimeGuis.Live::open)
-                    .flatMap(plan -> plan == null ? Optional.empty() : plan.arg(argument));
+            Optional<OpenArgSpec> arg = planOf(alias).flatMap(plan -> plan.arg(argument));
             if (arg.isPresent()) {
                 for (String candidate : candidates(arg.get())) {
                     if (candidate.toLowerCase(Locale.ROOT).startsWith(prefix)) {
@@ -121,6 +159,18 @@ public final class OpenCommandHandler {
             }
             return builder.buildFuture();
         };
+    }
+
+    /** The live plan behind an alias: a GUI's {@code open:} block or a command document's keys. */
+    private Optional<OpenPlan> planOf(String alias) {
+        Binding binding = bindings.get(alias);
+        if (binding == null) {
+            return Optional.empty();
+        }
+        if (binding.kind() == OpenDeclaration.Kind.COMMAND) {
+            return documents.plan(binding.id());
+        }
+        return live.get().gui(binding.id()).map(RuntimeGuis.Live::open);
     }
 
     private List<String> candidates(OpenArgSpec arg) {

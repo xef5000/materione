@@ -37,8 +37,14 @@ final class RuleCompiler {
      * @return the rule, or empty after reporting why it was skipped
      */
     Optional<Rule> compile(int index, Object entry) {
-        StepPath path = StepPath.of("behavior", Integer.toString(index));
-        String fallbackId = context.owner + "#" + index;
+        return compile(StepPath.of("behavior", Integer.toString(index)), context.owner + "#" + index, entry);
+    }
+
+    /**
+     * Compiles one rule that sits at {@code path} (the empty path for a command document's own flow, logic.md §40),
+     * named {@code fallbackId} when it names none.
+     */
+    Optional<Rule> compile(StepPath path, String fallbackId, Object entry) {
         if (!(entry instanceof Map<?, ?> raw)) {
             report(fallbackId, path, "rule is not a mapping", "every rule needs on:/do: keys");
             return Optional.empty();

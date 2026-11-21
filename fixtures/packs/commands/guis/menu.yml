@@ -1,0 +1,13 @@
+# A GUI with an `open:` block (logic.md section 6.1): the sugar a command document is defined against (section 40). Its
+# alias and the document `commands:menu2`, whose flow opens this GUI, are the same command written two ways.
+menu:
+  title: Commands menu
+  container: chest_1
+  open:
+    commands: [cmenu]
+    args:
+      - {name: page, type: int, default: "1"}
+  behavior:
+    - on: gui.open
+      do:
+        - run_command: "say MATERIONE-COMMANDS-MENU-OPEN ${player.name} page ${gui.args.page}"

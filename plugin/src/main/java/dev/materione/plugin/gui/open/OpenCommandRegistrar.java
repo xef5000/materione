@@ -56,8 +56,8 @@ public final class OpenCommandRegistrar {
     /** An alias this registrar has put in the tree, with the argument shape it was built with. */
     private record Owned(List<String> shape) {}
 
-    /** The GUI an alias opens and the arguments its command takes. */
-    private record Claim(NamespacedId gui, List<OpenArgSpec> args) {}
+    /** What an alias runs (a GUI it opens, or a command document's flow) and the arguments its command takes. */
+    private record Claim(OpenDeclaration.Kind kind, NamespacedId owner, List<OpenArgSpec> args) {}
 
     private final Plugin plugin;
     private final OpenCommandHandler handler;
@@ -71,6 +71,9 @@ public final class OpenCommandRegistrar {
     private Set<String> refused = Set.of();
     /** Aliases a reload did not put in the tree, and which must not ask for another until the next event. */
     private Set<String> unreloadable = Set.of();
+    /** The command documents of the applied and of the built registries (logic.md §40); none until installed. */
+    private volatile Supplier<List<OpenDeclaration>> liveDocuments = List::of;
+    private volatile Supplier<List<OpenDeclaration>> builtDocuments = List::of;
     private long lastReload = Long.MIN_VALUE;
     private volatile boolean treeOpen;
     private ScheduledHandle pendingReload;
@@ -100,6 +103,18 @@ public final class OpenCommandRegistrar {
     }
 
     /**
+     * Adds the command documents to what claims names (logic.md §40): they claim after every GUI, so a GUI's {@code open:}
+     * alias keeps its name, as it always did, and a document that wants it is the one refused.
+     *
+     * @param live the command documents of the applied registries
+     * @param built the command documents of the latest reload's registries, which the COMMANDS event registers from
+     */
+    public void commandDocuments(Supplier<List<OpenDeclaration>> live, Supplier<List<OpenDeclaration>> built) {
+        this.liveDocuments = live == null ? List::of : live;
+        this.builtDocuments = built == null ? List::of : built;
+    }
+
+    /**
      * Registers every declared alias. Called from the server's COMMANDS lifecycle event, at start and on a server
      * reload, while the registrar is valid. Registers from the built registries, so it is correct before the first
      * apply has run.
@@ -111,32 +126,31 @@ public final class OpenCommandRegistrar {
         cancelReload();
         treeOpen = true;
         unreloadable = Set.of();
-        RuntimeGuis view = built.get();
+        List<OpenDeclaration> declarations = declarations(built.get(), builtDocuments);
         Set<String> previous = Set.copyOf(owned.keySet());
         owned.clear();
-        Map<String, Claim> claims = claims(view, registrar, previous, true);
-        var bound = new LinkedHashMap<String, NamespacedId>();
+        Map<String, Claim> claims = claims(declarations, registrar, previous, true);
+        var bound = new LinkedHashMap<String, OpenCommandHandler.Binding>();
         for (Map.Entry<String, Claim> entry : claims.entrySet()) {
             String alias = entry.getKey();
             Claim claim = entry.getValue();
             try {
-                Set<String> labels = registrar.register(node(alias, claim.args()), "Opens " + claim.gui(), List.of());
+                String description = (claim.kind() == OpenDeclaration.Kind.GUI ? "Opens " : "Runs ") + claim.owner();
+                Set<String> labels = registrar.register(node(alias, claim.args()), description, List.of());
                 if (labels.contains(alias)) {
                     owned.put(alias, new Owned(OpenCommandTree.shape(claim.args())));
-                    bound.put(alias, claim.gui());
+                    bound.put(alias, new OpenCommandHandler.Binding(claim.kind(), claim.owner()));
                 } else {
-                    conflict(claim.gui(), alias, "could not be registered");
+                    conflict(claim, alias, "could not be registered");
                 }
             } catch (RuntimeException e) {
-                conflict(claim.gui(), alias, "could not be registered: " + e.getMessage());
+                conflict(claim, alias, "could not be registered: " + e.getMessage());
             }
         }
         // every declared alias this event did not bind is refused until the next event: a swap must not ask again
         var rejected = new HashSet<String>();
-        for (RuntimeGuis.Live gui : view.all()) {
-            if (gui.open() != null) {
-                rejected.addAll(gui.open().commands());
-            }
+        for (OpenDeclaration declaration : declarations) {
+            rejected.addAll(declaration.plan().commands());
         }
         rejected.removeAll(bound.keySet());
         refused = Set.copyOf(rejected);
@@ -154,9 +168,9 @@ public final class OpenCommandRegistrar {
         if (closed) {
             return;
         }
-        Map<String, Claim> claims = claims(view, null, owned.keySet(), false);
+        Map<String, Claim> claims = claims(declarations(view, liveDocuments), null, owned.keySet(), false);
         claims.keySet().removeAll(refused);
-        var next = new LinkedHashMap<String, NamespacedId>();
+        var next = new LinkedHashMap<String, OpenCommandHandler.Binding>();
         var stale = new LinkedHashMap<String, Claim>();
         for (Map.Entry<String, Claim> entry : claims.entrySet()) {
             String alias = entry.getKey();
@@ -167,9 +181,9 @@ public final class OpenCommandRegistrar {
             if (treeOpen && (missing || reshaped) && !unreloadable.contains(alias)) {
                 stale.put(alias, claim);
             }
-            next.put(alias, claim.gui());
+            next.put(alias, new OpenCommandHandler.Binding(claim.kind(), claim.owner()));
         }
-        Map<String, NamespacedId> before = handler.bindings();
+        Map<String, OpenCommandHandler.Binding> before = handler.bindings();
         handler.rebind(next);
         if (!stale.isEmpty()) {
             reloadTree(stale);
@@ -200,9 +214,9 @@ public final class OpenCommandRegistrar {
                     plugin.getLogger().warning("MATERIONE-OPEN-TREE could not schedule reload: " + e);
                     for (Map.Entry<String, Claim> entry : stale.entrySet()) {
                         diagnostics.accept(new Diagnostic(DiagnosticCodes.OPEN_TREE_RESYNC, Severity.WARN,
-                                "open command '" + entry.getKey() + "' of " + entry.getValue().gui()
+                                noun(entry.getValue()) + " '" + entry.getKey() + "' of " + entry.getValue().owner()
                                         + " could not schedule its command-tree reload",
-                                entry.getValue().gui(), null, "reload content after the rate-limit window or restart"));
+                                entry.getValue().owner(), null, "reload content after the rate-limit window or restart"));
                     }
                 }
             }
@@ -223,9 +237,9 @@ public final class OpenCommandRegistrar {
                 failed.add(entry.getKey());
                 Claim claim = entry.getValue();
                 diagnostics.accept(new Diagnostic(DiagnosticCodes.OPEN_TREE_RESYNC, Severity.WARN,
-                        "open command '" + entry.getKey() + "' of " + claim.gui() + " is not in the live tree after a "
+                        noun(claim) + " '" + entry.getKey() + "' of " + claim.owner() + " is not in the live tree after a "
                                 + "reload; it applies at the next restart",
-                        claim.gui(), null, "restart the server to register it"));
+                        claim.owner(), null, "restart the server to register it"));
             }
         }
         if (!failed.isEmpty()) {
@@ -267,30 +281,40 @@ public final class OpenCommandRegistrar {
     }
 
     /**
-     * The aliases the GUIs claim, in order, with the conflicts left out. An alias one GUI claims twice, or that is
-     * already a command, is skipped and reported (when {@code report} is set).
+     * Everything that claims names: the GUIs' {@code open:} blocks first, in the view's order, then the command
+     * documents (logic.md §40). The order is the rule for a collision: the earlier claim keeps the name.
+     */
+    private static List<OpenDeclaration> declarations(RuntimeGuis guis, Supplier<List<OpenDeclaration>> documents) {
+        var all = new java.util.ArrayList<>(OpenDeclaration.of(guis));
+        all.addAll(documents.get());
+        return all;
+    }
+
+    /**
+     * The aliases the declarations claim, in order, with the conflicts left out. An alias one declaration claims twice,
+     * that another already claimed, or that is already a command, is skipped and reported (when {@code report} is set).
      *
      * @param registrar the registrar of the COMMANDS event, or null outside it (then only the command map is checked)
      * @param ours the aliases this registrar put in the tree, which are not conflicts
      */
-    private Map<String, Claim> claims(RuntimeGuis view, Commands registrar, Set<String> ours, boolean report) {
+    private Map<String, Claim> claims(
+            List<OpenDeclaration> declarations, Commands registrar, Set<String> ours, boolean report) {
         var claims = new LinkedHashMap<String, Claim>();
-        for (RuntimeGuis.Live gui : view.all()) {
-            OpenPlan plan = gui.open();
-            if (plan == null) {
-                continue;
-            }
+        for (OpenDeclaration declaration : declarations) {
+            OpenPlan plan = declaration.plan();
             for (String alias : plan.commands()) {
+                var claim = new Claim(declaration.kind(), declaration.id(), plan.args());
                 if (claims.containsKey(alias)) {
                     if (report) {
-                        conflict(gui.id(), alias, "is already the open command of " + claims.get(alias).gui());
+                        conflict(claim, alias, "is already the " + (claims.get(alias).kind() == OpenDeclaration.Kind.GUI
+                                ? "open command" : "command") + " of " + claims.get(alias).owner());
                     }
                 } else if (taken(alias, registrar, ours)) {
                     if (report) {
-                        conflict(gui.id(), alias, "is already a command");
+                        conflict(claim, alias, "is already a command");
                     }
                 } else {
-                    claims.put(alias, new Claim(gui.id(), plan.args()));
+                    claims.put(alias, claim);
                 }
             }
         }
@@ -318,9 +342,17 @@ public final class OpenCommandRegistrar {
                 argument -> handler.suggestions(alias, argument));
     }
 
-    private void conflict(NamespacedId gui, String alias, String reason) {
+    /** What a message calls the name: an open command (a GUI's) or a command (a document's). */
+    private static String noun(Claim claim) {
+        return claim.kind() == OpenDeclaration.Kind.GUI ? "open command" : "command";
+    }
+
+    private void conflict(Claim claim, String alias, String reason) {
+        String hint = claim.kind() == OpenDeclaration.Kind.GUI
+                ? "rename the command or the other one; /materione gui open still opens the GUI"
+                : "rename the command or the other one; the document's other names still run it";
         diagnostics.accept(new Diagnostic(DiagnosticCodes.OPEN_COMMAND_CONFLICT, Severity.WARN,
-                "open command '" + alias + "' of " + gui + " " + reason + "; the alias is skipped",
-                gui, null, "rename the command or the other one; /materione gui open still opens the GUI"));
+                noun(claim) + " '" + alias + "' of " + claim.owner() + " " + reason + "; the alias is skipped",
+                claim.owner(), null, hint));
     }
 }

@@ -9,6 +9,25 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Commands as content (#330, M6, logic.md section 40).** A new content type, `command` (`commands/`): `names`, typed `args`
+  (`string`, `int`, `number`, `player`, `boolean`, `choice`, each with `optional`, `default` and `suggest`), `permission`,
+  `requirement`, `deny`, `console` and one flow, `do:`, with `flows:` for named flows. The names, arguments and gate are the block a
+  GUI's `open:` reads, from one schema (`CommandSchema`), and `open:` is defined as the sugar of a command whose flow opens the GUI;
+  no existing file changes. The flow runs under a new trigger, `command.run`, with `args.*` (typed: numbers and booleans are
+  numbers and booleans), `command.name`, `command.label` and the sender's tree in context. A flow a command `call`s with nothing to
+  pass now reads the command's `args.*` (a called flow's own arguments shadow the run's only when the call passed some). The gate is
+  permission, console (refused unless `console: true`), arguments (the usage line is generated from the declaration), then
+  requirement (the `deny:` steps are its answer; `materione.command.bypass.<pack>.<id>` skips it). Names reach the server's
+  command tree through the open-command registrar: GUI aliases claim first, then documents in pack order; a name already held (another
+  document, a GUI, vanilla or another plugin) is skipped with `MTR-0067` and the earlier claim keeps it; a content swap hides a
+  removed name and asks for one rate-limited data reload to add a new one or change an argument shape. `MTR-0066` to `MTR-0069` now
+  apply to commands as well; no code was added. `logic.get` and `logic.edit` accept a command document (its flow is the one rule of
+  `command.run` at the path `do`, so step edits address `do.0`; the rule edits are refused); the dry run compiles `do`, `requirement` and
+  `deny`; the SDK gains `p.commands` with no code of its own. API: `OpenDeclaration`, `DocumentCommands`, `CommandSchema`,
+  `FlowCompiler.document`. Benchmark: T27 (`/discord`) passes, T02 loses CMD; T21 (`/pay`) passes everything that is a command and
+  fails on a new gap, QTY (the money actions read `amount` as a literal). Harness `PaperCommandsIT` (with a new `dprobe tab`); QA
+  `commanddocs.*` (not run, not blessed); fixture pack `commands`. Not built: `claim` and `browse` as built-in content, the graph Logic tab
+  on a command document (#367), `min` and `max` on an argument, rule options on a document.
 - **Target addressing: an action on another player or entity (#331, M6.5, logic.md section 39).** An action that can act on
   something other than the player the rule runs for takes an optional `target:`: `self` (the default), `event.target` (the entity
   an `entity.hit` or `entity.kill` carries), `{arg: <name>}` (a player a command or GUI argument named), `{player: "<template>"}`

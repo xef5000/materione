@@ -13,7 +13,8 @@ const tradeGui = p.guis.create("trade", {
 });
 
 p.commands.create("trade", {
-  args: { target: { type: "player" } },
+  names: ["trade"],
+  args: [{ name: "target", type: "player" }],
   do: [
     m.actions.setVar({ var: req, op: "set", value: "pending" }),
     m.actions.message({ text: "<gold>Trade request sent.", target: { arg: "target" } }),

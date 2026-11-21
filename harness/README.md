@@ -247,6 +247,16 @@ node --test harness\protocol\floor-bot.test.mjs
   `require` runs its else, one to an online player goes through. Paper only: the cross-region dispatch of the same code is proved at the
   scheduler seam by `TargetedDispatchTest`, and nothing here ran on Folia.
 
+- **Commands as content** (`PaperCommandsIT`, `CommandsRunner`, logic.md section 40, #330). Runs by default (one boot). The `commands`
+  fixture pack holds command documents; the fake-connection players of the durability probe run them as a player types them
+  (`dprobe cmd`), and the console runs them as the console does. Each command announces itself with `say MATERIONE-COMMANDS-...`, and the
+  runner reads the executor's own `MATERIONE-COMMAND alias=... outcome=...` line for what a refusal is. It proves typed arguments reaching
+  `args.*` (a number doubled in an expression, `command.label` for an alias, `command.name` for the first name), a usage refusal for a value
+  that does not read and for a player who is not online, a permission refusal for a player without the node and the run once they have it
+  (`/staff`; an op holds every node nobody registered), a requirement that fails with its deny steps and is skipped by the bypass node (an
+  operator holds that too), a console refused unless `console: true`, and
+  the tree's completions (`dprobe tab`) for a player argument and a choice. Paper only; nothing here ran on Folia.
+
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 
 The tiers above are headless — the opt-in protocol client does not render, so visual failure modes

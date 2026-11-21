@@ -1,0 +1,15 @@
+# Fault fixture (#330): a command whose names, arguments and gate are malformed in several places still parses. Each
+# problem is a diagnostic on the definition and what could be read is kept, so one bad argument does not take the
+# command down: the first name is good, `Bad Name` is not a name, the second argument has an unknown type and a
+# duplicate of the first, and `permission` is blank.
+sloppy:
+  names: [good, "Bad Name", good]
+  permission: "  "
+  args:
+    - {name: first, type: int}
+    - {name: second, type: money}
+    - {name: first, type: string}
+    - "not a mapping"
+    - {type: int}
+  do:
+    - message: "still runs"

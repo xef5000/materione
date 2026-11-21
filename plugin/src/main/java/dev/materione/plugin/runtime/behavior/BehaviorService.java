@@ -190,7 +190,7 @@ public final class BehaviorService {
      * and a fresh {@code vars}. {@code location} is where the event happened, which is not always where the
      * player is (the entity that was hit). The world-event bridge adds its own roots to it (logic.md §37).
      */
-    Map<String, Object> baseRoot(Player player, Location location) {
+    public Map<String, Object> baseRoot(Player player, Location location) {
         var root = new LinkedHashMap<String, Object>();
         World world = location.getWorld();
         Location where = player.getLocation();
@@ -235,7 +235,7 @@ public final class BehaviorService {
      * The run's context: the variable tree plus what only the platform can supply, the player
      * facet and PlaceholderAPI resolution for that player.
      */
-    MapLogicContext logicContext(Map<String, Object> root, Player player) {
+    public MapLogicContext logicContext(Map<String, Object> root, Player player) {
         return logicContext(root, player, null);
     }
 

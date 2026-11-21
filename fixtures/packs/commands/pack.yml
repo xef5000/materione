@@ -1,0 +1,9 @@
+# The commands fixture pack (#330, logic.md section 40): commands a pack declares with no GUI to open. Every command
+# announces itself with a line the harness reads from the console (`say MATERIONE-COMMANDS-...`, via run_command). The
+# harness (PaperCommandsIT), the QA catalog (qa/catalog/commands.mjs) and the plugin's own CommandsPipelineTest are the
+# only readers; the pack holds command documents and one GUI whose `open:` block is the sugar the commands are defined
+# against, and no item, so the fixture corpora's item counts stay their own.
+id: commands
+version: 1.0.0
+schema_version: 1
+depends: []

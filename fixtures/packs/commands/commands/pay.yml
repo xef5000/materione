@@ -1,0 +1,18 @@
+# /pay <player> <amount> (#330, benchmark task T21; logic.md section 40). A typed player argument and a typed number
+# argument reach the flow as args.to and args.amount; the player argument also addresses the message (#331, `target:`).
+# The requirement refuses a non-positive amount before the flow runs, and the deny steps say why (it has no permission: the
+# harness player must not hold the bypass node, which an operator holds like every node nobody registered). The money verbs
+# (take_money, give_money) are the benchmark program's; a harness server has no currency, so this fixture announces.
+pay:
+  description: "Harness and QA: /pay <player> <amount>"
+  names: [pay, give-coins]
+  args:
+    - {name: to, type: player}
+    - {name: amount, type: number}
+  requirement: "args.amount > 0"
+  deny:
+    - message: "<red>Pay a positive amount."
+    - run_command: "say MATERIONE-COMMANDS-PAY-DENIED ${player.name} amount ${args.amount}"
+  do:
+    - run_command: "say MATERIONE-COMMANDS-PAY ${player.name} to ${args.to} amount ${args.amount} doubled ${args.amount * 2} label ${command.label} name ${command.name}"
+    - message: {text: "<green>${player.name} sent you ${args.amount}", target: {arg: to}}

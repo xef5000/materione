@@ -79,8 +79,8 @@ describe('the corpus through the checker', () => {
 
 describe('a gap is reported as a missing primitive (codemode.md section 6, 9.2)', () => {
   it('marks TS2339 on a member of a generated catalog, with its catalog and the member', () => {
-    const found = check('const p = m.pack("t"); p.commands.create("c", {});').diagnostics.find((d) => d.code === 'TS2339');
-    expect(found?.missingPrimitive).toEqual({ member: 'commands', catalog: 'PackWriter', nearest: [] });
+    const found = check('const p = m.pack("t"); p.dialogs.create("c", {});').diagnostics.find((d) => d.code === 'TS2339');
+    expect(found?.missingPrimitive).toEqual({ member: 'dialogs', catalog: 'PackWriter', nearest: [] });
     expect(found).toMatchObject({ line: 1, column: 26, severity: 'error' });
     expect(found?.hint).toContain('missing primitive');
   });
@@ -229,7 +229,7 @@ describe('what a clean program yields', () => {
   });
 
   it('is deterministic: the same inputs give the same JSON, fresh checker or warm', () => {
-    const program = 'const p = m.pack("t"); p.commands.create("c", {}); window.x; const q: string = 3;';
+    const program = 'const p = m.pack("t"); p.dialogs.create("c", {}); window.x; const q: string = 3;';
     const first = JSON.stringify(check(program));
     expect(JSON.stringify(check(program))).toBe(first);
     expect(JSON.stringify(createChecker({ libs: LIB_FILES, core }).check({ program, sdk: current }))).toBe(first);

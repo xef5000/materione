@@ -1,0 +1,10 @@
+# Fault fixture (#330): a command document whose do: is not a list is not a command document. It parses to nothing, the
+# pipeline quarantines it, and the healthy sibling in the same file (a different resource) is unaffected.
+broken:
+  names: [broken]
+  do: "say hello"
+
+healthy:
+  names: [healthy]
+  do:
+    - message: "hello"

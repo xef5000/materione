@@ -156,10 +156,24 @@ public final class FlowCompiler {
      * which the caller treats as a failed check.
      */
     public static ParsedCondition condition(NamespacedId owner, Object raw, String trigger, LogicLookup lookup) {
+        return condition(owner, raw, trigger, lookup, OPEN_SECTION);
+    }
+
+    /** The block a GUI's gate keys sit in; a command document's sit at the document's root (logic.md §40). */
+    public static final String OPEN_SECTION = "open";
+
+    /**
+     * As {@link #condition(NamespacedId, Object, String, LogicLookup)} for a gate that lives in {@code section}: the
+     * problems name {@code <section>.requirement}, or {@code requirement} when the section is empty (a command
+     * document, whose gate is its own top-level keys).
+     */
+    public static ParsedCondition condition(
+            NamespacedId owner, Object raw, String trigger, LogicLookup lookup, String section) {
         var context = new CompileContext(owner, lookup, true);
-        var unit = new CompileUnit(context, "open", rootsOf(lookup, trigger), "the '" + trigger + "' trigger provides");
+        String subject = section.isEmpty() ? "command" : section;
+        var unit = new CompileUnit(context, subject, rootsOf(lookup, trigger), "the '" + trigger + "' trigger provides");
         try {
-            Condition condition = new ConditionCompiler(unit).compile(raw, StepPath.of("open", "requirement"));
+            Condition condition = new ConditionCompiler(unit).compile(raw, within(section, "requirement"));
             return new ParsedCondition(condition, List.copyOf(context.problems));
         } catch (Skip skip) {
             return new ParsedCondition(null, List.copyOf(context.problems));
@@ -174,32 +188,68 @@ public final class FlowCompiler {
      * @return the rule, or no rule when the steps did not load (the problems say why)
      */
     public static ParsedRules denied(NamespacedId owner, String trigger, Object steps, Object flows, LogicLookup lookup) {
+        return denied(owner, trigger, steps, flows, lookup, OPEN_SECTION);
+    }
+
+    /** As {@link #denied(NamespacedId, String, Object, Object, LogicLookup)} for a gate that lives in {@code section}. */
+    public static ParsedRules denied(
+            NamespacedId owner, String trigger, Object steps, Object flows, LogicLookup lookup, String section) {
         var context = new CompileContext(owner, lookup, true);
         Optional<EventSelector> selector = lookup.selector(trigger);
         if (selector.isEmpty()) {
             return ParsedRules.empty();
         }
         Set<String> roots = rootsOf(lookup, trigger);
-        var unit = new CompileUnit(context, "open.deny", roots, "the '" + trigger + "' trigger provides");
+        StepPath path = within(section, "deny");
+        String subject = section.isEmpty() ? "deny" : section + ".deny";
+        var unit = new CompileUnit(context, subject, roots, "the '" + trigger + "' trigger provides");
         var compiler = new StepCompiler(unit, new FlowSet(context, flows, roots));
-        StepPath path = StepPath.of("open", "deny");
         try {
             List<Step> body = compiler.list(steps, path);
             if (body.isEmpty()) {
                 return new ParsedRules(List.of(), List.copyOf(context.problems));
             }
             if (compiler.deepestCall() > CallStep.MAX_DEPTH) {
-                context.report(DiagnosticCodes.FLOW_CALL_INVALID, Severity.ERROR, "open.deny", path,
+                context.report(DiagnosticCodes.FLOW_CALL_INVALID, Severity.ERROR, subject, path,
                         "calls nest " + compiler.deepestCall() + " deep, past the limit of " + CallStep.MAX_DEPTH,
                         "flatten the chain of calls; the deny steps were dropped");
                 return new ParsedRules(List.of(), List.copyOf(context.problems));
             }
-            var rule = new Rule(owner, "open.deny", selector.get(), new AllCond(List.of()), body,
+            var rule = new Rule(owner, subject, selector.get(), new AllCond(List.of()), body,
                     RuleOptions.none(), RuleFilters.none(), path);
             return new ParsedRules(List.of(rule), List.copyOf(context.problems));
         } catch (Skip skip) {
             return new ParsedRules(List.of(), List.copyOf(context.problems));
         }
+    }
+
+    /**
+     * Compiles the one flow of a command document (logic.md §40): its {@code do:} steps as a single rule of
+     * {@code trigger} with no condition, and the document's named {@code flows:}. A command's gate (permission,
+     * requirement, deny) is checked at the open path, not as the rule's {@code if}, so this rule carries none. The
+     * problems name {@code do} (or {@code flows.<id>}) as the author wrote them, not a {@code behavior.<n>} that is
+     * not in the file.
+     *
+     * @return the rule, or no rule when the steps did not load (the problems say why); named flows are compiled and
+     *     reported either way
+     */
+    public static ParsedRules document(
+            NamespacedId owner, String trigger, Object steps, Object flows, LogicLookup lookup) {
+        var context = new CompileContext(owner, lookup, true);
+        var entry = new java.util.LinkedHashMap<String, Object>();
+        entry.put("id", owner.toString());
+        entry.put("on", trigger);
+        entry.put("do", steps);
+        var flowSet = new FlowSet(context, flows, flowRoots(lookup, List.of(entry)));
+        var rules = new ArrayList<Rule>();
+        new RuleCompiler(context, flowSet).compile(StepPath.root(), owner.toString(), entry).ifPresent(rules::add);
+        flowSet.compileAll();
+        return new ParsedRules(List.copyOf(rules), List.copyOf(context.problems));
+    }
+
+    /** The path of {@code key} inside {@code section}, or at the root when the section is empty. */
+    private static StepPath within(String section, String key) {
+        return section.isEmpty() ? StepPath.of(key) : StepPath.of(section, key);
     }
 
     /** The variable roots a condition or step of {@code trigger} may read, or null when the trigger has no schema. */

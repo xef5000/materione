@@ -1173,7 +1173,7 @@ final class AuthoringTransactions {
 
         private boolean hasLogic(String directory) {
             return directory.equals("items") || directory.equals("blocks") || directory.equals("furnitures")
-                    || directory.equals("guis") || directory.equals("rules");
+                    || directory.equals("guis") || directory.equals("rules") || directory.equals("commands");
         }
 
         /** Each resource of the document through the content type's own parse, diagnose and compile. */
@@ -1208,10 +1208,13 @@ final class AuthoringTransactions {
         @SuppressWarnings("unchecked")
         private void validateLogic(String text, String directory, List<Diagnostic> out) {
             // a rule document is a behavior host with no resource of its own: the host the warning is about
-            String host = "rules".equals(directory) ? "rule" : null;
+            boolean command = "commands".equals(directory);
+            String host = "rules".equals(directory) ? "rule" : command ? "command" : null;
             for (Map.Entry<String, Map<String, Object>> resource : resources(text).entrySet()) {
                 // the rules' bare on: key loads as a YAML-1.1 boolean: normalized, as the editor's parsed view is
-                Object behavior = LosslessYaml.stringKeyedDeep(resource.getValue().get("behavior"));
+                Object behavior = command
+                        ? commandRules(resource.getValue())
+                        : LosslessYaml.stringKeyedDeep(resource.getValue().get("behavior"));
                 Object flows = LosslessYaml.stringKeyedDeep(resource.getValue().get("flows"));
                 if (behavior == null && flows == null) {
                     continue;
@@ -1223,6 +1226,36 @@ final class AuthoringTransactions {
                 var result = api.logic().validate(draft);
                 out.addAll(result.ok() ? result.value() : result.diagnostics());
             }
+        }
+
+        /**
+         * A command document's logic as the one rule list the flow compiler reads (logic.md §40): its {@code do:} is
+         * the rule's flow, its {@code requirement} the rule's condition (so a bad predicate, or a path the trigger
+         * does not provide, is found), and its {@code deny:} steps a second rule of the same trigger. The runtime
+         * compiles them one by one; the dry run needs only their problems.
+         */
+        private Object commandRules(Map<String, Object> command) {
+            List<Object> rules = new ArrayList<>();
+            Object steps = LosslessYaml.stringKeyedDeep(command.get("do"));
+            Object requirement = LosslessYaml.stringKeyedDeep(command.get("requirement"));
+            Object deny = LosslessYaml.stringKeyedDeep(command.get("deny"));
+            if (steps instanceof List<?> list && !list.isEmpty()) {
+                Map<String, Object> rule = new LinkedHashMap<>();
+                rule.put("on", "command.run");
+                if (requirement != null) {
+                    rule.put("if", requirement);
+                }
+                rule.put("do", list);
+                rules.add(rule);
+            }
+            if (deny instanceof List<?> list && !list.isEmpty()) {
+                Map<String, Object> rule = new LinkedHashMap<>();
+                rule.put("on", "command.run");
+                rule.put("id", "deny");
+                rule.put("do", list);
+                rules.add(rule);
+            }
+            return rules.isEmpty() ? null : rules;
         }
     }
 }

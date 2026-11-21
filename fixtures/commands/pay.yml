@@ -1,0 +1,30 @@
+# Golden command document (#330, logic.md section 40): comments, blank lines, flow style, an unknown key at each level
+# and a named flow are all part of the lossless round-trip contract. Load then save must give these exact bytes.
+pay:
+  description: "Send coins to another player"
+  sidecar_note: kept as written    # a key this version does not know survives
+  names: [pay, give-coins]
+  permission: shop.pay
+  args:
+    # the player the coins go to: an online player's exact name
+    - name: to
+      type: player
+      future_option: 7
+    - {name: amount, type: number}
+    - {name: note, type: string, optional: true}
+  requirement: "args.amount > 0"
+  deny:
+    - message: "<red>Pay a positive amount."
+
+  console: false
+  do:
+    - require:
+        - take_money: "${args.amount}"
+      else:
+        - message: "<red>Not enough coins."
+    - give_money: {amount: "${args.amount}", target: {arg: to}}   # the other player, by the argument that named them
+    - call: thank
+
+  flows:
+    thank:
+      - message: {text: "<green>${player.name} sent you ${args.amount}", target: {arg: to}}

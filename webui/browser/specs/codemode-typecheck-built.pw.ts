@@ -67,8 +67,8 @@ test('the built Worker: corpus, a gap, an ambient name, and a deadline', async (
   const worker = requests.find((url) => /assets\/worker-.*\.js$/.test(url));
   expect(worker, 'the Worker is a static file of the build').toBeDefined();
 
-  const gap = await check(page, 'const p = m.pack("t"); p.commands.create("c", {});');
-  expect(gap.diagnostics[0]!.missingPrimitive).toMatchObject({ member: 'commands', catalog: 'PackWriter' });
+  const gap = await check(page, 'const p = m.pack("t"); p.dialogs.create("c", {});');
+  expect(gap.diagnostics[0]!.missingPrimitive).toMatchObject({ member: 'dialogs', catalog: 'PackWriter' });
   const ambient = await check(page, 'fetch("https://example.com"); window.x;');
   expect(ambient.ok).toBe(false);
   expect(ambient.diagnostics.map((d) => d.code)).toEqual(['TS2304', 'TS2304']);

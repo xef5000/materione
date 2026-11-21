@@ -159,7 +159,9 @@ public final class FlowRun {
 
         @Override
         public Object resolve(List<String> path) {
-            if (!path.isEmpty() && "args".equals(path.get(0))) {
+            // a called flow's own arguments shadow the run's; with none given (the top frame, or a call that passed
+            // nothing) the host's own args root shows through: a command's typed arguments (logic.md section 40)
+            if (!path.isEmpty() && "args".equals(path.get(0)) && hasCallArgs()) {
                 Object current = run.currentArgs();
                 for (int i = 1; i < path.size(); i++) {
                     if (!(current instanceof Map<?, ?> map)) {
@@ -170,6 +172,11 @@ public final class FlowRun {
                 return path.size() == 1 ? run.currentArgs() : current;
             }
             return base.resolve(path);
+        }
+
+        private boolean hasCallArgs() {
+            Map<String, Object> current = run.currentArgs();
+            return current != null && !current.isEmpty();
         }
 
         @Override

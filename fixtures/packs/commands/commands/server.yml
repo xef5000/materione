@@ -1,0 +1,41 @@
+# Commands with no arguments, with a console form, and with optional, boolean and choice arguments (#330, logic.md
+# section 40). One file holds several documents, as any content file does: one command per top-level key.
+
+# benchmark task T27: a command that prints a link, and needs nothing else
+discord:
+  description: "Harness and QA: /discord"
+  names: [discord]
+  do:
+    - message: "<blue>Join us: <u>discord.gg/example</u>"
+    - run_command: "say MATERIONE-COMMANDS-DISCORD ${player.name} label ${command.label}"
+
+# a command the console may run: there is no player, so ${player.name} is the console's name
+announce:
+  description: "Harness and QA: a console form"
+  names: [announce]
+  console: true
+  do:
+    - run_command: "say MATERIONE-COMMANDS-ANNOUNCE ${player.name}"
+
+# a permission: a player without the node is refused before anything else (an operator holds every node nobody registered)
+staff:
+  description: "Harness and QA: a permission gate"
+  names: [staff]
+  permission: commands.staff
+  do:
+    - run_command: "say MATERIONE-COMMANDS-STAFF ${player.name}"
+
+# optional, boolean and choice arguments, and a named flow the command calls (it sees the typed arguments, args.*).
+# `off` is quoted on purpose: an unquoted off is the boolean false in YAML 1.1, in a suggest list as anywhere.
+tune:
+  description: "Harness and QA: /tune [mode] [loud] [times]"
+  names: [tune]
+  args:
+    - {name: mode, type: choice, default: soft, suggest: [soft, loud, "off"]}
+    - {name: loud, type: boolean, optional: true}
+    - {name: times, type: int, default: "1"}
+  do:
+    - call: report
+  flows:
+    report:
+      - run_command: "say MATERIONE-COMMANDS-TUNE ${player.name} mode ${args.mode} loud ${args.loud} times ${args.times}"
