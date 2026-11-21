@@ -63,10 +63,10 @@ test('the corpus: the Worker agrees with the recorded expectations (pass or fail
 
 test('the Worker and the Node checker give the same diagnostics for the same text', async ({ page }) => {
   await open(page);
-  const program = 'const p = m.pack("t");\np.commands.create("c", {});\nwindow.fetch("x");\nconst n: string = 3;';
+  const program = 'const p = m.pack("t");\np.dialogs.create("c", {});\nwindow.fetch("x");\nconst n: string = 3;';
   const result = await check(page, program);
   expect(result.diagnostics.map((d) => `${d.code}@${d.line}:${d.column}`)).toEqual(['TS2339@2:3', 'TS2304@3:1', 'TS2322@4:7']);
-  expect(result.diagnostics[0]!.missingPrimitive).toEqual({ member: 'commands', catalog: 'PackWriter', nearest: [] });
+  expect(result.diagnostics[0]!.missingPrimitive).toEqual({ member: 'dialogs', catalog: 'PackWriter', nearest: [] });
   expect(await check(page, program)).toEqual(result);
 });
 
