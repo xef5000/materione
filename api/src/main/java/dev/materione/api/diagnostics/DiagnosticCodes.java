@@ -640,6 +640,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0121", Severity.WARN, "A world verb setting is invalid; the default is used");
 
     /**
+     * A money amount that is a template rendering to something other than a number above 0 and at most 1.0E12 (text,
+     * zero, a negative number, or an oversized one). The step that holds it fails or is false, and nothing moves
+     * (logic.md section 42, #464). Rate-limited per rule and code, as the other run-time codes are.
+     */
+    public static final DiagnosticCode MONEY_AMOUNT_REFUSED =
+            new DiagnosticCode("MTR-0120", Severity.WARN, "Money amount refused at run time; nothing moved");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -779,7 +787,8 @@ public final class DiagnosticCodes {
             RULE_STEP_REFERENCE_UNRESOLVED,
             VERB_BUDGET_SPENT,
             VERB_REGION_REFUSED,
-            VERB_SETTING_INVALID);
+            VERB_SETTING_INVALID,
+            MONEY_AMOUNT_REFUSED);
 
     private DiagnosticCodes() {}
 

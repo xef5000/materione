@@ -1,0 +1,13 @@
+# /coinpay-raw <player> <amount>: the same money steps with no requirement and the amount taken as text, so a bad amount
+# reaches the money code instead of the usage check (#464, MTR-0120). Nothing here is a valid payment: the point is that a
+# refused amount moves nothing and the refusal is reported.
+coinpay-raw:
+  description: "Harness and QA: send coins with the amount as text, so a bad amount is refused (MTR-0120)"
+  names: [coinpay-raw]
+  args:
+    - {name: to, type: player}
+    - {name: amount, type: string}
+  do:
+    - take_money: {amount: "${args.amount}", currency: economy:coins}
+    - give_money: {amount: "${args.amount}", currency: economy:coins, target: {arg: to}}
+    - run_command: "say MATERIONE-ECON-RAW ${player.name} to ${args.to} amount ${args.amount}"

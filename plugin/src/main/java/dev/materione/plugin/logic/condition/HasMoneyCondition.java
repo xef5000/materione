@@ -1,6 +1,8 @@
 package dev.materione.plugin.logic.condition;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.Availability;
+import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.Facets;
@@ -31,9 +33,9 @@ import org.bukkit.entity.Player;
  *
  * <p>The currency resolves exactly as {@code give_money} and {@code take_money} resolve it: a named one by
  * {@link ProviderParams#resolve}, otherwise the default. A currency that is unknown, or whose integration
- * cannot answer, is <em>false</em>, so a check on money the server cannot count never grants. So is an amount
- * that does not render to a number above 0: a condition has no diagnostic to give, and "false" is the answer
- * that cannot grant (as {@code has_exp} answers one).
+ * cannot answer, is <em>false</em>, so a check on money the server cannot count never grants. An amount that does not
+ * render to a number above 0 is refused with a {@link CodedRefusal} under {@code MTR-0120}: the test counts as false, and
+ * the engine reports the code (logic.md section 42). A condition returns no outcome, so the refusal is an exception.
  *
  * <p>The shared read guard checks the backend's explicit Folia capability and the current owner;
  * an unsafe synchronous read is unavailable rather than a false or guessed balance.
@@ -87,7 +89,7 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
         }
         OptionalDouble amount = ProviderParams.runAmount(params.amount(), context);
         if (amount.isEmpty()) {
-            return false;
+            throw refused(params, context);
         }
 
         CurrencyCatalog catalog = reads.lookup(providers::currencies);
@@ -111,7 +113,7 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
         if (player == null) return CompletableFuture.completedFuture(false);
         return params.amount().resolveResumable(context, executor).thenCompose(resolved -> {
             OptionalDouble amount = ProviderParams.runAmount(resolved, context);
-            if (amount.isEmpty()) return CompletableFuture.completedFuture(false);
+            if (amount.isEmpty()) return CompletableFuture.<Boolean>failedFuture(refused(params, context));
             double need = amount.getAsDouble();
             return executor.on(dev.materione.api.logic.Threading.ANY, () -> {
                 CurrencyCatalog catalog = reads.lookup(providers::currencies);
@@ -129,6 +131,12 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
     }
 
     private record Selection(CurrencyCatalog catalog, Currency currency) {}
+
+    /** The refusal of an amount that does not render to a number above 0 (MTR-0120), with what it rendered to. */
+    private static CodedRefusal refused(Params params, LogicContext context) {
+        return new CodedRefusal(DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+                ProviderParams.refusedAmount(params.amount(), context));
+    }
 
     /** Available when the default currency can be used, as for {@code take_money}. */
     @Override

@@ -219,6 +219,25 @@ class FlowInterpreterTest {
         });
     }
 
+    /** A condition that refuses a value is false, the else runs, and the refusal is reported under its own code. */
+    @Test
+    void aConditionThatRefusesAValueIsFalseAndReportsItsCode() {
+        run(rule("""
+                - if: { boomy: refuse }
+                  then: [ { a: never } ]
+                  else: [ { b: else } ]
+                """));
+
+        assertThat(f.ran).containsExactly("b:else");
+        assertThat(diagnostics).singleElement().satisfies(problem -> {
+            assertThat(problem.code().code()).isEqualTo("MTR-0120");
+            assertThat(problem.message()).contains("amount must be a number above 0");
+        });
+        assertThat(trace).filteredOn(event -> event.type() == TraceEvent.Type.STEP_FAILED)
+                .extracting(TraceEvent::detail).singleElement().asString()
+                .startsWith("MTR-0120 condition refused:");
+    }
+
     @Test
     void chanceZeroSkipsTheStepAndTracesIt() {
         run(rule("- a: never\n  chance: 0\n- b: always"));
@@ -228,6 +247,29 @@ class FlowInterpreterTest {
     }
 
     // --- failure and require ---------------------------------------------------------
+
+    /**
+     * A refused value (logic.md section 42, MTR-0120) is reported under its own code and named in the trace, and it is
+     * reported even inside a {@code require}, where an ordinary failure is only a branch.
+     */
+    @Test
+    void aRefusedValueReportsItsCodeEvenInsideARequireAndNamesItInTheTrace() {
+        run(rule("""
+                - require:
+                    - refuses: -5
+                  else:
+                    - b: else
+                """));
+
+        assertThat(f.ran).containsExactly("b:else");
+        assertThat(diagnostics).singleElement().satisfies(problem -> {
+            assertThat(problem.code().code()).isEqualTo("MTR-0120");
+            assertThat(problem.message()).contains("amount must be a number above 0").contains("behavior.0.do.0");
+        });
+        assertThat(trace).filteredOn(event -> event.type() == TraceEvent.Type.STEP_FAILED)
+                .extracting(TraceEvent::detail).singleElement().asString()
+                .startsWith("MTR-0120 action 'refuses' failed: amount must be");
+    }
 
     @Test
     void anUnhandledFailureIsReportedAndTheChainContinues() {

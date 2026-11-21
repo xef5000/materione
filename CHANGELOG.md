@@ -404,8 +404,11 @@ releases may change file formats, settings and the public API.
 
 - **The money amount is an expression (#464, logic.md section 42).** `give_money`, `take_money` and `has_money` take `amount` as a number or
   a template that renders to one, `take_money: {amount: "${args.amount}"}`, as `give_exp` does. A literal is checked at load as before; a
-  template that renders to text, zero or a negative number fails the step (or is false for `has_money`) and moves nothing. The SDK types the
-  amount `number | Expr`. Benchmark: T21 (`/pay`) passes, QTY closes. No file changes; no new diagnostic code.
+  template that renders to text, zero, a negative number or more than 1.0E12 fails the step (or is false for `has_money`) and moves nothing,
+  and the refusal is reported under the new `MTR-0120` (rate-limited, shown in the trace; plugin.md section 5). The SDK types the amount
+  `number | Expr`. Benchmark: T21 (`/pay`) passes, QTY closes. No file changes. API: `ActionOutcome.Failed` gains an optional diagnostic code
+  (`ActionOutcome.refused`), and `CodedRefusal` lets a condition refuse a value. Harness: a test economy (`harness:stub`) in the durability
+  probe and `PaperEconomyIT`; QA `economy.*` (auto, not run).
 - **`message` no longer takes a channel under `target:` (#331, breaking before release; logic.md section 39).** `target: player|actionbar|broadcast`
   is gone: `target` is now the address every targetable action shares, and the action bar and the whole server are the actions
   `actionbar` and `broadcast`. A `message` step that still writes one of the three words is skipped at load (`MTR-0057`) with the

@@ -1,5 +1,6 @@
 package dev.materione.plugin.logic.action;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
@@ -99,7 +100,8 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
         }
         OptionalDouble amount = ProviderParams.runAmount(params.amount(), context);
         if (amount.isEmpty()) {
-            return ActionOutcome.failed(ProviderParams.refusedAmount(params.amount(), context));
+            return ActionOutcome.refused(DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+                    ProviderParams.refusedAmount(params.amount(), context));
         }
         CurrencyCatalog catalog = providers.currencies();
         Currency currency = ProviderParams.resolve(catalog, params.currency());

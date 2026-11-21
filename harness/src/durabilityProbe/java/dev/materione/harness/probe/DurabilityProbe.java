@@ -1,5 +1,7 @@
 package dev.materione.harness.probe;
 
+import dev.materione.api.MaterioneAPI;
+import dev.materione.api.NamespacedId;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -37,6 +39,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -114,7 +117,39 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     @Override
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
+        registerEconomy();
         log("ready");
+    }
+
+    /**
+     * Registers {@link EconomyStub} with the product's logic registry (logic.md section 42, #464), through the public
+     * {@code MaterioneAPI}. The probe depends on the product, so the product's classes load for it; a failure is logged,
+     * and the money the economy fixture pack names stays unavailable.
+     */
+    private void registerEconomy() {
+        Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
+        if (product == null) {
+            log("economy stub skipped: Materione is not installed");
+            return;
+        }
+        try {
+            MaterioneAPI materione = (MaterioneAPI) product.getClass().getMethod("api").invoke(product);
+            materione.logic().currencyIntegrations().register(this, NamespacedId.of("harness", "stub"), new EconomyStub());
+            log("economy stub registered");
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            log("economy stub not registered: " + failure);
+        }
+    }
+
+    /** {@code dprobe grant <player> <amount>}: adds stub coins; answers the new balance. */
+    private void grant(Player player, double amount) {
+        double after = EconomyStub.BALANCES.merge(player.getUniqueId(), amount, Double::sum);
+        log("grant " + player.getName() + " " + after);
+    }
+
+    /** {@code dprobe balance <player>}: the player's stub coins, as the economy holds them. */
+    private void balance(Player player) {
+        log("balance " + player.getName() + " " + EconomyStub.BALANCES.getOrDefault(player.getUniqueId(), 0d));
     }
 
     private void log(String line) {
@@ -131,6 +166,8 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "state" -> state(player(args[1]));
                 case "set" -> setSlot(player(args[1]), Integer.parseInt(args[2]), args[3], Integer.parseInt(args[4]));
                 case "inv" -> inv(player(args[1]));
+                case "grant" -> grant(player(args[1]), Double.parseDouble(args[2]));
+                case "balance" -> balance(player(args[1]));
                 case "pdc" -> pdc(player(args[1]), args[2], args.length > 3 ? args[3] : null);
                 case "login" -> login(args[1]);
                 case "getbytes" -> getBytes(player(args[1]), args[2]);

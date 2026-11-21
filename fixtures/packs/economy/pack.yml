@@ -1,0 +1,8 @@
+# The economy fixture pack (#464, logic.md section 42): money whose amount comes from a command argument. The currency names
+# the harness's test economy (harness:stub, registered by the durability probe), so the harness IT (PaperEconomyIT) moves real
+# balances. Without that probe (the QA probe) the currency reports unavailable, and the refusal of a bad amount, which happens
+# before any currency is needed, is what the QA catalog's economy suite reads (qa/catalog/economy.mjs).
+id: economy
+version: 1.0.0
+schema_version: 1
+depends: []

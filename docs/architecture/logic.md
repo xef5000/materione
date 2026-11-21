@@ -4853,7 +4853,9 @@ the code-mode SDK (`TS2322`). The amount now takes an expression, the way `give_
 engine surface: it widens an existing parameter to the one expression language, so it is not a primitive under D12 (the table of master §3.1
 below records how it still meets the tests).
 The code is in `plugin.logic.ProviderParams` (`amount`, `runAmount`, `refusedAmount`), `plugin.logic.action.GiveMoneyAction` and
-`TakeMoneyAction`, and `plugin.logic.condition.HasMoneyCondition`. Each decision is reversible by the owner.
+`TakeMoneyAction`, and `plugin.logic.condition.HasMoneyCondition`. The refusal's engine path is `behavior.run` (`RunReporter.refused`,
+`FlowInterpreter.failure`, `ControlSteps.holds`, `TargetedAction.aggregate`) and `behavior.runtime.RuleEngine`, with the two types it needs in
+`api.logic` (`ActionOutcome.refused` and `CodedRefusal`). Each decision is reversible by the owner.
 
 **Traceability.**
 
@@ -4874,14 +4876,25 @@ The code is in `plugin.logic.ProviderParams` (`amount`, `runAmount`, `refusedAmo
 2. **At run time a template must render to a number above 0 and at most `MAX_AMOUNT`.** `ProviderParams.runAmount` parses the rendered text as a
    finite double and requires it above 0 and at most `1.0E12`; anything else has no amount. `give_money` and `take_money` then fail with
    `amount must be a number above 0 and at most 1.0E12, not "<what it rendered>"` before any balance is touched, so a negative result never
-   pays or takes. `has_money` is false, as `has_exp` is for an amount it cannot read: a condition returns no outcome to carry a reason, and
-   false is the answer that cannot grant.
+   pays or takes. `has_money` refuses the same way, with the same reason, and is false: a condition returns no outcome, so the refusal is
+   the exception `CodedRefusal` (below), and the engine counts the test as false, as the contract of `ConditionType.test` requires.
 3. **Placement is `give_exp`'s.** `executeResumable` renders the template first, on the thread its own reads need (the run's region, or the
    target's, through the aimed executor of §39), then runs the action on `threading(params)`, the currency's thread as before. `has_money`
    renders first and reads the balance on the currency's thread. A literal has nothing to resolve, so its path is the one it was.
-4. **No new diagnostic code.** A literal that does not load is `MTR-0057` (the step is skipped, as for any action). A template that does not
-   render to a positive number is the action's failed outcome: it shows in the trace and to a surrounding `require`, as an insufficient balance
-   does. `MTR-0106` to `MTR-0119` are not touched.
+4. **A refused amount is reported under `MTR-0120`.** A literal that does not load is `MTR-0057` (the step is skipped, as for any action).
+   A template that renders to something other than a number above 0 and at most `1.0E12` is refused at run time under **`MTR-0120`**
+   (warning, `DiagnosticCodes.MONEY_AMOUNT_REFUSED`, plugin.md §5). The engine does three things with it, the same way for every step:
+   - **the outcome carries the code.** `ActionOutcome.refused(code, reason)` is a `Failed` whose `code()` is set (an ordinary failure has
+     none). The interpreter reports it through `RunReporter.refused`, rate-limited per rule and code as the other run-time codes are, and
+     reports it **even inside a `require`**: a bad amount is a content error, where an insufficient balance is a business outcome and stays
+     silent. A multi-target step keeps the code only when every failing target refused with that code (`TargetedAction.aggregate`);
+   - **the trace names it.** The step's `STEP_FAILED` detail begins `MTR-0120`, so a live trace shows the code next to the step, not only the
+     reason;
+   - **a condition refuses by exception.** `has_money` cannot return a code, so it throws `CodedRefusal` (`api.logic`). Its test counts as
+     false, and `ControlSteps.holds` and `RuleEngine.conditionResult` report the code and trace `MTR-0120 condition refused: …`. The composites
+     share one caveat: inside `not` or `any`, a refused amount makes the whole condition false (fail closed) rather than only its own branch. A
+     refusal is a content error, so that is the safe reading.
+   `MTR-0106` to `MTR-0119` are not touched (#465 takes `MTR-0118` and `MTR-0119`).
 5. **The survey: which quantities take an expression, and which stay literal.** The issue asked for the others to be checked, and widened only
    the obvious ones. The state after this section:
 
@@ -4910,12 +4923,15 @@ shorthand widens to `number | Expr`, it does not narrow.
 |---|---|
 | U3 composition | `amount` is the expression language every other quantity reads; `target:` (#331) addresses the player the amount is paid to, and the same `args.amount` feeds both halves of `/pay` |
 | U4 self-description | `expression: true` on the three entries in `authoring.describe`, the golden registries and the generated `.d.ts`, from the same declaration that parses them |
-| U5 safety | a bad literal or template is refused at load and skips only its step; a template that renders to anything but a positive number fails the action or is false, and moves nothing |
+| U5 safety | a bad literal or template is refused at load and skips only its step; a template that renders to anything but a positive number fails the action or is false, moves nothing, and reports `MTR-0120` |
 
 ### Verification
 
-`MoneyAmountExpressionTest` (eight tests: the declaration, the load-time refusals, a template that pays and takes, text, zero and negative results
-that move nothing, `has_money` on a template, the resumable paths with a template and with a literal), `ProviderActionsTest` and
+`MoneyAmountExpressionTest` (nine tests: the declaration, the load-time refusals, a template that pays and takes, text, zero and negative results
+that move nothing, `has_money` on a template and its refusal, the code on the outcome and on the refusal, the resumable paths with a template and
+with a literal), `FlowInterpreterTest` (two new: a refused value inside a `require` is reported as `MTR-0120` and traced under that code; a
+condition that refuses is false, the else runs, and the code is reported), `DiagnosticCodesTest` (the count is 105; `MTR-0120` is warning-level),
+`ProviderActionsTest` and
 `HasMoneyConditionTest` (the literal messages, unchanged), `TargetedActionsTest` (the money actions on a target), and `ConditionsInFlowsTest`
 (a flow with the three entries and templates compiles with no problem, and a `"lots"` amount is still refused at load). The corpus: T21 passes
 (`fixtures/codemode/corpus/t21-pay-command.expect.json`), with its staged operations pinned by `fixtures/golden/codemode/ops/t21-pay-command.json`
@@ -4925,20 +4941,41 @@ Regenerated and reviewed (the diffs are the three amounts, their descriptions, t
 `fixtures/golden/codemode/plugin-current.d.ts` and `with-addon.d.ts`. `scripts/benchmark/corpus-report.mjs --check` is in sync (18 of 29 tasks pass;
 QTY is closed).
 
-**QA.** There is no `qa/catalog/` entry for this change. The probe has no economy provider: `logic.providers-unavailable-without-vault` asserts that
-`give_money` and `take_money` are unavailable there (`MATERIONE-LOGIC-OK ... unavailable=give_money,take_money,connect`). A money move cannot be seen in
-game, so the unit tests above are the evidence (owner question 1).
+**Harness and QA.** `harness/` has a test economy (decision 1 below): `PaperEconomyIT` boots the `economy` fixture pack on Paper and moves
+balances between two fake players. The QA catalog's `economy` suite (`qa/catalog/economy.mjs`, two auto entries, not run and not blessed) covers
+the refusal a player can see on the probe, which has no economy provider and needs none for it: a bad amount is refused before any currency is
+read, the run carries on, and the server logs `MTR-0120`. A payment on the probe is not covered, because the probe does not install the stub.
+
+**Found while testing (not fixed here).** A currency file is a *document of currencies*: each top-level key is the currency's id and its
+value is the mapping (`qa_xp:` in `fixtures/packs/probe/currencies/qa_xp.yml`). A file whose keys sit at the top level (`integration: xp` with
+no id above it) defines **no** currency, and nothing reports it: `PackResources.declared` finds no resource and the file is dropped silently.
+`fixtures/packs/showcase/currencies/points.yml` is written that way, so by the same mechanism `showcase:points` is undefined at run time (inferred from
+the code path; the showcase pack was not booted to confirm it). The economy pack (`fixtures/packs/economy/currencies/coins.yml`) was written the same way first and failed for
+this reason. Two follow-ups for the owner: fix the showcase file (its `ShowcasePackTest` reads the file text, so it moves with the fix), and
+decide whether a currency-shaped file with no id should be a diagnostic (a warning, like `MTR-0021` for a command document with no usable name).
+
+### Decisions taken on review (#464)
+
+The first draft of this section left two questions to the owner; the owner delegated both, and the decisions are these.
+
+1. **A test economy in the harness: yes; in the probe: no.** The harness implements Materione's own currency SPI
+   (`api.logic.provider.CurrencyIntegration`), not a Vault jar: `EconomyStub`, balances held in memory, in the durability probe
+   (`harness/src/durabilityProbe`, never shipped). The probe registers it with the product's logic registry as `harness:stub`, and
+   the probe plugin declares `depend: [Materione]` so the product loads first. `fixtures/packs/economy` names it
+   (`currencies/coins.yml`), and two command documents move coins through it: `coinpay` (the T21 shape: a player argument, the amount
+   from `args.amount`, `take_money` in a `require`, then `give_money` to the other player) and `coinpay-raw` (the amount as text, so a bad one
+   reaches the money code). `dprobe grant` and `dprobe balance` read and write the balances. The QA probe is not given the stub: it loads
+   `Materione.jar` only, so the stub would need a second jar built and installed by the probe script, and that is not cheap. The probe copies every
+   fixture pack, so the economy pack is in it too, with its currency reporting unavailable; the `economy` QA entries need nothing more.
+2. **A refused run-time amount reports `MTR-0120`: yes.** Decision 4 above, with the trace and the `require` behaviour it fixes. The code is
+   pinned in `DiagnosticCodesTest` (the count is 105) and documented in plugin.md §5. #465 takes `MTR-0118` and `MTR-0119`, so `MTR-0120` is
+   free on `main`; the merge of #465 is a trivial conflict in that test's count and comment, as the coordinator expected.
 
 ### Owner questions
 
-1. **Money in the QA probe.** CLAUDE.md asks for a QA entry for every player-visible change. A money action is not visible without an economy
-   provider, and the probe server has none. Install a Vault stub on the probe so `give_money` and `take_money` can be observed in game, or accept
-   the unit tests as the evidence for money?
-2. **A refusal in the trace only, or a diagnostic too.** A template that renders to a non-positive number is the action's failure reason, in the
-   trace and to `require`. An exception publishes a rate-limited diagnostic, and a bad literal is `MTR-0057`. Should a refused run-time amount also
-   publish a code (the next free one in the `MTR-0106` to `MTR-0119` block is `MTR-0120`), or is the trace reason enough?
-3. **Widen the presentation quantities now.** `potion` `duration` and `amplifier`, `title` timings, `sound` `volume` and `pitch`, and `prompt`
+1. **Widen the presentation quantities now.** `potion` `duration` and `amplifier`, `title` timings, `sound` `volume` and `pitch`, and `prompt`
    `timeout` are literal, and each widening is the same `Quantity` read. Widen them all with this section, or with the first task that needs one?
+   (Not decided on review; the owner's delegation covered the two questions above.)
 
 ### Not built, on purpose
 

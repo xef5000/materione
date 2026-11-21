@@ -40,6 +40,16 @@ public final class RunReporter {
                 "behavior continues despite the failure; repeated reports are rate-limited");
     }
 
+    /**
+     * A step refused a value its content gave it, under the code the refusal carries ({@code MTR-0120}, logic.md
+     * section 42). Reported even inside a {@code require}: a bad amount is a content error, not a business outcome such
+     * as an insufficient balance, which stays silent.
+     */
+    public void refused(Rule rule, StepPath path, DiagnosticCode code, String problem) {
+        report(code, code.defaultSeverity(), rule, path, problem,
+                "the step moved nothing; fix the value the content gives it. Repeated reports are rate-limited");
+    }
+
     /** A run budget ended a run ({@code MTR-0059}). */
     public void aborted(Rule rule, StepPath path, String problem) {
         report(DiagnosticCodes.FLOW_RUN_ABORTED, Severity.WARN, rule, path, problem,

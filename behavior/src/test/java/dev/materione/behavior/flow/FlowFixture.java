@@ -39,7 +39,7 @@ public final class FlowFixture {
     public final LogicFixture logic = new LogicFixture();
 
     public FlowFixture() {
-        for (String id : List.of("a", "b", "c", "fails", "boom", "message")) {
+        for (String id : List.of("a", "b", "c", "fails", "refuses", "boom", "message")) {
             logic.action(LogicFixture.recording(id, Threading.PLAYER_REGION, ran));
         }
         logic.action(LogicFixture.recording("g", Threading.GLOBAL, ran));

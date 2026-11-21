@@ -52,6 +52,8 @@ val containerProbeJar by tasks.registering(Jar::class) {
 val durabilityProbe = sourceSets.create("durabilityProbe")
 dependencies {
     add(durabilityProbe.compileOnlyConfigurationName, libs.paper.api)
+    // the test economy (#464) implements the product's own currency SPI; the product is a dependency at run time
+    add(durabilityProbe.compileOnlyConfigurationName, project(":api"))
 }
 val durabilityProbeJar by tasks.registering(Jar::class) {
     archiveClassifier.set("durability-probe")

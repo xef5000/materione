@@ -1,0 +1,19 @@
+# /coinpay <player> <amount>: the benchmark's /pay (T21, logic.md section 40) with the money verbs on a currency, so the amount
+# that comes from the argument is an expression (#464). The name is coinpay, not pay, because the commands pack claims pay.
+coinpay:
+  description: "Harness: send coins to a player (the T21 shape with a stub-currency amount from args.amount)"
+  names: [coinpay]
+  args:
+    - {name: to, type: player}
+    - {name: amount, type: number}
+  requirement: "args.amount > 0"
+  deny:
+    - message: "<red>Pay a positive amount."
+    - run_command: "say MATERIONE-ECON-DENIED ${player.name} amount ${args.amount}"
+  do:
+    - require:
+        - take_money: {amount: "${args.amount}", currency: economy:coins}
+      else:
+        - run_command: "say MATERIONE-ECON-SHORT ${player.name} amount ${args.amount}"
+    - give_money: {amount: "${args.amount}", currency: economy:coins, target: {arg: to}}
+    - run_command: "say MATERIONE-ECON-PAY ${player.name} to ${args.to} amount ${args.amount}"

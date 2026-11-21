@@ -3,8 +3,10 @@ package dev.materione.plugin.logic.action;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
@@ -127,7 +129,7 @@ class MoneyAmountExpressionTest {
     }
 
     @Test
-    void aTemplateAmountIsFalseForHasMoneyWhenItIsNotAPositiveNumberAndTrueWhenTheBalanceReachesIt() {
+    void hasMoneyHoldsWhenTheBalanceReachesATemplateAmountAndRefusesAnyOtherRenderingWithItsCode() {
         providers.backend.balances.put(fake.uuid, 300d);
         var parsed = has.parse(reader("amount", "${args.amount}"));
 
@@ -135,8 +137,27 @@ class MoneyAmountExpressionTest {
         assertThat(has.test(parsed, withAmount(300.0))).isTrue();
         assertThat(has.test(parsed, withAmount(301.0))).isFalse();
         for (Object bad : List.of("lots", "", -5.0, 0.0)) {
-            assertThat(has.test(parsed, withAmount(bad))).as("has_money with %s", bad).isFalse();
+            assertThatThrownBy(() -> has.test(parsed, withAmount(bad)))
+                    .as("has_money with %s", bad)
+                    .isInstanceOfSatisfying(CodedRefusal.class, refusal -> {
+                        assertThat(refusal.code()).isEqualTo(DiagnosticCodes.MONEY_AMOUNT_REFUSED);
+                        assertThat(refusal.getMessage()).startsWith("amount must be a number above 0");
+                    });
         }
+    }
+
+    @Test
+    void theRefusedOutcomeCarriesTheMoneyCodeAndAnOrdinaryFailureDoesNot() {
+        var refused = give.execute(give.parse(reader("amount", "${args.amount}")), withAmount("lots"));
+        assertThat(refused).isInstanceOfSatisfying(ActionOutcome.Failed.class, failed -> {
+            assertThat(failed.code()).isEqualTo(DiagnosticCodes.MONEY_AMOUNT_REFUSED);
+            assertThat(failed.reason()).startsWith("amount must be a number above 0");
+        });
+        // an insufficient balance is an ordinary failure: no diagnostic code, so nothing is reported beyond the trace
+        providers.backend.balances.put(fake.uuid, 1d);
+        var insufficient = take.execute(take.parse(reader("amount", 5)), fake.context());
+        assertThat(insufficient).isInstanceOfSatisfying(ActionOutcome.Failed.class,
+                failed -> assertThat(failed.code()).isNull());
     }
 
     @Test
@@ -171,6 +192,10 @@ class MoneyAmountExpressionTest {
 
         assertThat(has.testResumable(parsed, withAmount(120.0), reads).toCompletableFuture().join()).isTrue();
         assertThat(has.testResumable(parsed, withAmount(999.0), reads).toCompletableFuture().join()).isFalse();
-        assertThat(has.testResumable(parsed, withAmount("lots"), reads).toCompletableFuture().join()).isFalse();
+        // a refused amount fails the stage with its code, which the engine reports and the condition counts as false
+        assertThatThrownBy(() -> has.testResumable(parsed, withAmount("lots"), reads).toCompletableFuture().join())
+                .isInstanceOfSatisfying(java.util.concurrent.CompletionException.class, failure ->
+                        assertThat(failure.getCause()).isInstanceOfSatisfying(CodedRefusal.class,
+                                refusal -> assertThat(refusal.code()).isEqualTo(DiagnosticCodes.MONEY_AMOUNT_REFUSED)));
     }
 }

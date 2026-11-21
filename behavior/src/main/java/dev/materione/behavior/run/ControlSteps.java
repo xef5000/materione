@@ -1,5 +1,7 @@
 package dev.materione.behavior.run;
 
+import dev.materione.api.diagnostics.DiagnosticCode;
+import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.Cancellation;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.ReadUnavailableException;
@@ -47,7 +49,16 @@ abstract class ControlSteps {
 
     abstract void push(FlowRun run, Frame frame);
 
-    abstract boolean failure(FlowRun run, StepPath path, String message, boolean thrown);
+    /** A step failed with no diagnostic code of its own; see {@link #failure(FlowRun, StepPath, String, boolean, DiagnosticCode)}. */
+    final boolean failure(FlowRun run, StepPath path, String message, boolean thrown) {
+        return failure(run, path, message, thrown, null);
+    }
+
+    /**
+     * A step failed. {@code code} is the diagnostic a refused value carries (logic.md section 42), or null for an
+     * ordinary failure.
+     */
+    abstract boolean failure(FlowRun run, StepPath path, String message, boolean thrown, DiagnosticCode code);
 
     abstract boolean park(FlowRun run, StepPath path, Threading thread, long ticks, boolean timed);
 
@@ -213,6 +224,11 @@ abstract class ControlSteps {
         } catch (RuntimeException e) {
             if (e instanceof ReadUnavailableException) {
                 failClosed(run, path, e);
+                return false;
+            }
+            if (e instanceof CodedRefusal refusal) { // a refused value: false, reported under its own code (logic.md section 42)
+                reporter.refused(run.rule(), path, refusal.code(), refusal.getMessage());
+                emit(run, path, TraceEvent.Type.STEP_FAILED, refusal.code().code() + " condition refused: " + refusal.getMessage());
                 return false;
             }
             reporter.failure(run.rule(), path, "condition failed: " + reasonOf(e));

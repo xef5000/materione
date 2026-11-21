@@ -264,6 +264,12 @@ node --test harness\protocol\floor-bot.test.mjs
   (`/staff`; an op holds every node nobody registered), a requirement that fails with its deny steps and is skipped by the bypass node (an
   operator holds that too), a console refused unless `console: true`, and
   the tree's completions (`dprobe tab`) for a player argument and a choice. Paper only; nothing here ran on Folia.
+- **Money from a command argument** (`PaperEconomyIT`, `EconomyRunner`, logic.md section 42, #464). Runs by default (one boot). The
+  `economy` fixture pack names the harness's test economy, `harness:stub` (`EconomyStub`, an implementation of the product's currency SPI
+  with balances in memory, registered by the durability probe, which depends on the product). `dprobe grant` and `dprobe balance` read and
+  write the balances. The runner moves stub coins between two fake players with the T21 shape (`coinpay`) and checks the balances; a short
+  balance, a denied amount and four refused amounts as text (`coinpay-raw`: `-5`, `abc`, `1e13`, `0`) move nothing and each is reported
+  under `MTR-0120`. The QA probe does not install the stub; its `economy` suite covers the refusal only. Paper only.
 
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 

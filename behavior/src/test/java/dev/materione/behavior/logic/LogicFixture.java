@@ -112,6 +112,10 @@ public final class LogicFixture {
             if (params.equals("boom")) {
                 throw new IllegalStateException("predicate exploded");
             }
+            if (params.equals("refuse")) { // a refused value: the test is false and the code is reported (logic.md section 42)
+                throw new dev.materione.api.logic.CodedRefusal(dev.materione.api.diagnostics.DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+                        "amount must be a number above 0");
+            }
             return result;
         }
     }
@@ -174,6 +178,10 @@ public final class LogicFixture {
             }
             if (id.equals("fails")) {
                 return ActionOutcome.failed("no luck");
+            }
+            if (id.equals("refuses")) { // a value the content gave that is no amount: the money code (logic.md section 42)
+                return ActionOutcome.refused(dev.materione.api.diagnostics.DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+                        "amount must be a number above 0 and at most 1.0E12, not \"" + params + "\"");
             }
             ran.add(id + ":" + params);
             return ActionOutcome.OK;
