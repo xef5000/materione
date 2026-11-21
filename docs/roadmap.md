@@ -420,11 +420,11 @@ unchanged. What changes is how its remaining work is shaped: dialogs and HUDs ar
 systems, the input-slot durability work is the **custody** primitive's proof, and the backpack (#304) is the first **preset**
 (primitives.md §6 lists each re-scope). The agent work has its own milestone, next.
 
-## M6.5 (name TBD) — The agent vertical slice (owner decision on PR #322, architecture §14.9)
+## M6.5 — The AI assistant (the agent vertical slice; owner decision on PR #322, architecture §14.9) — ✅ exit met 2026-11-21
 
 **Goal:** a nice vertical slice before expanding horizontally: a server owner describes a feature to a chatbot in the cloud editor
 and the agent builds it, validates it and applies it, entirely from Materione's primitives and presets (the story of #320).
-Placed between M6 and M7; **TBD** in name and scope. Existing milestones keep their numbers. M7 and M8 are mainly horizontal
+Placed between M6 and M7; its scope was fixed by the re-scope below. Existing milestones keep their numbers. M7 and M8 are mainly horizontal
 expansion (parity long tail, then scale), and M8 is very late, so this slice comes before them.
 
 - The chatbot layer fixed on the cloud editor page (`editor.materione.com`), whose tools are the editor's existing authoring
@@ -465,6 +465,20 @@ the program, it is type-checked, run in the sandbox, dry-run on the server and a
 transaction reverted, and the spend is bounded by the allowance, the pool and the gateway limit, **shown by measurement** (#405).
 #320's full acceptance criteria (its example end to end, content tests per #350) are re-checked by re-running the benchmark once
 the M6 primitives land, tracked on #320.
+
+**M6.5 closeout (exit met 2026-11-21, #405):** the assistant runs on the deployed editor. The owner's measured run
+([`architecture/codemode.md`](architecture/codemode.md) §12.3) created and applied new content from a request, had a change to an
+existing item approved, applied and reverted, all through the type-check, the sandbox and the server dry run, with GPT-6 Luna
+Medium behind the model proxy (`34f03596`). The spend matched to the picodollar between the D1 ledger and the AI Gateway logs
+($0.003032 over 9 turns); the per-account allowance, the global pool and the request bounds refused cleanly; the gateway limit is
+set to $20 a day and $100 a month, and auto top-up is off. The benchmark's tool-per-operation baseline (#349,
+[`architecture/agent-benchmark.md`](architecture/agent-benchmark.md) §7.2) accepts as many buildable tasks as code mode but at about
+twice the cost per accepted task, and stages a workaround on 11 of the 13 tasks that need a missing primitive, against 2 for code mode.
+As built across the milestone: the SDK generator and core (#337, #339), the type-check Worker (#342), the sandbox (#343), the
+server transaction with dry run, journal and revert (#341, #344), proposals and grants (#346), the review surface and change log
+(#347), the chatbot and agent loop (#348), the model proxy, accounts and two-bucket ledger (#402, #409, #410), the model choice
+(#385), and the benchmark corpus in CI with its harness (#349). Open follow-ups (the stale editor view #461, self-description
+gaps, the sandbox on other browsers, robustness) and the two owner decisions (#338, #350) stay on the board.
 
 ## M7 — Parity close-out (the long tail)
 

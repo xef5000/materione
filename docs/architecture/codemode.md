@@ -1618,14 +1618,64 @@ and `webui/src/lib/codemode/proxy/`) is wired and verified with both the scripte
 | A touched document already has an error | Findings that existed before the transaction are **reported as warnings** and do not refuse it; only findings the transaction adds refuse it. Rare by construction (agents and the editor do not write faulty documents) but direct YAML editing makes it possible. Implementation: #372. |
 | A revert whose restored state fails validation | **Refused.** Reverts stay strict; there is no "restore anyway". |
 
+### 12.3 As built: the live slice and its measured spend (#405, 2026-11-20)
+
+The M6.5 exit (roadmap) asks for the slice on the deployed editor with its spend bounded **by measurement**. The owner ran it on
+2026-11-20 between 03:57 and 04:04 UTC; the raw evidence (D1 exports, gateway log totals, transcripts) is on
+[#405](https://github.com/xef5000/materione/issues/405). The benchmark oracle of §11 was not used: everything below is the
+deployed path.
+
+**Setup.** `editor.materione.com` connected to the owner's real Paper server; model proxy deployed from `34f03596` (the #437
+charter, workflow run 44227151993); model `gpt-6-luna-medium` (gateway: `openai/gpt-6-luna`); a free-eligible account with a
+credit balance of 0, so every turn drew on the free allowance.
+
+**The run.**
+
+| Request | What happened | Turns | Charged |
+|---|---|---:|---:|
+| "Greet players when they join; on first join broadcast a welcome and give a starter stone sword" | Read the packs and asked which pack (none existed). The first program failed in the sandbox (`SDK-0008`, no pack `test`; nothing staged). After the owner created the pack, a clean dry run, then **applied** without approval (three new documents: a variable, an item, a rule). Works in game. | 7 | $0.002694 |
+| "Change test:coin so it looks like a coin" | One `setFields` on an existing item: clean dry run, **approval requested, approved, applied**, correct in game; then **reverted** from the change log, correct in game. | 2 | $0.000338 |
+
+Two findings: the SDK has no pack-creation operation, so a request on a server with no pack needs the owner first; and the editor
+showed stale content in the detail view and the Files tab after the approved change (#461).
+
+**Spend: the ledger against the gateway.**
+
+| Measure | D1 ledger (`reservations`) | AI Gateway logs |
+|---|---|---|
+| Turns | 9, all `settled`, none `kept` | 9, all successful |
+| Total | 3,032,175,000 picodollars = $0.003032 | $0.003032 |
+| Per turn | $0.000136 to $0.001014 | equal row for row |
+| Tokens | input + cache read + cache write | equals the gateway's input count on every row |
+
+Every reservation exceeded its settlement: $0.1072 reserved in total against $0.003032 settled, about 35 times the real cost,
+refunded at settlement. The largest output was 478 tokens against the 12,288 cap. `daily_account_free_usage` for the day equals the
+settled total over 9 requests; the free bucket paid everything and the paid bucket nothing. The cost per accepted request was
+$0.0027 for the first (including the failed attempt and the question) and $0.00034 for the second; at the first one's cost the
+$0.05 daily allowance covers about 18 such requests.
+
+**The limits.** None was weakened for the test; the two counters were seeded and restored in D1 by the owner.
+
+| Limit | How it was exercised | Result |
+|---|---|---|
+| Daily allowance per account ($0.05) | Account usage seeded to $0.0495 | The panel showed the refusal with the time until reset; no reservation row was written |
+| Global free pool ($1.00) | Pool usage seeded to $0.9995 | The panel showed that the shared pool is exhausted |
+| 64 messages | Request from the console | `400`, messages exceed 64 |
+| 80,000 input tokens | Request from the console | `413`, over the short-context bound |
+| 512 KiB body | Request from the console | `413`, body over 512 KiB |
+| 12,288 output tokens | Ledger | Maximum observed 478; the proxy sets the cap on every upstream call |
+| Gateway spend limit | Owner, dashboard | $20 a day and $100 a month, sliding windows. Cloudflare documents that the gateway blocks with a `429` once a limit is reached; not exercised live |
+| Auto top-up | Owner, dashboard ("Auto recharge") | Off |
+
+The atomic D1 reservation is the measured hard bound; the gateway limit is the backstop behind it, eventually consistent by
+Cloudflare's account. The tool-per-operation comparison of §11 is in
+[agent-benchmark.md §7.2](agent-benchmark.md#72-the-measured-run-code-mode-against-a-tool-per-operation-baseline-349).
+
 ## 13. Not verified
 
-- **The deployed slice with a real model (2026-11-18).** The owner ran the assistant on `editor.materione.com` against a real
-  server after deploying the model proxy with the #437 charter (commit `34f03596`), and reported that it worked. Not yet recorded:
-  the evidence of a create, an approval and a revert in that run, with the editor and proxy versions; the spend of those turns
-  measured against the proxy's reservation and settlement, the AI Gateway logs and the D1 ledger; and the limits exercised (a
-  caller's daily allowance, the global pool, the request bounds, and that the gateway spend limit blocks). The benchmark's oracle
-  (§11) is not a substitute for any of these. Tracked in #405.
+- **The deployed slice, beyond the run of §12.3.** One owner run, two requests, one account, one server. Not exercised live: the
+  gateway spend limit actually blocking (documented by Cloudflare, configured, not hit); a paid-credit turn (the run used the free
+  bucket only); concurrent callers racing the pool; and the vague-request behaviour on the deployed charter.
 - The numbers of §2.4 are as the fetched pages report them: the arXiv page through a mirror, and the daily.dev page is a
   summary of an article that was not read. None was cross-checked against the full papers or the original article.
 - *Resolved by #340 (§4.3, "Measured"):* the embedding (promise-returning host function, interrupt handler, hard memory cap

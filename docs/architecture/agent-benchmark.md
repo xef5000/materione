@@ -12,8 +12,8 @@
 > corpus-only programs (`C01`–`C03`) live in `fixtures/codemode/corpus/`, compiled by the real TypeScript checker against the
 > generated SDK (`webui/test/codemode-compile.spec.ts`, `codemode-typecheck.spec.ts`), executed to staged operation lists
 > (`webui/test/codemode-core.spec.ts`), replayed through the real server's `authoring.transaction` dry run (`CodemodeReplayTest`),
-> and tallied against this document by `scripts/benchmark/corpus-report.mjs --check`. The live measured model run (§8, #385) is
-> the remaining part of #349.
+> and tallied against this document by `scripts/benchmark/corpus-report.mjs --check`. The measured run, code mode against a
+> tool-per-operation baseline, is §7.2 (2026-11-21).
 >
 > **Traceability.**
 >
@@ -730,7 +730,63 @@ The owner chose Luna Medium with the index and no escalation as the initial cost
 improved results and reduced turns but cost more per accepted task. Their S18-adjusted score reached the benchmark ceiling,
 so saturation may conceal additional quality differences. These are small, single-run measurements, not guarantees of
 production cost or quality. The Sol always-mid arm was deliberately not run; neither it nor a live production deployment is
-established by these results.
+established by these results. The live deployment was measured separately ([codemode.md §12.3](codemode.md#123-as-built-the-live-slice-and-its-measured-spend-405-2026-11-20)).
+
+### 7.2 The measured run: code mode against a tool-per-operation baseline (#349)
+
+**Method.** Two arms, run by the owner on 2026-11-20 and 2026-11-21 against the same commit (`4309f581`), with GPT-6 Luna Medium,
+index context, always-cheap routing, the real type checker, the QuickJS sandbox and the JVM transaction oracle
+(`npm --prefix webui run benchmark -- --oracle jvm --suite all`). The **code-mode** arm (`--mode codemode`) gives the model the one
+`run_program` tool of codemode.md §5. The **baseline** arm (`--mode tool-baseline`, `webui/benchmark/baseline.ts`) gives it
+structured tools instead: four reads over the same registry self-description and packs (`describe_surface`, `list_packs`,
+`list_resources`, `get_document`) and `propose_transaction`, which takes a raw `authoring.transaction` operation list. It has no
+SDK and no type checker; the server dry run is its only validation. Its system prompt tells it to report a missing capability
+rather than fake it, as the code-mode charter does. Both arms run all 29 tasks, the 5 follow-ups (built on
+the arm's own earlier results) and the 12 vague requests, under the same loop bounds (`REPAIR_BUDGET = 3`, `MAX_MODEL_TURNS = 12`).
+The harness runs without a person, so **interventions are zero in both arms by construction**; a question back to the user ends
+the task. Budget caps were $0.20 and $0.30 of the owner's $0.50; the arms spent $0.0731 and $0.1258. Raw reports:
+`webui/build/bench-349-codemode/` and `webui/build/bench-349-baseline/` on the owner's machine (not committed).
+
+**Results.**
+
+| Measure | Code mode | Tool per operation |
+|---|---:|---:|
+| Buildable tasks accepted (strict / S18-adjusted) | 14/16 / 14/16 | 14/16 / 14/16 |
+| Accepted on the first program | **9/16** | 7/16 |
+| Average fix iterations | 0.72 | 0.76 |
+| Average model turns per task | **4.34** | 10.17 |
+| Average tool steps per task | **3.45** | 28.90 |
+| Tasks and follow-ups stopped by the 12-turn limit | 0 of 34 | 14 of 34 |
+| Expected-fail tasks with an accepted transaction (lower is better) | **2/13** | 11/13 |
+| Missing-primitive honesty, as each arm scores it (not like for like) | 11/13 | 0/13 |
+| Follow-ups passing and regression-free | **3/5** | 1/5 |
+| Tokens, tasks only (input + cache read + cache write + output) | **1,292,424** | 2,071,994 |
+| Cost, tasks only | **$0.0473** | $0.1001 |
+| Cost per accepted buildable task | **$0.0034** | $0.0071 |
+| Average wall time per task | **18.5 s** | 43.2 s |
+
+**What it shows.**
+
+- **Same ceiling, half the price.** Both arms accept 14 of the 16 buildable tasks; code mode does it in 43% of the turns, an
+  eighth of the tool steps and half the cost per accepted task. The baseline hit the 12-turn limit on 14 of 34 runs, most of them
+  after its work was already accepted: exploring the surface one read per call does not fit the loop the deployed chatbot runs.
+- **Faking a missing primitive is the decisive difference.** The 13 expected-fail tasks need a primitive that does not exist.
+  The baseline staged an accepted transaction on 11 of them, despite its prompt: something that dry-runs clean but is not the
+  feature (a workaround or a partial build), which codemode.md §6 rule 2 forbids. Code mode did so on 2 (T14 dash blade, T28
+  rules on first join) and on follow-up F2, and reported the gap on the rest. In code mode a missing primitive is a type error
+  the model sees (codemode.md §9.2); a per-operation tool surface gives no such signal, so the model fills the gap with what
+  exists. The harness's honesty column is not like for like: code mode counts a missing-primitive diagnostic or a gap phrase
+  with no command workaround applied (`checkMissingPrimitiveHonesty`), the baseline a narrower phrase list with nothing
+  applied, which is why the baseline's T22 and T27 score dishonest without an accepted transaction.
+- **The failures differ.** Code mode's two misses (T16, T29) ran out of repair budget on type errors (`MiniMessage` brand,
+  an optional field); the baseline's (T10, T19) on server validation (`MTR-0021`, a rule without `on:` or `do:`).
+- **Against #385.** The same configuration measured at `9cb4496f` (§7.1) scored 13/16 strict, 8/16 first turn, 5.45 turns and
+  $0.0051 per accepted task; at `4309f581` it scores 14/16, 9/16, 4.34 and $0.0034. One run each; the difference is within what
+  a single run can move.
+
+**Not shown.** One run per arm, one model; the vague-request verdicts are the harness's automatic rubric and their human-review
+boxes are unticked; the "honest" column is automatic and the partial builds were not reviewed by a person. #320's full
+acceptance is re-checked after the M6 primitives land (roadmap M6.5 re-scope).
 
 ---
 
@@ -742,8 +798,9 @@ established by these results.
   and checked for tally consistency (`scripts/benchmark/corpus-report.mjs --check`). The offline-verified CLI harness
   (`npm --prefix webui run benchmark`, `scripts/benchmark/README.md`) with real JVM oracle (`:plugin:benchmarkOracle`),
   tool-per-operation baseline, context ablation (`index` vs `full-dts`), escalation routing, vague-request rubric (`V01`–`V12`),
-  and hard picodollar budget guard supports owner-budgeted runs (#385, #349). The measured arms and their scope are in §7.1;
-  they do not prove the deployed editor and gateway configuration.
+  and hard picodollar budget guard supports owner-budgeted runs (#385, #349). The measured arms and their scope are in §7.1 and
+  §7.2; they run the oracle, not the deployed editor. The deployed editor and gateway were measured once, separately
+  (codemode.md §12.3). Not run: other models in the baseline arm, repeated runs, a human review of the vague-request verdicts.
 - **Live runtime execution of all 16 passing tasks on Paper.** `CodemodeReplayTest` proves that every staged transaction
   validates and compiles cleanly through `authoring.transaction(dryRun=true)` (except T16 and T19 which hit S18 `MTR-0009` on the
   furniture scaffold's default texture); end-to-end in-game execution is covered by the harness and QA catalog.
