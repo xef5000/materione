@@ -27,14 +27,24 @@ final class LogicEditor {
 
     private final Map<String, Object> resource;
     private final LogicLookup lookup;
+    private final boolean command;
 
-    LogicEditor(Map<String, Object> resource, LogicLookup lookup) {
+    /**
+     * @param command a command document (logic.md §40): its flow is the top-level {@code do:}, edited at {@code do.<i>},
+     *     and the rule edits, which address a {@code behavior:} list it does not have, are refused
+     */
+    LogicEditor(Map<String, Object> resource, LogicLookup lookup, boolean command) {
         this.resource = resource;
         this.lookup = lookup;
+        this.command = command;
     }
 
     /** Applies one edit. */
     void apply(LogicEdit edit) {
+        if (command && isRuleEdit(edit)) {
+            throw LogicRefusal.rule("do", "a command document has one flow, do:, and no rules to add, remove, "
+                    + "reorder or patch; edit its steps (do.0, ...), and its names, arguments and gate as fields");
+        }
         switch (edit) {
             case LogicEdit.AddRule add -> addRule(add.index(), add.rule());
             case LogicEdit.RemoveRules remove -> removeRules(remove.indices());
@@ -51,7 +61,11 @@ final class LogicEditor {
         }
     }
 
-    // ------------------------------------------------------------------
+    private static boolean isRuleEdit(LogicEdit edit) {
+        return edit instanceof LogicEdit.AddRule || edit instanceof LogicEdit.RemoveRules
+                || edit instanceof LogicEdit.ReorderRules || edit instanceof LogicEdit.PatchRule;
+    }
+
     // rules
 
     private void addRule(int index, Map<String, Object> rule) {
@@ -275,6 +289,9 @@ final class LogicEditor {
     }
 
     private void rewriteCalls(String from, String to) {
+        if (command && resource.get("do") instanceof List<?> steps) {
+            rewriteCallsIn(steps, from, to);
+        }
         Object rules = resource.get("behavior");
         if (rules instanceof List<?> list) {
             for (Object rule : list) {

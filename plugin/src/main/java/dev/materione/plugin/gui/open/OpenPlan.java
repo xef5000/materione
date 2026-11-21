@@ -6,6 +6,7 @@ import dev.materione.api.diagnostics.DiagnosticCode;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.gui.GuiAuthoringApi.OpenArg;
+import dev.materione.api.gui.GuiAuthoringApi.OpenSpec;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.behavior.flow.Condition;
 import dev.materione.behavior.flow.FlowCompiler;
@@ -67,7 +68,24 @@ public record OpenPlan(
         if (rules == null || rules.open() == null) {
             return null;
         }
-        var spec = rules.open();
+        return compile(owner, rules.open(), rules.flows(), TRIGGER, FlowCompiler.OPEN_SECTION, lookup);
+    }
+
+    /**
+     * Compiles a names, arguments and gate block wherever it lives (logic.md §40): a GUI's {@code open:} block under
+     * {@code gui.opening}, or a command document's own keys under {@code command.run}. The two differ only in the
+     * trigger the requirement and the deny steps are checked under, and in where a problem says the block sits.
+     *
+     * @param owner the GUI or command document the block belongs to
+     * @param spec the block as read
+     * @param flows the owner's named flows, which the deny steps may call
+     * @param trigger the trigger whose variables the requirement and the deny steps may read
+     * @param section {@code open} for a GUI's block, empty for a command document (its keys are the document's own)
+     * @param lookup the registries the requirement and the deny steps resolve against; null compiles the block
+     *     without them, and a requirement then fails closed
+     */
+    public static OpenPlan compile(
+            NamespacedId owner, OpenSpec spec, Object flows, String trigger, String section, LogicLookup lookup) {
         var problems = new ArrayList<Diagnostic>();
         List<OpenArgSpec> args = arguments(owner, spec.args(), problems);
         Condition requirement = null;
@@ -76,20 +94,22 @@ public record OpenPlan(
             if (lookup == null) {
                 broken = true;
             } else {
-                var parsed = FlowCompiler.condition(owner, spec.requirement(), TRIGGER, lookup);
+                var parsed = FlowCompiler.condition(owner, spec.requirement(), trigger, lookup, section);
                 problems.addAll(parsed.problems());
                 requirement = parsed.condition();
                 broken = requirement == null;
             }
             if (broken) {
+                boolean command = section.isEmpty();
                 problems.add(problem(owner, DiagnosticCodes.OPEN_REQUIREMENT_INVALID, Severity.ERROR,
-                        "open.requirement does not load, so opening is refused for everyone without the bypass",
+                        (command ? "requirement" : section + ".requirement") + " does not load, so "
+                                + (command ? "the command" : "opening") + " is refused for everyone without the bypass",
                         "fix the condition reported beside it"));
             }
         }
         Rule deny = null;
         if (!spec.deny().isEmpty() && lookup != null) {
-            ParsedRules parsed = FlowCompiler.denied(owner, TRIGGER, spec.deny(), rules.flows(), lookup);
+            ParsedRules parsed = FlowCompiler.denied(owner, trigger, spec.deny(), flows, lookup, section);
             problems.addAll(parsed.problems());
             deny = parsed.rules().isEmpty() ? null : parsed.rules().get(0);
         }
@@ -118,6 +138,12 @@ public record OpenPlan(
         } catch (RuntimeException e) {
             return false;
         }
+    }
+
+    /** The node that skips a command document's requirement: {@code materione.command.bypass.<pack>.<id>} (logic.md §40). */
+    public static String commandBypassNode(NamespacedId command) {
+        Objects.requireNonNull(command, "command");
+        return "materione.command.bypass." + command.namespace() + "." + command.value();
     }
 
     /** The node that skips a GUI's requirement: {@code materione.gui.bypass.<pack>.<id>} (logic.md §6.1). */

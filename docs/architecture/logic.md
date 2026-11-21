@@ -2363,6 +2363,11 @@ this PR; the surface is in [`plugin.md`](plugin.md) §5.
     tree, the window, the requirement and deny messages) is in `qa/catalog/opencommands.mjs`, and needs a real client.
 22. **Numbering.** §20 is taken by #211 and §22 is reserved by an open PR; this section takes the next free number and
     is reconciled at merge.
+23. **Since #330 the block is not only a GUI's.** The names, arguments, permission, requirement and deny this section
+    describes are one schema (`CommandSchema`) that a `command` document reads too, and `open:` is defined as the sugar of a
+    command whose flow opens the GUI. Nothing above changed: the registrar, the gate, the usage line and the tree serve both
+    kinds. The command document, its trigger `command.run`, the typed `args.*`, the console rule and the collision order are
+    in §40.
 
 ---
 
@@ -4345,3 +4350,225 @@ A target form for an offline player (money to an offline account: out, as the is
 holder of a stack: #333); `heal`, `damage` and `velocity` (#329 had not landed); a target on `view.open` (views row V4); a
 dedicated widget in the Logic tab's inspector (the field is the generic raw editor, advanced, with the description); `target:` on
 `run_command` (`run_command` has `as:`); parallel handling of a set.
+
+---
+
+## 40. Decisions taken in #330 (commands as content)
+
+[#330](https://github.com/xef5000/materione/issues/330) is rank 4 of the benchmark ([`agent-benchmark.md`](agent-benchmark.md) §4.2, the `CMD`
+gap; [`primitives.md`](primitives.md) §5.4) and a primitive under D12 ([`architecture.md`](../architecture.md) §3.1): until it, a command with typed
+arguments, a permission and a gate could be declared only as the `open:` block of a GUI, so a command that opens nothing (a `/discord` that prints
+a link, a `/pay <player> <amount>`) had no home. It adds one content type, `command` (`commands/`), lifts the names, arguments and gate that
+`open:` declares into one schema that both read, and defines `open:` as the sugar of the second. Nothing in it is named for a use case: T27
+(`/discord`) is a document of three lines, T21 (`/pay`) is the same document with #331's `target:` (and does not pass the benchmark yet, for a gap
+of its own that is not this primitive: "Benchmark" below), and the `claim` and `browse` commands that are hard-coded today are the follow-up the
+issue names, not built here. The code is in `content.logic` (`CommandSchema`), `content.commands`
+(`CommandType`, `CommandDefinition`), `behavior.flow` (`FlowCompiler.document`), `plugin.gui.open` (the shared machinery: `OpenPlan`, `ArgParser`,
+`ArgType`, `OpenCommandTree`, the registrar and the handler, and `OpenDeclaration`, `DocumentCommands`), `plugin.commands` (`RuntimeCommands`,
+`CommandDocuments`, `CommandRuns`) and `plugin.logic.trigger` (`CommandTriggers`). Each decision is reversible by the owner.
+
+**Traceability.**
+
+| Decision or rule | How this section applies it |
+|---|---|
+| D5 | `command` is a registry entry with a complete self-description, so `authoring.describe`, the editor's generic form and the code-mode SDK (`p.commands.create`) show it with no code of their own; `command.run` is a registered trigger with its context schema |
+| D8 | the tree's executor hops to the sender's own thread through the gateway (the entity scheduler for a player, the global thread for the console); the flow's world access is the actions' as for any run |
+| D6, D1 | a command is a file in `commands/`; the pipeline parses, compiles and swaps it like every type, and nothing registers a command any other way |
+| D12, master §3.1 | a content type with names, arguments and a flow (U1 to U4), validated offline and quarantined on a collision (U5); the table at the end |
+| master §5.5, §5.6 | one schema source for the block both `open:` and a command read; every existing `open:` block loads, saves and behaves as before ("What changed for existing content" below) |
+
+### The document
+
+```yaml
+pay:
+  description: "Send coins to another player"
+  names: [pay, give-coins]                 # the first is the command's name; the others are aliases
+  permission: shop.pay                     # a node the sender needs; none means anyone
+  args:                                    # the typed arguments, exactly as open.args declares them
+    - {name: to, type: player}
+    - {name: amount, type: number}
+  requirement: "args.amount > 0"           # a condition the sender must meet
+  deny:                                    # steps that run when it is not met
+    - message: "<red>Pay a positive amount."
+  console: false                           # whether a sender with no player may run it (default: no)
+  do:                                      # the one flow the command runs
+    - take_money: "${args.amount}"
+    - give_money: {amount: "${args.amount}", target: {arg: to}}
+  flows: {}                                # named flows `call` runs, as any host's
+```
+
+| Key | Meaning | Shared with `open:` |
+|---|---|---|
+| `names` | the names that run it, each `[a-z0-9_-]+`; required | `open.commands` (the one key that is spelled differently) |
+| `args` | the typed arguments: `string`, `int`, `number`, `player`, `boolean`, `choice`, each with `optional`, `default` and `suggest` | `open.args`, byte for byte |
+| `permission` | the node the sender needs | `open.permission` |
+| `requirement` | a condition (an expression, a predicate or a composite) | `open.requirement` |
+| `deny` | the steps that run when the requirement fails | `open.deny` |
+| `console` | whether the console, a command block or RCON may run it | none: a GUI cannot be opened without a window |
+| `do` | the flow the command runs: the one flow model of §2, required | none: the flow of an `open:` is "open this GUI" |
+| `flows` | named flows callable by `do`'s `call` | the same key every host has |
+| `description` | a note for the people who edit the document | none |
+
+### Decisions
+
+1. **One schema source, referenced by both.** `CommandSchema` (`content.logic`) reads, checks and writes the block (names, arguments, permission,
+   requirement, deny) and draws its self-description once (`CommandSchema.argumentFields()` is the `args` entry's fields in `authoring.describe`).
+   `GuiOpen`, the reader of #221, is now a thin spelling of it (`Dialect.OPEN`); the command document is the other (`Dialect.COMMAND`). The dialect
+   decides three things and nothing else: the key that holds the names (`commands` in `open:`, `names` in a document), whether a key outside the
+   block's own is a problem (the `open:` block is strict, a document's other keys are `do`, `flows` and the rest), and the label a message uses
+   (`open.args` or `command.args`). The typed form is the same `OpenSpec` record, so the editor's typed `SetOpen` of #221 is unchanged. At run time
+   the one `OpenPlan.compile` compiles both (the argument types and defaults, the requirement as a condition, the deny steps as a rule), and
+   `ArgParser`, `ArgType`, `OpenUsage` and `OpenCommandTree` serve both with no copy: the usage line of `/pay` is generated by the code that
+   generates `/shop`'s. The `open:` parameter of a GUI stays a raw value in the GUI's self-description (its editor is the GUI studio's typed
+   `SetOpen`); a command document's `args`, `permission`, `requirement` and `deny` are typed parameters, described from the same constants.
+2. **`open:` is defined as the sugar of a command.** A GUI's `open:` block means the command document `names: <open.commands>`, with the same
+   `args`, `permission`, `requirement` and `deny`, whose `do:` is one `gui.open` of that GUI with each parsed argument passed on (`gui.open` is the
+   verb in code today; it is `view.open` once [`views.md`](views.md) row V0 lands, and the definition is "the open action of the declaration's own
+   kind", so the rename touches this sentence and nothing else). The runtime **does not synthesize that document**: a GUI's declaration and a
+   document's are two `OpenDeclaration`s (`Kind.GUI` and `Kind.COMMAND`) that go through the same registrar, the same Brigadier tree and the same
+   handler, and differ in what the handler runs once a name is typed (the opener, or `CommandRuns`). That keeps the one open path the single place a
+   window is created (§6.1) and costs a GUI open no flow run. The equivalence is proven by content, not asserted: the `commands` fixture pack holds
+   `commands:menu` with `open: {commands: [cmenu]}` and `commands:menu2`, a document whose flow is `gui.open: {gui: commands:menu, args: {page:
+   "${args.page}"}}`, and `CommandsPipelineTest` shows both compile to the same names, argument shape and gate. **What is not the same, on purpose:**
+   a GUI opened by name is still gated by the opener (permission, arguments, requirement, in the order of §23 decision 5) and a GUI's `gui.args` stay
+   text; a document's gate and `args` are decision 3 and 4 below. Neither changes for an existing GUI.
+3. **The gate of a command is permission, console, arguments, requirement.** `CommandRuns` runs it on the sender's thread, in this order, and each
+   refusal is one logged outcome (`MATERIONE-COMMAND alias=<a> command=<id> outcome=...`):
+   `denied` (the sender lacks `permission:`; the console holds every node), `console` (a sender with no player and no `console: true`),
+   `usage` (an argument does not read as its type, refused with the usage line generated from the declaration), `refused` (the requirement is not
+   met, or did not load, which fails closed with `MTR-0068` at pack compile), then `ran`. The bypass node `materione.command.bypass.<pack>.<id>`
+   skips the requirement and nothing else, as `materione.gui.bypass.<pack>.<id>` does for a GUI (§23 decision 8). A failed requirement runs the
+   `deny:` steps as the sender's run; with none, the sender is told "the requirement for /x is not met". (A GUI sends both, because the opener
+   always answers; a command lets the author's own steps be the whole answer.) The first name is `command.name`, whatever was typed is
+   `command.label`.
+4. **The trigger is `command.run`, and `args.*` is typed.** The flow is one rule of a registered trigger, so it compiles with the flow compiler an
+   item's rules go through and `${...}` paths are checked against the trigger's schema (an unknown root is `MTR-0060`). Its context is the sender's
+   tree as any player-subject event has it (`player.*`, `location.*`, `world.*`, `server.*`, `vars`), `args.*`, `command.name` and `command.label`.
+   `args.*` carries the **typed** values: an `int` as an integer, a `number` as a double, a `boolean` as a boolean, and everything else as text. A
+   GUI's `gui.args` stay text (changing them would change every existing `open:` flow), and the consequence is real: with text, `${args.amount} > 0`
+   would compare as strings. An optional argument left out with no default is absent (`${args.x}` reads as nothing); one with a default carries it.
+   `args` is already the name of a called flow's own arguments (§2.4), and one engine rule changed so both read: a called flow's arguments shadow
+   the run's `args` only when the call passed some, so a flow a command `call`s with no `with:` reads the command's `args.*`, and one called with
+   `with:` reads what it was given (as before). A `target: {arg: to}` reads `args.to`, which is why #331's `arg:` works for `/pay`.
+5. **The console is refused unless `console: true`.** A sender with no player (the console, a command block, RCON) gets "only a player can run /x" and
+   the outcome `console`. With `console: true` the run has no player: `${player.name}` is the sender's name, the player-only roots are absent, and
+   an action that needs a player fails with its own reason, so a console command is written from the actions that do not need one (`run_command`,
+   `broadcast`, `set_var` on a server variable). The `console` outcome is checked before the arguments, so `/pay` at the console is told it has no
+   console form, not what its usage is.
+6. **Registration is the registrar's, and a collision is a diagnostic.** The open-command registrar (§23 decisions 11 to 16) claims names from every
+   declaration: the GUIs' `open:` aliases first, in the view's order, then the command documents in the order the pipeline met them. The earlier claim
+   keeps the name. A name already claimed (by another document, in this pack or another, or by a GUI), or already a command on the server (vanilla,
+   another plugin), is skipped with `MTR-0067`, which names both owners and says "the alias is skipped"; the rest of the document's names still run
+   it. A document all of whose names are refused claims nothing, which is its quarantine: it stays on disk, is reported on every reload that
+   sees the conflict, and shadows nobody. **No GUI alias ever loses to a document**, which is what keeps every existing `open:` block behaving as
+   it did the day the document type was added. A name that is not `[a-z0-9_-]+` is reported when the pack compiles (`MTR-0021`, a warning on the
+   document) and never reaches the tree; the valid names of the same document do.
+7. **Reload, resync and unregistration are the open commands'.** At the server's COMMANDS event (start, and a server reload) the registrar registers
+   from the **built** registries, so documents are in the tree when the first apply publishes them and unchanged content at boot causes no data
+   reload (§23 decision 15). A content swap updates the declared set at once: a removed document, or a removed name, is hidden through its
+   `requires` and needs no reload (Brigadier cannot remove a child); a document that comes back reuses its node; a new name, or one whose argument
+   names or types changed, asks for one rate-limited `reloadData` that fires the COMMANDS event again, and a name that reload still did not
+   put in the tree is `MTR-0069` ("applies at the next restart"). This is unregistration: it is a hide, as it is for an `open:` alias, and the tree
+   keeps the dead literal until a restart. Defaults, optionality, `suggest:`, permission, requirement and the flow are live without a reload: the
+   executor reads the plan at run time, so an edit to `do:` takes effect on the next run.
+8. **A command that does not load claims no name.** The flow compiles at shadow build with the problems the compiler gives any host, each at its
+   path in the document (`do.1`, `flows.thank.0`, `requirement`, `deny.0`, never a `behavior.<n>` that is not in the file). A step that fails is
+   skipped (`MTR-0057`) and its siblings load; a document whose steps all fail, with no `do:`, or with no usable name, is not live and says so
+   (`MTR-0021`), so a half-written document cannot register a name that does nothing. A document whose `do:` is not a list, or whose `flows:` is not a
+   mapping, parses to nothing and is quarantined whole (`MTR-0008`), and the healthy document beside it in the same file is not.
+9. **Threads (D8).** Brigadier calls the executor on the thread of the source; the handler then hops with the gateway
+   (`executeEntity` for a player, `executeGlobal` for any other sender) before it reads anything, so the gate and the context (the player's health, the
+   world's time) are read on the thread that owns them, and a refusal costs one hop. The flow starts there and runs as any rule's does, hopping per
+   action through the thread gateway. Nothing here touches a world or an entity on its own. **Proven on Paper only** (the harness and the unit tests);
+   nothing ran on a native Folia server for this issue, as for §39.
+10. **Authoring.** `commands/` is a pack directory (`PackLayout`, both scaffold tables, which a test pins byte for byte, and the authoring
+    transaction's logic stage name it). The scaffold is a complete, running command. `logic.get` and `logic.edit` accept a command document: its
+    flow is shown as the one rule of `command.run`, at the path `do`, so step edits address `do.0`, `do.1.then.0` and `flows.<id>.0` (the same
+    `InsertStep`, `PatchStep`, `MoveStep`, `RemoveStep`, `AddFlow`, `RemoveFlow` and `RenameFlow` as for a host, `RenameFlow` also rewriting the
+    `call`s in `do`), while the rule edits (`AddRule`, `RemoveRules`, `ReorderRules`, `PatchRule`) are refused with a message that points at the
+    steps and at the fields: a command has one flow and no rules. The names, arguments and gate are fields (`authoring.setFields`), edited by the
+    studio's generic form from the self-description. The dry run of a transaction compiles a command's `do`, `requirement` and `deny` with the same
+    compiler, so a bad predicate or an unknown `${root}` is found before anything is written. **The graph Logic tab does not open a command
+    document**, exactly as it does not open a rule document (§37 decision 12, issue #367, not fixed here): the generic form and the Script tab are the
+    ways in, and a command is at least as reachable as a rule. `args.*` autocompletes in the inspector from the trigger's context like any path.
+
+### What changed for existing content
+
+Nothing migrates and no file is rewritten. Every `open:` block loads, saves and behaves as before: `GuiOpen` returns the same spec and the same problem
+messages (a test pins them), the registrar claims GUI aliases first and in the same order, the handler's GUI path is the code it was, and the GUI
+fixtures are byte-identical. Four things are visible, none of them a change of meaning:
+
+- **`MTR-0066`, `MTR-0067`, `MTR-0068` and `MTR-0069` apply to commands as well as to `open:`.** They are the same conditions in the same code, so they
+  keep their numbers; their titles and [`plugin.md`](plugin.md) §5 rows say "open or command". No code was added: a second set of four codes for the
+  same four problems would be the second copy this section exists to avoid, and the block `MTR-0106` to `MTR-0117` is taken by the HUD and frame-cycling
+  designs.
+- **A flow called with no `with:` now sees the run's `args`** (decision 4). Before, `${args.x}` in such a flow read nothing, because the call
+  frame's empty map shadowed the root; no fixture or pack read `args` that way.
+- **`OpenCommandHandler.bindings()` returns a binding (the kind and the id), not only the id.** It is an internal read.
+- **`BehaviorService.baseRoot` and `logicContext` are public**, because the command runner is in another package; they are unchanged.
+
+### The universality tests (master §3.1)
+
+| Test | How it passes |
+|---|---|
+| U1 name | `command` names what the document is, `names` what runs it, `args` what it takes, `do` what it does. Nothing is `kit`, `warp` or `pay`: `/pay`, `/discord` and `/tune` are three documents of the fixture pack |
+| U2 generality | any names, any typed arguments (the six types), any flow of the one model, any permission and requirement; a name is anything `[a-z0-9_-]+` that no one holds |
+| U3 composition | its flow is the one flow model: every action and condition composes with it, and `target:` (#331) addresses another player by an argument (`/pay`); proved by the `commands` pack (`CommandsPipelineTest`, `CommandRunsTest`, `PaperCommandsIT`) with no Java in the content; T27 and the command of T21 are YAML only |
+| U4 self-description | a content type with typed parameters, one trigger with its context and a `firedBy` host, in `authoring.describe`, the golden registry fixtures and the generated `.d.ts` (`p.commands.create`); no hand-written editor or SDK surface |
+| U5 safety | parsed at load; the gate refuses before the flow runs; a collision skips the name and quarantines a document with no name left; an unloadable flow claims nothing; the executor never throws into the server (a failed run is the action's `FAILED` and the reporter's warning) |
+
+### Verification
+
+`CommandTypeTest` (the self-description, the shared schema, the golden document's parse and its byte-identical round trip, the fault fixtures, and
+that `GuiOpen` and the command dialect read the same block to the same spec), `ArgParserTest` (the typed values), `FlowRunArgsTest` (a flow called
+with and without arguments), `CommandsPipelineTest` (the `commands` fixture pack from files to the live shadow with no diagnostics; a command with a
+broken step; one whose requirement does not load; one with no usable name; `open:` and the written-out document compiling to one shape),
+`CommandRunsTest` (the gate in order, the console, typed `args.*` reaching the flow, the deny steps, the bypass, a flow that `call`s a flow),
+`CommandDocumentRegistrarTest` (the tree, collisions and their order, a swap that adds, hides and restores a document, a changed argument shape, the
+suggestions), `LogicAuthoringApiTest` (a command document through `get` and `edit`), `ScaffoldSchemaConsistencyTest` and `ScaffoldDryRunTest`, the
+editor demo snapshot and the code-mode registry and `.d.ts` goldens, the corpus (T27 passes, T21 does not: "Benchmark" below; `scripts/benchmark/corpus-report.mjs --check` is
+in sync), the replay of T27's staged operations through the real server's dry run (every stage but the platform and GUI ones ran, no diagnostic), and
+`PaperCommandsIT` on Paper 1.21.4 (typed arguments into `args.*`, a usage refusal, a permission refusal, the requirement and its deny
+steps, an alias, the console form and the console refusal, the tree's completions through `dprobe tab`, and `open:` beside the document that opens
+the same GUI). QA `commanddocs.discord-prints-a-link`, `.pay-sends-to-a-player`, `.pay-refuses-a-bad-amount`, `.permission-denied` and
+`.suggestions-offer-players` (**not run and not blessed**: they need the local 26.x probe, and blessing runs happen on main).
+
+### Benchmark
+
+T27 (`/discord`) passes: the SDK program type-checks, stages `commands/discord.yml`, and the real server's dry run accepts it with no diagnostic
+(`fixtures/golden/codemode/replay/t27-discord-command.json`). **T21 (`/pay <player> <amount>`) does not pass, and the reason is not this
+primitive.** Everything of `/pay` that is a command passes (the typed `player` and `number` arguments reach `args.to` and `args.amount`, the
+requirement refuses a non-positive amount, `target: {arg: to}` addresses the other player, and the harness runs it), but `give_money`,
+`take_money` and `has_money` read `amount` as a literal number at load, so the amount that comes from an argument is a type error in the SDK and
+would be a load error in a file. The benchmark page's first draft said the line passed; the machine-checked corpus says it does not. It is
+recorded as its own gap, **QTY** (a quantity parameter that takes an expression, as `give_exp` and `give_item` already do through `Quantity`), at
+rank 12 of [`agent-benchmark.md`](agent-benchmark.md) §4.2, small and with no issue yet. T02 loses CMD from its gaps and keeps STATE, VIEW and
+CUSTODY.
+
+### Owner questions
+
+1. **Hide a command from players who cannot run it?** The tree's `requires` checks only that the name is declared (as for `open:`), so a player without
+   `permission:` sees the command in tab completion and is refused when they run it. Putting the permission in `requires` hides it, and makes
+   a refusal silent (Brigadier answers "unknown command"). Keep the visible refusal, or hide?
+2. **Numeric bounds on an argument.** The benchmark's draft of `/pay` wrote `amount: {type: number, min: 1}`. The shared schema has no `min` or `max`
+   (decision 4 uses `requirement: "args.amount > 0"`, which works and refuses with the author's own message). A bound is a schema change for `open:`
+   too, and the editor's typed `SetOpen` carries the record: add `min` and `max` to `int` and `number`, or leave it to the requirement?
+3. **Type `gui.args` too?** A document's `args` are typed and a GUI's `gui.args` are text, so the same argument is `5` in one and `"5"` in the other.
+   Typing `gui.args` is a change to every existing `open:` flow (a comparison that was a string comparison becomes numeric). Leave the split until a
+   release can carry it?
+4. **Rule options on a command.** A rule has `cooldown`, `charges`, `per` and `on_cooldown`; a command's `do:` has none, because the document is not a
+   rule list. A `/daily` is a `command` plus a cooldown, which T04 and T05 write as rule options. Should the document take the same four keys (one
+   more shared schema, read by the same `RuleOptions`), or is a cooldown a step (`require` on a variable) for a command?
+5. **Offline players and selectors.** A `player` argument is an exact online name, as for `open:` (§23 decision 11); `@a` and an offline name are
+   refused. Money to an offline player is out of #331 too. Keep, or add an `offline_player` type?
+6. **The package name.** The shared machinery stays in `plugin.gui.open` (decision 1) to avoid moving a dozen classes and their tests for no
+   behavior. Moving it to `plugin.command` is a rename; worth doing with `claim` and `browse` (the follow-up), when `open` stops being the larger
+   half of it?
+
+### Not built, on purpose
+
+`claim` and `browse` as built-in content (the follow-up the issue names); the graph Logic tab on a command document (#367); a per-argument
+permission (§23 decision 19); `min` and `max` on an argument (question 2); rule options on a document (question 4); a Bedrock or prompt surface for
+arguments (§23 decision 20); a command with a different flow per name, or a subcommand tree (a command is one name, its aliases, and one argument
+list: a `choice` argument and a `choose` step compose the same thing); a `custom` trigger or a command-run trigger for rule documents (primitives.md
+§5.5: the flow of a command is the command's, not a rule's `on:`).

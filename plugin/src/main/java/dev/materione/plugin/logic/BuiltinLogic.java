@@ -250,6 +250,10 @@ public final class BuiltinLogic {
                 entityTypes, dev.materione.platform.entity.EntityPalette.damageCauses())) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
+        // the trigger a command document's do: runs under (logic.md section 40)
+        for (TriggerType trigger : dev.materione.plugin.logic.trigger.CommandTriggers.all()) {
+            api.triggers().register(owner, builtIn(trigger.id()), trigger);
+        }
         for (ActionType<?> action : actions(items)) {
             api.actions().register(owner, builtIn(action.id()), action);
         }

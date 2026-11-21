@@ -2388,6 +2388,15 @@
             "rule"
           ],
           "id": "player.respawn"
+        },
+        {
+          "description": "A sender runs a command a command document declares, after its permission, arguments and requirement are checked",
+          "details": [],
+          "displayName": "Command run",
+          "firedBy": [
+            "command"
+          ],
+          "id": "command.run"
         }
       ],
       "functions": [
@@ -8836,6 +8845,154 @@
           "cancellable": false,
           "context": [
             {
+              "description": "The sender's name; the console's name when the console runs the command",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The sender's UUID; absent for the console",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator; absent for the console",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the sender is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the sender is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The sender's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The sender's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The sender's X coordinate",
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The sender's Y coordinate",
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The sender's Z coordinate",
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the sender",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the sender",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the sender",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the sender",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The typed arguments the sender gave, by name: whole numbers and numbers as numbers, true and false as booleans, everything else as text; an optional argument left out and with no default is absent",
+              "hosts": [],
+              "path": "args.*",
+              "type": "raw"
+            },
+            {
+              "description": "The command's first name",
+              "hosts": [],
+              "path": "command.name",
+              "type": "string"
+            },
+            {
+              "description": "The name the sender typed (an alias, maybe)",
+              "hosts": [],
+              "path": "command.label",
+              "type": "string"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "A sender runs a command a command document declares, after its permission, arguments and requirement are checked",
+          "details": [],
+          "displayName": "Command run",
+          "filters": [],
+          "firedBy": [
+            "command"
+          ],
+          "id": "command.run",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
               "description": "The player's name",
               "hosts": [],
               "path": "player.name",
@@ -12936,6 +13093,203 @@
             "summary": "React to world events with conditions and actions",
             "type": "list",
             "uiHint": "behavior-rules"
+          },
+          {
+            "advanced": true,
+            "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+            "id": "flows",
+            "label": "Flows",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
+          }
+        ]
+      },
+      {
+        "description": "A command players type, with typed arguments, a permission and a requirement, that runs one flow of steps: no item, GUI or other host to hang it on",
+        "directory": "commands",
+        "displayName": "Command",
+        "name": "command",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "A note for the people who edit this document",
+            "id": "description",
+            "label": "Description",
+            "order": 0,
+            "required": false,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "The names that run the command, each [a-z0-9_-]+ and none already a command (the first is its name)",
+            "id": "names",
+            "label": "Names",
+            "order": 10,
+            "required": true,
+            "section": "behavior",
+            "type": "list",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "The typed arguments after the name; ${args.<name>} reads each",
+            "id": "args",
+            "label": "Arguments",
+            "nested": [
+              {
+                "advanced": false,
+                "description": "The argument's name, [a-z][a-z0-9_]*; ${args.<name>} reads it",
+                "id": "name",
+                "label": "Name",
+                "order": 0,
+                "required": true,
+                "section": "general",
+                "type": "string",
+                "uiHint": "text"
+              },
+              {
+                "advanced": false,
+                "allowedValues": [
+                  "boolean",
+                  "choice",
+                  "int",
+                  "number",
+                  "player",
+                  "string"
+                ],
+                "description": "How the text typed is read: string, int, number, player (an online player's exact name), boolean, or choice (one of suggest)",
+                "id": "type",
+                "label": "Type",
+                "order": 0,
+                "required": true,
+                "section": "general",
+                "type": "enum",
+                "uiHint": "select"
+              },
+              {
+                "advanced": false,
+                "default": "false",
+                "description": "Whether the argument may be left out",
+                "id": "optional",
+                "label": "Optional",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "boolean",
+                "uiHint": "toggle"
+              },
+              {
+                "advanced": false,
+                "description": "The value used when the argument is left out; it must read as the argument's type",
+                "id": "default",
+                "label": "Default",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "string",
+                "uiHint": "text"
+              },
+              {
+                "advanced": false,
+                "description": "The completions the command offers; for a choice, also the only values it accepts",
+                "id": "suggest",
+                "label": "Suggest",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "list",
+                "uiHint": "list"
+              }
+            ],
+            "order": 20,
+            "required": false,
+            "section": "behavior",
+            "type": "list",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "The permission node a sender needs; none means anyone may run it",
+            "id": "permission",
+            "label": "Permission",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "A condition the sender must meet; the deny steps run when it fails",
+            "id": "requirement",
+            "label": "Requirement",
+            "order": 40,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "text",
+            "valueKind": "condition"
+          },
+          {
+            "advanced": false,
+            "description": "Steps that run when the requirement fails, then the command is refused",
+            "id": "deny",
+            "label": "Deny",
+            "order": 50,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "text",
+            "valueKind": "steps"
+          },
+          {
+            "advanced": false,
+            "default": "false",
+            "description": "Whether a sender with no player (the console, a command block) may run it; otherwise it is refused",
+            "id": "console",
+            "label": "Console",
+            "order": 60,
+            "required": false,
+            "section": "behavior",
+            "type": "boolean",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "The steps the command runs: the one flow model, with ${args.*}, ${command.name} and ${command.label} in context",
+            "id": "do",
+            "label": "Do",
+            "order": 70,
+            "required": true,
+            "scope": [
+              {
+                "description": "The typed arguments the sender gave, by name: whole numbers and numbers as numbers, true and false as booleans, everything else as text",
+                "hosts": [],
+                "path": "args.*",
+                "type": "raw"
+              },
+              {
+                "description": "The command's first name",
+                "hosts": [],
+                "path": "command.name",
+                "type": "string"
+              },
+              {
+                "description": "The name the sender typed",
+                "hosts": [],
+                "path": "command.label",
+                "type": "string"
+              }
+            ],
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced",
+            "valueKind": "steps"
           },
           {
             "advanced": true,

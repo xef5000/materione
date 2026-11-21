@@ -34,6 +34,20 @@ final class LogicViews {
                 }
             }
         }
+        return new LogicView(pack, path, resourceId, revision, rules, flows(resource));
+    }
+
+    /**
+     * The view of a command document (logic.md §40): its one flow, {@code do:}, is shown as the single rule of the
+     * {@code command.run} trigger, at the path {@code do} (its steps are {@code do.0}, {@code do.1}, ...), beside its
+     * named flows. There is no {@code behavior:} to show, and the rule edits do not apply to it.
+     */
+    static LogicView command(String pack, String path, String resourceId, int revision, Map<String, Object> resource) {
+        var rule = new RuleView(0, "do", "command.run", Map.of(), null, null, steps(resource.get("do"), "do"));
+        return new LogicView(pack, path, resourceId, revision, List.of(rule), flows(resource));
+    }
+
+    private static List<FlowView> flows(Map<String, Object> resource) {
         var flows = new ArrayList<FlowView>();
         if (resource.get("flows") instanceof Map<?, ?> named) {
             named.forEach((id, steps) -> {
@@ -41,7 +55,7 @@ final class LogicViews {
                 flows.add(new FlowView(flowId, steps(steps, "flows." + flowId)));
             });
         }
-        return new LogicView(pack, path, resourceId, revision, rules, flows);
+        return flows;
     }
 
     private static RuleView rule(int index, Map<String, Object> rule) {

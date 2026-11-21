@@ -62,6 +62,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe adopt &lt;name&gt; &lt;hex&gt;             commit an account into the product's live PlayerEscrow (memory and data together)
  *   dprobe fill &lt;name&gt; &lt;MATERIAL&gt; &lt;n&gt;          put n of a material in all 36 storage slots (an inventory with no room)
  *   dprobe cmd &lt;name&gt; &lt;command...&gt;             Player#performCommand, as the player typed it
+ *   dprobe tab &lt;name&gt; &lt;buffer...&gt;              the completions the command tree gives the player for what they typed so far
+ *                                               (a final {@code <>} stands for the trailing space a console line loses)
  *   dprobe arm &lt;gate&gt;                          set the production crash gate's armed name (-Dmaterione.escrow.gate must be set)
  *   dprobe disable                              disable the Materione plugin (onDisable runs, as on /reload or a stop)
  *   dprobe save &lt;name&gt;                         Player#saveData, synchronous, on the calling (main) thread
@@ -131,6 +133,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "adopt" -> adopt(player(args[1]), args[2]);
                 case "fill" -> fill(player(args[1]), args[2], Integer.parseInt(args[3]));
                 case "cmd" -> command(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
+                case "tab" -> tab(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
                 case "arm" -> arm(args[1]);
                 case "disable" -> disableProduct();
                 case "save" -> save(player(args[1]));
@@ -307,6 +310,19 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     private void command(Player player, String command) {
         boolean ran = player.performCommand(command);
         log("cmd ok=" + ran + " player=" + player.getName() + " command=" + command);
+    }
+
+    /**
+     * What the server's command tree completes for {@code buffer} as the player typed it (no leading slash; a trailing
+     * space asks for the next argument): the completions Paper's own tab-complete path gives the player, sorted.
+     */
+    private void tab(Player player, String typed) {
+        // a console line loses its trailing space, so a final "<>" stands for it: "pay <>" asks for the first argument
+        String buffer = typed.endsWith("<>") ? typed.substring(0, typed.length() - 2) : typed;
+        java.util.List<String> completions = Bukkit.getServer().getCommandMap().tabComplete(player, buffer);
+        java.util.List<String> sorted = completions == null ? java.util.List.of()
+                : completions.stream().sorted().toList();
+        log("tab ok=true player=" + player.getName() + " buffer=[" + buffer + "] completions=" + sorted);
     }
 
     /** Re-arms the product's crash gate from inside the server: the gate reads the property's current value. */

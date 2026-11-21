@@ -64,6 +64,35 @@ public final class ArgParser {
         return new Result(values, null);
     }
 
+    /**
+     * The parsed values as the expression engine reads them (logic.md §40): a whole number as an integer, a number as
+     * a double, {@code true} and {@code false} as booleans, everything else as the text it is. A GUI's
+     * {@code gui.args} stay text, as they always were; a command document's {@code args.*} are these, so
+     * {@code ${args.amount} > 0} compares numbers and {@code ${args.amount} * 2} does arithmetic.
+     *
+     * @param values the canonical text {@link #parse} returned
+     */
+    public static Map<String, Object> typed(OpenPlan plan, Map<String, String> values) {
+        var out = new LinkedHashMap<String, Object>();
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            String text = entry.getValue();
+            ArgType type = plan.arg(entry.getKey()).map(OpenArgSpec::type).orElse(ArgType.STRING);
+            Object value = text;
+            try {
+                value = switch (type) {
+                    case INT -> (Object) Integer.valueOf(text);
+                    case NUMBER -> (Object) Double.valueOf(text);
+                    case BOOLEAN -> (Object) Boolean.valueOf(text);
+                    default -> text;
+                };
+            } catch (NumberFormatException keptAsText) {
+                // a default that does not read as its type was dropped at compile; text is the safe reading
+            }
+            out.put(entry.getKey(), value);
+        }
+        return out;
+    }
+
     private static Result refused(String error) {
         return new Result(Map.of(), error);
     }

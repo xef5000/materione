@@ -369,6 +369,13 @@ state and state, the reads index and `view.refresh`, and the dialog and HUD as k
 `suggest:`, permission, requirement, deny, bypass and the Brigadier sync. Direction: lift the block into a `command` content
 type whose flow may `gui.open`; `open:` remains valid and means exactly what it does. `claim` and `browse` become content.
 
+**As built (#330, logic.md §40):** the `command` content type (`commands/`) has `names`, typed `args`, `permission`, `requirement`, `deny`, `console`
+and one flow, `do:`, with `flows:`. The names, arguments and gate are the block `open:` declares, read from one schema (`CommandSchema`), and
+`open:` is *defined* as the sugar of a command whose flow is the open action of that GUI (the runtime keeps one open path and does not synthesize
+the document). The flow runs under a registered trigger, `command.run`, with typed `args.*`, `command.name` and `command.label`; a command with no
+player (the console) is refused unless `console: true`; names are claimed by the open-command registrar (GUI aliases first, then documents), so a
+collision skips the later name with `MTR-0067`. `claim` and `browse` as content are the follow-up and are not built.
+
 ### 5.5 A rule unit with no host, and the missing triggers
 
 *Behavior that is not attached to an item, block, furniture or GUI.* Direction: a standalone rule/flow unit (new content type or

@@ -14,7 +14,7 @@ export const CORPUS_DIR = join(ROOT, 'fixtures', 'codemode', 'corpus');
 export const REPLAY_DIR = join(ROOT, 'fixtures', 'golden', 'codemode', 'replay');
 export const BENCHMARK_DOC = join(ROOT, 'docs', 'architecture', 'agent-benchmark.md');
 
-export const CLOSED_GAPS = ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER', 'TIME', 'TARGET'];
+export const CLOSED_GAPS = ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER', 'TIME', 'TARGET', 'CMD'];
 
 export const RANKING = [
   { rank: 1, gaps: ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER'] },
@@ -28,6 +28,7 @@ export const RANKING = [
   { rank: 9, gaps: ['VIEW'] },
   { rank: 10, gaps: ['QUERY'] },
   { rank: 11, gaps: ['PROVIDER'] },
+  { rank: 12, gaps: ['QTY'] },
 ];
 
 export function loadCorpus(corpusDir = CORPUS_DIR, replayDir = REPLAY_DIR) {

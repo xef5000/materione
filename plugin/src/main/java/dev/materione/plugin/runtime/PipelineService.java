@@ -184,6 +184,9 @@ public final class PipelineService {
         // host-less rule documents (logic.md section 37): runtime logic, compiled into the shadow's world-rule view
         var rules = new dev.materione.content.rules.RuleType();
         registry.register(NamespacedId.of("materione", "rule"), rules, rules.describe(), "materione");
+        // commands as content (logic.md section 40): names, typed arguments and a gate around one flow, runtime logic
+        var commands = new dev.materione.content.commands.CommandType();
+        registry.register(NamespacedId.of("materione", "command"), commands, commands.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -419,6 +422,8 @@ public final class PipelineService {
         var currencyType = contentTypes().stream().filter(t -> t.name().equals("currency")).findFirst();
         var ruleType = contentTypes().stream().filter(t -> t.name().equals("rule")).findFirst();
         var ruleDocuments = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
+        var commandType = contentTypes().stream().filter(t -> t.name().equals("command")).findFirst();
+        var liveCommands = new java.util.ArrayList<dev.materione.plugin.commands.RuntimeCommands.Live>();
         var currencies = new java.util.ArrayList<dev.materione.api.logic.provider.Currency>();
         var guiModels = new LinkedHashMap<NamespacedId, CompiledGui>();
         var glyphType = contentTypes().stream().filter(t -> t.name().equals("glyph")).findFirst();
@@ -438,6 +443,8 @@ public final class PipelineService {
             builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
             builder.view(FurnitureBehaviors.KEY, FurnitureBehaviors.empty());
             builder.view(WorldRules.KEY, WorldRules.empty());
+            builder.view(dev.materione.plugin.commands.RuntimeCommands.KEY,
+                    dev.materione.plugin.commands.RuntimeCommands.empty());
             builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
                     dev.materione.plugin.runtime.mechanics.ItemMechanics.empty());
             builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
@@ -624,6 +631,8 @@ public final class PipelineService {
                     acceptCurrency(resource, raw, templates, currencyType.get(), currencies);
                 } else if ("rule".equals(resource.contentType()) && ruleType.isPresent()) {
                     acceptRuleDocument(resource, raw, templates, ruleType.get(), ruleDocuments);
+                } else if ("command".equals(resource.contentType()) && commandType.isPresent()) {
+                    acceptCommandDocument(resource, raw, templates, commandType.get(), liveCommands);
                 }
             }
         }
@@ -634,6 +643,9 @@ public final class PipelineService {
         builder.view(FurnitureBehaviors.KEY, new FurnitureBehaviors(furnitureBehaviors));
         // the rule documents, and which triggers any item answers: a world event with no rule on it costs a lookup
         builder.view(WorldRules.KEY, WorldRules.of(ruleDocuments, behaviors));
+        // the command documents that loaded: their names reach the server's command tree through the registrar
+        builder.view(dev.materione.plugin.commands.RuntimeCommands.KEY,
+                new dev.materione.plugin.commands.RuntimeCommands(liveCommands));
         builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
                 new dev.materione.plugin.runtime.mechanics.ItemMechanics(itemMechanics));
         builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
@@ -751,6 +763,29 @@ public final class PipelineService {
             if (!compiled.isEmpty()) {
                 out.put(document.id(), compiled);
             }
+        }
+    }
+
+    /**
+     * One command document (logic.md section 40): parsed, then compiled into a live command (its flow, and the plan the
+     * open path registers names from). A document the flow compiler cannot load, or that names nothing, is not live and
+     * claims no name; the diagnostics say why. The pack compile already published the document's shape problems.
+     */
+    private void acceptCommandDocument(
+            ContentResource resource, Map<String, Object> raw,
+            Map<String, Map<String, Object>> templates, ContentType commandType,
+            List<dev.materione.plugin.commands.RuntimeCommands.Live> out) {
+        Optional<Object> parsed;
+        try {
+            parsed = commandType.parse(resource.id(), raw, templates);
+        } catch (RuntimeException e) {
+            diagnostics.publish(Diagnostic.error(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED, "shadow build skipped " + resource.id() + ": " + e));
+            return;
+        }
+        if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.commands.CommandDefinition command) {
+            dev.materione.plugin.commands.CommandDocuments.compile(command, logicLookup(), diagnostics::publish)
+                    .ifPresent(out::add);
         }
     }
 

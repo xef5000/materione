@@ -1,0 +1,10 @@
+# The command `cmenu` of the GUI `commands:menu`, written as a document: the same name's shape (an `int` argument with a
+# default) and a flow that opens the GUI with the parsed argument (logic.md section 40, "open: is sugar"). This one is
+# named menu2 because a name belongs to one declaration.
+menu2:
+  description: "Harness and QA: the open: sugar, written out"
+  names: [menu2]
+  args:
+    - {name: page, type: int, default: "1"}
+  do:
+    - gui.open: {gui: "commands:menu", args: {page: "${args.page}"}}

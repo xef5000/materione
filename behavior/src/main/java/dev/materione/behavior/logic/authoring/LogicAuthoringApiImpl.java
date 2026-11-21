@@ -41,8 +41,22 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
      * host-less rule documents of logic.md §37). The furniture folder is {@code furnitures/}, as the pack layout names it.
      */
     private static final List<String> RESOURCE_FOLDERS =
-            List.of("items/", "blocks/", "furnitures/", "guis/", "rules/");
-    private static final String FOLDER_HINT = "items/, blocks/, furnitures/, guis/ or rules/";
+            List.of("items/", "blocks/", "furnitures/", "guis/", "rules/", "commands/");
+    private static final String FOLDER_HINT = "items/, blocks/, furnitures/, guis/, rules/ or commands/";
+
+    /**
+     * The folder of command documents (logic.md §40). Their flow is the top-level {@code do:}, not a {@code behavior:}
+     * list, so the step paths are {@code do.<i>...} and the rule edits do not apply.
+     */
+    static final String COMMAND_FOLDER = "commands/";
+
+    /** The trigger a command's {@code do:} runs under. */
+    static final String COMMAND_TRIGGER = "command.run";
+
+    /** The keys the logic edits write for a document in {@code path}'s folder. */
+    private static List<String> editedKeys(String path) {
+        return path != null && path.startsWith(COMMAND_FOLDER) ? List.of("do", "flows") : List.of("behavior", "flows");
+    }
 
     private final AuthoringApi authoring;
     private final LogicLookup lookup;
@@ -89,7 +103,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
         }
         List<FieldEdit> fields = planned.value();
         if (fields.isEmpty()) {
-            return ApiResult.ok(view(before), compileProblems(before.pack(), before.resourceId(), before.resource()));
+            return ApiResult.ok(view(before), compileProblems(before));
         }
         ApiResult<DocumentView> saved;
         try {
@@ -107,7 +121,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
             return ApiResult.fail(after.diagnostics());
         }
         Loaded now = after.value();
-        return ApiResult.ok(view(now), compileProblems(now.pack(), now.resourceId(), now.resource()));
+        return ApiResult.ok(view(now), compileProblems(now));
     }
 
     @Override
@@ -127,7 +141,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
      */
     private ApiResult<List<FieldEdit>> plan(Loaded before, List<LogicEdit> edits) {
         Map<String, Object> working = copyOf(before.resource());
-        var editor = new LogicEditor(working, lookup);
+        var editor = new LogicEditor(working, lookup, before.path().startsWith(COMMAND_FOLDER));
         try {
             for (LogicEdit edit : edits) {
                 editor.apply(edit);
@@ -219,12 +233,22 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
     }
 
     private static LogicView view(Loaded loaded) {
+        if (loaded.path().startsWith(COMMAND_FOLDER)) {
+            return LogicViews.command(loaded.pack(), loaded.path(), loaded.resourceId(), loaded.revision(),
+                    loaded.resource());
+        }
         return LogicViews.view(loaded.pack(), loaded.path(), loaded.resourceId(), loaded.revision(), loaded.resource());
     }
 
     /** The compiler's problems for the resource as it stands: the warnings an accepted edit reports. */
-    private List<Diagnostic> compileProblems(String pack, String resourceId, Map<String, Object> resource) {
-        NamespacedId owner = NamespacedId.of(pack, resourceId);
+    private List<Diagnostic> compileProblems(Loaded loaded) {
+        NamespacedId owner = NamespacedId.of(loaded.pack(), loaded.resourceId());
+        Map<String, Object> resource = loaded.resource();
+        if (loaded.path().startsWith(COMMAND_FOLDER)) {
+            // a command's flow is its do:, compiled as the runtime compiles it (logic.md section 40)
+            return FlowCompiler.document(owner, COMMAND_TRIGGER, resource.get("do"), resource.get("flows"), lookup)
+                    .problems();
+        }
         return FlowCompiler.compile(owner, resource.get("behavior"), resource.get("flows"), lookup).problems();
     }
 
@@ -234,7 +258,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
     /** The field edits that take the file from {@code before} to {@code after}: whole values, or a removal. */
     private static List<FieldEdit> changedFields(Loaded before, Map<String, Object> after) {
         var fields = new ArrayList<FieldEdit>();
-        for (String key : List.of("behavior", "flows")) {
+        for (String key : editedKeys(before.path())) {
             Object was = before.resource().get(key);
             Object now = after.get(key);
             if (Objects.equals(was, now)) {
