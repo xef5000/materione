@@ -81,7 +81,7 @@
 | T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Fail | CUSTODY |
 | T19 | **Vending machine**: a furniture that opens a shop when right-clicked | furniture | Pass | |
 | T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | TIMER, VIEW |
-| T21 | **`/pay <player> <amount>`** | command, economy | Fail | QTY |
+| T21 | **`/pay <player> <amount>`** | command, economy | Pass (#464) | |
 | T22 | **Arena region**: entering `arena` gives the PvP kit, leaving removes it | integration | Fail | PROVIDER |
 | T23 | **Rank-up**: `/rankup` pays 10 000 coins for the next rank and announces it | GUI, economy | Pass | |
 | T24 | **Ruby ore**: a custom block that drops a ruby and 5 XP, 10% chance of a second ruby | block | Pass | |
@@ -91,10 +91,12 @@
 | T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**20 pass, 0 partial, 9 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
-`now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41) and #330 (commands as content, logic.md §40): T04, T05 and T07 flipped to Pass
-alongside T06, T10 and T15, T12, T13 and T14 with #329, and T27 with #330. The count was 10, 2 and 17 when the page was written, 13, 2 and 14 after #327, and 16, 13
-before #329 and #330. "Fails on" lists what the honest program needs, not everything that would be nice.
+**21 pass, 0 partial, 8 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
+`now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41), #330 (commands as
+content, logic.md §40) and #464 (the money amount as an expression, logic.md §42): T04, T05 and T07 flipped to Pass alongside T06, T10
+and T15, T12, T13 and T14 with #329, T27 with #330, and T21 with #464. The count was 10, 2 and 17 when the page was written, 13, 2 and
+14 after #327, 16, 13 before #329 and #330, and 20, 9 before #464. "Fails on" lists what the honest program needs, not everything that
+would be nice.
 
 **The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built (and
 verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-seeded on a player-scoped Bloodfang world):
@@ -451,7 +453,7 @@ The mana variable, the spend-or-refuse rule and the `launch` pass (the projectil
 An `actionbar` line on every tick would imitate a HUD; it is a
 workaround and it still needs TIMER.
 
-### T21 `/pay <player> <amount>` — Fail (QTY)
+### T21 `/pay <player> <amount>` — Pass (#464)
 
 ```ts
 p.commands.create("pay", {                                                // passes since #330 (logic.md §40)
@@ -460,17 +462,17 @@ p.commands.create("pay", {                                                // pas
   requirement: m.expr`args.amount > 0`,
   deny: [ m.actions.message("<red>Pay a positive amount.") ],
   do: [ m.steps.require([ m.actions.takeMoney({ amount: m.expr`args.amount` }) ], { else: [ m.actions.message("<red>Not enough coins.") ] }),
-                                                                          // ✗ TS2322 'Expr' is not assignable to 'number'  [QTY]
-        m.actions.giveMoney({ amount: m.expr`args.amount`, target: { arg: "to" } }),         // ✗ the same [QTY]; the target passes since #331
+                                                                          // passes since #464 (logic.md §42): the amount is an expression
+        m.actions.giveMoney({ amount: m.expr`args.amount`, target: { arg: "to" } }),         // passes since #464; the target since #331
         m.actions.message({ text: m.expr`player.name + " paid you " + args.amount`, target: { arg: "to" } }) ] });  // passes since #331
 ```
 
 The command, the typed `player` and `number` arguments reaching `args.to` and `args.amount`, the requirement and the target all pass (#330, #331;
-the harness runs a `/pay`-shaped command end to end). **What does not pass is the amount itself:** `give_money`, `take_money` and `has_money` read
-`amount` as a literal number at load, so a number that comes from an argument is a type error in the SDK (and would be a load error in a file:
-`amount: "${args.amount}"` is not a number). The first draft of this page said the line passed; the machine-checked corpus says it does not,
-so this task leaves CMD (closed by #330) and keeps a gap of its own, **QTY**: a quantity parameter that takes an expression, as `give_exp` and
-`give_item` already do through `Quantity`. It is small and has no issue yet.
+the harness runs a `/pay`-shaped command end to end). The amount passes since #464: `give_money`, `take_money` and `has_money` take an
+expression for `amount`, as `give_exp` does through `Quantity`, so a number that comes from an argument is a `number` in the SDK, and a template
+that renders to text, zero or a negative number fails the step rather than paying it (logic.md §42). Before #464 the amount read a literal at
+load, and this task failed on **QTY** alone. The first draft of this page said the line passed; the machine-checked corpus said it did not until
+that gap closed.
 
 ### T22 Arena region — Fail (PROVIDER)
 
@@ -582,9 +584,9 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **TRIG-PLAYER** | Triggers for a player's lifecycle: join, quit, respawn, death | §5.5 | T10 T28 (2) | **Closed by #327** (`player.join`, `player.quit`, `player.respawn`, `player.death`); T10 passes, T28 keeps VIEW |
 | **VERB** | Entity and world verbs: heal, damage, velocity, particle, launch, break or set a block, edit a stack | §5.7 | T12 T13 T14 T20, F2 F5 (4) | **Closed by #329** (`heal`, `damage`, `velocity`, `particle`, `launch`, `break_blocks`, `set_block`, `drop_item`, `stack.edit`; logic.md §41); T12 T13 T14 and F2 pass, T20 and F5 keep TIMER (and VIEW) |
 | **TIME** | A clock in expressions (`now()`), durations, and a cooldown that persists and can be read | new | T04 T05 T07 (3) | **Closed by #328** (`now()`, `today()`, `on_cooldown` with `${cooldown.remaining}`); T04 T05 T07 pass |
-| **CMD** | Commands as content | §5.4 | T02 T21 T27 (3) | **Closed by #330** (the `command` content type, `commands/`, with `open:` defined as its sugar; logic.md §40); T27 passes, T21 keeps QTY, T02 keeps its other gaps |
-| **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | **Closed by #331** (`target:` on `message`, `actionbar`, `title`, `sound`, `potion`, `give_item`, `give_money`, `take_money`, `teleport`; logic.md §39); T21 passes it, and keeps QTY |
-| **QTY** | A quantity parameter that takes an expression: the amount of `give_money`, `take_money` and `has_money` reads a literal | new (found by #330) | T21 (1) | T21 |
+| **CMD** | Commands as content | §5.4 | T02 T21 T27 (3) | **Closed by #330** (the `command` content type, `commands/`, with `open:` defined as its sugar; logic.md §40); T27 passes, T21 then kept QTY (closed by #464), T02 keeps its other gaps |
+| **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | **Closed by #331** (`target:` on `message`, `actionbar`, `title`, `sound`, `potion`, `give_item`, `give_money`, `take_money`, `teleport`; logic.md §39); T21 passes it (and kept QTY until #464) |
+| **QTY** | A quantity parameter that takes an expression: the amount of `give_money`, `take_money` and `has_money` reads a literal | new (found by #330) | T21 (1) | **Closed by #464** (`amount` of `give_money`, `take_money` and `has_money` takes an expression, as `give_exp` does; logic.md §42); T21 passes |
 | **VIEW** | Views over state: more than one viewer; the dialog and HUD view kinds | §5.3 | T02 T20 T28 (3) | none alone |
 | **STATE** | Keyed state: a holder other than player or server (a stack, an entity, a key), a TTL, an expiry trigger | §5.2 | T01 T02, F1 (2) | none alone |
 | **TIMER** | A trigger that fires on a schedule | §5.5 | T20 T26, F5 (2) | with RULE: T26 |
@@ -605,20 +607,11 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 17 | T04 T05 T07 | Small: expression functions and one rule option |
-| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 20 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
-| 4 | **Commands as content** (#330), **shipped** | CMD | 20 | none: T27 passes at ship, T21 keeps QTY (rank 12) | Small to medium: lift the `open:` block (as built: logic.md §40) |
-| 5 | **Target addressing** (#331), **shipped** | TARGET | 20 | none: T21 needs QTY as well (rank 12) | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
-| 6 | **Timers** (rides #327's rule unit) (#332) | TIMER | 21 | T26 | Small once RULE exists; budgets matter |
-| 7 | **Keyed state: holders, keys, TTL** (#333) | STATE | 22 | T01 (needs 1 and 5) | Large: the store port, stack and entity holders, migration checks |
-| 8 | **Custody holders and transfer** (#334) | CUSTODY | 23 | T18 | Large, with an open design problem (primitives.md §3) |
-| 9 | **Views over state; dialog and HUD as view kinds** (#335) | VIEW | 26 | T02 (needs 4, 5, 7, 8), T20 (needs 1, 3, 6), T28 (needs 1) | Large: #6 and #7 reshaped |
-| 10 | **A ranking read across holders** (#336) | QUERY | 27 | T17 | Medium; touches offline player data |
-| 11 | **Open provider kinds** (primitives.md §5.8, no issue) | PROVIDER | 28 | T22 | Deferred until a second kind forces the shape |
-| 12 | **Expression-valued quantities on the money actions** (found by #330, no issue) | QTY | 29 | T21 | Small: `give_money`, `take_money` and `has_money` read `amount` through `Quantity`, as `give_exp` does |
+| 3 | **Entity and world verbs** (#329) | VERB | 21 | T12 T13 T14 | Medium: about eight actions, each small; protection checks |
 
 **What the ranking says.**
 
-1. **Four issues of small or medium cost (ranks 1 to 4) take the benchmark from 10 to 20 of 29.** None of them is on the
+1. **Four issues of small or medium cost (ranks 1 to 4) take the benchmark from 10 to 21 of 29** (one of the 21 is T21, counted in the baseline since #464). None of them is on the
    `/trade` path. The audit's worked example is the *hardest* task in the set (five gaps, three of them large), not a typical one.
 2. **`#320`'s own example, Bloodfang, needs ranks 1, 5 and 7.** The slice's exit criterion (#320's acceptance) therefore fixes the
    minimum: **rules and triggers, target addressing, and stack-held state**. Rank 2 to 4 are cheap and broad and belong with them.

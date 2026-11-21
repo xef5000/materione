@@ -1,7 +1,7 @@
 // T21 /pay <player> <amount> (agent-benchmark.md section 3).
-// The command passes since #330 (logic.md section 40): a typed player argument and a typed number argument reach the flow as
-// args.to and args.amount, and #331's `target` addresses the other player. What it cannot say is the amount itself: the money
-// actions take a literal number, so an amount that comes from an argument is a type error (gap QTY).
+// The command is a document (#330, logic.md section 40): a typed player argument and a typed number argument reach the flow as
+// args.to and args.amount, and #331's `target` addresses the other player. The amount is an expression: the money actions take
+// one since #464 (logic.md section 42), so an amount that comes from an argument is a number in the SDK.
 const p = m.pack("bench");
 p.commands.create("pay", {
   names: ["pay"],

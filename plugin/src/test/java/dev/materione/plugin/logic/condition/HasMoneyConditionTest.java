@@ -30,7 +30,7 @@ class HasMoneyConditionTest {
     @Test
     void theShorthandIsTheAmountAndTheDefaultCurrencyIsUsedWhenNoneIsNamed() {
         var parsed = condition.parse(reader(params("amount", 250)));
-        assertThat(parsed.amount()).isEqualTo(250.0);
+        assertThat(parsed.amount().literal()).isEqualTo(250.0);
         assertThat(parsed.currency()).isNull();
     }
 

@@ -561,7 +561,8 @@
           "parameters": [
             {
               "advanced": false,
-              "description": "Amount to give; above 0",
+              "description": "Amount to give; above 0, or a template that renders to one",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -1711,7 +1712,8 @@
           "parameters": [
             {
               "advanced": false,
-              "description": "Amount to take; above 0",
+              "description": "Amount to take; above 0, or a template that renders to one",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,
@@ -2449,7 +2451,8 @@
           "parameters": [
             {
               "advanced": false,
-              "description": "Amount the balance must reach; above 0",
+              "description": "Amount the balance must reach; above 0, or a template that renders to one",
+              "expression": true,
               "id": "amount",
               "label": "Amount",
               "order": 0,

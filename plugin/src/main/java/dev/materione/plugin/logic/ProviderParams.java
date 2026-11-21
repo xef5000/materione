@@ -1,8 +1,11 @@
 package dev.materione.plugin.logic;
 
+import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.provider.Currency;
 import dev.materione.api.logic.provider.CurrencyCatalog;
+import dev.materione.plugin.logic.support.Quantity;
+import java.util.OptionalDouble;
 import java.util.regex.Pattern;
 
 /**
@@ -20,20 +23,40 @@ public final class ProviderParams {
     private ProviderParams() {}
 
     /**
-     * The {@code amount} of a money step: required, finite, above zero and at most
-     * {@link #MAX_AMOUNT}.
+     * The {@code amount} of a money step (logic.md §18, §42): a number, or a template that renders to one such as
+     * {@code "${args.amount}"}. A literal is required, finite, above zero and at most {@link #MAX_AMOUNT}, checked here
+     * at load. A template is checked as it renders, at run time, by {@link #runAmount}.
      *
      * @throws IllegalArgumentException with an author-facing message
      */
-    public static double amount(ParamReader params) {
+    public static Quantity amount(ParamReader params) {
         if (params.raw("amount").isEmpty()) {
             throw new IllegalArgumentException("amount is required");
+        }
+        if (params.raw("amount").orElseThrow() instanceof String text && (text.contains("${") || text.contains("%"))) {
+            return Quantity.required(params, "amount", 0, MAX_AMOUNT);
         }
         double value = params.decimal("amount", 0, 0, MAX_AMOUNT);
         if (value <= 0) {
             throw new IllegalArgumentException("amount must be above 0");
         }
-        return value;
+        return new Quantity(value, null, 0, MAX_AMOUNT, false);
+    }
+
+    /**
+     * The amount a money step pays, takes or checks when it runs: the quantity's value in this context, which must be a
+     * number above zero. A template that renders to text, to zero or to a negative number has no amount, so the step
+     * refuses it (see {@link #refusedAmount}) and never moves money on a guess (logic.md §42).
+     */
+    public static OptionalDouble runAmount(Quantity amount, LogicContext context) {
+        OptionalDouble value = amount.value(context);
+        return value.isPresent() && value.getAsDouble() > 0 ? value : OptionalDouble.empty();
+    }
+
+    /** The reason a money step gives when {@link #runAmount} has no amount: what the template rendered to. */
+    public static String refusedAmount(Quantity amount, LogicContext context) {
+        String shown = amount.template() == null ? Double.toString(amount.literal()) : amount.template().render(context);
+        return "amount must be a number above 0 and at most " + MAX_AMOUNT + ", not \"" + shown + "\"";
     }
 
     /**

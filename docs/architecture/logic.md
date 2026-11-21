@@ -4841,3 +4841,107 @@ cheap and annoyances are expensive, above all for a first-time user. Each decisi
 
 `spawn`, `kill` and an attribute modifier (the other verbs primitives.md §5.7 lists: no benchmark task needs them); particle shapes and aura triggers (#21's remainder, #332); the protection port that `as_player: false` and the Folia
 boundary will ask (#466); particles that carry block, item or transition data; a typed `at` or `shape` in the SDK (both are `raw` in the schema, as `target` is, §39 owner question 4); the verbs in a GUI until it is opened about a stack; any Folia run.
+
+---
+
+## 42. Decisions taken in #464 (the money amount is an expression)
+
+[#464](https://github.com/xef5000/materione/issues/464) closes **QTY**, the last gap of [`agent-benchmark.md`](agent-benchmark.md) T21 (`/pay`):
+`give_money`, `take_money` and `has_money` read `amount` as a literal at load, so an amount from `args.amount` or a variable was a type error in
+the code-mode SDK (`TS2322`). The amount now takes an expression, the way `give_exp` and `give_item` already take one, through the same
+`Quantity` ([`ParamReader`](../../api/src/main/java/dev/materione/api/logic/ParamReader.java) `template` and `acceptingExpression()`). No new
+engine surface: it widens an existing parameter to the one expression language, so it is not a primitive under D12 (the table of master §3.1
+below records how it still meets the tests).
+The code is in `plugin.logic.ProviderParams` (`amount`, `runAmount`, `refusedAmount`), `plugin.logic.action.GiveMoneyAction` and
+`TakeMoneyAction`, and `plugin.logic.condition.HasMoneyCondition`. Each decision is reversible by the owner.
+
+**Traceability.**
+
+| Decision or rule | How this section applies it |
+|---|---|
+| D5 | `amount` declares `acceptingExpression()`; the SDK types it `number \| Expr` from the registry's `expression` flag, with no SDK code. The registry, editor snapshot and `.d.ts` goldens change by those lines and nothing else |
+| D12, master §3.1 | no engine surface: a parameter widened to the existing expression language (U3); a literal and a template are one value |
+| D8 | a template renders on the thread its own reads need (`resolveResumable`), and the currency then runs the deposit or withdrawal on its own thread, as §39 aims a target |
+| D6, D1 | nothing is stored: the YAML and the file format are unchanged; a literal stays a number in the file |
+| master §5.6 | literal files load, save and run byte-identically ("What changed for existing content") |
+
+### Decisions
+
+1. **One quantity, the one `give_exp` reads.** `ProviderParams.amount` returns a `Quantity`. A literal keeps its checks and messages, at load:
+   `amount is required`, `amount must be a finite number in 0.0..1.0E12`, `amount must be above 0`. A string that holds `${` or `%` is a
+   template, compiled at load and checked as it renders. A plain string such as `"100"` is still refused at load, as before, so no existing
+   file changes meaning.
+2. **At run time a template must render to a number above 0 and at most `MAX_AMOUNT`.** `ProviderParams.runAmount` parses the rendered text as a
+   finite double and requires it above 0 and at most `1.0E12`; anything else has no amount. `give_money` and `take_money` then fail with
+   `amount must be a number above 0 and at most 1.0E12, not "<what it rendered>"` before any balance is touched, so a negative result never
+   pays or takes. `has_money` is false, as `has_exp` is for an amount it cannot read: a condition returns no outcome to carry a reason, and
+   false is the answer that cannot grant.
+3. **Placement is `give_exp`'s.** `executeResumable` renders the template first, on the thread its own reads need (the run's region, or the
+   target's, through the aimed executor of §39), then runs the action on `threading(params)`, the currency's thread as before. `has_money`
+   renders first and reads the balance on the currency's thread. A literal has nothing to resolve, so its path is the one it was.
+4. **No new diagnostic code.** A literal that does not load is `MTR-0057` (the step is skipped, as for any action). A template that does not
+   render to a positive number is the action's failed outcome: it shows in the trace and to a surrounding `require`, as an insufficient balance
+   does. `MTR-0106` to `MTR-0119` are not touched.
+5. **The survey: which quantities take an expression, and which stay literal.** The issue asked for the others to be checked, and widened only
+   the obvious ones. The state after this section:
+
+| Parameter | State | Reason |
+|---|---|---|
+| `give_money`, `take_money`, `has_money` `amount` | **widened here** (decisions 1 to 3) | the benchmark's `/pay`; a price or a payout that follows an argument or a variable |
+| `give_exp`, `take_exp`, `has_exp` `amount`; `give_item`, `take_item`, `has_item`, `has_item_space` `amount` (and `slots`) | already expressions | `give_item`'s `amount` is the example the issue named, and it already is one |
+| `teleport` `x`, `y`, `z`, `yaw`, `pitch`; `is_near` `x`, `y`, `z`, `distance` | already expressions | |
+| `set_var` `value`; `custody.consume` `slot`; `prompt`, `title`, `message` text | already expressions | |
+| `potion` `duration`, `amplifier` | literal | no benchmark task needs them; the widening is the same `Quantity` read and waits for the first one that does (question 3) |
+| `title` `fade_in`, `stay`, `fade_out`; `sound` `volume`, `pitch`; `prompt` `timeout` | literal | presentation timings, not values a flow computes; no task needs them |
+| `slot_has` `slot`, `amount`; `gui.slot_item` `amount`, `level`, `set_amount` | literal | a GUI's slot is a position in its own layout, fixed when the GUI is authored, and the GUI's item edits are its own |
+| `has_permission` `min` | literal | a count over the node list the same step holds, checked at load against that list |
+| rule `cooldown`, `charges`, `per`, `on_cooldown`; step `delay`, `chance`; `wait` ticks | literal | not action parameters: the rule and flow compilers read them at load into the cooldown store and the scheduler (logic.md §16, §37). An expression there is a change to the rule model, not a widening |
+
+### What changed for existing content
+
+Nothing migrates and no file is rewritten. A literal `amount` loads, saves and runs as it did: the same checks and messages, the same double
+handed to the deposit and the withdrawal, the same `insufficient funds: balance <b>, needs <n>` reason, and the same `has_money` answer. The
+recipe `pay_to_receive` expands to the same `take_money: {amount: 250.0}`. The SDK's `giveMoney(5)` and `takeMoney(5)` still type-check: the
+shorthand widens to `number | Expr`, it does not narrow.
+
+### The universality tests (master §3.1)
+
+| Test | How it passes |
+|---|---|
+| U3 composition | `amount` is the expression language every other quantity reads; `target:` (#331) addresses the player the amount is paid to, and the same `args.amount` feeds both halves of `/pay` |
+| U4 self-description | `expression: true` on the three entries in `authoring.describe`, the golden registries and the generated `.d.ts`, from the same declaration that parses them |
+| U5 safety | a bad literal or template is refused at load and skips only its step; a template that renders to anything but a positive number fails the action or is false, and moves nothing |
+
+### Verification
+
+`MoneyAmountExpressionTest` (eight tests: the declaration, the load-time refusals, a template that pays and takes, text, zero and negative results
+that move nothing, `has_money` on a template, the resumable paths with a template and with a literal), `ProviderActionsTest` and
+`HasMoneyConditionTest` (the literal messages, unchanged), `TargetedActionsTest` (the money actions on a target), and `ConditionsInFlowsTest`
+(a flow with the three entries and templates compiles with no problem, and a `"lots"` amount is still refused at load). The corpus: T21 passes
+(`fixtures/codemode/corpus/t21-pay-command.expect.json`), with its staged operations pinned by `fixtures/golden/codemode/ops/t21-pay-command.json`
+and the real server's dry run by `fixtures/golden/codemode/replay/t21-pay-command.json` (accepted, no diagnostic, one document: `commands/pay.yml`).
+Regenerated and reviewed (the diffs are the three amounts, their descriptions, the `expression` flag and the shorthand signatures):
+`fixtures/codemode/registry/plugin-current.json`, `with-addon.json`, `fixtures/golden/editor-demo-snapshot.json`,
+`fixtures/golden/codemode/plugin-current.d.ts` and `with-addon.d.ts`. `scripts/benchmark/corpus-report.mjs --check` is in sync (18 of 29 tasks pass;
+QTY is closed).
+
+**QA.** There is no `qa/catalog/` entry for this change. The probe has no economy provider: `logic.providers-unavailable-without-vault` asserts that
+`give_money` and `take_money` are unavailable there (`MATERIONE-LOGIC-OK ... unavailable=give_money,take_money,connect`). A money move cannot be seen in
+game, so the unit tests above are the evidence (owner question 1).
+
+### Owner questions
+
+1. **Money in the QA probe.** CLAUDE.md asks for a QA entry for every player-visible change. A money action is not visible without an economy
+   provider, and the probe server has none. Install a Vault stub on the probe so `give_money` and `take_money` can be observed in game, or accept
+   the unit tests as the evidence for money?
+2. **A refusal in the trace only, or a diagnostic too.** A template that renders to a non-positive number is the action's failure reason, in the
+   trace and to `require`. An exception publishes a rate-limited diagnostic, and a bad literal is `MTR-0057`. Should a refused run-time amount also
+   publish a code (the next free one in the `MTR-0106` to `MTR-0119` block is `MTR-0120`), or is the trace reason enough?
+3. **Widen the presentation quantities now.** `potion` `duration` and `amplifier`, `title` timings, `sound` `volume` and `pitch`, and `prompt`
+   `timeout` are literal, and each widening is the same `Quantity` read. Widen them all with this section, or with the first task that needs one?
+
+### Not built, on purpose
+
+A `min` and `max` on a money amount (question 2 of §40, still open: the amount is checked against the one range, `0` to `1.0E12`); a money amount
+in another unit (the expression language does the arithmetic); and a list of amounts in one step (a payment per player is a loop in the TypeScript
+program, not an engine list).

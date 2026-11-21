@@ -5,20 +5,6 @@
   "area": "command, economy",
   "prompt": "Create /pay <player> <amount> to transfer coins from the sender to another player.",
   "registry": "plugin-current",
-  "result": "fail",
-  "gaps": ["QTY"],
-  "diagnostics": [
-    {
-      "code": 2322,
-      "line": 15,
-      "gap": "QTY",
-      "messageContains": ["Expr", "number"]
-    },
-    {
-      "code": 2322,
-      "line": 18,
-      "gap": "QTY",
-      "messageContains": ["Expr", "number"]
-    }
-  ]
+  "result": "pass",
+  "gaps": []
 }

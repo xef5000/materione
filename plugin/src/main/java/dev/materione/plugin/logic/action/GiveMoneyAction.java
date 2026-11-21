@@ -7,6 +7,7 @@ import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Subjects;
 import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
@@ -20,23 +21,29 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.ProviderParams;
 import dev.materione.plugin.logic.currency.CurrencyReads;
+import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 
 /**
  * {@code give_money: 100} or {@code give_money: {amount: 100, currency: gems}}: deposits money into the
  * run's player's balance of a named currency (logic.md §18). With no {@code currency:} it uses the
- * {@code default_currency} setting, which is {@code materione:money} (Vault) unless changed.
+ * {@code default_currency} setting, which is {@code materione:money} (Vault) unless changed. The amount is a
+ * number or a template that renders to one, {@code give_money: {amount: "${args.amount}"}} (logic.md §42).
  *
  * <p>An unknown currency fails the step with {@code unknown currency}; a currency whose integration is
- * not installed fails with the reason the catalog gives. The headline {@link #threading()} is GLOBAL (the
- * common case, Vault); the step's real thread is the bound currency's, see {@link #threading(Params)}.
+ * not installed fails with the reason the catalog gives; an amount that is not a number above 0 fails it with
+ * the reason {@link ProviderParams#refusedAmount} gives, and nothing is deposited. The headline
+ * {@link #threading()} is GLOBAL (the common case, Vault); the step's real thread is the bound currency's,
+ * see {@link #threading(Params)}.
  */
 public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params> {
 
-    /** The parsed step; {@code currency} is the authored name, or null for the default. */
-    public record Params(double amount, String currency) {}
+    /** The parsed step: the amount (a literal or a template) and the authored currency, or null for the default. */
+    public record Params(Quantity amount, String currency) {}
 
     private final LogicProviders providers;
     private final CurrencyReads reads;
@@ -62,7 +69,7 @@ public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params>
                 "Adds money to the player's balance of a currency (the default currency unless one is named)",
                 List.of(
                         new ParameterSchema("amount", ParameterType.DECIMAL, true, null,
-                                "Amount to give; above 0", null, null),
+                                "Amount to give; above 0, or a template that renders to one", null, null).acceptingExpression(),
                         new ParameterSchema("currency", ParameterType.STRING, false, null,
                                 "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null).withWidget("reference", "currency")),
                 "2.0.0"), LogicCategory.ECONOMY, "amount").withTargets(TargetKind.PLAYER);
@@ -101,6 +108,10 @@ public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params>
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
+        OptionalDouble amount = ProviderParams.runAmount(params.amount(), context);
+        if (amount.isEmpty()) {
+            return ActionOutcome.failed(ProviderParams.refusedAmount(params.amount(), context));
+        }
         CurrencyCatalog catalog = providers.currencies();
         Currency currency = ProviderParams.resolve(catalog, params.currency());
         if (currency == null) {
@@ -110,11 +121,22 @@ public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params>
         if (backend == null) {
             return ActionOutcome.failed(catalog.availability(currency).reason());
         }
-        return switch (backend.deposit(player.getUniqueId(), params.amount())) {
+        return switch (backend.deposit(player.getUniqueId(), amount.getAsDouble())) {
             case EconomyResult.Succeeded ignored -> ActionOutcome.OK;
             case EconomyResult.InsufficientFunds ignored -> ActionOutcome.failed("the currency refused the deposit");
             case EconomyResult.Failed failed -> ActionOutcome.failed(failed.reason());
         };
+    }
+
+    /**
+     * A template amount is rendered first, on the thread its own reads need (the run's region, or the target's), and
+     * the deposit then runs on the currency's thread, as {@code give_exp} does (logic.md §42). A literal amount takes
+     * the same path with nothing to resolve.
+     */
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        return params.amount().resolveResumable(context, reads).thenCompose(amount ->
+                reads.on(threading(params), () -> execute(new Params(amount, params.currency()), context)));
     }
 
     /** Available when the default currency can be used; the reason names what is missing otherwise. */
