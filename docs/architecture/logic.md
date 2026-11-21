@@ -290,6 +290,8 @@ public interface ActionType<P> {
   `FAILED` and also emits a rate-limited diagnostic (runtime-systems §2.1).
 - **Threading.** Each action declares `PLAYER_REGION`, `GLOBAL` or `ANY`, and the interpreter
   dispatches through the thread gateway (plugin.md §2). This replaces today's boolean `syncSafe`.
+- **Targets.** An action that can act on another player or entity declares `targetable` in its description; the engine then
+  parses its `target:` once at load and runs it on each resolved subject (§39). An action never resolves or parses a target.
 - **Category.** One of `player`, `gui`, `world`, `server`, `economy`, `data`, `flow` or
   `integration`. Addons may add categories. The node editor colours by category (§7.3).
 
@@ -876,7 +878,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`.
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39).
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -4074,3 +4076,272 @@ editor demo snapshot and code-mode registry goldens (the schema), `PaperItemVars
    trigger; it is cheap to do later and not needed by the benchmark. Leave it, or do it with step 2?
 4. **Step 2: the default durability of a keyed variable.** Memory (decision 16) or file. Memory is safe and cheap, and the wrong default for a "HUD value" ([master §8.3](../architecture.md)); the field exists either way.
 5. **Step 2: `scope: entity` or `scope: keyed` with `holder: entity`.** A sixth reserved word is the symmetric choice with `item` and reads best (`vars.entity.rpg.bleed`); a `holder` on `keyed` keeps the word list closed at five. Needed by F1.
+
+---
+
+## 39. Decisions taken in #331 (target addressing: an action on another player or entity)
+
+#331 is the fifth issue of M6.5 ([`agent-benchmark.md`](agent-benchmark.md) §4.2, rank 5; [`primitives.md`](primitives.md) §5.6) and a
+primitive under D12 ([`architecture.md`](../architecture.md) §3.1): until it, every action acted on the player the run belongs to, and
+`message` carried a *channel* under the name `target`. It adds one optional parameter, `target:`, to the actions that can act on
+something else, one value type behind it, and one resolver. Nothing in it is named for a use case: Bloodfang's bleed (T01), `/pay`
+(T21) and the other half of `/trade` (T02) are compositions of it. The code is in `api.logic` (`TargetSpec`, `TargetKind`,
+`ResolvedTarget`, `TargetResolver`, `Subjects`, `ActionDescription.targetable`), `behavior.run` (`TargetedAction`, `TargetedContext`,
+`RunReadExecutor.aimedAt`) and `plugin.logic.target` (`BukkitTargetResolver`, `EntityTarget`). Each decision is reversible by the owner.
+
+**Traceability.**
+
+| Decision or rule | How this section applies it |
+|---|---|
+| D5 | `targetable` is part of an action's self-description; declaring it adds the shared `target` parameter to the schema, so the editor form, `logic.vocabulary` and the code-mode SDK show it with no code of their own ("Self-description" below) |
+| D8 | resolution reads the world only on the thread that owns it; the action is dispatched to each subject's own region through the gateway, one subject at a time ("Threads" below) |
+| D6, D1 | `target:` is a parameter in the step's YAML; the pipeline parses it at load like any parameter, and nothing applies it any other way |
+| D12, master §3.1 | one value shape across every action (U3); an unresolved target fails the action, it never falls back to the run's player (U5); the table at the end |
+| master §5.5, §5.6 | an action with no `target:` behaves as before; a file loads and saves byte for byte ("What changed for existing content" below) |
+
+### The value
+
+`target:` is written in the action's own parameters, beside `chance` and `delay` only in the sense that every targetable action
+accepts it. It has five forms, and exactly one:
+
+| Form | Resolves to | Online only | Load check |
+|---|---|---|---|
+| `self` (the default; also what an absent `target:` means) | the run's player; the action runs exactly as it did before targets, with no resolution step | | |
+| `event.target` | the entity the trigger carries: the struck entity of `entity.hit`, the killed one of `entity.kill` | the entity must still be in the world | the rule's trigger must carry a `target` root (`MTR-0057` otherwise) |
+| `arg: <name>` | the player a command or GUI argument named (`/pay <to> <amount>` is `arg: to`) | yes | the name must look like an argument |
+| `player: "<template>"` | the player whose name or uuid the template renders to (`"${args.from}"`, `"${vars.session.pay.partner}"`) | yes | the template compiles and its `${root}`s are known (`MTR-0060`) |
+| `nearby: {radius, type?, limit?}` | up to `limit` entities within `radius` blocks of the run's player, nearest first, never the run's player | | `radius` is 0.5 to 64, `limit` 1 to 16 (default 1), `type` an entity type key |
+
+```yaml
+behavior:
+  - on: entity.hit                    # a rule document, or an item
+    do:
+      - potion: {type: wither, duration: 100, target: event.target}    # the bleed, on the struck entity
+  - on: gui.click                     # a button whose GUI declares an argument `to` (the command form is #330's)
+    do:
+      - take_money: 100
+      - give_money: {amount: 100, target: {arg: to}}                   # /pay
+      - message: {text: "${player.name} paid you 100", target: {arg: to}}
+      - sound: {sound: entity.player.levelup, target: {nearby: {radius: 8, type: player, limit: 4}}}
+```
+
+`self` and `event.target` are bare words; the other three are one-key mappings. A bare string that is neither word is a load error
+(a name is `player:`, never a bare string, so `"self"` is never a player called Self), and the mapping forms reject unknown keys, so a
+misspelled `limt` is a diagnostic, not a selector that silently takes one entity. The value is parsed once, at load, by one function
+(`TargetSpec.read`), for every action: no action parses a target (U3). The result is a sealed type of five records that the engine
+stores on the step (`ActionStep.target`, with the kinds the action admits); `self` is stored as nothing, so an untargeted step has
+no resolution to run and the dispatch path pays one null check (plugin.md §9).
+
+**Why these five.** They are the five ways a flow in the benchmark reached something other than its own player: the thing that was
+hit (T01), a player named by a command argument (T21, T02), a player named by state (T02's requester), a set around the subject
+with no loop step (agent-benchmark.md §5: "a target is a selector"), and the subject itself. A holder (the owner of a key, the
+holder of a stack) is #333's, and a selector over *every* player is a list source (#336), not a target. **`event.target` is the
+trigger's, not a free entity id**: a flow cannot name an entity by a uuid it stored, because nothing in the model keeps an entity
+across ticks (an entity holder is #333).
+
+### Self-description: `targetable`
+
+`ActionDescription` gains `targetable`, the kinds the action accepts, in the order of `TargetKind`:
+
+| Kind | Meaning |
+|---|---|
+| `player` | an online player |
+| `entity` | any entity (a player is one, so `entity` admits players; the vocabulary lists both for an action that takes either) |
+
+Declaring it does two things in the constructor and nothing else: it records the kinds, and it **appends the shared `target`
+parameter** (`raw`, `valueKind: target`, advanced, default `self`) to the schema unless the type declared its own. So the form the
+studio draws, `authoring.describe`, the scaffold and the SDK generator all see a `target` field on exactly the actions that take
+one, from the one description (D5; codemode.md §3.5). `logic.vocabulary` also carries `targetable: ["player"]` on each such action
+(absent otherwise), so a consumer that wants "which actions can aim" reads one key. The parameter is `raw`, not a typed union,
+deliberately: the generated SDK types no engine vocabulary (issue 355, `core.d.ts`), so an agent's `target` is `JsonValue` and a
+wrong form is the compiler's `MTR-0057`, which the dry run reports with the step path, exactly as for any parameter the schema
+does not describe more finely. A typed target in the SDK would need the registry to describe the five forms as grammar
+(`Grammar.conditions` is the precedent); that is a follow-up, not built here (below).
+
+An action that is **not** targetable and has no parameter called `target` rejects one at load (`MTR-0057`, "this action cannot act
+on a target"), so a target is never silently ignored. One action has its own parameter called `target` and is not targetable:
+`broadcast` (a world name or a permission node, for its scope). Its meaning is untouched; it is the reason this check looks at the
+schema and not at the key alone.
+
+### The path through the engine
+
+1. **Load.** `ActionCompiler` asks the type's description whether it is targetable, reads `target:` with `TargetSpec.read`, checks
+   `event.target` against the trigger's context roots (the same set `${...}` is checked against, §2.6), and stores a `StepTarget`
+   (the spec and the admitted kinds) on the `ActionStep`. A bad value skips that step with `MTR-0057` and the rule's other steps
+   load.
+2. **Reach the step.** `FlowContinuations.action` runs the chance roll and the delay as before, then the thread check for the
+   action's `threading()`: the run first goes to the thread the action needs *for the run's own player*. That is deliberate: the
+   target is resolved from the run's state, so the run must be where its own data is.
+3. **Resolve.** `TargetedAction` captures the run's read origin (on the run's own thread, once), calls the platform's
+   `TargetResolver`, and gets a `TargetResolution`: the subjects, or none and a reason.
+4. **Run the action on each subject, in order.** For each subject the action's `executeResumable` is called with a
+   `TargetedContext` (the run's context plus the `ResolvedTarget` facet) and a read executor aimed at the subject. The action reads
+   its subject with `Subjects.player(context)` or `Subjects.entity(context)`, which return the run's own player when there is no
+   target, so an action's code changes by one call at each place it touches the player, and *nothing else* about it changes.
+5. **Outcome.** `OK` when every subject succeeded; otherwise `FAILED` with the first reason (and "k of n targets failed" for a set).
+
+`Subjects` is the **only** place an action reads its subject, and **only a targetable action may call it** for that purpose: an
+action that does not declare `targetable` never receives a target, because the compiler never parses one for it. Everything else the
+action reads from the context stays the run's: `${player.name}`, placeholders, `vars`. A message "to the other player" says whose
+name the sender has. (The first draft overrode `Facets.PLAYER` in the overlay, which was less code and wrong: an expression function
+that reads the player, `balance()` in `${balance() / 2}`, would have read the *target's* balance.)
+
+### Threads (D8)
+
+| Step | Thread |
+|---|---|
+| the chance roll, the delay, the thread check | as for any action: the run's own |
+| resolve `event.target`, `arg:`, `player:` | the thread the step is on (reading a facet, an argument, or the online-player list, none of which needs a region); a `player:` template is rendered through the run's read executor like any template |
+| resolve `nearby` | the run's player's region (`reads.on(PLAYER_REGION)` on the run's executor): the search box is read from where the player stands |
+| the action's own-region work (`PLAYER_REGION`) | **the subject's region**: the read executor handed to the action sends `PLAYER_REGION` to the subject's entity scheduler (`GatewayRunScheduler.schedule(anchor = subject)`), inline when the current thread already owns it |
+| the action's `GLOBAL` work (a Vault deposit) | the global thread, as before |
+| template and expression reads inside the action | the run's own region, through the origin captured *before* the first subject was touched, so a later subject's thread is never mistaken for the run's |
+| continuing after the action | back on the run's own thread, through the interpreter's existing `await` continuation |
+
+So `give_money` to a player in another Folia region deposits on that player's region thread (or the global thread for a Vault
+currency), `potion` on an entity applies on the entity's region, and the next step runs on the run's own. Subjects of a set are
+handled one after another, never in parallel: the order is the order resolved and a failure of one does not skip the rest. A subject
+that leaves between resolution and dispatch (the entity scheduler retires the task) is that subject's failure ("left before the
+action ran"), not an exception.
+
+On Paper every ownership check is true and a targeted flow runs inline on the main thread. **What is proven where:** the dispatch
+seam (the effect of a targeted action is submitted to the *subject's* entity scheduler and not run inline when another region owns
+it, and the resolution of `nearby` is submitted to the run's player's) is proven by a unit test over the real
+`GatewayRunScheduler` with a recording gateway and a probe that says "owned here" for one entity only
+(`TargetedDispatchTest`). Nothing was run on a native Folia server for this issue: the `foliaProbe` source set is opt-in evidence
+and the CI harness is Paper 1.21.4. `Entity#getNearbyEntities` on Folia requires the search box to lie in the region the thread
+owns; a box that crosses a region boundary throws there, and the resolver turns that into a refused resolution ("the search area is
+not owned by this region") rather than a partial answer. Owner question 3.
+
+### Permission and ownership
+
+**Targeting is not a grant, and it is not a check.** A rule is the pack author's, not the player's: a player who triggers
+`entity.hit` is not exercising a command, so there is no node "may this player target that one" to test, and inventing one per action
+would be a second permission system beside the author's own `if: {has_permission: ...}` (which composes with every action and is
+how a pack gates a verb). The engine adds exactly these rules, none a permission:
+
+1. An action can only act on what it admits: `message` on a zombie is `FAILED` ("the action cannot act on a entity"), `potion` on an
+   item entity is `FAILED` ("a potion effect needs a living entity").
+2. `player:` and `arg:` resolve **online** players only (offline is a refusal in v1; money to an offline player is out, as the issue
+   says), and an unknown name is a refusal, never a partial match: `Bukkit.getPlayerExact`, not a prefix search.
+3. `nearby` never includes the run's own player, skips players in spectator mode (an observer should not be healed or spoken to
+   by a radius, though a command that names them still reaches them) and skips a mob that has just died: a killed mob stays in
+   the search box while it plays its death, and the harness found a potion landing on that corpse instead of on the zombie beside
+   it, so the selector requires `isValid()`.
+4. A verb keeps its own checks on its subject: `give_money`/`take_money` go through the same currency backend and its own result
+   (insufficient funds is `FAILED` on the *target's* balance); `give_item` delivers with the same overflow rules; protection plugins
+   see the same Bukkit calls they saw before.
+
+A command that takes a player argument is gated by the command's own permission (§23), which is where `/pay` and `/trade` ask the
+question. **Owner question 1** is whether a player should be able to opt out of being the target of other players' rules (an
+`materione.target.exempt`-style node).
+
+### Failure (U5)
+
+A target that does not resolve makes the **action** `FAILED`, so `require` runs its `else:` and the trace and the rate-limited
+reporter see it. The reasons, as the resolver words them (each is prefixed with `target <spec>:`):
+
+| Reason | When |
+|---|---|
+| `this event carries no target` | `event.target` and the trigger gave none (also caught at load for a rule whose trigger has no `target` root) |
+| `the target is no longer in the world` | the struck or killed entity is gone (a dead mob; a player who quit) |
+| `argument '<name>' is not set` | `arg:` and the command or GUI did not pass it |
+| `no player named '<name>' is online` | `arg:` or `player:` |
+| `the player name is empty` | the template rendered nothing |
+| `the action cannot act on a <kind> (<who>)` | the resolved subject is a kind the action does not take |
+| `no <type> within <r> blocks` | `nearby` found nothing; the failure of a selector that matches nobody is real (a flow can `require` an ally nearby), and a flow that wants "if any" writes it as a `require` with an `else: []` |
+| `the run has no player to search around` | `nearby` on a run with no player |
+| `'<type>' is not an entity type on this server` | `nearby.type` |
+| `the search area is not owned by this region` | Folia, a box that crosses a region boundary |
+| `targets are not available here` | an engine with no platform resolver (a unit test); never in the plugin |
+
+The trace shows the resolved target. `STEP_OK` carries `on player Bob` (or `on zombie 1a2b3c4d, player Alex` for a set) in its
+`detail`, and a `STEP_FAILED` after a resolution appends `(on ...)` to its reason, so the Logic tab's trace and `logic.trace`
+subscribers read who an action touched without a new event type.
+
+### Which actions, and why
+
+| Action | Kinds | Why |
+|---|---|---|
+| `message` | player | tell another player; replaces the old channel `target` (below) |
+| `actionbar`, `title` | player | the other two ways to tell a player; same value shape as `message` |
+| `sound` | player | to a player or, with `scope: world`, to *their* world; `scope: server` with a `target` is a load error (it would play once per subject) |
+| `potion` | player, entity | the bleed (T01): any living entity |
+| `give_item` | player | a reward for the other player |
+| `give_money`, `take_money` | player | `/pay` (T21); online players only |
+| `teleport` | player, entity | send the struck entity or a partner somewhere; absolute coordinates, as for the run's player |
+
+**Not targetable, and why.** `run_command` and `broadcast` already address a console or a scope; `set_var` addresses state by
+declaration (a holder is #333); `give_exp`/`take_exp`, `take_item`, `give_permission`/`take_permission`, `stop_sound`, `chat` and the
+`gui.*` family are candidates and are not in the first set because no benchmark task needed them: adding one is declaring
+`.withTargets(...)` and reading `Subjects` at its one touch point, and is a small PR. `view.open` and `view.close` take `target:` in
+views.md row V4 on exactly this value (`TargetSpec`, `StepTarget`, `TargetedAction`): V4 declares them targetable and teaches the
+GUI opener to read `Subjects`; it adds no parser. **#329's `heal`, `damage` and `velocity` had not landed when this shipped.** The hook
+is the same declaration: each declares `.withTargets(PLAYER, ENTITY)` and reads `Subjects.entity(context)`.
+
+### What changed for existing content
+
+`message` used to read `target: player|actionbar|broadcast` as a channel. That is the one collision with the new value (two meanings
+of one key in one action), and the channels already have their own actions (`actionbar`, `broadcast`), so U1 says the spelling that
+duplicates a capability goes. There is no release to keep compatible with (the owner, 2026-11-19), so there is no shim: a
+`message` step that still writes one of the three words is skipped at load with a message that names the replacement
+(`MTR-0057`), and its file is untouched (the file stays the source of truth; the step reloads when it is fixed). No fixture or
+pack in the repository used it. `message: "text"` and `message: {text: ...}` are unchanged.
+
+### Diagnostics
+
+No code was added ([`plugin.md`](plugin.md) §5). A bad `target:` is `MTR-0057` ("action 'x' rejected: ..."), naming the step path; an
+unknown `${root}` inside a `player:` template is `MTR-0060`; a run-time refusal is the action's `FAILED` and the reporter's
+rate-limited warning when nothing guards it.
+
+### The universality tests (master §3.1)
+
+| Test | How it passes |
+|---|---|
+| U1 name | `target` names the capability: who the action acts on. Nothing is `message_other` or `heal_ally`; the channel spelling of `message` was removed so there is one way to say it |
+| U2 generality | any subject the run can name: the event's entity, an argument or state value naming a player, a bounded set around the subject; any action that declares it, including an addon's (`ActionDescription.withTargets` is public API) |
+| U3 composition | one value shape across seven built-in actions plus `give_money` and `take_money`, proved by `TargetedActionsTest` (each declares the one shared parameter and acts on the target and not on the run's player), `TargetsPipelineTest` and `PaperTargetAddressingIT` (potion on the struck zombie, a selector, a message to a flow argument), with no Java in the content |
+| U4 self-description | `targetable` and the `target` parameter in `logic.vocabulary`, `authoring.describe`, the golden registry fixtures and the generated `.d.ts`; no hand-written editor or SDK surface |
+| U5 safety | parsed at load; unresolved is `FAILED`; a refusal never falls back to the run's player; resolution never mutates; bounds are in the grammar (radius 64, limit 16) |
+
+### Verification
+
+`TargetSpecTest` (the five forms, their bounds, the rejections and messages, and the description: the declaration adds the one
+shared parameter, once, and admits players when it names entities), `TargetedActionTest` (the interpreter with a scripted resolver
+and a scheduler that models regions: resolve then act on the subject's region, inline when the run already owns it, a set one
+subject after another, the failure cases and their trace text, a `require` seeing an unresolved target, a retired subject, the
+context that adds one facet and changes nothing else, and the load checks), `BukkitTargetResolverTest` (each form against
+stand-ins: the gone entity, the wrong kind, the empty name, the box and the sphere, the limit, spectators, the Folia refusal),
+`TargetedActionsTest` (the actions act on the target and not on the run's player; the declarations), `TargetedDispatchTest`
+(the Folia dispatch seam above, over the real `GatewayRunScheduler`), `TargetsPipelineTest` (the `targets` fixture pack from
+files to the live shadow with no diagnostics; `event.target` refused where the trigger carries none; the retired channel
+spelling skipped with its replacement named), `VocabularySourcesTest` and `VocabularySourcesJsonTest` (`targetable` on the wire),
+the editor demo snapshot and the codemode registry and `.d.ts` goldens, the corpus (T01, T02 and T21 no longer fail on TARGET;
+`scripts/benchmark/corpus-report.mjs --check` is in sync) and `PaperTargetAddressingIT` on Paper 1.21.4 (a bleed on the struck
+zombie by `event.target`, read back from its active effects; a message to a flow argument that goes through for an online player
+and fails the flow's `require` for one who is not; a selector that slows the nearest zombie and not the husk that was struck). QA
+`targets.potion-on-struck-entity`, `.nearby-selector`, `.message-to-argument-player` and `.unresolved-target-fails-the-require`
+(**not run and not blessed**: they need the local 26.x probe, and blessing runs happen on main).
+
+### Owner questions
+
+1. **Opting out of being targeted.** The engine adds no permission (above). Should a player be able to hold a node that exempts
+   them from other players' `player:`, `arg:` and `nearby` targeting (not `event.target`, which is a fight they are in)? It is one
+   resolver check, and the cost is that a pack's `/pay` would then fail on an exempt recipient.
+2. **An empty selector.** `nearby` matching nobody is `FAILED`, as the issue says for any unresolved target; a flow that wants
+   "heal everyone nearby, if anyone" must tolerate the failure, which is reported as a rate-limited warning when no `require`
+   handles it. Should an *empty set* be `OK` instead (a selector's job is to select, and zero is an answer)?
+3. **Folia and a search that crosses a region boundary.** `nearby` fails soft there; reading across regions needs a hop per region
+   and a merge, which changes the "one run, in order" semantics. Keep the refusal, or build the merge?
+4. **A typed target in the SDK.** The SDK sees `target` as `JsonValue` ("Self-description: targetable" above), so a wrong form is a dry-run diagnostic, not a
+   type error. Typing it needs the registry to describe the five forms as grammar (a `Grammar` entry like the condition forms),
+   which is the right place under #355 and is a small change in the generator: is it wanted before the editor's form?
+5. **`player:` by name.** A name is not a stable identity (a player can rename). It resolves a *name or uuid*, online now, for the
+   action about to run, and keeps nothing; storing a player in state is #333's holder question.
+
+### Not built, on purpose
+
+A target form for an offline player (money to an offline account: out, as the issue says); a holder target (the owner of a key, the
+holder of a stack: #333); `heal`, `damage` and `velocity` (#329 had not landed); a target on `view.open` (views row V4); a
+dedicated widget in the Logic tab's inspector (the field is the generic raw editor, advanced, with the description); `target:` on
+`run_command` (`run_command` has `as:`); parallel handling of a set.

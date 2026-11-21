@@ -14,7 +14,7 @@ export const CORPUS_DIR = join(ROOT, 'fixtures', 'codemode', 'corpus');
 export const REPLAY_DIR = join(ROOT, 'fixtures', 'golden', 'codemode', 'replay');
 export const BENCHMARK_DOC = join(ROOT, 'docs', 'architecture', 'agent-benchmark.md');
 
-export const CLOSED_GAPS = ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER', 'TIME'];
+export const CLOSED_GAPS = ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER', 'TIME', 'TARGET'];
 
 export const RANKING = [
   { rank: 1, gaps: ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER'] },

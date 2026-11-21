@@ -196,9 +196,11 @@ writes to declared state; it remains for what the reads index cannot see (a poll
 definition-wide refresh. Selecting zero viewers is `OK`. Threading: `ANY`; renders run on each viewer's owner thread (§5.6).
 
 **Target addressing.** A view verb with `target:` attaches or detaches *another* player, resolved and checked by the engine
-through the gateway (primitives.md §5.6). That is how a flow run by one player shows a window to two (§6.3). The target design
-is #331's; the view verbs only declare that they accept one in their self-description, so it arrives in the SDK with no view
-code.
+through the gateway (primitives.md §5.6). That is how a flow run by one player shows a window to two (§6.3). The target value is
+#331's and shipped before V4 ([logic.md](logic.md) §39: `target: self | event.target | {arg} | {player} | {nearby}`, resolved once by the
+engine and handed to the action as a subject). V4 therefore adds no parser and no resolver: `view.open` and `view.close` declare
+`.withTargets(PLAYER)` in their self-description (which is what puts `target` in the SDK) and the GUI and dialog openers read their
+viewer with `Subjects.player(context)` instead of the run's player; the opener's `OpenGate` and the viewer's own region do the rest.
 
 ### 3.7 The view context: `view.*`
 
@@ -528,7 +530,7 @@ trade:
 # commands/trade_accept.yml — opens the view for both under one key
 do:
   - view.open: { view: trade, key: "${args.trade}" }                         # the accepter
-  - view.open: { view: trade, key: "${args.trade}", target: "${args.from}" } # the requester (#331)
+  - view.open: { view: trade, key: "${args.trade}", target: { player: "${args.from}" } } # the requester (#331)
 ```
 
 Three rules make the composition correct, and none is trade-specific:

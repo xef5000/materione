@@ -6,6 +6,6 @@ p.commands.create("pay", {
     m.steps.require([m.actions.takeMoney(100)], {
       else: [m.actions.message("<red>Not enough coins.")],
     }),
-    m.actions.giveMoney({ amount: 100, target: "arg:to" }),
+    m.actions.giveMoney({ amount: 100, target: { arg: "to" } }),
   ],
 });

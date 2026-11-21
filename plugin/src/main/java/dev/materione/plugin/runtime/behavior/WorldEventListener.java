@@ -72,7 +72,7 @@ public final class WorldEventListener implements Listener {
             events.fire(new Fire(EventTypes.ENTITY_HIT, attacker, target::getLocation,
                     Map.of("type", EntityPalette.typeOf(target), "cause", EntityPalette.causeOf(event.getCause())),
                     () -> Map.of("target", target(target, true), "damage", damage(event)), event,
-                    () -> List.of(attacker.getInventory().getItemInMainHand()), true));
+                    () -> List.of(attacker.getInventory().getItemInMainHand()), true, target));
         } catch (RuntimeException e) {
             reportBridgeFailure(attacker, e);
         }
@@ -112,7 +112,7 @@ public final class WorldEventListener implements Listener {
         try {
             events.fire(new Fire(EventTypes.ENTITY_KILL, killer, dead::getLocation,
                     Map.of("type", EntityPalette.typeOf(dead)), () -> Map.of("target", target(dead, false)), null,
-                    () -> List.of(killer.getInventory().getItemInMainHand()), true));
+                    () -> List.of(killer.getInventory().getItemInMainHand()), true, dead));
         } catch (RuntimeException e) {
             reportBridgeFailure(killer, e);
         }

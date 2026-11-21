@@ -4,10 +4,11 @@ import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.Availability;
-import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Subjects;
+import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.Currency;
 import dev.materione.api.logic.provider.CurrencyBackend;
@@ -61,7 +62,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
                                 "Amount to take; above 0", null, null),
                         new ParameterSchema("currency", ParameterType.STRING, false, null,
                                 "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null).withWidget("reference", "currency")),
-                "2.0.0"), LogicCategory.ECONOMY, "amount");
+                "2.0.0"), LogicCategory.ECONOMY, "amount").withTargets(TargetKind.PLAYER);
     }
 
     @Override
@@ -87,7 +88,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        Player player = context.facet(Facets.PLAYER).orElse(null);
+        Player player = Subjects.player(context).orElse(null);
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }

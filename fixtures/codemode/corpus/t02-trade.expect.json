@@ -6,7 +6,7 @@
   "prompt": "Create /trade <player>: request, accept, shared two-player window, atomic swap, expiry.",
   "registry": "plugin-current",
   "result": "fail",
-  "gaps": ["CMD", "CUSTODY", "STATE", "TARGET", "VIEW"],
+  "gaps": ["CMD", "CUSTODY", "STATE", "VIEW"],
   "diagnostics": [
     {
       "code": 2353,
@@ -28,12 +28,6 @@
       "gap": "CMD",
       "messageContains": ["commands", "PackWriter"],
       "missingPrimitive": { "member": "commands", "catalog": "PackWriter" }
-    },
-    {
-      "code": 2322,
-      "line": 19,
-      "gap": "TARGET",
-      "messageContains": ["arg:target"]
     },
     {
       "code": 2339,

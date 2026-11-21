@@ -1,0 +1,55 @@
+# Target addressing on a real server (#331, logic.md section 39). One value shape, `target:`, on the actions that admit it:
+# the entity the trigger carries, a player named by a flow argument, and a bounded selector around the player.
+targets:
+  description: "Harness and QA: actions on another player or entity"
+  flows:
+    # `tell` takes the name of a player as `args.to`. The message goes to that player when they are online; when they are
+    # not, the action fails, the require sees it and the else runs (and ends the run).
+    tell:
+      - require:
+          - message: {text: "hello from ${player.name}", target: {arg: to}}
+        else:
+          - run_command: "say MATERIONE-TARGETS-MESSAGE-REFUSED ${args.to}"
+      - run_command: "say MATERIONE-TARGETS-MESSAGE-OK ${player.name} to ${args.to}"
+  behavior:
+    # the bleed of benchmark task T01: a wither effect on the entity that was struck
+    - id: bleed
+      on: entity.hit
+      type: zombie
+      do:
+        - potion: {type: wither, duration: 200, amplifier: 1, target: event.target}
+        - run_command: "say MATERIONE-TARGETS-BLEED ${target.type}"
+    # a bounded selector: hitting a husk slows the nearest zombie within eight blocks, not the husk
+    - id: slow_the_nearest_zombie
+      on: entity.hit
+      type: husk
+      do:
+        - require:
+            - potion: {type: slowness, duration: 200, amplifier: 2, target: {nearby: {radius: 8, type: zombie, limit: 1}}}
+          else:
+            - run_command: "say MATERIONE-TARGETS-NEARBY-REFUSED"
+        - run_command: "say MATERIONE-TARGETS-NEARBY-DONE"
+    # a message to a player who is not online is a failed action, never a message to someone else
+    - id: alice_writes_to_nobody
+      on: player.join
+      if: "player.name == 'Alice'"
+      do:
+        - call: {flow: tell, with: {to: Carol}}
+    # and to one who is online reaches them
+    - id: bob_writes_to_alice
+      on: player.join
+      if: "player.name == 'Bob'"
+      do:
+        - call: {flow: tell, with: {to: Alice}}
+    # the QA client is the only player on its server: Probe messages themself (the line is in their chat) and a player
+    # nobody is (the refusal is in the server log); the harness's players are Alice and Bob and never match these two
+    - id: probe_tells_probe
+      on: player.join
+      if: "player.name == 'Probe'"
+      do:
+        - call: {flow: tell, with: {to: Probe}}
+    - id: probe_tells_nobody
+      on: player.join
+      if: "player.name == 'Probe'"
+      do:
+        - call: {flow: tell, with: {to: Carol}}

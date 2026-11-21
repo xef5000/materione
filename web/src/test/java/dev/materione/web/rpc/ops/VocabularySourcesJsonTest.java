@@ -25,8 +25,10 @@ class VocabularySourcesJsonTest {
         var asking = new BehaviorVocabulary.Action("prompt", SelfDescription.of("Prompt", "Asks"), null, false,
                 LogicCategory.GUI, null, Availability.AVAILABLE, "materione", true);
         var plain = new BehaviorVocabulary.Action("message", SelfDescription.of("Message", "Says"), "text", false);
+        var aimed = new BehaviorVocabulary.Action("potion", SelfDescription.of("Potion", "Applies"), null, false,
+                LogicCategory.PLAYER, null, Availability.AVAILABLE, "materione", false, List.of("player", "entity"));
         return new BehaviorVocabulary(
-                List.of(), List.of(asking, plain), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(asking, plain, aimed), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
                 List.of(), List.of(), List.of(),
                 List.of(new BehaviorVocabulary.ListSourceEntry("online_players", new ListSourceDescription(
                         SelfDescription.of("Online players", "Everyone online"), null,
@@ -49,6 +51,17 @@ class VocabularySourcesJsonTest {
         var actions = json.getAsJsonArray("actions");
         assertThat(actions.get(0).getAsJsonObject().get("takesElse").getAsBoolean()).isTrue();
         assertThat(actions.get(1).getAsJsonObject().has("takesElse")).isFalse();
+    }
+
+    @Test
+    void targetableIsOnlyWrittenForTheActionsThatCanActOnAnotherPlayerOrEntity() {
+        JsonObject json = EditorContentOps.vocabularyJson(vocabulary());
+
+        var actions = json.getAsJsonArray("actions");
+        assertThat(actions.get(0).getAsJsonObject().has("targetable")).isFalse();
+        assertThat(actions.get(1).getAsJsonObject().has("targetable")).isFalse();
+        assertThat(actions.get(2).getAsJsonObject().getAsJsonArray("targetable").toString())
+                .isEqualTo("[\"player\",\"entity\"]");
     }
 
     @Test

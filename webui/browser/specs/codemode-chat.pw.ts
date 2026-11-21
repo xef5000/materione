@@ -101,7 +101,7 @@ test('Bloodfang conversation end-to-end: disclosure, missing primitives, repair 
   await expect(composer(page)).toBeVisible();
   await maybeShot(page, 'assistant-disclosure.png');
 
-  // Prompt 1: read-only + failing asAsked -> reports missing primitives (holder, target), 0 applies
+  // Prompt 1: read-only + failing asAsked -> reports the missing primitive (holder), 0 applies
   await composer(page).fill(prompts[0]!);
   await composer(page).press('Enter');
 
@@ -110,7 +110,6 @@ test('Bloodfang conversation end-to-end: disclosure, missing primitives, repair 
   await expect(transcript.getByText('Read only', { exact: true })).toBeVisible();
   await expect(transcript.getByText('Type error', { exact: true })).toBeVisible();
   await expect(transcript).toContainText('holder');
-  await expect(transcript).toContainText('target');
   expect(await applies(page)).toBe(0);
 
   // Prompt 2: repairs TS error (Type error -> Dry run clean) and auto-applies 4 new documents

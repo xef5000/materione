@@ -38,6 +38,8 @@ public record ParameterSchema(
     public static final String KIND_FLOW = "flow";
     /** A value that is a mapping of argument names to values. */
     public static final String KIND_ARGUMENTS = "arguments";
+    /** A value that is a target: {@code self}, {@code event.target}, or a mapping with arg, player or nearby (logic.md section 39). */
+    public static final String KIND_TARGET = "target";
 
     public ParameterSchema {
         Objects.requireNonNull(id, "id");
