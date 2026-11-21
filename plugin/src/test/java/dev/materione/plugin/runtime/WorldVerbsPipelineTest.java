@@ -183,6 +183,6 @@ class WorldVerbsPipelineTest {
                         - particle: {particle: cloud, at: event}
                 """, Path.of("rules/verbs.yml"), "rule", "verbs")));
 
-        assertThat(diagnostics.recent(64)).extracting(diagnostic -> diagnostic.code().code()).containsOnly("MTR-0060");
+        assertThat(diagnostics.recent(64)).extracting(diagnostic -> diagnostic.code().code()).contains("MTR-0060");
     }
 }

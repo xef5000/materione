@@ -76,6 +76,11 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe die &lt;name&gt; / respawn &lt;name&gt;        setHealth(0) / PERFORM_RESPAWN
  *   dprobe items                                dropped item entities in the first world
  *   dprobe pickup <name>                        every dropped item entity touches the player (ItemEntity#playerTouch, the pick-up path a ticking player takes)
+ *   dprobe fillblocks <x1 y1 z1 x2 y2 z2> <MATERIAL>   fill a box of the first world (world verbs, #329)
+ *   dprobe protect <x> <y> <z>                  a stand-in protection plugin: cancel every BlockBreakEvent at that block
+ *   dprobe block <x> <y> <z>                    the material at that block
+ *   dprobe dig <name> <x> <y> <z>               Player#breakBlock: the player mines that block (fires BlockBreakEvent)
+ *   dprobe vel <name>                           the player's velocity
  * </pre>
  *
  * Every answer is one log line containing {@code MATERIONE-DPROBE}. The crash gate is the product's own
@@ -150,6 +155,12 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "respawn" -> respawn(player(args[1]));
                 case "items" -> items();
                 case "pickup" -> pickup(player(args[1]));
+                case "fillblocks" -> fillBlocks(args);
+                case "protect" -> protect(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
+                case "block" -> blockAt(Integer.parseInt(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]));
+                case "dig" -> dig(player(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]),
+                        Integer.parseInt(args[4]));
+                case "vel" -> velocity(player(args[1]));
                 default -> throw new IllegalArgumentException("unknown stage '" + stage + "'");
             }
         } catch (Throwable failure) {
@@ -464,6 +475,55 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
             R.call(R.call(item, "getHandle"), "playerTouch", handle(player));
         }
         log("pickup ok=true player=" + player.getName());
+    }
+
+    // ---- world verbs (#329) -----------------------------------------------------------------------------------------
+
+    private final java.util.Set<String> protectedBlocks = ConcurrentHashMap.newKeySet();
+
+    private void fillBlocks(String[] a) {
+        World world = Bukkit.getWorlds().get(0);
+        Material material = Material.valueOf(a[7]);
+        int[] n = new int[6];
+        for (int i = 0; i < 6; i++) {
+            n[i] = Integer.parseInt(a[i + 1]);
+        }
+        for (int x = Math.min(n[0], n[3]); x <= Math.max(n[0], n[3]); x++) {
+            for (int y = Math.min(n[1], n[4]); y <= Math.max(n[1], n[4]); y++) {
+                for (int z = Math.min(n[2], n[5]); z <= Math.max(n[2], n[5]); z++) {
+                    world.getBlockAt(x, y, z).setType(material, false);
+                }
+            }
+        }
+        log("fillblocks ok=true");
+    }
+
+    private void protect(int x, int y, int z) {
+        protectedBlocks.add(x + "," + y + "," + z);
+        log("protect ok=true at=" + x + "," + y + "," + z);
+    }
+
+    private void blockAt(int x, int y, int z) {
+        log("block at=" + x + "," + y + "," + z + " type=" + Bukkit.getWorlds().get(0).getBlockAt(x, y, z).getType());
+    }
+
+    private void dig(Player player, int x, int y, int z) {
+        boolean broken = player.breakBlock(Bukkit.getWorlds().get(0).getBlockAt(x, y, z));
+        log("dig ok=" + broken + " player=" + player.getName());
+    }
+
+    private void velocity(Player player) {
+        var v = player.getVelocity();
+        log("vel player=" + player.getName() + " x=" + v.getX() + " y=" + v.getY() + " z=" + v.getZ());
+    }
+
+    /** The stand-in protection plugin: a block listed by {@code dprobe protect} cannot be broken. */
+    @EventHandler(priority = org.bukkit.event.EventPriority.LOW)
+    public void broke(org.bukkit.event.block.BlockBreakEvent event) {
+        var block = event.getBlock();
+        if (protectedBlocks.contains(block.getX() + "," + block.getY() + "," + block.getZ())) {
+            event.setCancelled(true);
+        }
     }
 
     private void items() {

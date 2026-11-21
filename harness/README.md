@@ -247,6 +247,14 @@ node --test harness\protocol\floor-bot.test.mjs
   `require` runs its else, one to an online player goes through. Paper only: the cross-region dispatch of the same code is proved at the
   scheduler seam by `TargetedDispatchTest`, and nothing here ran on Folia.
 
+- **Entity and world verbs** (`PaperWorldVerbsIT`, `WorldVerbsRunner`, logic.md section 41, #329). Runs by default (one boot). The `worldverbs`
+  fixture pack holds an excavator whose `break_blocks` mines a flat 3 by 3 area and a rule document that dashes a player who joins
+  (`velocity`). The durability probe plays the world: `dprobe fillblocks` lays a stone layer, `dprobe protect` is a stand-in protection plugin
+  that cancels the `BlockBreakEvent` of one block, `dprobe dig` is `Player#breakBlock`, and `dprobe block` and `dprobe vel` read the world and the
+  player's velocity back. The runner checks that the rule saw the broken block as its location, that every block of the area is air except the
+  protected one and the blocks outside it, that the excavator's rule ran once (its own breaks did not re-trigger it) and that the dash moved
+  the player forward and up. Paper only: the cross-region hop of the same code is proved at the `Regions` seam by unit tests, and nothing here ran on Folia.
+
 - **Commands as content** (`PaperCommandsIT`, `CommandsRunner`, logic.md section 40, #330). Runs by default (one boot). The `commands`
   fixture pack holds command documents; the fake-connection players of the durability probe run them as a player types them
   (`dprobe cmd`), and the console runs them as the console does. Each command announces itself with `say MATERIONE-COMMANDS-...`, and the
