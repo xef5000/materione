@@ -64,3 +64,6 @@ cloud/model-proxy/node_modules/
 cloud/model-proxy/dist/
 cloud/model-proxy/.wrangler/
 .wrangler/
+
+# Root-level tool caches (vitest run from the repo root)
+/node_modules/
