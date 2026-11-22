@@ -19,7 +19,7 @@ dynamic:
       type: item
       slot: 11
       item: minecraft:diamond
-      visible_if: "gui.args.on == '1'"
+      visible_if: "view.args.on == '1'"
       name: "<aqua>Shown only when on=1"
     - id: viewer_head
       type: item
@@ -40,5 +40,5 @@ dynamic:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUILOGIC-DYNAMIC-OPEN ${gui.id} on=${gui.args.on}"
+            command: "say MATERIONE-GUILOGIC-DYNAMIC-OPEN ${view.id} on=${view.args.on}"
             as: console

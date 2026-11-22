@@ -4,15 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.view.open.OpenGate.Admission;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenResult;
 
 /**
  * The one open path (logic.md §6.1) and the session lifecycle around it: every stage, in order, with the
- * triggers it fires, and the replace and back-stack behaviour that {@code gui.open} and {@code gui.back}
+ * triggers it fires, and the replace and back-stack behaviour that {@code view.open} and {@code view.back}
  * rest on.
  */
 class GuiOpenerTest {
@@ -25,10 +27,10 @@ class GuiOpenerTest {
               behavior:
                 - on: gui.opening
                   do:
-                    - mark: "opening ${gui.id} category=${gui.args.category}"
+                    - mark: "opening ${view.id} category=${view.args.category}"
                 - on: gui.open
                   do:
-                    - mark: "open ${gui.id} tab=${gui.session.tab}"
+                    - mark: "open ${view.id} tab=${vars.session.tab}"
                 - on: gui.close
                   do:
                     - mark: "close-any reason?"
@@ -50,7 +52,7 @@ class GuiOpenerTest {
               behavior:
                 - on: gui.open
                   do:
-                    - mark: "open ${gui.id}"
+                    - mark: "open ${view.id}"
             """;
 
     private GuiFixture f;
@@ -71,7 +73,7 @@ class GuiOpenerTest {
         OpenResult result = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API);
 
         assertThat(result.ok()).isTrue();
-        GuiSession session = result.session();
+        ViewerRecord session = result.record();
         assertThat(f.sessions.current(f.viewer.id())).containsSame(session);
         assertThat(session.args()).containsEntry("category", "tools");
         assertThat(f.windows.log).containsExactly("open shop");
@@ -100,7 +102,7 @@ class GuiOpenerTest {
         assertThat(f.ran).as("a refusal fires nothing").isEmpty();
 
         OpenResult allowed = open("shop", Map.of("category", "food"), OpenRequest.Cause.API);
-        assertThat(allowed.session().args()).containsEntry("category", "FOOD").containsEntry("typed", "yes");
+        assertThat(allowed.record().args()).containsEntry("category", "FOOD").containsEntry("typed", "yes");
     }
 
     @Test
@@ -130,11 +132,11 @@ class GuiOpenerTest {
 
     @Test
     void openingAnotherGuiReplacesTheFirstFiresItsCloseAndRemembersIt() {
-        GuiSession shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).session();
-        shop.vars().put("tab", "weapons");
+        ViewerRecord shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).record();
+        shop.sessionValues().put("tab", "weapons");
         f.ran.clear();
 
-        GuiSession map = open("map", Map.of(), OpenRequest.Cause.ACTION).session();
+        ViewerRecord map = open("map", Map.of(), OpenRequest.Cause.ACTION).record();
 
         assertThat(shop.endedBecause()).isEqualTo(CloseReason.REPLACED);
         assertThat(f.sessions.current(f.viewer.id())).containsSame(map);
@@ -145,18 +147,18 @@ class GuiOpenerTest {
 
     @Test
     void goingBackRestoresTheArgumentsAndTheSessionVariables() {
-        GuiSession shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).session();
-        shop.vars().put("tab", "weapons");
+        ViewerRecord shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).record();
+        shop.sessionValues().put("tab", "weapons");
         open("map", Map.of(), OpenRequest.Cause.ACTION);
         f.ran.clear();
 
-        GuiSession.Snapshot previous = f.sessions.history(f.viewer.id()).pop().orElseThrow();
-        GuiSession back = f.opener.open(OpenRequest.back(f.viewer, previous)).session();
+        ViewerRecord.Snapshot previous = f.sessions.history(f.viewer.id()).pop().orElseThrow();
+        ViewerRecord back = f.opener.open(OpenRequest.back(f.viewer, previous)).record();
 
         assertThat(back).isNotSameAs(shop);
-        assertThat(back.gui()).isEqualTo(GuiFixture.id("shop"));
+        assertThat(back.definition()).isEqualTo(GuiFixture.id("shop"));
         assertThat(back.args()).containsEntry("category", "tools");
-        assertThat(back.vars()).containsEntry("tab", "weapons");
+        assertThat(back.sessionValues()).containsEntry("tab", "weapons");
         // the restored variable is visible to the rules that open it
         assertThat(f.ran).contains("mark:open demo:shop tab=weapons");
         // going back does not push the window it leaves, so the stack is empty now
@@ -165,8 +167,8 @@ class GuiOpenerTest {
 
     @Test
     void openingTheSameGuiAgainReplacesItToo() {
-        GuiSession first = open("shop", Map.of("category", "a"), OpenRequest.Cause.API).session();
-        GuiSession second = open("shop", Map.of("category", "b"), OpenRequest.Cause.API).session();
+        ViewerRecord first = open("shop", Map.of("category", "a"), OpenRequest.Cause.API).record();
+        ViewerRecord second = open("shop", Map.of("category", "b"), OpenRequest.Cause.API).record();
 
         assertThat(first.endedBecause()).isEqualTo(CloseReason.REPLACED);
         assertThat(second.args()).containsEntry("category", "b");
@@ -188,7 +190,7 @@ class GuiOpenerTest {
 
     @Test
     void failedReplacementClosesTheRetiredWindowAndReturnsItsInputsOnce() {
-        GuiSession previous = open("shop", Map.of(), OpenRequest.Cause.API).session();
+        ViewerRecord previous = open("shop", Map.of(), OpenRequest.Cause.API).record();
         f.windows.log.clear();
         f.windows.failOpenWith = "the server said no";
 
@@ -207,7 +209,7 @@ class GuiOpenerTest {
         f.windows.defer = true;
         open("map", Map.of(), OpenRequest.Cause.API);
         f.windows.defer = false;
-        GuiSession replacement = open("shop", Map.of(), OpenRequest.Cause.API).session();
+        ViewerRecord replacement = open("shop", Map.of(), OpenRequest.Cause.API).record();
         f.windows.log.clear();
         f.windows.failOpenWith = "late failure";
 
@@ -221,7 +223,7 @@ class GuiOpenerTest {
     void guiOpenWaitsForTheWindowWhenTheHostDefersIt() {
         f.windows.defer = true;
 
-        GuiSession session = open("shop", Map.of(), OpenRequest.Cause.API).session();
+        ViewerRecord session = open("shop", Map.of(), OpenRequest.Cause.API).record();
 
         assertThat(f.sessions.current(f.viewer.id())).as("the session switches at once").containsSame(session);
         assertThat(f.ran).containsExactly("mark:opening demo:shop category=");
@@ -241,13 +243,13 @@ class GuiOpenerTest {
                     - on: gui.close
                       reason: replaced
                       do:
-                        - gui.open: map
+                        - view.open: map
                 """);
         open("bounce", Map.of(), OpenRequest.Cause.API);
 
         OpenResult result = open("shop", Map.of(), OpenRequest.Cause.API);
 
         assertThat(result.outcome()).isEqualTo(OpenResult.Outcome.CANCELLED);
-        assertThat(f.sessions.current(f.viewer.id()).orElseThrow().gui()).isEqualTo(GuiFixture.id("map"));
+        assertThat(f.sessions.current(f.viewer.id()).orElseThrow().definition()).isEqualTo(GuiFixture.id("map"));
     }
 }

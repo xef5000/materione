@@ -18,13 +18,13 @@ import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
-import dev.materione.plugin.gui.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenRequest;
 import dev.materione.plugin.gui.open.GuiOpenGates;
 import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,6 +52,8 @@ import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.open.OpenGate;
 
 /** Real opener, host, and reload callback while an initial open is deferred by a click. */
 @Isolated
@@ -159,7 +161,7 @@ class InitialOpenPublicationTest {
                     new GuiJournal(plugin, scheduling, fixture.sessions), new GuiRenderer(RenderReporter.SILENT),
                     PaperRichTitles.create(null), (code, gui, layer, message) -> diagnostics.add(message));
             Viewer viewer = Viewer.of(player);
-            var previous = new GuiSession(id, "Probe", previousGui.id(), Map.of());
+            var previous = GuiViewerState.record(id, "Probe", previousGui.id(), Map.of());
             fixture.sessions.begin(previous);
             var oldMenu = new GuiMenu(previous, GuiContainers.byId("chest_1").orElseThrow(), previousGui.title(), input);
             oldMenu.inputSlots(Set.of(0));
@@ -179,13 +181,13 @@ class InitialOpenPublicationTest {
             var opener = new GuiOpener(guis, fixture.sessions, fixture.events, host, ticker, logger);
             var gate = GuiOpenGates.of((who, node) -> false, PlayerNames.NONE, (rule, context, owner) -> { });
             opener.gate((who, gui, args) -> { admissions.incrementAndGet(); return gate.admit(who, gui, args); });
-            var pending = new AtomicReference<GuiSession>();
+            var pending = new AtomicReference<ViewerRecord>();
 
             guard.during(id, () -> {
                 var result = opener.open(OpenRequest.of(viewer, first.id(), Map.of("amount", "invalid"),
                         OpenRequest.Cause.API));
                 assertThat(result.ok()).isTrue();
-                pending.set(result.session());
+                pending.set(result.record());
                 assertThat(oldMenu.getInventory().getItem(0)).isNull();
                 assertThat(returned.get()).isEqualTo(5);
                 RuntimeGuis.Live latest = switch (scenario) {
@@ -206,7 +208,7 @@ class InitialOpenPublicationTest {
                 }
                 try {
                     var method = GuiLiveRefresh.class.getDeclaredMethod("refreshViewer",
-                            Viewer.class, GuiSession.class, Optional.class);
+                            Viewer.class, ViewerRecord.class, Optional.class);
                     method.setAccessible(true);
                     method.invoke(refresh, viewer, pending.get(), Optional.ofNullable(published.get()));
                 } catch (ReflectiveOperationException error) {
@@ -216,10 +218,10 @@ class InitialOpenPublicationTest {
                 assertThat(opens.get()).isZero();
             });
             assertThat(tasks).hasSize(1);
-            GuiSession replacement = null;
+            ViewerRecord replacement = null;
             if (scenario.equals("newer-session")) {
                 replacement = opener.open(OpenRequest.of(viewer, newerGui.id(), Map.of(), OpenRequest.Cause.API))
-                        .session();
+                        .record();
                 assertThat(replacement).isNotNull();
                 var replacementMenu = (GuiMenu) replacement.window();
                 assertThat(replacementMenu.inputSlots()).contains(1);
@@ -280,7 +282,7 @@ class InitialOpenPublicationTest {
     void changedOpeningRuleActuallyCancelsWhenAppliedToItsOwnOpen() {
         var fixture = new GuiFixture();
         var changed = fixture.gui(gui("trade", 3, 4, "B", "", true));
-        var session = new GuiSession(fixture.viewer.id(), fixture.viewer.name(), changed.id(), Map.of());
+        var session = GuiViewerState.record(fixture.viewer.id(), fixture.viewer.name(), changed.id(), Map.of());
         assertThat(fixture.events.opening(fixture.viewer, session, changed)).isTrue();
         assertThat(fixture.ran).containsExactly("mark:B-opening");
     }

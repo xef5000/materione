@@ -39,7 +39,7 @@ class OverlayLogicContextTest {
         assertThat(overlay.value("entry.missing")).isNull();
         assertThat(overlay.value("entry.absent.deeper")).isNull();
         assertThat(overlay.value("player.name")).isEqualTo("Probe");
-        assertThat(overlay.value("gui.page.players.count")).isEqualTo(4);
+        assertThat(overlay.value("view.page.players.count")).isEqualTo(4);
     }
 
     @Test

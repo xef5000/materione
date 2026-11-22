@@ -519,7 +519,7 @@ class GuiAuthoringApiTest {
                                     "rule 'r' broke", definition.id(), null, "fix it",
                                     dev.materione.api.diagnostics.DiagnosticTarget.field("behavior", "0", "do", "1")));
                         })).gui();
-        String withRules = SHOP + "  behavior:\n    - on: gui.click\n      do:\n        - gui.close\n";
+        String withRules = SHOP + "  behavior:\n    - on: gui.click\n      do:\n        - view.close\n";
 
         ApiResult<List<Diagnostic>> fromYaml = checked.validate(new GuiValidateRequest(
                 new Yaml(PACK, withRules), List.of()));

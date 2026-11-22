@@ -173,7 +173,7 @@ class WorldVerbsPipelineTest {
 
     @Test
     void theEventLocationIsReadFromTheTriggerSoATriggerWithoutOneIsToldSoAtLoad() {
-        // gui.open carries no location
+        // view.open carries no location
         shadow(List.of(text("""
                 verbs:
                   behavior:

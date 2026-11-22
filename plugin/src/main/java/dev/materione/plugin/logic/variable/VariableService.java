@@ -6,7 +6,7 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.api.logic.variable.StackRef;
 import dev.materione.api.logic.variable.StackVariableStore;
 import dev.materione.api.logic.variable.VariableBinding;
@@ -49,7 +49,7 @@ public final class VariableService implements AutoCloseable {
     private final LongSupplier clock;
     private final Map<String, Long> stackMisses = new ConcurrentHashMap<>();
     private final VariablesApi api = new Api();
-    private volatile GuiSessionPort guiSessions = GuiSessionPort.NONE;
+    private volatile ViewPort views = ViewPort.NONE;
     private volatile boolean closed;
 
     /**
@@ -158,14 +158,14 @@ public final class VariableService implements AutoCloseable {
         return api;
     }
 
-    /** Registers the GUI runtime's session port for the PlaceholderAPI expansion (#214). */
-    public void guiSessions(GuiSessionPort port) {
-        this.guiSessions = port == null ? GuiSessionPort.NONE : port;
+    /** Registers the view runtime's port for the PlaceholderAPI expansion (#214, views.md section 3.8). */
+    public void views(ViewPort port) {
+        this.views = port == null ? ViewPort.NONE : port;
     }
 
-    /** The GUI session port in effect ({@link GuiSessionPort#NONE} until the GUI runtime registers one). */
-    public GuiSessionPort guiSessions() {
-        return guiSessions;
+    /** The view port in effect ({@link ViewPort#NONE} until the view runtime registers one). */
+    public ViewPort views() {
+        return views;
     }
 
     /** The store of {@code scope}. */

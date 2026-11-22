@@ -176,7 +176,7 @@ class OpenPlanTest {
                     commands: [shop]
                     args:
                       - { name: category, type: string, default: all }
-                    requirement: "gui.args.category == 'tools'"
+                    requirement: "view.args.category == 'tools'"
                 """));
 
         assertThat(plan.problems()).isEmpty();

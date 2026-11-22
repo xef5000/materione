@@ -103,7 +103,7 @@ public final class GuiSlotItemAction implements ActionType<GuiSlotItemAction.Par
         }
         try {
             GuiRun run = GuiRun.ofOpenSession(bridge, context);
-            return run.services().inputs().apply(run.viewer().player(), run.session(), slot.getAsInt(), params.op())
+            return run.services().inputs().apply(run.viewer().player(), run.record(), slot.getAsInt(), params.op())
                     .map(ActionOutcome::failed)
                     .orElse(ActionOutcome.OK);
         } catch (GuiRun.Refused refused) {

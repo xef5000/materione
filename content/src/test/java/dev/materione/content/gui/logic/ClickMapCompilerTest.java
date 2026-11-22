@@ -141,7 +141,7 @@ class ClickMapCompilerTest {
     @Test
     void theGuiCompileCarriesTheMapAndTheRules() {
         var raw = definition(1, button("b", 8, 18, 16, 16));
-        raw.put("behavior", List.of(Map.of("on", "gui.click", "do", List.of("gui.close"))));
+        raw.put("behavior", List.of(Map.of("on", "gui.click", "do", List.of("view.close"))));
         GuiDefinition gui = GuiTestSupport.parse(GuiTestSupport.type(), raw);
 
         var model = GuiCompiler.compile(gui, 0xE200, NO_TEXTURES).model();

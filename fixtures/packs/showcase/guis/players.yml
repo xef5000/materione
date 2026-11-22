@@ -28,8 +28,8 @@ players:
       type: item
       slot: 4
       item: minecraft:paper
-      name: "<white>Page ${gui.page.list.number} of ${gui.page.list.count}"
-      lore: ["<gray>Search: ${gui.session.search}"]
+      name: "<white>Page ${view.page.list.number} of ${view.page.list.count}"
+      lore: ["<gray>Search: ${vars.session.search}"]
     - id: back
       type: item
       slot: 0
@@ -86,7 +86,7 @@ players:
     - on: gui.click
       layer: back
       do:
-        - gui.back
+        - view.back
     - on: gui.page
       layer: list
       do:

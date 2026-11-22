@@ -9,8 +9,8 @@ import dev.materione.plugin.gui.input.ClickKind;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.input.StackView;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.logic.variable.VariableService;
 import java.util.List;
 import java.util.Map;
@@ -44,19 +44,19 @@ public final class GuiEvents {
      *
      * @return true when a rule cancelled the open ({@code cancel} or {@code stop: {cancel: true}})
      */
-    public boolean opening(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
+    public boolean opening(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
         BehaviorEvent event = fire(GuiRuleSet.OPENING, gui.logic().rules(GuiRuleSet.OPENING),
                 viewer, session, FilterFacts.NONE, Map.of());
         return event != null && event.isCancelRequested();
     }
 
     /** Fires {@code gui.open}: the window is showing. */
-    public void opened(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
+    public void opened(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
         fire(GuiRuleSet.OPEN, gui.logic().rules(GuiRuleSet.OPEN), viewer, session, FilterFacts.NONE, Map.of());
     }
 
     /** Fires {@code gui.close} with the reason the session ended. {@link CloseReason#REMOVED} fires nothing. */
-    public void closed(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, CloseReason reason) {
+    public void closed(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, CloseReason reason) {
         if (!reason.fires()) {
             return;
         }
@@ -66,7 +66,7 @@ public final class GuiEvents {
     }
 
     /** Fires {@code gui.click_outside}: a click outside the window. */
-    public void outside(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, ClickKind kind) {
+    public void outside(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, ClickKind kind) {
         fire(GuiRuleSet.CLICK_OUTSIDE, gui.logic().rules(GuiRuleSet.CLICK_OUTSIDE), viewer, session,
                 key -> "click".equals(key) ? kind.id() : null,
                 GuiContexts.click(kind.id(), -1, 0));
@@ -76,7 +76,7 @@ public final class GuiEvents {
      * Fires the {@code gui.tick} rules due at {@code elapsed} ticks since the window opened: those
      * whose {@code every:} divides it.
      */
-    public void tick(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, long elapsed) {
+    public void tick(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, long elapsed) {
         for (Rule rule : gui.logic().rules(GuiRuleSet.TICK)) {
             int every = GuiRuleSet.everyOf(rule);
             if (every > 0 && elapsed % every == 0) {
@@ -95,7 +95,7 @@ public final class GuiEvents {
      * @param layer the layer that took the click, or "" when none did
      */
     public void click(
-            Viewer viewer, GuiSession session, List<Rule> rules, String layer, int slot, ClickKind kind, int key) {
+            Viewer viewer, ViewerRecord session, List<Rule> rules, String layer, int slot, ClickKind kind, int key) {
         click(viewer, session, rules, layer, slot, kind, key, null);
     }
 
@@ -104,7 +104,7 @@ public final class GuiEvents {
      * one rule serves every entry (logic.md §6.7). Null for a click that shows no entry.
      */
     public void click(
-            Viewer viewer, GuiSession session, List<Rule> rules, String layer, int slot, ClickKind kind, int key,
+            Viewer viewer, ViewerRecord session, List<Rule> rules, String layer, int slot, ClickKind kind, int key,
             Map<String, Object> entry) {
         var extra = new java.util.LinkedHashMap<String, Object>(GuiContexts.click(kind.id(), slot, key));
         extra.put("layer", Map.of("id", layer));
@@ -127,7 +127,7 @@ public final class GuiEvents {
      * @param index the page now shown, from 1
      * @param count the pages the list has, at least 1
      */
-    public void paged(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, String list, int index, int count) {
+    public void paged(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, String list, int index, int count) {
         fire(GuiRuleSet.PAGE, gui.logic().rules(GuiRuleSet.PAGE), viewer, session,
                 key -> "layer".equals(key) ? list : null,
                 Map.of("page", Map.of("index", index, "count", count)));
@@ -143,7 +143,7 @@ public final class GuiEvents {
      * @return true when a rule cancelled the change
      */
     public boolean slotChange(
-            Viewer viewer, GuiSession session, RuntimeGuis.Live gui, String layer, int index,
+            Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, String layer, int index,
             StackView before, StackView after) {
         BehaviorEvent event = fire(GuiRuleSet.SLOT_CHANGE, gui.logic().rules(GuiRuleSet.SLOT_CHANGE), viewer, session,
                 key -> "layer".equals(key) ? layer : null, slotVars(index, before, after));
@@ -155,7 +155,7 @@ public final class GuiEvents {
      * same context a {@code gui.slot_change} rule sees, with {@code slot.item} the entering item.
      */
     public boolean accepts(
-            Viewer viewer, GuiSession session, InputSlots.Input input, int index, StackView entering, StackView before) {
+            Viewer viewer, ViewerRecord session, InputSlots.Input input, int index, StackView entering, StackView before) {
         if (input.accept() == null && !input.acceptBroken()) {
             return true;
         }
@@ -170,7 +170,7 @@ public final class GuiEvents {
      * @return true when a rule cancelled the click
      */
     public boolean clickInventory(
-            Viewer viewer, GuiSession session, RuntimeGuis.Live gui, ClickKind kind, int slot, int key, String item) {
+            Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, ClickKind kind, int slot, int key, String item) {
         var extra = new java.util.LinkedHashMap<String, Object>(GuiContexts.click(kind.id(), slot, key));
         extra.put("slot", Map.of("item", item));
         BehaviorEvent event = fire(GuiRuleSet.CLICK_INVENTORY, gui.logic().rules(GuiRuleSet.CLICK_INVENTORY),
@@ -189,7 +189,7 @@ public final class GuiEvents {
     }
 
     private BehaviorEvent fire(
-            String trigger, List<Rule> rules, Viewer viewer, GuiSession session, FilterFacts facts,
+            String trigger, List<Rule> rules, Viewer viewer, ViewerRecord session, FilterFacts facts,
             Map<String, Object> extra) {
         if (rules.isEmpty()) {
             return null;

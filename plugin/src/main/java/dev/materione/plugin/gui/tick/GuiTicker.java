@@ -4,9 +4,10 @@ import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.gui.window.WindowHost;
 import java.util.Optional;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * Drives the two clocks of an open window (logic.md §6.2, §6.3): {@code gui.tick}, which runs rules, and the
@@ -43,33 +44,33 @@ public final class GuiTicker {
      * Starts the session's clocks where its GUI needs them and they are not running. Safe to call at any time:
      * on open, and after a reload that may have added the first tick rule or the first dynamic layer.
      */
-    public void ensure(Viewer viewer, GuiSession session) {
+    public void ensure(Viewer viewer, ViewerRecord session) {
         if (!session.isOpen()) {
             return;
         }
-        Optional<RuntimeGuis.Live> gui = guis.find(session.gui());
+        Optional<RuntimeGuis.Live> gui = guis.find(session.definition());
         if (gui.isEmpty()) {
             return;
         }
-        if (gui.get().logic().ticks() && session.claimTicker()) {
+        if (gui.get().logic().ticks() && GuiViewerState.of(session).claimTicker()) {
             scheduleTick(viewer, session, gui.get().logic().tickPeriod());
         }
-        if (gui.get().clockPeriod() > 0 && session.claimClock()) {
+        if (gui.get().clockPeriod() > 0 && GuiViewerState.of(session).claimClock()) {
             scheduleClock(viewer, session, gui.get().clockPeriod());
         }
     }
 
-    private void scheduleTick(Viewer viewer, GuiSession session, int period) {
-        scheduler.later(viewer, period, () -> wakeTick(viewer, session, period), session::releaseTicker);
+    private void scheduleTick(Viewer viewer, ViewerRecord session, int period) {
+        scheduler.later(viewer, period, () -> wakeTick(viewer, session, period), GuiViewerState.of(session)::releaseTicker);
     }
 
-    private void wakeTick(Viewer viewer, GuiSession session, int period) {
-        Optional<RuntimeGuis.Live> gui = session.isOpen() ? guis.find(session.gui()) : Optional.empty();
+    private void wakeTick(Viewer viewer, ViewerRecord session, int period) {
+        Optional<RuntimeGuis.Live> gui = session.isOpen() ? guis.find(session.definition()) : Optional.empty();
         if (gui.isEmpty() || !gui.get().logic().ticks()) {
-            session.releaseTicker();
+            GuiViewerState.of(session).releaseTicker();
             return;
         }
-        long elapsed = session.advanceTicks(period);
+        long elapsed = GuiViewerState.of(session).advanceTicks(period);
         try {
             events.tick(viewer, session, gui.get(), elapsed);
         } finally {
@@ -78,17 +79,17 @@ public final class GuiTicker {
         }
     }
 
-    private void scheduleClock(Viewer viewer, GuiSession session, int period) {
-        scheduler.later(viewer, period, () -> wakeClock(viewer, session, period), session::releaseClock);
+    private void scheduleClock(Viewer viewer, ViewerRecord session, int period) {
+        scheduler.later(viewer, period, () -> wakeClock(viewer, session, period), GuiViewerState.of(session)::releaseClock);
     }
 
-    private void wakeClock(Viewer viewer, GuiSession session, int period) {
-        Optional<RuntimeGuis.Live> gui = session.isOpen() ? guis.find(session.gui()) : Optional.empty();
+    private void wakeClock(Viewer viewer, ViewerRecord session, int period) {
+        Optional<RuntimeGuis.Live> gui = session.isOpen() ? guis.find(session.definition()) : Optional.empty();
         if (gui.isEmpty() || gui.get().clockPeriod() == 0 || windows.shape(viewer, session).isEmpty()) {
-            session.releaseClock();
+            GuiViewerState.of(session).releaseClock();
             return;
         }
-        session.advanceWindowTicks(period);
+        GuiViewerState.of(session).advanceWindowTicks(period);
         try {
             windows.advance(viewer, session, gui.get());
         } finally {
@@ -97,7 +98,7 @@ public final class GuiTicker {
             if (next > 0) {
                 scheduleClock(viewer, session, next);
             } else {
-                session.releaseClock();
+                GuiViewerState.of(session).releaseClock();
             }
         }
     }

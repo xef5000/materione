@@ -908,6 +908,16 @@ public final class EditorContentOps {
         if (type.flatFile()) {
             object.addProperty("flatFile", true);
         }
+        // the view facet (views.md section 9): present only on a view kind, so the editor and the SDK learn which types
+        // are views from the registry and keep no list of them
+        type.view().ifPresent(facet -> {
+            JsonObject view = new JsonObject();
+            view.addProperty("viewerRule", facet.viewerRule().id());
+            view.addProperty("rerenderDefault", facet.rerenderDefault().id());
+            view.addProperty("supportsTarget", facet.supportsTarget());
+            view.addProperty("supportsKey", facet.supportsKey());
+            object.add("view", view);
+        });
         var params = new com.google.gson.JsonArray();
         description.parameters().forEach(param -> params.add(paramJson(param)));
         object.add("parameters", params);

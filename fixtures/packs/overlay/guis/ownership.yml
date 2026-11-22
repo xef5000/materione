@@ -13,7 +13,7 @@ ownership:
       type: item
       slot: 4
       item: minecraft:barrier
-      visible_if: "gui.session.cover == true"
+      visible_if: "vars.session.cover == true"
     - {id: toggle, type: button, x: 152, y: 18, width: 16, height: 16}
   behavior:
     - on: gui.open
@@ -36,7 +36,7 @@ ownership:
         - run_command:
             command: "say MATERIONE-OVERLAY-OWNERSHIP-SHIFT"
             as: console
-        - if: "${gui.args.cancel == '1'}"
+        - if: "${view.args.cancel == '1'}"
           then:
             - run_command:
                 command: "say MATERIONE-OVERLAY-OWNERSHIP-CANCEL"

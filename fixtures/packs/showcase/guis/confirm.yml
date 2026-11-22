@@ -10,7 +10,7 @@ confirm:
       type: text
       x: 8
       y: 6
-      text: "${gui.args.question}"
+      text: "${view.args.question}"
       font: default
       color: "#404040"
     - id: accept
@@ -37,7 +37,7 @@ confirm:
         - run_command:
             command: "say MATERIONE-SHOWCASE-CONFIRM yes"
             as: console
-        - gui.back
+        - view.back
     - on: gui.click
       layer: decline
       do:
@@ -45,10 +45,10 @@ confirm:
         - run_command:
             command: "say MATERIONE-SHOWCASE-CONFIRM no"
             as: console
-        - gui.back
+        - view.back
     - on: gui.click_outside
       do:
-        - gui.back
+        - view.back
     - on: gui.close
       do:
         - run_command:

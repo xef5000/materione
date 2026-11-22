@@ -37,11 +37,11 @@ import java.util.Set;
  */
 public final class ItemLayerCompiler {
 
-    /** The variable roots an item layer may read: the viewer, the server, run variables and the GUI itself. */
-    public static final Set<String> ROOTS = Set.of("player", "server", "vars", "gui");
+    /** The variable roots an item layer may read: the viewer, the server, run variables and the view itself. */
+    public static final Set<String> ROOTS = Set.of("player", "server", "vars", "view");
 
     /** The roots of a list's entry template (logic.md §6.7): the item layer's roots and the entry being shown. */
-    public static final Set<String> ENTRY_ROOTS = Set.of("player", "server", "vars", "gui", "entry");
+    public static final Set<String> ENTRY_ROOTS = Set.of("player", "server", "vars", "view", "entry");
 
     /** Source names of the optional integrations, by the plugin each one needs. */
     static final Map<String, String> OPTIONAL_SOURCES = Map.of(

@@ -22,9 +22,25 @@ public final class StaticReferenceWalker implements StaticReferences {
     private static final int MAX_DEPTH = 64;
 
     private final LogicVocabulary vocabulary;
+    private final java.util.function.Supplier<Map<String, dev.materione.api.content.ViewFacet>> viewKinds;
 
     public StaticReferenceWalker(LogicVocabulary vocabulary) {
+        this(vocabulary, Map::of);
+    }
+
+    /**
+     * @param viewKinds the content types that are view kinds with their facets, read when a reference is checked (the
+     *     content-type registry, which can gain an addon's kind after this walker is built)
+     */
+    public StaticReferenceWalker(
+            LogicVocabulary vocabulary, java.util.function.Supplier<Map<String, dev.materione.api.content.ViewFacet>> viewKinds) {
         this.vocabulary = vocabulary;
+        this.viewKinds = viewKinds;
+    }
+
+    @Override
+    public Map<String, dev.materione.api.content.ViewFacet> viewKinds() {
+        return viewKinds.get();
     }
 
     @Override

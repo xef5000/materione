@@ -77,6 +77,18 @@ public final class GuiType implements ContentType {
         return "guis";
     }
 
+    /**
+     * The container GUI is the first view kind (views.md section 3.2, 4.2): its viewers are {@code opened} by a verb, a
+     * change to what it reads re-renders it by default (the behaviour is row V1), and it can be targeted and keyed once
+     * rows V4 and V5 build those, which is when these two flags become true.
+     */
+    @Override
+    public java.util.Optional<dev.materione.api.content.ViewFacet> view() {
+        return java.util.Optional.of(new dev.materione.api.content.ViewFacet(
+                dev.materione.api.content.ViewFacet.ViewerRule.OPENED,
+                dev.materione.api.content.ViewFacet.RerenderPolicy.ON_CHANGE, false, false));
+    }
+
     @Override
     public SelfDescription describe() {
         var layerFields = List.of(

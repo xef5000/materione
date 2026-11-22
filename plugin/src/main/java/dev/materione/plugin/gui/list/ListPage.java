@@ -5,8 +5,8 @@ import java.util.Map;
 /**
  * The page state of one list in one session (logic.md §6.7): the page shown, from 1, how many pages the list has (at
  * least 1) and how many entries it has in all. Stored in the session's pages map under the list's id, so a rule reads
- * it as {@code gui.page.<list>.number}, {@code gui.page.<list>.count} (for a "Page 2/5" text) and
- * {@code gui.page.<list>.size} (for "no results": a size of 0).
+ * it as {@code view.page.<list>.number}, {@code view.page.<list>.count} (for a "Page 2/5" text) and
+ * {@code view.page.<list>.size} (for "no results": a size of 0).
  *
  * @param number the page shown, from 1 up to {@code count}
  * @param count the number of pages, at least 1

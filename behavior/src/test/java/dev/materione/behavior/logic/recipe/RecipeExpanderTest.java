@@ -42,7 +42,7 @@ class RecipeExpanderTest {
     private final LogicLookup lookup = lookup(Map.of(
             "give", new Fake("give", Availability.AVAILABLE),
             "message", new Fake("message", Availability.AVAILABLE),
-            "gui.close", new Fake("gui.close", Availability.AVAILABLE),
+            "view.close", new Fake("view.close", Availability.AVAILABLE),
             "take_money", new Fake("take_money", Availability.unavailable("no economy is installed"))),
             Map.of("materione:pay", template()));
 
@@ -57,7 +57,7 @@ class RecipeExpanderTest {
         assertThat(result.diagnostics()).isEmpty();
         assertThat(result.value()).containsExactly(Map.of(
                 "on", "gui.click", "layer", "buy",
-                "do", List.of(Map.of("give", "gem"), "gui.close")));
+                "do", List.of(Map.of("give", "gem"), "view.close")));
     }
 
     @Test
@@ -79,10 +79,10 @@ class RecipeExpanderTest {
             @Override
             public List<Map<String, Object>> expand(Map<String, Object> params) {
                 seen.putAll(params);
-                return List.of(Map.of("on", "gui.click", "do", List.of("gui.close")));
+                return List.of(Map.of("on", "gui.click", "do", List.of("view.close")));
             }
         };
-        var probing = new RecipeExpander(lookup(Map.of("gui.close", new Fake("gui.close", Availability.AVAILABLE)),
+        var probing = new RecipeExpander(lookup(Map.of("view.close", new Fake("view.close", Availability.AVAILABLE)),
                 Map.of("materione:probe", recipe)));
 
         probing.expand(new InstantiateRequest("probe", Map.of("price", 5)));
@@ -223,7 +223,7 @@ class RecipeExpanderTest {
                 "rules", List.of(Map.of(
                         "on", "gui.click",
                         "layer", "{{layer}}",
-                        "do", List.of(Map.of("give", "{{item}}"), "gui.close")))));
+                        "do", List.of(Map.of("give", "{{item}}"), "view.close")))));
     }
 
     private static RecipeTemplate toggleRecipe() {

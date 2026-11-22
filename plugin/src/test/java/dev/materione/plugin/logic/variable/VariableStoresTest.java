@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.DiagnosticCodes;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.plugin.logic.variable.VariableTestSupport.Wired;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -252,12 +252,12 @@ class VariableStoresTest {
         }
 
         @Test
-        void aGuiSessionPortIsEmptyUntilTheGuiRuntimeRegistersOne() {
+        void aViewPortIsEmptyUntilTheGuiRuntimeRegistersOne() {
             Wired wired = VariableTestSupport.wired(dir, new HashMap<>());
 
-            assertThat(wired.service().guiSessions()).isSameAs(GuiSessionPort.NONE);
-            wired.service().guiSessions(null);
-            assertThat(wired.service().guiSessions()).isSameAs(GuiSessionPort.NONE);
+            assertThat(wired.service().views()).isSameAs(ViewPort.NONE);
+            wired.service().views(null);
+            assertThat(wired.service().views()).isSameAs(ViewPort.NONE);
         }
 
         @Test

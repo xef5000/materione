@@ -15,15 +15,15 @@ import dev.materione.content.gui.GuiCompiler;
 import dev.materione.plugin.gui.input.ClickKind;
 import dev.materione.plugin.gui.input.GuiClick;
 import dev.materione.plugin.commands.OpenPlan;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.open.OpenResult;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenResult;
 import dev.materione.plugin.gui.open.GuiOpenGates;
 import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.behavior.logic.RegistryLogicLookup;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.logic.BuiltinLogic;
@@ -45,6 +45,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * The plugin's own pack and the content browser it ships (runtime-systems §8.3, master §7.3).
@@ -151,7 +152,7 @@ class BuiltinBrowserPackTest {
     }
 
     private GuiFixture fixture;
-    private GuiSession session;
+    private ViewerRecord session;
 
     @BeforeEach
     void fixture() {
@@ -190,11 +191,11 @@ class BuiltinBrowserPackTest {
 
     private OpenResult openBrowser(Map<String, String> args) {
         OpenResult result = fixture.opener.open(OpenRequest.of(fixture.viewer, BROWSER, args, OpenRequest.Cause.API));
-        session = result.session();
+        session = result.record();
         return result;
     }
 
-    private GuiSession current() {
+    private ViewerRecord current() {
         return fixture.sessions.current(fixture.player.getUniqueId()).orElseThrow();
     }
 
@@ -203,7 +204,7 @@ class BuiltinBrowserPackTest {
     }
 
     private String shown(int slot) {
-        return current().rendered().lists().shownAt(slot)
+        return GuiViewerState.of(current()).rendered().lists().shownAt(slot)
                 .map(shown -> shown.entry().get("kind") + ":" + shown.entry().get("name"))
                 .orElse(null);
     }
@@ -215,7 +216,7 @@ class BuiltinBrowserPackTest {
         assertThat(shown(0)).isEqualTo("pack:shop");
         assertThat(shown(1)).isEqualTo("pack:zoo");
         assertThat(shown(2)).isNull();
-        assertThat(current().rendered().hidden()).contains("back", "clear", "no_results").doesNotContain("pages");
+        assertThat(GuiViewerState.of(current()).rendered().hidden()).contains("back", "clear", "no_results").doesNotContain("pages");
     }
 
     @Test
@@ -228,7 +229,7 @@ class BuiltinBrowserPackTest {
         assertThat(shown(0)).isEqualTo("folder:gems");
         assertThat(shown(1)).isEqualTo("folder:tools");
         assertThat(shown(2)).isEqualTo("item:Coin");
-        assertThat(current().rendered().hidden()).doesNotContain("back");
+        assertThat(GuiViewerState.of(current()).rendered().hidden()).doesNotContain("back");
 
         click(45, ClickKind.LEFT); // back
 
@@ -306,7 +307,7 @@ class BuiltinBrowserPackTest {
         assertThat(shown(0)).isEqualTo("item:Raw Ruby");
         assertThat(shown(1)).isEqualTo("item:Ruby");
         assertThat(shown(2)).isNull();
-        assertThat(current().rendered().hidden()).contains("nothing_here", "no_results").doesNotContain("clear");
+        assertThat(GuiViewerState.of(current()).rendered().hidden()).contains("nothing_here", "no_results").doesNotContain("clear");
 
         // words in any order, against the id or the name
         openBrowser(Map.of("search", "ruby shop:raw"));
@@ -323,13 +324,13 @@ class BuiltinBrowserPackTest {
         openBrowser(Map.of("search", "nothingcalledthis"));
 
         assertThat(shown(0)).isNull();
-        assertThat(current().pages().get("entries")).isEqualTo(Map.of("number", 1, "count", 1, "size", 0));
-        assertThat(current().rendered().hidden()).contains("nothing_here").doesNotContain("no_results", "clear");
+        assertThat(GuiViewerState.of(current()).pages().get("entries")).isEqualTo(Map.of("number", 1, "count", 1, "size", 0));
+        assertThat(GuiViewerState.of(current()).rendered().hidden()).contains("nothing_here").doesNotContain("no_results", "clear");
 
         click(50, ClickKind.LEFT); // clear the search
 
         assertThat(shown(0)).isEqualTo("pack:shop");
-        assertThat(current().rendered().hidden()).contains("no_results", "clear");
+        assertThat(GuiViewerState.of(current()).rendered().hidden()).contains("no_results", "clear");
     }
 
     @Test
@@ -339,7 +340,7 @@ class BuiltinBrowserPackTest {
         openBrowser(Map.of());
 
         assertThat(shown(0)).isNull();
-        assertThat(current().rendered().hidden()).contains("no_results").doesNotContain("nothing_here");
+        assertThat(GuiViewerState.of(current()).rendered().hidden()).contains("no_results").doesNotContain("nothing_here");
     }
 
     @Test
@@ -353,17 +354,17 @@ class BuiltinBrowserPackTest {
 
         assertThat(shown(0)).isEqualTo("item:Item 00");
         assertThat(shown(44)).isEqualTo("item:Item 44");
-        assertThat(current().pages().get("entries")).isEqualTo(Map.of("number", 1, "count", 2, "size", 50));
+        assertThat(GuiViewerState.of(current()).pages().get("entries")).isEqualTo(Map.of("number", 1, "count", 2, "size", 50));
 
         click(51, ClickKind.LEFT); // next page
 
         assertThat(shown(0)).isEqualTo("item:Item 45");
         assertThat(shown(4)).isEqualTo("item:Item 49");
         assertThat(shown(5)).isNull();
-        assertThat(current().pages().get("entries")).isEqualTo(Map.of("number", 2, "count", 2, "size", 50));
+        assertThat(GuiViewerState.of(current()).pages().get("entries")).isEqualTo(Map.of("number", 2, "count", 2, "size", 50));
 
         click(51, ClickKind.LEFT); // already on the last page: nothing moves
-        assertThat(current().pages().get("entries")).isEqualTo(Map.of("number", 2, "count", 2, "size", 50));
+        assertThat(GuiViewerState.of(current()).pages().get("entries")).isEqualTo(Map.of("number", 2, "count", 2, "size", 50));
 
         click(47, ClickKind.LEFT); // previous page
         assertThat(shown(0)).isEqualTo("item:Item 00");
@@ -421,14 +422,10 @@ class BuiltinBrowserPackTest {
 
     @Test
     void theConditionsReadAnAbsentArgumentAndAnAbsentSearchAsEmpty() throws IOException {
-        var absent = new dev.materione.behavior.logic.MapLogicContext(Map.of("gui", new java.util.LinkedHashMap<>(Map.of(
-                "args", Map.of(), "session", Map.of(), "page", Map.of("entries", Map.of("size", 0))))));
-        var located = new dev.materione.behavior.logic.MapLogicContext(Map.of("gui", new java.util.LinkedHashMap<>(Map.of(
-                "args", Map.of("path", "shop"), "session", Map.of("search", "ruby"),
-                "page", Map.of("entries", Map.of("size", 3))))));
-        var cleared = new dev.materione.behavior.logic.MapLogicContext(Map.of("gui", new java.util.LinkedHashMap<>(Map.of(
-                "args", Map.of("path", ""), "session", Map.of("search", ""),
-                "page", Map.of("entries", Map.of("size", 0))))));
+        var absent = browserWindow(Map.of(), Map.of(), Map.of("entries", Map.of("size", 0)));
+        var located = browserWindow(Map.of("path", "shop"), Map.of("search", "ruby"),
+                Map.of("entries", Map.of("size", 3)));
+        var cleared = browserWindow(Map.of("path", ""), Map.of("search", ""), Map.of("entries", Map.of("size", 0)));
 
         record Case(String layer, boolean absent, boolean located, boolean cleared) {}
         for (Case c : List.of(
@@ -443,12 +440,18 @@ class BuiltinBrowserPackTest {
             assertThat(expression.evaluate(cleared)).as(c.layer() + " set to empty").isEqualTo(c.cleared());
         }
         // an empty page while searching is the other message
-        var noMatch = new dev.materione.behavior.logic.MapLogicContext(Map.of("gui", new java.util.LinkedHashMap<>(Map.of(
-                "args", Map.of(), "session", Map.of("search", "zzz"), "page", Map.of("entries", Map.of("size", 0))))));
+        var noMatch = browserWindow(Map.of(), Map.of("search", "zzz"), Map.of("entries", Map.of("size", 0)));
         assertThat(dev.materione.behavior.logic.EngineExpressions.INSTANCE
                 .expression(String.valueOf(layer("no_results").get("visible_if"))).evaluate(noMatch)).isEqualTo(true);
         assertThat(dev.materione.behavior.logic.EngineExpressions.INSTANCE
                 .expression(String.valueOf(layer("nothing_here").get("visible_if"))).evaluate(noMatch)).isEqualTo(false);
+    }
+
+    /** What the browser's conditions read: the view's arguments and pages, and the window's session values (views.md 3.7). */
+    private static dev.materione.behavior.logic.MapLogicContext browserWindow(
+            Map<String, Object> args, Map<String, Object> session, Map<String, Object> pages) {
+        return dev.materione.plugin.view.TestSessionValues.in(new dev.materione.behavior.logic.MapLogicContext(
+                Map.of("view", new java.util.LinkedHashMap<>(Map.of("args", args, "page", pages)))), session);
     }
 
     @Test

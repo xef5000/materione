@@ -70,7 +70,7 @@ class LogicTypesTest {
 
     @Test
     void contextVariablePathsAreDottedLowercaseWithAnOptionalWildcard() {
-        assertThat(ContextVariable.of("gui.args.*", ParameterType.STRING, "args").hosts()).isEmpty();
+        assertThat(ContextVariable.of("view.args.*", ParameterType.STRING, "args").hosts()).isEmpty();
         assertThat(ContextVariable.of("player.name", ParameterType.STRING, null).providedBy("item").hosts())
                 .containsExactly("item");
         assertThatThrownBy(() -> ContextVariable.of("Player.Name", ParameterType.STRING, ""))

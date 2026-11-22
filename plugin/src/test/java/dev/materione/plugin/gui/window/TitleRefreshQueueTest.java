@@ -3,16 +3,17 @@ package dev.materione.plugin.gui.window;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 class TitleRefreshQueueTest {
     @Test
     void togglingBackBeforeDeferredCallbackCannotRestoreStaleTitle() {
-        var session = new GuiSession(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
+        var session = GuiViewerState.record(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
         var queue = new TitleRefreshQueue();
         var scheduled = new ArrayList<Runnable>();
         var displayed = new ArrayList<String>();
@@ -26,24 +27,24 @@ class TitleRefreshQueueTest {
 
     @Test
     void onlyNewestRequestRunsAndItReadsStateWhenExecuted() {
-        var session = new GuiSession(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
+        var session = GuiViewerState.record(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
         var queue = new TitleRefreshQueue();
         var scheduled = new ArrayList<Runnable>();
         var displayed = new ArrayList<String>();
-        session.vars().put("tab", "first");
+        session.sessionValues().put("tab", "first");
         queue.update(session, true, true, () -> displayed.add("immediate"), () -> displayed.add("stale"),
                 (task, retired) -> scheduled.add(task));
         queue.update(session, true, true, () -> displayed.add("immediate"),
-                () -> displayed.add(session.vars().get("tab").toString()),
+                () -> displayed.add(session.sessionValues().get("tab").toString()),
                 (task, retired) -> scheduled.add(task));
-        session.vars().put("tab", "latest");
+        session.sessionValues().put("tab", "latest");
         scheduled.forEach(Runnable::run);
         assertThat(displayed).containsExactly("latest");
     }
 
     @Test
     void retirementOfAnOlderTaskCannotCancelItsReplacement() {
-        var session = new GuiSession(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
+        var session = GuiViewerState.record(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
         var queue = new TitleRefreshQueue();
         var tasks = new ArrayList<Runnable>();
         var retired = new ArrayList<Runnable>();
@@ -59,7 +60,7 @@ class TitleRefreshQueueTest {
 
     @Test
     void onlyCurrentRetirementNotifiesFailureAndItCannotRunTwice() {
-        var session = new GuiSession(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
+        var session = GuiViewerState.record(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
         var queue = new TitleRefreshQueue();
         var tasks = new ArrayList<Runnable>();
         var retirements = new ArrayList<Runnable>();

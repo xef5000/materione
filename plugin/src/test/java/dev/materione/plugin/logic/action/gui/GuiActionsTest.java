@@ -12,18 +12,23 @@ import dev.materione.api.logic.Threading;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.gui.GuiBridge;
+import dev.materione.plugin.logic.action.view.BackViewAction;
+import dev.materione.plugin.logic.action.view.CloseViewAction;
+import dev.materione.plugin.logic.action.view.OpenViewAction;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.event.GuiContexts;
 import dev.materione.plugin.gui.input.ClickKind;
 import dev.materione.plugin.gui.input.GuiClick;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.open.OpenGate;
 
 /**
  * The four GUI actions (logic.md §6): each parses strictly, describes itself, and runs against the real
@@ -65,11 +70,11 @@ class GuiActionsTest {
                 - on: gui.click
                   layer: go
                   do:
-                    - gui.open: {gui: detail, args: {item: "sword", who: "${player.name}"}}
+                    - view.open: {view: detail, args: {item: "sword", who: "${player.name}"}}
                 - on: gui.click
                   layer: back
                   do:
-                    - gui.back
+                    - view.back
                 - on: gui.click
                   layer: refresh
                   do:
@@ -79,11 +84,11 @@ class GuiActionsTest {
                   layer: close
                   do:
                     - mark: closing
-                    - gui.close
+                    - view.close
                     - mark: after-close
                 - on: gui.close
                   do:
-                    - mark: "menu-closed ${gui.id}"
+                    - mark: "menu-closed ${view.id}"
             """;
 
     private static final String DETAIL = """
@@ -100,16 +105,16 @@ class GuiActionsTest {
               behavior:
                 - on: gui.open
                   do:
-                    - mark: "detail ${gui.args.item} for ${gui.args.who}"
+                    - mark: "detail ${view.args.item} for ${view.args.who}"
                 - on: gui.click
                   layer: up
                   do:
-                    - gui.back
+                    - view.back
                     - mark: "back-done"
             """;
 
     private GuiFixture f;
-    private GuiSession menu;
+    private ViewerRecord menu;
 
     @BeforeEach
     void setUp() {
@@ -117,17 +122,17 @@ class GuiActionsTest {
         f.gui(MENU);
         f.gui(DETAIL);
         menu = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("menu"), Map.of("page", "2"),
-                OpenRequest.Cause.API)).session();
-        menu.vars().put("tab", "weapons");
+                OpenRequest.Cause.API)).record();
+        menu.sessionValues().put("tab", "weapons");
         f.ran.clear();
     }
 
-    private void click(GuiSession session, int slot) {
+    private void click(ViewerRecord session, int slot) {
         f.router.route(new GuiClick(f.viewer, session, slot, ClickKind.LEFT, 0));
     }
 
     /** A context for a run that belongs to {@code session} (or to none). */
-    private MapLogicContext context(GuiSession session) {
+    private MapLogicContext context(ViewerRecord session) {
         return GuiContexts.build(f.viewer, session, Map.of());
     }
 
@@ -137,8 +142,8 @@ class GuiActionsTest {
     void openingFromAClickOpensTheOtherGuiWithRenderedArgumentsAndRemembersThisOne() {
         click(menu, 0); // the go button
 
-        GuiSession detail = f.sessions.current(f.viewer.id()).orElseThrow();
-        assertThat(detail.gui()).isEqualTo(GuiFixture.id("detail"));
+        ViewerRecord detail = f.sessions.current(f.viewer.id()).orElseThrow();
+        assertThat(detail.definition()).isEqualTo(GuiFixture.id("detail"));
         assertThat(detail.args()).containsEntry("item", "sword").containsEntry("who", "Probe");
         assertThat(f.ran).contains("mark:detail sword for Probe", "mark:menu-closed demo:menu");
         assertThat(menu.endedBecause()).isEqualTo(CloseReason.REPLACED);
@@ -148,16 +153,16 @@ class GuiActionsTest {
     @Test
     void goingBackFromTheOpenedGuiBringsBackTheArgumentsAndSessionVariables() {
         click(menu, 0);
-        GuiSession detail = f.sessions.current(f.viewer.id()).orElseThrow();
+        ViewerRecord detail = f.sessions.current(f.viewer.id()).orElseThrow();
         f.ran.clear();
 
-        click(detail, 0); // detail's up button runs gui.back, then a mark
+        click(detail, 0); // detail's up button runs view.back, then a mark
 
-        GuiSession restored = f.sessions.current(f.viewer.id()).orElseThrow();
-        assertThat(restored.gui()).isEqualTo(GuiFixture.id("menu"));
+        ViewerRecord restored = f.sessions.current(f.viewer.id()).orElseThrow();
+        assertThat(restored.definition()).isEqualTo(GuiFixture.id("menu"));
         assertThat(restored).isNotSameAs(menu);
         assertThat(restored.args()).containsEntry("page", "2");
-        assertThat(restored.vars()).containsEntry("tab", "weapons");
+        assertThat(restored.sessionValues()).containsEntry("tab", "weapons");
         // the flow that went back keeps running: its session ended, but runs belong to the player
         assertThat(f.ran).contains("mark:back-done");
         assertThat(detail.endedBecause()).isEqualTo(CloseReason.REPLACED);
@@ -177,7 +182,7 @@ class GuiActionsTest {
 
         assertThat(f.windows.log).containsExactly("open menu", "rewrite menu");
         assertThat(f.sessions.current(f.viewer.id())).containsSame(menu);
-        assertThat(menu.vars()).containsEntry("tab", "weapons");
+        assertThat(menu.sessionValues()).containsEntry("tab", "weapons");
         assertThat(f.ran).containsExactly("mark:refreshed");
     }
 
@@ -188,7 +193,7 @@ class GuiActionsTest {
         assertThat(menu.endedBecause()).isEqualTo(CloseReason.ACTION);
         assertThat(f.sessions.current(f.viewer.id())).isEmpty();
         assertThat(f.windows.log).containsExactly("open menu", "close");
-        // runs belong to the player, not the window: the step after gui.close still ran
+        // runs belong to the player, not the window: the step after view.close still ran
         assertThat(f.ran).containsExactly("mark:closing", "mark:menu-closed demo:menu", "mark:after-close");
     }
 
@@ -196,7 +201,7 @@ class GuiActionsTest {
     void closingDropsTheBackStack() {
         click(menu, 0);
         assertThat(f.sessions.history(f.viewer.id()).size()).isEqualTo(1);
-        GuiSession detail = f.sessions.current(f.viewer.id()).orElseThrow();
+        ViewerRecord detail = f.sessions.current(f.viewer.id()).orElseThrow();
 
         f.lifecycle.closeByAction(f.viewer, detail);
 
@@ -214,9 +219,10 @@ class GuiActionsTest {
             f.sessions.end(menu, CloseReason.PLAYER);
             ctx.with(Facets.PLAYER, f.player);
 
-            for (ActionType<?> action : List.of(new CloseGuiAction(f.bridge), new BackGuiAction(f.bridge),
+            for (ActionType<?> action : List.of(new CloseViewAction(f.bridge.view()), new BackViewAction(f.bridge.view()),
                     new RefreshGuiAction(f.bridge))) {
-                assertThat(run(action, ctx)).as(action.id()).isEqualTo(ActionOutcome.failed("no open gui"));
+                assertThat(run(action, ctx)).as(action.id()).isEqualTo(ActionOutcome.failed(
+                        action.id().startsWith("view.") ? "no open view" : "no open gui"));
             }
         }
 
@@ -224,15 +230,15 @@ class GuiActionsTest {
         void aRunWithNoSessionHasNoOpenGuiEither() {
             MapLogicContext ctx = new MapLogicContext(Map.of()).with(Facets.PLAYER, f.player);
 
-            assertThat(run(new CloseGuiAction(f.bridge), ctx)).isEqualTo(ActionOutcome.failed("no open gui"));
+            assertThat(run(new CloseViewAction(f.bridge.view()), ctx)).isEqualTo(ActionOutcome.failed("no open view"));
         }
 
         @Test
         void aRunWithoutAPlayerCannotUseAnyGuiAction() {
             MapLogicContext ctx = new MapLogicContext(Map.of());
 
-            for (ActionType<?> action : List.of(new OpenGuiAction(f.bridge), new CloseGuiAction(f.bridge),
-                    new BackGuiAction(f.bridge), new RefreshGuiAction(f.bridge))) {
+            for (ActionType<?> action : List.of(new OpenViewAction(f.bridge.view()), new CloseViewAction(f.bridge.view()),
+                    new BackViewAction(f.bridge.view()), new RefreshGuiAction(f.bridge))) {
                 ActionOutcome outcome = run(action, ctx);
                 assertThat(outcome).as(action.id()).isInstanceOf(ActionOutcome.Failed.class);
                 assertThat(((ActionOutcome.Failed) outcome).reason()).isEqualTo("event has no player");
@@ -242,38 +248,38 @@ class GuiActionsTest {
         @Test
         void anUnboundBridgeFailsSoftInsteadOfThrowing() {
             var ctx = context(menu);
-            var unbound = new CloseGuiAction(new GuiBridge());
+            var unbound = new CloseViewAction(new GuiBridge().view());
 
             ActionOutcome outcome = unbound.execute(unbound.parse(reader(Map.of())), ctx);
 
-            assertThat(outcome).isEqualTo(ActionOutcome.failed("the GUI runtime is not available"));
+            assertThat(outcome).isEqualTo(ActionOutcome.failed("the view runtime is not available"));
         }
 
         @Test
         void aSessionThatIsNoLongerThePlayersCurrentOneIsNoOpenGui() {
             // the player opened something else behind this run's back
-            f.sessions.begin(new GuiSession(f.viewer.id(), "Probe", GuiFixture.id("detail"), Map.of()));
+            f.sessions.begin(GuiViewerState.record(f.viewer.id(), "Probe", GuiFixture.id("detail"), Map.of()));
 
-            assertThat(run(new CloseGuiAction(f.bridge), context(menu)))
-                    .isEqualTo(ActionOutcome.failed("no open gui"));
+            assertThat(run(new CloseViewAction(f.bridge.view()), context(menu)))
+                    .isEqualTo(ActionOutcome.failed("no open view"));
         }
 
         @Test
         void openingAnUnknownGuiFailsWithTheName() {
-            var action = new OpenGuiAction(f.bridge);
+            var action = new OpenViewAction(f.bridge.view());
 
-            ActionOutcome outcome = action.execute(action.parse(reader(Map.of("gui", "ghost"))), context(menu));
+            ActionOutcome outcome = action.execute(action.parse(reader(Map.of("view", "ghost"))), context(menu));
 
-            assertThat(outcome).isEqualTo(ActionOutcome.failed("no live GUI matches 'ghost'"));
+            assertThat(outcome).isEqualTo(ActionOutcome.failed("no live view matches 'ghost'"));
         }
 
         @Test
         void openingFromARunWithNoSessionStillWorks() {
             f.sessions.end(menu, CloseReason.PLAYER); // e.g. an item rule, or a flow that outlived its window
-            var action = new OpenGuiAction(f.bridge);
+            var action = new OpenViewAction(f.bridge.view());
             var ctx = new MapLogicContext(Map.of("player", Map.of("name", "Probe"))).with(Facets.PLAYER, f.player);
 
-            ActionOutcome outcome = action.execute(action.parse(reader(Map.of("gui", "demo:detail",
+            ActionOutcome outcome = action.execute(action.parse(reader(Map.of("view", "demo:detail",
                     "args", Map.of("item", "bow", "who", "${player.name}")))), ctx);
 
             assertThat(outcome).isEqualTo(ActionOutcome.OK);
@@ -282,19 +288,19 @@ class GuiActionsTest {
 
         @Test
         void aBareNameMeansTheGuiOfThatNameInThisGuisPack() {
-            var action = new OpenGuiAction(f.bridge);
+            var action = new OpenViewAction(f.bridge.view());
 
-            assertThat(action.execute(action.parse(reader(Map.of("gui", "detail"))), context(menu)))
+            assertThat(action.execute(action.parse(reader(Map.of("view", "detail"))), context(menu)))
                     .isEqualTo(ActionOutcome.OK);
-            assertThat(f.sessions.current(f.viewer.id()).orElseThrow().gui()).isEqualTo(GuiFixture.id("detail"));
+            assertThat(f.sessions.current(f.viewer.id()).orElseThrow().definition()).isEqualTo(GuiFixture.id("detail"));
         }
 
         @Test
         void openingRefusedByTheGateIsAFailureWithItsReason() {
             f.opener.gate((viewer, subject, args) -> dev.materione.plugin.view.open.OpenGate.Admission.deny("members only"));
-            var action = new OpenGuiAction(f.bridge);
+            var action = new OpenViewAction(f.bridge.view());
 
-            assertThat(action.execute(action.parse(reader(Map.of("gui", "detail"))), context(menu)))
+            assertThat(action.execute(action.parse(reader(Map.of("view", "detail"))), context(menu)))
                     .isEqualTo(ActionOutcome.failed("members only"));
             assertThat(f.sessions.current(f.viewer.id())).as("the window stays").containsSame(menu);
         }
@@ -307,48 +313,48 @@ class GuiActionsTest {
 
         @Test
         void eachActionDescribesItselfAsAGuiActionOnThePlayersThread() {
-            List<ActionType<?>> actions = List.of(new OpenGuiAction(f.bridge), new CloseGuiAction(f.bridge),
-                    new BackGuiAction(f.bridge), new RefreshGuiAction(f.bridge));
+            List<ActionType<?>> actions = List.of(new OpenViewAction(f.bridge.view()), new CloseViewAction(f.bridge.view()),
+                    new BackViewAction(f.bridge.view()), new RefreshGuiAction(f.bridge));
 
             assertThat(actions).extracting(ActionType::id)
-                    .containsExactly("gui.open", "gui.close", "gui.back", "gui.refresh");
+                    .containsExactly("view.open", "view.close", "view.back", "gui.refresh");
             assertThat(actions).allSatisfy(action -> {
                 assertThat(action.describe().category()).isEqualTo(LogicCategory.GUI);
                 assertThat(action.threading()).isEqualTo(Threading.PLAYER_REGION);
                 assertThat(action.describe().self().displayName()).isNotBlank();
             });
-            assertThat(new OpenGuiAction(f.bridge).describe().shorthand()).isEqualTo("gui");
-            assertThat(new CloseGuiAction(f.bridge).describe().shorthand()).isNull();
+            assertThat(new OpenViewAction(f.bridge.view()).describe().shorthand()).isEqualTo("view");
+            assertThat(new CloseViewAction(f.bridge.view()).describe().shorthand()).isEqualTo("view");
         }
 
         @Test
         void openAcceptsAGuiAndTemplatedArguments() {
-            var action = new OpenGuiAction(f.bridge);
+            var action = new OpenViewAction(f.bridge.view());
 
-            OpenGuiAction.Params params = action.parse(reader(Map.of("gui", "shop:main",
+            OpenViewAction.Params params = action.parse(reader(Map.of("view", "shop:main",
                     "args", Map.of("category", "tools", "who", "${player.name}"))));
 
-            assertThat(params.gui()).isEqualTo("shop:main");
+            assertThat(params.view()).isEqualTo("shop:main");
             assertThat(params.args()).containsOnlyKeys("category", "who");
         }
 
         @Test
         void openRejectsAMissingGuiAndBadArguments() {
-            var action = new OpenGuiAction(f.bridge);
+            var action = new OpenViewAction(f.bridge.view());
 
             assertThatThrownBy(() -> action.parse(reader(Map.of())))
                     .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> action.parse(reader(Map.of("gui", "x", "args", "not a mapping"))))
+            assertThatThrownBy(() -> action.parse(reader(Map.of("view", "x", "args", "not a mapping"))))
                     .isInstanceOf(IllegalArgumentException.class);
-            assertThatThrownBy(() -> action.parse(reader(Map.of("gui", "x", "args", Map.of("a", List.of(1))))))
+            assertThatThrownBy(() -> action.parse(reader(Map.of("view", "x", "args", Map.of("a", List.of(1))))))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
         void theParameterlessActionsAcceptNoParametersAndTakeNoBareValue() {
-            // their bare-name form (`- gui.close`) is an empty mapping
-            assertThat(new CloseGuiAction(f.bridge).parse(reader(Map.of()))).isNotNull();
-            assertThat(new BackGuiAction(f.bridge).parse(reader(Map.of()))).isNotNull();
+            // their bare-name form (`- view.close`) is an empty mapping
+            assertThat(new CloseViewAction(f.bridge.view()).parse(reader(Map.of()))).isNotNull();
+            assertThat(new BackViewAction(f.bridge.view()).parse(reader(Map.of()))).isNotNull();
             assertThat(new RefreshGuiAction(f.bridge).parse(reader(Map.of()))).isNotNull();
         }
     }
@@ -359,7 +365,7 @@ class GuiActionsTest {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static ActionOutcome run(ActionType action, MapLogicContext ctx) {
-        // gui.open needs its gui; the other actions take no parameters and ignore the key
-        return action.execute(action.parse(reader(Map.of("gui", "detail"))), ctx);
+        // view.open needs its view; the others are given none, so each runs on the flow's own view
+        return action.execute(action.parse(reader(action instanceof OpenViewAction ? Map.of("view", "detail") : Map.of())), ctx);
     }
 }

@@ -21,7 +21,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.gui.prompt.PromptReply;
 import dev.materione.plugin.gui.prompt.PromptService;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
@@ -59,7 +59,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
     /** A run-local variable. */
     public record Local(String name) implements Target {}
 
-    /** A variable of the open GUI session ({@code gui.session.<name>}). */
+    /** A variable of the open GUI session ({@code vars.session.<name>}). */
     public record Session(String name) implements Target {}
 
     /**
@@ -178,7 +178,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
         if (player == null) {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }
-        GuiSession session = context.facet(GuiSession.FACET).filter(GuiSession::isOpen).orElse(null);
+        ViewerRecord session = context.facet(ViewerRecord.FACET).filter(ViewerRecord::isOpen).orElse(null);
         if (params.target() instanceof Session target && session == null) {
             String reason = "session." + target.name() + ": no open gui";
             prompts.report(DiagnosticCodes.PROMPT_METHOD_FAILED, "a prompt answers into session." + target.name()
@@ -200,14 +200,14 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
     }
 
     /** Writes the answer where the step says, or fails with the reason it went unanswered. Runs on the player's thread. */
-    private static ActionOutcome settle(Params params, LogicContext context, GuiSession session, PromptReply reply) {
+    private static ActionOutcome settle(Params params, LogicContext context, ViewerRecord session, PromptReply reply) {
         if (reply instanceof PromptReply.Unanswered unanswered) {
             return ActionOutcome.failed(unanswered.reason());
         }
         String answer = ((PromptReply.Answer) reply).text();
         switch (params.target()) {
             case Local local -> context.locals().put(local.name(), answer);
-            case Session target -> session.vars().put(target.name(), answer);
+            case Session target -> session.sessionValues().put(target.name(), answer);
         }
         return ActionOutcome.OK;
     }

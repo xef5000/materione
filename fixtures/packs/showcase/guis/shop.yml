@@ -33,7 +33,7 @@ shop:
       name: "<green>Emerald"
       lore:
         - "<gray>5 points"
-        - "<gray>Category: ${gui.args.category}"
+        - "<gray>Category: ${view.args.category}"
         - "<gray>In stock: ${vars.server.showcase.stock}"
     - id: sold_out
       type: item
@@ -69,7 +69,7 @@ shop:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-SHOWCASE-OPEN shop category=${gui.args.category}"
+            command: "say MATERIONE-SHOWCASE-OPEN shop category=${view.args.category}"
             as: console
     - on: gui.click
       layer: emerald
@@ -93,19 +93,19 @@ shop:
     - on: gui.click
       layer: servers
       do:
-        - gui.open: showcase:servers
+        - view.open: showcase:servers
     - on: gui.click
       layer: players
       do:
-        - gui.open: showcase:players
+        - view.open: showcase:players
     - on: gui.click
       layer: settings
       do:
-        - gui.open: showcase:settings
+        - view.open: showcase:settings
     - on: gui.click
       layer: close
       do:
-        - gui.close
+        - view.close
     - on: gui.close
       do:
         - run_command:

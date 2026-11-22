@@ -35,7 +35,7 @@ class OpenGateParityTest {
                 args:
                   - { name: category, type: choice, default: all, suggest: [all, tools, food] }
                   - { name: count, type: int, min: 1, max: 9, default: "1" }
-                requirement: "gui.args.category == 'tools'"
+                requirement: "view.args.category == 'tools'"
                 deny:
                   - mark: "refused"
             """;

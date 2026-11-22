@@ -45,7 +45,7 @@ class GuiTriggersTest {
 
     @Test
     void guiPageFiltersOnTheListAndCarriesTheNewPageAndItsCount() {
-        assertThat(contextPaths("gui.page")).contains("page.index", "page.count", "gui.page.*");
+        assertThat(contextPaths("gui.page")).contains("page.index", "page.count", "view.page.*");
         assertThat(trigger("gui.page").describe().filters()).extracting(ParameterSchema::id)
                 .containsExactly("layer");
         assertThat(contextPaths("gui.click")).contains("entry.*");
@@ -62,7 +62,7 @@ class GuiTriggersTest {
     void everyTriggerGuaranteesThePlayerTheServerAndTheGui() {
         for (TriggerType trigger : GuiTriggers.all()) {
             assertThat(contextPaths(trigger.id())).contains(
-                    "player.name", "player.uuid", "server.online", "gui.id", "gui.args.*", "gui.session.*", "vars.*");
+                    "player.name", "player.uuid", "server.online", "view.id", "view.args.*", "vars.session.*", "vars.*");
         }
     }
 

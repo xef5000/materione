@@ -30,15 +30,15 @@ detail:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUILOGIC-OPEN ${gui.id} item=${gui.args.item} from=${gui.args.from}"
+            command: "say MATERIONE-GUILOGIC-OPEN ${view.id} item=${view.args.item} from=${view.args.from}"
             as: console
-        - message: "<aqua>Detail of ${gui.args.item}"
+        - message: "<aqua>Detail of ${view.args.item}"
     - on: gui.click
       layer: up
       do:
-        - gui.back
+        - view.back
     - on: gui.close
       do:
         - run_command:
-            command: "say MATERIONE-GUILOGIC-CLOSE ${gui.id} reason=${close.reason}"
+            command: "say MATERIONE-GUILOGIC-CLOSE ${view.id} reason=${close.reason}"
             as: console

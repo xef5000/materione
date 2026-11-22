@@ -86,7 +86,7 @@ public final class GuiCommands {
 
     /**
      * The {@code name=value} tokens after the id: the arguments the GUI opens with (read by its rules
-     * as {@code gui.args.<name>}). Typed arguments and the open commands that take them are the open
+     * as {@code view.args.<name>}). Typed arguments and the open commands that take them are the open
      * specification's; here they are plain text. A player name never holds {@code =}, so a token with
      * one is never mistaken for the target.
      */

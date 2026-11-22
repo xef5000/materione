@@ -41,13 +41,13 @@ class GuiRulesTest {
     @Test
     void behaviorAndFlowsAreReadAsAuthored() {
         var raw = definition(1, layer("b", "button", "x", 0, "y", 0, "width", 8, "height", 8));
-        raw.put("behavior", List.of(rule("gui.click", "gui.close"), "not a mapping"));
+        raw.put("behavior", List.of(rule("gui.click", "view.close"), "not a mapping"));
         raw.put("flows", Map.of("greet", List.of("gui.refresh")));
 
         GuiRules rules = GuiTestSupport.parse(GuiTestSupport.type(), raw).rules();
 
         assertThat(rules.behavior()).hasSize(2);
-        assertThat(rules.behavior().get(0)).isEqualTo(rule("gui.click", "gui.close"));
+        assertThat(rules.behavior().get(0)).isEqualTo(rule("gui.click", "view.close"));
         assertThat(rules.behavior().get(1)).as("an entry that is not a mapping keeps its index").isEqualTo("not a mapping");
         assertThat(rules.flows()).isEqualTo(Map.of("greet", List.of("gui.refresh")));
         assertThat(rules.problems()).isEmpty();
@@ -57,13 +57,13 @@ class GuiRulesTest {
     void aBareOnKeyThatYamlReadAsABooleanIsRescued() {
         var yamlRule = new LinkedHashMap<Object, Object>();
         yamlRule.put(Boolean.TRUE, "gui.open"); // YAML 1.1 reads an unquoted `on:` this way
-        yamlRule.put("do", List.of("gui.close"));
+        yamlRule.put("do", List.of("view.close"));
         var raw = definition(1);
         raw.put("behavior", List.of(yamlRule));
 
         GuiRules rules = GuiTestSupport.parse(GuiTestSupport.type(), raw).rules();
 
-        assertThat(rules.behavior().get(0)).isEqualTo(rule("gui.open", "gui.close"));
+        assertThat(rules.behavior().get(0)).isEqualTo(rule("gui.open", "view.close"));
     }
 
     @Test
@@ -107,7 +107,7 @@ class GuiRulesTest {
         assertThat(calls).isEmpty();
 
         var raw = definition(1);
-        raw.put("behavior", List.of(rule("gui.click", "gui.close")));
+        raw.put("behavior", List.of(rule("gui.click", "view.close")));
         List<Diagnostic> diagnostics = type.diagnose(GuiTestSupport.parse(type, raw));
 
         assertThat(calls).containsExactly("shop:test");

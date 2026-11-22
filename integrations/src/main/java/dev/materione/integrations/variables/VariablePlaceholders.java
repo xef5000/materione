@@ -5,7 +5,7 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.provider.EconomyResult;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariablesApi;
@@ -28,8 +28,8 @@ import java.util.function.Supplier;
  * <pre>
  *   %materione_var_&lt;pack&gt;_&lt;key&gt;%             the viewer's value of a declared variable
  *   %materione_var_&lt;pack&gt;_&lt;key&gt;_&lt;player&gt;%  the named player's value (player scope)
- *   %materione_gui_open%                    the GUI the viewer has open, or empty
- *   %materione_gui_last%                    the GUI before it, or empty
+ *   %materione_view_open%                    the view (kind:id) the viewer has open, or empty
+ *   %materione_view_last%                    the view before it, or empty
  * </pre>
  *
  * <p>Declared ids decide the split: {@code <pack>_<key>} may contain underscores on either side, so
@@ -47,7 +47,7 @@ public final class VariablePlaceholders {
     private static final long REPORT_INTERVAL_MS = 1000;
 
     private final VariablesApi variables;
-    private final Supplier<GuiSessionPort> guiSessions;
+    private final Supplier<ViewPort> views;
     private final CurrencyPlaceholderBridge currencies;
     private final Consumer<Diagnostic> diagnostics;
     private final LongSupplier clock;
@@ -55,23 +55,23 @@ public final class VariablePlaceholders {
 
     /**
      * @param variables the declarations and values, read per request
-     * @param guiSessions the GUI session port, read per request (it is registered when GUI sessions exist)
+     * @param views the view port, read per request (it is registered when the view runtime exists)
      */
-    public VariablePlaceholders(VariablesApi variables, Supplier<GuiSessionPort> guiSessions) {
-        this(variables, guiSessions, null, diagnostic -> { }, System::currentTimeMillis);
+    public VariablePlaceholders(VariablesApi variables, Supplier<ViewPort> views) {
+        this(variables, views, null, diagnostic -> { }, System::currentTimeMillis);
     }
 
     /** Enables balance placeholders through a live, thread-safe bridge and diagnostic sink. */
-    public VariablePlaceholders(VariablesApi variables, Supplier<GuiSessionPort> guiSessions,
+    public VariablePlaceholders(VariablesApi variables, Supplier<ViewPort> views,
             CurrencyPlaceholderBridge currencies, Consumer<Diagnostic> diagnostics) {
-        this(variables, guiSessions, Objects.requireNonNull(currencies, "currencies"),
+        this(variables, views, Objects.requireNonNull(currencies, "currencies"),
                 diagnostics, System::currentTimeMillis);
     }
 
-    VariablePlaceholders(VariablesApi variables, Supplier<GuiSessionPort> guiSessions,
+    VariablePlaceholders(VariablesApi variables, Supplier<ViewPort> views,
             CurrencyPlaceholderBridge currencies, Consumer<Diagnostic> diagnostics, LongSupplier clock) {
         this.variables = Objects.requireNonNull(variables, "variables");
-        this.guiSessions = Objects.requireNonNull(guiSessions, "guiSessions");
+        this.views = Objects.requireNonNull(views, "views");
         this.currencies = currencies;
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -90,8 +90,8 @@ public final class VariablePlaceholders {
             return null;
         }
         return switch (identifier) {
-            case "gui_open" -> guiSessions.get().openGui(viewer).orElse("");
-            case "gui_last" -> guiSessions.get().lastGui(viewer).orElse("");
+            case "view_open" -> views.get().openView(viewer).orElse("");
+            case "view_last" -> views.get().lastView(viewer).orElse("");
             default -> identifier.startsWith(VAR) ? variable(identifier.substring(VAR.length()), viewer, playerNamed)
                     : identifier.startsWith(BALANCE) && currencies != null
                             ? balance(identifier.substring(BALANCE.length()), viewer) : null;

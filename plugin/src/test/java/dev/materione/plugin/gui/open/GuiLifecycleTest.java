@@ -3,11 +3,12 @@ package dev.materione.plugin.gui.open;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.plugin.gui.GuiFixture;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.view.open.OpenRequest;
 
 /** How a session ends (logic.md §6.2): each reason fires {@code gui.close} once, with its reason. */
 class GuiLifecycleTest {
@@ -20,7 +21,7 @@ class GuiLifecycleTest {
               behavior:
                 - on: gui.close
                   do:
-                    - mark: "any ${gui.id} ${close.reason}"
+                    - mark: "any ${view.id} ${close.reason}"
                 - on: gui.close
                   reason: player
                   do:
@@ -36,14 +37,14 @@ class GuiLifecycleTest {
             """;
 
     private GuiFixture f;
-    private GuiSession session;
+    private ViewerRecord session;
 
     @BeforeEach
     void setUp() {
         f = new GuiFixture();
         f.gui(SHOP);
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of(), OpenRequest.Cause.API))
-                .session();
+                .record();
         f.ran.clear();
     }
 

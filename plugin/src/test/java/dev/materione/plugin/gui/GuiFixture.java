@@ -34,8 +34,8 @@ import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.WindowHost;
 import dev.materione.plugin.logic.BuiltinLogic;
@@ -55,6 +55,8 @@ import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.yaml.snakeyaml.Yaml;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.ViewKinds;
 
 /**
  * The whole GUI runtime without a server: real sessions, opener, lifecycle, router, ticker and rule
@@ -73,7 +75,8 @@ public final class GuiFixture {
     /** What happened, in order: every action that ran as {@code mark:<text>}. */
     public final List<String> ran = new ArrayList<>();
     public final List<Diagnostic> diagnostics = new ArrayList<>();
-    public final GuiSessions sessions = new GuiSessions();
+    public final ViewRegistry sessions = new ViewRegistry();
+    public final ViewKinds kinds = new ViewKinds();
     public final FakeWindows windows = new FakeWindows();
     public final ManualTicks ticks = new ManualTicks();
     public final GuiBridge bridge = new GuiBridge();
@@ -135,7 +138,8 @@ public final class GuiFixture {
         lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         opener = new GuiOpener(guis, sessions, events, windows, ticker, Logger.getAnonymousLogger());
         refresh = new GuiLiveRefresh(plugin(), null, guis, sessions, windows, lifecycle, ticker);
-        bridge.bind(new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh, inputPort,
+        kinds.register(new GuiViewKind(guis, opener, lifecycle, refresh));
+        bridge.bind(new GuiBridge.Services(guis, sessions, kinds, opener, lifecycle, refresh, inputPort,
                 new dev.materione.plugin.gui.list.GuiPages(events, refresh)));
     }
 
@@ -202,7 +206,7 @@ public final class GuiFixture {
     /** Records what the real window host would do to the server. */
     public static final class FakeWindows implements WindowHost {
         public final List<String> log = new ArrayList<>();
-        public final Map<GuiSession, Shape> shapes = new LinkedHashMap<>();
+        public final Map<ViewerRecord, Shape> shapes = new LinkedHashMap<>();
         /** When set, opens wait here until released, like a host that defers a tick. */
         public final List<Runnable> deferred = new ArrayList<>();
         public boolean defer;
@@ -215,19 +219,19 @@ public final class GuiFixture {
         public GuiRenderer renderer;
 
         @Override
-        public void open(Viewer viewer, GuiSession session,
+        public void open(Viewer viewer, ViewerRecord session,
                 java.util.function.Supplier<java.util.Optional<RuntimeGuis.Live>> resolve,
                 Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
             show("open", viewer, session, resolve, opened, failed);
         }
 
         @Override
-        public void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
+        public void reopen(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, Runnable opened,
                 Consumer<String> failed) {
             show("reopen", viewer, session, () -> java.util.Optional.of(gui), ignored -> opened.run(), failed);
         }
 
-        private void show(String what, Viewer viewer, GuiSession session,
+        private void show(String what, Viewer viewer, ViewerRecord session,
                 java.util.function.Supplier<java.util.Optional<RuntimeGuis.Live>> resolve,
                 Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
             Runnable task = () -> {
@@ -242,7 +246,7 @@ public final class GuiFixture {
                 }
                 log.add(what + " " + gui.id().value());
                 session.attach(this);
-                session.displayed(gui);
+                GuiViewerState.of(session).displayed(gui);
                 shapes.put(session, new Shape(gui.title(), gui.container().id()));
                 paint(viewer, session, gui, true);
                 opened.accept(gui);
@@ -254,9 +258,9 @@ public final class GuiFixture {
             }
         }
 
-        private void paint(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full) {
+        private void paint(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, boolean full) {
             if (renderer != null) {
-                session.remember(renderer.render(viewer, session, gui, full, session.windowTicks()));
+                GuiViewerState.of(session).remember(renderer.render(viewer, session, gui, full, GuiViewerState.of(session).windowTicks()));
             }
         }
 
@@ -266,29 +270,29 @@ public final class GuiFixture {
         }
 
         @Override
-        public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
+        public void rewrite(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
             log.add("rewrite " + gui.id().value());
-            session.displayed(gui);
+            GuiViewerState.of(session).displayed(gui);
             paint(viewer, session, gui, true);
         }
 
         @Override
-        public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
+        public void advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
             log.add("advance " + gui.id().value());
-            session.displayed(gui);
+            GuiViewerState.of(session).displayed(gui);
             paint(viewer, session, gui, false);
         }
 
         @Override
-        public Optional<Shape> shape(Viewer viewer, GuiSession session) {
+        public Optional<Shape> shape(Viewer viewer, ViewerRecord session) {
             return Optional.ofNullable(shapes.get(session));
         }
 
         /** The sessions whose input items were released to their viewer, in order. */
-        public final List<GuiSession> released = new ArrayList<>();
+        public final List<ViewerRecord> released = new ArrayList<>();
 
         @Override
-        public void releaseInputs(Viewer viewer, GuiSession session) {
+        public void releaseInputs(Viewer viewer, ViewerRecord session) {
             released.add(session);
         }
     }
@@ -303,12 +307,12 @@ public final class GuiFixture {
         public String refuse;
 
         @Override
-        public dev.materione.plugin.gui.input.StackView peek(GuiSession session, int slot) {
+        public dev.materione.plugin.gui.input.StackView peek(ViewerRecord session, int slot) {
             return items.getOrDefault(slot, dev.materione.plugin.gui.input.StackView.EMPTY);
         }
 
         @Override
-        public Optional<String> apply(org.bukkit.entity.Player player, GuiSession session, int slot,
+        public Optional<String> apply(org.bukkit.entity.Player player, ViewerRecord session, int slot,
                 dev.materione.plugin.gui.input.SlotOp op) {
             applied.add(slot + ":" + op.kind().id());
             return Optional.ofNullable(refuse);
@@ -321,7 +325,7 @@ public final class GuiFixture {
 
         @Override
         public java.util.concurrent.CompletionStage<Optional<String>> consume(org.bukkit.entity.Player player,
-                GuiSession session, int slot, dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach) {
+                ViewerRecord session, int slot, dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach) {
             consumed.add(slot + ":" + reach.name().toLowerCase(java.util.Locale.ROOT));
             if (consumeResult != null) {
                 return consumeResult;
@@ -373,7 +377,7 @@ public final class GuiFixture {
         }
     }
 
-    /** {@code mark: "text ${gui.args.x}"}: records the rendered template. */
+    /** {@code mark: "text ${view.args.x}"}: records the rendered template. */
     static final class Mark implements ActionType<TemplateText> {
         private final List<String> ran;
 

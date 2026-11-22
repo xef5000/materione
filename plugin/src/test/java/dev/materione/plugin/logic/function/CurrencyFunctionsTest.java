@@ -14,7 +14,7 @@ import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.logic.provider.PermissionProvider;
 import dev.materione.api.logic.provider.ServerTransfer;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.logic.MapLogicContext;
@@ -200,7 +200,7 @@ class CurrencyFunctionsTest {
                 return new Balance(new EconomyResult.Succeeded(amount), text);
             }
         };
-        var resolver = new VariablePlaceholders(unusedVariables, () -> GuiSessionPort.NONE, bridge,
+        var resolver = new VariablePlaceholders(unusedVariables, () -> ViewPort.NONE, bridge,
                 diagnostic -> { throw new AssertionError(diagnostic); });
         assertThat(resolver.resolve("balance_shop_dollars_formatted", ALEX, name -> Optional.empty()))
                 .isEqualTo("-$1,250.50");

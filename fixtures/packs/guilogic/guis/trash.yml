@@ -30,7 +30,7 @@ trash:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUITRASH-OPEN ${gui.id}"
+            command: "say MATERIONE-GUITRASH-OPEN ${view.id}"
             as: console
     - on: gui.slot_change
       layer: bin

@@ -11,8 +11,8 @@ import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.event.GuiContexts;
 import dev.materione.plugin.gui.input.SlotOp;
 import dev.materione.plugin.gui.input.StackView;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.logic.condition.SlotHasCondition;
 import dev.materione.behavior.logic.EngineExpressions;
 import java.util.Map;
@@ -40,14 +40,14 @@ class InputSlotActionsTest {
             """;
 
     private GuiFixture f;
-    private GuiSession shop;
+    private ViewerRecord shop;
 
     @BeforeEach
     void open() {
         f = new GuiFixture();
         f.gui(SHOP);
         shop = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of(), OpenRequest.Cause.API))
-                .session();
+                .record();
     }
 
     private static ParamReader reader(Map<String, Object> params) {

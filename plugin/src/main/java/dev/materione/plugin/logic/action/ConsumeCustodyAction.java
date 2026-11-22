@@ -147,7 +147,7 @@ public final class ConsumeCustodyAction implements ActionType<ConsumeCustodyActi
         } catch (GuiRun.Refused refused) {
             return failed(refused.getMessage());
         }
-        return run.services().inputs().consume(run.viewer().player(), run.session(), whole.getAsInt(), reach)
+        return run.services().inputs().consume(run.viewer().player(), run.record(), whole.getAsInt(), reach)
                 .thenApply(reason -> reason.<ActionOutcome>map(ActionOutcome::failed).orElse(ActionOutcome.OK));
     }
 

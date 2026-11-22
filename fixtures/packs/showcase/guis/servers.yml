@@ -43,7 +43,7 @@ servers:
     - on: gui.click
       layer: back
       do:
-        - gui.back
+        - view.back
     - on: gui.open
       do:
         - run_command:

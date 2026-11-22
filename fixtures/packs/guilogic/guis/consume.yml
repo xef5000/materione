@@ -45,7 +45,7 @@ consume:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUICONSUME-OPEN ${gui.id}"
+            command: "say MATERIONE-GUICONSUME-OPEN ${view.id}"
             as: console
     - on: gui.click
       layer: plain

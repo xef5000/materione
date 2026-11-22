@@ -53,7 +53,7 @@ public final class RefreshGuiAction implements ActionType<RefreshGuiAction.Param
     public ActionOutcome execute(Params params, LogicContext context) {
         try {
             GuiRun run = GuiRun.ofOpenSession(bridge, context);
-            return run.services().refresh().refresh(run.viewer(), run.session())
+            return run.services().refresh().refresh(run.viewer(), run.record())
                     ? ActionOutcome.OK
                     : ActionOutcome.failed("the window is not showing this GUI");
         } catch (GuiRun.Refused refused) {

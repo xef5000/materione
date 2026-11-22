@@ -182,7 +182,7 @@ class TransactionStagedLogicTest {
                   {"field":["hub","behavior"],"value":[
                     {"on":"gui.click","layer":"go","do":[
                       {"give_item":"bench:token"},
-                      {"gui.open":{"gui":"bench:hub"}},
+                      {"view.open":{"view":"bench:hub"}},
                       {"give_item":"%player_name%"}]}]}]}""";
         JsonObject applied = apply(server, token, hub);
         assertThat(applied.get("accepted").getAsBoolean()).as(String.valueOf(applied)).isTrue();

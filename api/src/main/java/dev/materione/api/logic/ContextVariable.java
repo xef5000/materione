@@ -7,12 +7,12 @@ import java.util.regex.Pattern;
 
 /**
  * One entry of a trigger's context schema (logic.md §2.6): a variable path the trigger guarantees
- * to its rules ({@code player.name}, {@code click.slot}, {@code gui.args.*}). The compiler checks
+ * to its rules ({@code player.name}, {@code click.slot}, {@code view.args.*}). The compiler checks
  * {@code ${...}} paths against the schema and the studio autocompletes from it, so one declaration
  * serves checking and editing (D5).
  *
  * @param path dotted lowercase path; a trailing {@code .*} stands for a family of names
- *        ({@code gui.args.*} for each declared argument)
+ *        ({@code view.args.*} for each declared argument)
  * @param type the value kind an expression sees
  * @param description one line for autocomplete
  * @param hosts the content types whose runtime fills this variable ({@code item}, {@code block},

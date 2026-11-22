@@ -1,6 +1,7 @@
 package dev.materione.plugin.gui.input;
 
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * Whether a layer is showing for a session right now (logic.md §6.3): the router skips a layer that is not,
@@ -15,7 +16,7 @@ public interface LayerVisibility {
     LayerVisibility ALL = (session, layerId) -> true;
 
     /** A layer is showing unless the window's last render hid it with its {@code visible_if}. */
-    LayerVisibility RENDERED = (session, layerId) -> !session.rendered().hidden().contains(layerId);
+    LayerVisibility RENDERED = (session, layerId) -> !GuiViewerState.of(session).rendered().hidden().contains(layerId);
 
-    boolean visible(GuiSession session, String layerId);
+    boolean visible(ViewerRecord session, String layerId);
 }

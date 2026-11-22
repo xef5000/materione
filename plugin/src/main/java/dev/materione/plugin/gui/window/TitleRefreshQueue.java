@@ -1,25 +1,25 @@
 package dev.materione.plugin.gui.window;
 
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 
 /** Cancels superseded deferred window refreshes without retaining completed sessions. */
 final class TitleRefreshQueue {
-    private final ConcurrentHashMap<GuiSession, Long> pending = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ViewerRecord, Long> pending = new ConcurrentHashMap<>();
     private final AtomicLong sequence = new AtomicLong();
 
-    void invalidate(GuiSession session) {
+    void invalidate(ViewerRecord session) {
         pending.remove(session);
     }
 
-    void update(GuiSession session, boolean requiresDeferral, boolean dispatching, Runnable apply, Runnable refresh,
+    void update(ViewerRecord session, boolean requiresDeferral, boolean dispatching, Runnable apply, Runnable refresh,
             BiConsumer<Runnable, Runnable> schedule) {
         update(session, requiresDeferral, dispatching, apply, refresh, schedule, () -> { });
     }
 
-    void update(GuiSession session, boolean requiresDeferral, boolean dispatching, Runnable apply, Runnable refresh,
+    void update(ViewerRecord session, boolean requiresDeferral, boolean dispatching, Runnable apply, Runnable refresh,
             BiConsumer<Runnable, Runnable> schedule, Runnable retired) {
         invalidate(session);
         if (!requiresDeferral || !dispatching) {

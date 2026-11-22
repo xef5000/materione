@@ -4,12 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.scheduling.ScheduledHandle;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 class HeldTitleRefreshTest {
     @Test
@@ -18,10 +19,10 @@ class HeldTitleRefreshTest {
         var session = session();
         var tasks = new ArrayList<Runnable>();
         var calls = new ArrayList<String>();
-        session.vars().put("value", "old");
-        queue.ensure(session, () -> calls.add(session.vars().get("value").toString()),
+        session.sessionValues().put("value", "old");
+        queue.ensure(session, () -> calls.add(session.sessionValues().get("value").toString()),
                 (task, retired) -> { tasks.add(task); return ScheduledHandle.NONE; });
-        session.vars().put("value", "latest");
+        session.sessionValues().put("value", "latest");
         queue.ensure(session, () -> calls.add("obsolete"), (task, retired) -> {
             tasks.add(task);
             return ScheduledHandle.NONE;
@@ -57,7 +58,7 @@ class HeldTitleRefreshTest {
         assertThat(calls).hasValue(1);
     }
 
-    private static GuiSession session() {
-        return new GuiSession(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
+    private static ViewerRecord session() {
+        return GuiViewerState.record(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
     }
 }

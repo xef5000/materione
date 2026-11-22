@@ -19,5 +19,5 @@ glyph_cycle:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GLYPH-CYCLE-OPEN ${gui.id}"
+            command: "say MATERIONE-GLYPH-CYCLE-OPEN ${view.id}"
             as: console

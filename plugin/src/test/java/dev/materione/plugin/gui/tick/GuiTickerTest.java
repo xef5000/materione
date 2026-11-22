@@ -3,9 +3,9 @@ package dev.materione.plugin.gui.tick;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.plugin.gui.GuiFixture;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ class GuiTickerTest {
                 - on: gui.tick
                   every: 20
                   do:
-                    - mark: "second at ${gui.id}"
+                    - mark: "second at ${view.id}"
                 - on: gui.tick
                   every: 60
                   do:
@@ -39,8 +39,8 @@ class GuiTickerTest {
         f = new GuiFixture();
     }
 
-    private GuiSession open(String name) {
-        return f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id(name), Map.of(), OpenRequest.Cause.API)).session();
+    private ViewerRecord open(String name) {
+        return f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id(name), Map.of(), OpenRequest.Cause.API)).record();
     }
 
     @Test
@@ -78,7 +78,7 @@ class GuiTickerTest {
     @Test
     void closingStopsTheChainWithoutAnyCancel() {
         f.gui(CLOCK);
-        GuiSession session = open("clock");
+        ViewerRecord session = open("clock");
         f.ticks.advance(20);
         f.ran.clear();
 
@@ -115,7 +115,7 @@ class GuiTickerTest {
     @Test
     void ensureIsIdempotentWhileATimerRuns() {
         f.gui(CLOCK);
-        GuiSession session = open("clock");
+        ViewerRecord session = open("clock");
 
         f.ticker.ensure(f.viewer, session);
         f.ticker.ensure(f.viewer, session);
@@ -131,7 +131,7 @@ class GuiTickerTest {
                   container: chest_1
                   layers: []
                 """);
-        GuiSession session = open("clock");
+        ViewerRecord session = open("clock");
         assertThat(f.ticks.periods).isEmpty();
 
         f.gui(CLOCK); // the author adds tick rules; the session is the same one
@@ -164,10 +164,10 @@ class GuiTickerTest {
     @Test
     void anEndedSessionNeverStartsATimer() {
         f.gui(CLOCK);
-        GuiSession session = open("clock");
+        ViewerRecord session = open("clock");
         f.ticks.advance(1);
         f.sessions.end(session, CloseReason.PLAYER);
-        GuiSession ended = session;
+        ViewerRecord ended = session;
 
         f.ticker.ensure(f.viewer, ended);
         f.ticks.advance(200);

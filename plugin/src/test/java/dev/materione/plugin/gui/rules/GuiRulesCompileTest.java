@@ -58,7 +58,7 @@ class GuiRulesCompileTest {
                       click: [left, right]
                       slot: 0
                       do:
-                        - gui.close
+                        - view.close
                     - on: gui.open
                       do:
                         - gui.refresh
@@ -71,7 +71,7 @@ class GuiRulesCompileTest {
                     - on: gui.click
                       layer: buy
                       do:
-                        - gui.close
+                        - view.close
                     - on: gui.click
                       layer: [buy, ghost]
                       click: left
@@ -126,12 +126,12 @@ class GuiRulesCompileTest {
                     - on: gui.click
                       layer: buy
                       do:
-                        - gui.close
+                        - view.close
                         - gui.teleport_cow: now
                     - on: gui.click
                       click: triple
                       do:
-                        - gui.close
+                        - view.close
                 """);
 
         assertThat(problems).anySatisfy(problem -> {
@@ -151,7 +151,7 @@ class GuiRulesCompileTest {
                     - on: gui.click
                       layer: [missing, ghost]
                       do:
-                        - gui.close
+                        - view.close
                 """);
 
         assertThat(problems).hasSize(2).allSatisfy(problem -> {
@@ -168,7 +168,7 @@ class GuiRulesCompileTest {
                     - on: gui.click
                       slot: [17, 18]
                       do:
-                        - gui.close
+                        - view.close
                 """);
 
         assertThat(problems).hasSize(1);
@@ -181,7 +181,7 @@ class GuiRulesCompileTest {
         List<Diagnostic> problems = check(HEAD + """
                     - on: click
                       do:
-                        - gui.close
+                        - view.close
                 """);
 
         assertThat(problems).hasSize(1);
@@ -209,7 +209,7 @@ class GuiRulesCompileTest {
                     - on: gui.click
                       layer: buy
                       do:
-                        - message: "${plyer.name} ${click.slot} ${gui.args.x}"
+                        - message: "${plyer.name} ${click.slot} ${view.args.x}"
                 """);
 
         assertThat(problems).hasSize(1);

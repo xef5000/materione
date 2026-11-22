@@ -2,7 +2,7 @@
 #
 # It is an ordinary GUI resource. The plugin runs on its own backend here: this file is loaded, compiled and opened
 # by the same pipeline and GUI runtime as a server's own GUIs, and it uses only what they have: the `content` list
-# source, the `list` component and its search, `prompt`, `gui.open` / `gui.back` for navigation, and `give_item`.
+# source, the `list` component and its search, `prompt`, `view.open` / `view.back` for navigation, and `give_item`.
 #
 # What it shows: the packs, then the folders inside a pack, then the items. The folders are the ones under the pack's
 # items/, blocks/ and furnitures/ folders, merged, so a folder an author makes is a category. Opening a pack or a folder
@@ -31,7 +31,7 @@ browser:
       type: text
       x: 112
       y: 6
-      text: "PAGE ${gui.page.entries.number} OF ${gui.page.entries.count}"
+      text: "PAGE ${view.page.entries.number} OF ${view.page.entries.count}"
       font: smallcaps
       color: "#404040"
     - id: nothing_here
@@ -41,7 +41,7 @@ browser:
       text: "NOTHING HERE YET"
       font: smallcaps
       color: "#707070"
-      visible_if: "gui.page.entries.size == 0 && (gui.session.search == null || gui.session.search == '')"
+      visible_if: "view.page.entries.size == 0 && (vars.session.search == null || vars.session.search == '')"
     - id: no_results
       type: text
       x: 62
@@ -49,7 +49,7 @@ browser:
       text: "NO RESULTS"
       font: smallcaps
       color: "#707070"
-      visible_if: "gui.page.entries.size == 0 && gui.session.search != null && gui.session.search != ''"
+      visible_if: "view.page.entries.size == 0 && vars.session.search != null && vars.session.search != ''"
     - id: entries
       type: list
       slots: { from: 0, to: 44 }
@@ -67,7 +67,7 @@ browser:
       slot: 45
       item: minecraft:arrow
       name: "<gray>Back"
-      visible_if: "gui.args.path != null && gui.args.path != ''"
+      visible_if: "view.args.path != null && view.args.path != ''"
     - id: previous
       type: item
       slot: 47
@@ -85,14 +85,14 @@ browser:
       item: minecraft:paper
       name: "<white>Where you are"
       lore:
-        - "<gray>${gui.args.path == null || gui.args.path == '' ? 'All packs' : gui.args.path}"
-        - "<gray>Search: ${gui.session.search == null || gui.session.search == '' ? 'none' : gui.session.search}"
+        - "<gray>${view.args.path == null || view.args.path == '' ? 'All packs' : view.args.path}"
+        - "<gray>Search: ${vars.session.search == null || vars.session.search == '' ? 'none' : vars.session.search}"
     - id: clear
       type: item
       slot: 50
       item: minecraft:barrier
       name: "<white>Clear the search"
-      visible_if: "gui.session.search != null && gui.session.search != ''"
+      visible_if: "vars.session.search != null && vars.session.search != ''"
     - id: next
       type: item
       slot: 51
@@ -107,9 +107,9 @@ browser:
     # /materione browse red gem opens it already searching
     - on: gui.open
       do:
-        - if: "${gui.args.search != null && gui.args.search != ''}"
+        - if: "${view.args.search != null && view.args.search != ''}"
           then:
-            - set_var: { var: session.search, value: "${gui.args.search}" }
+            - set_var: { var: session.search, value: "${view.args.search}" }
             - gui.refresh
     - on: gui.click
       layer: entries
@@ -132,7 +132,7 @@ browser:
     - on: gui.click
       layer: back
       do:
-        - gui.back
+        - view.back
     - on: gui.click
       layer: previous
       do:
@@ -158,7 +158,7 @@ browser:
     - on: gui.click
       layer: close
       do:
-        - gui.close
+        - view.close
   flows:
     # taking is the only thing this GUI does that changes the world, and it is checked every time it is asked for
     take:
@@ -168,4 +168,4 @@ browser:
         else:
           - message: "<red>You need materione.browse.get to take items from the browser."
     enter:
-      - gui.open: { gui: "materione:browser", args: { path: "${args.path}" } }
+      - view.open: { view: "materione:browser", args: { path: "${args.path}" } }

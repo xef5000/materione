@@ -8,7 +8,7 @@ import java.util.Objects;
  * it may be left out, its default in canonical text, the values tab completion offers, the bounds of a number, and the
  * options of a player.
  *
- * @param name the argument name, {@code [a-z][a-z0-9_]*}; {@code args.<name>} and {@code gui.args.<name>} read it
+ * @param name the argument name, {@code [a-z][a-z0-9_]*}; {@code args.<name>} and {@code view.args.<name>} read it
  * @param type the typed parse
  * @param optional whether it may be left out
  * @param defaultValue the canonical default, or null when there is none

@@ -268,7 +268,8 @@ public final class DiagnosticCodes {
     /**
      * A logic step was skipped at load (logic.md §10): it names an action or condition that is not
      * registered, or the registered type rejected its parameters while parsing. Only that step is
-     * skipped; its siblings and the rest of the rule still load.
+     * skipped; its siblings and the rest of the rule still load. Also reported for a {@code view.open} that names,
+     * by a static id, a view kind no verb opens (a HUD shows itself; views.md section 3.6).
      */
     public static final DiagnosticCode LOGIC_STEP_REJECTED =
             new DiagnosticCode("MTR-0057", Severity.WARN, "Logic step rejected at load; skipped");
@@ -606,7 +607,7 @@ public final class DiagnosticCodes {
 
     /**
      * A rule step or condition names content by a static id that no pack declares: an item for {@code give_item},
-     * a GUI for {@code gui.open}. Found at reference resolution (master 5.4 level 3), so a transaction's dry run
+     * a view for {@code view.open}. Found at reference resolution (master 5.4 level 3), so a transaction's dry run
      * reports it against the operation that removed the content. The step is kept and fails when it runs; this is a
      * warning because content an addon provides is not in any pack.
      */

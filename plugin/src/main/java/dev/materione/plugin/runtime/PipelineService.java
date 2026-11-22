@@ -112,10 +112,11 @@ public final class PipelineService {
         this.scheduling = scheduling;
         this.descriptor = descriptor;
         this.runner = new PipelineRunner(diagnostics, quarantine);
-        // the static references of rules (an item a give_item names, a GUI a gui.open names), from self-description (#363)
+        // the static references of rules (an item a give_item names, a view a view.open names), from self-description (#363)
         this.runner.staticReferences(new dev.materione.core.pipeline.validate.StaticReferenceWalker(
                 new dev.materione.behavior.logic.RegistryLogicVocabulary(
-                        new dev.materione.behavior.logic.RegistryLogicLookup(registries))));
+                        new dev.materione.behavior.logic.RegistryLogicLookup(registries)),
+                () -> dev.materione.api.content.ViewFacet.byType(contentTypes())));
         // The server's self-reported format beats the table (a server newer
         // than this build still names its own format); -1 = detection failed.
         var detected = dev.materione.platform.probe.ServerPackFormat.detect().orElse(null);

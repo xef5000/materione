@@ -35,7 +35,7 @@ public final class ListEntries {
      * The entries a list shows, in order.
      *
      * @param context the window's context; each entry is read through an overlay of it as {@code entry.*}, and a
-     *     search reads its text from {@code gui.session.<var>}
+     *     search reads its text from {@code vars.session.<var>}
      * @param source the entries as the source produced them, unfiltered and unsorted
      * @param reporter where a filter that threw is reported
      * @param gui the GUI the list belongs to, for the report
@@ -75,7 +75,7 @@ public final class ListEntries {
      * none (unset, blank, or not text or a number): a null search keeps every entry.
      */
     static String searchText(ListSearch search, LogicContext context) {
-        Object raw = context.resolve(List.of("gui", "session", search.var()));
+        Object raw = context.resolve(List.of("vars", "session", search.var()));
         if (!(raw instanceof String) && !(raw instanceof Number)) {
             return null;
         }

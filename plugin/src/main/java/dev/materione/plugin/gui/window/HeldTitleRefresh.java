@@ -1,19 +1,19 @@
 package dev.materione.plugin.gui.window;
 
 import dev.materione.api.scheduling.ScheduledHandle;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 /** One owned retry per session; the retry resolves the current GUI rather than retaining a render. */
 final class HeldTitleRefresh {
-    private final ConcurrentHashMap<GuiSession, Pending> pending = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ViewerRecord, Pending> pending = new ConcurrentHashMap<>();
 
-    boolean pending(GuiSession session) {
+    boolean pending(ViewerRecord session) {
         return pending.containsKey(session);
     }
 
-    void ensure(GuiSession session, Runnable retry, BiFunction<Runnable, Runnable, ScheduledHandle> schedule) {
+    void ensure(ViewerRecord session, Runnable retry, BiFunction<Runnable, Runnable, ScheduledHandle> schedule) {
         Pending next = new Pending();
         if (pending.putIfAbsent(session, next) != null) {
             return;
@@ -33,7 +33,7 @@ final class HeldTitleRefresh {
         }
     }
 
-    void cancel(GuiSession session) {
+    void cancel(ViewerRecord session) {
         Pending old = pending.remove(session);
         if (old != null && old.handle != null) {
             old.handle.cancel();

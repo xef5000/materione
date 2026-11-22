@@ -3,11 +3,12 @@ package dev.materione.plugin.gui.input;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.plugin.gui.GuiFixture;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.view.CloseReason;
 
 /**
  * The click router (logic.md §6.2) end to end below the Bukkit event: an authored GUI is compiled by the
@@ -73,14 +74,14 @@ class ClickRouterTest {
             """;
 
     private GuiFixture f;
-    private GuiSession session;
+    private ViewerRecord session;
 
     @BeforeEach
     void open() {
         f = new GuiFixture();
         f.gui(SHOP);
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of("category", "tools"),
-                OpenRequest.Cause.API)).session();
+                OpenRequest.Cause.API)).record();
     }
 
     private ClickRouter.Routed click(int slot, ClickKind kind) {
@@ -146,7 +147,7 @@ class ClickRouterTest {
     void aLayerRuleOutranksTheLayerLessOne() {
         f.gui(SHOP.replace("slot: [3, 4]", "slot: [1]"));
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of(), OpenRequest.Cause.API))
-                .session();
+                .record();
 
         click(1, ClickKind.LEFT); // slot 1: the sell button claims it, the layer-less slot rule does not run
 
@@ -172,7 +173,7 @@ class ClickRouterTest {
 
     @Test
     void aClickOnAnEndedSessionIsIgnored() {
-        f.sessions.end(session, dev.materione.plugin.gui.session.CloseReason.PLAYER);
+        f.sessions.end(session, dev.materione.plugin.view.CloseReason.PLAYER);
 
         assertThat(click(0, ClickKind.LEFT).handled()).isFalse();
         assertThat(f.ran).isEmpty();
@@ -180,9 +181,9 @@ class ClickRouterTest {
 
     @Test
     void theContextCarriesTheGuiItsArgumentsAndThePlayer() {
-        f.gui(SHOP.replace("buy-left slot", "buy-left ${gui.id} ${gui.args.category} ${player.name} slot"));
+        f.gui(SHOP.replace("buy-left slot", "buy-left ${view.id} ${view.args.category} ${player.name} slot"));
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of("category", "food"),
-                OpenRequest.Cause.API)).session();
+                OpenRequest.Cause.API)).record();
 
         click(0, ClickKind.LEFT);
 
@@ -206,7 +207,7 @@ class ClickRouterTest {
                 new PeekAction(() -> observed.add(f.guard.dispatching(f.viewer.id()))));
         f.gui(SHOP.replace("- mark: buy-other", "- peek").replace("click: [right, shift_left]", "click: shift_left"));
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of(), OpenRequest.Cause.API))
-                .session();
+                .record();
 
         click(0, ClickKind.SHIFT_LEFT);
 

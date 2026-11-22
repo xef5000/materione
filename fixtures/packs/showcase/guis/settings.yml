@@ -81,11 +81,11 @@ settings:
     - on: gui.click
       layer: reset
       do:
-        - gui.open:
-            gui: showcase:confirm
+        - view.open:
+            view: showcase:confirm
             args:
               question: "<yellow>Turn the tips off?"
     - on: gui.click
       layer: back
       do:
-        - gui.back
+        - view.back
