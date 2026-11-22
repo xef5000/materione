@@ -132,4 +132,26 @@ class ConditionsInFlowsTest {
         assertThat(parsed.problems()).isNotEmpty();
         assertThat(parsed.rules().get(0).steps()).hasSize(1);
     }
+
+    @Test
+    void theMoneyActionsAndConditionTakeAnAmountTemplateInAFlow() {
+        var parsed = compile(map("on", "click:right", "do", List.of(
+                map("take_money", map("amount", "${vars.price}")),
+                map("give_money", map("amount", "${vars.price}", "currency", "gems")),
+                map("if", map("has_money", map("amount", "${vars.price}")),
+                        "then", List.of(map("message", "rich"))))));
+
+        assertThat(parsed.problems()).isEmpty();
+        assertThat(parsed.rules().get(0).steps()).hasSize(3);
+    }
+
+    @Test
+    void aMoneyAmountThatIsTextWithoutATemplateIsStillRefusedAtLoad() {
+        var parsed = compile(map("on", "click:right", "do", List.of(
+                map("give_money", map("amount", "lots")),
+                map("message", "still here"))));
+
+        assertThat(parsed.problems()).isNotEmpty();
+        assertThat(parsed.rules().get(0).steps()).hasSize(1);
+    }
 }

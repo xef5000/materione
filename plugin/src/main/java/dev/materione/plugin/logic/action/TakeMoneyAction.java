@@ -1,5 +1,6 @@
 package dev.materione.plugin.logic.action;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
@@ -7,6 +8,7 @@ import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Subjects;
 import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
@@ -20,20 +22,24 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.ProviderParams;
 import dev.materione.plugin.logic.currency.CurrencyReads;
+import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalDouble;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 
 /**
  * {@code take_money: 250} or {@code take_money: {amount: 250, currency: gems}}: withdraws money from
  * the run's player (logic.md §18). A balance that cannot cover the amount fails the step with
  * {@code insufficient funds} and takes nothing, so a flow can branch on the refusal with {@code require}
- * (logic.md §2.2). Currency resolution and the per-currency thread are as for {@code give_money}.
+ * (logic.md §2.2). An amount that is not a number above 0 fails it the same way, with nothing taken (logic.md §42).
+ * Currency resolution and the per-currency thread are as for {@code give_money}.
  */
 public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params> {
 
-    /** The parsed step; {@code currency} is the authored name, or null for the default. */
-    public record Params(double amount, String currency) {}
+    /** The parsed step: the amount (a literal or a template) and the authored currency, or null for the default. */
+    public record Params(Quantity amount, String currency) {}
 
     private final LogicProviders providers;
     private final CurrencyReads reads;
@@ -59,7 +65,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
                 "Removes money from the player's balance of a currency; fails when the balance is too low",
                 List.of(
                         new ParameterSchema("amount", ParameterType.DECIMAL, true, null,
-                                "Amount to take; above 0", null, null),
+                                "Amount to take; above 0, or a template that renders to one", null, null).acceptingExpression(),
                         new ParameterSchema("currency", ParameterType.STRING, false, null,
                                 "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null).withWidget("reference", "currency")),
                 "2.0.0"), LogicCategory.ECONOMY, "amount").withTargets(TargetKind.PLAYER);
@@ -92,6 +98,11 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
+        OptionalDouble amount = ProviderParams.runAmount(params.amount(), context);
+        if (amount.isEmpty()) {
+            return ActionOutcome.refused(DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+                    ProviderParams.refusedAmount(params.amount(), context));
+        }
         CurrencyCatalog catalog = providers.currencies();
         Currency currency = ProviderParams.resolve(catalog, params.currency());
         if (currency == null) {
@@ -101,12 +112,19 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
         if (backend == null) {
             return ActionOutcome.failed(catalog.availability(currency).reason());
         }
-        return switch (backend.withdraw(player.getUniqueId(), params.amount())) {
+        return switch (backend.withdraw(player.getUniqueId(), amount.getAsDouble())) {
             case EconomyResult.Succeeded ignored -> ActionOutcome.OK;
             case EconomyResult.InsufficientFunds funds -> ActionOutcome.failed(
-                    "insufficient funds: balance " + funds.balance() + ", needs " + params.amount());
+                    "insufficient funds: balance " + funds.balance() + ", needs " + amount.getAsDouble());
             case EconomyResult.Failed failed -> ActionOutcome.failed(failed.reason());
         };
+    }
+
+    /** A template amount is rendered first, then the withdrawal runs on the currency's thread; as for {@code give_money}. */
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        return params.amount().resolveResumable(context, reads).thenCompose(amount ->
+                reads.on(threading(params), () -> execute(new Params(amount, params.currency()), context)));
     }
 
     /** Available when the default currency can be used; the reason names what is missing otherwise. */

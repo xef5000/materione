@@ -298,9 +298,13 @@ public class ProviderActionsTest {
             var take = new TakeMoneyAction(providers);
 
             assertThat(give.parse(reader(params("amount", 100))).currency()).isNull();
-            assertThat(give.parse(reader(params("amount", 2.5, "currency", "gems")))).isEqualTo(
-                    new GiveMoneyAction.Params(2.5, "gems"));
-            assertThat(take.parse(reader(params("amount", 100)))).isEqualTo(new TakeMoneyAction.Params(100, null));
+            var named = give.parse(reader(params("amount", 2.5, "currency", "gems")));
+            assertThat(named.amount().literal()).isEqualTo(2.5);
+            assertThat(named.currency()).isEqualTo("gems");
+            var taken = take.parse(reader(params("amount", 100)));
+            assertThat(taken.amount().literal()).isEqualTo(100);
+            assertThat(taken.amount().template()).isNull();
+            assertThat(taken.currency()).isNull();
             assertThatThrownBy(() -> give.parse(reader(params()))).hasMessage("amount is required");
             assertThatThrownBy(() -> give.parse(reader(params("amount", 0)))).hasMessage("amount must be above 0");
             assertThatThrownBy(() -> give.parse(reader(params("amount", "100"))))

@@ -319,10 +319,14 @@ public final class FlowInterpreter extends FlowContinuations {
      * (rate-limited) and the chain continues; an exception is always reported, handled or not.
      */
     @Override
-    final boolean failure(FlowRun run, StepPath path, String message, boolean thrown) {
-        emit(run, path, TraceEvent.Type.STEP_FAILED, message);
+    final boolean failure(FlowRun run, StepPath path, String message, boolean thrown,
+            dev.materione.api.diagnostics.DiagnosticCode code) {
+        // a refused value names its code in the trace, and is reported under it even inside a require (logic.md section 42)
+        emit(run, path, TraceEvent.Type.STEP_FAILED, code == null ? message : code.code() + " " + message);
         Frame guard = run.nearestRequire();
-        if (thrown || guard == null) {
+        if (code != null) {
+            reporter.refused(run.rule(), path, code, message);
+        } else if (thrown || guard == null) {
             reporter.failure(run.rule(), path, message);
         }
         return guard == null || failRequire(run, guard, message);

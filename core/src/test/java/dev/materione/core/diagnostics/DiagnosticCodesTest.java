@@ -4,6 +4,7 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.diagnostics.DiagnosticCode;
+import dev.materione.api.diagnostics.Severity;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -56,7 +57,10 @@ class DiagnosticCodesTest {
         // MTR-0104 a transaction cannot be reverted: codemode.md section 10, #344;
         // MTR-0105 a rule step names content no pack declares: codemode.md section 10, #363;
         // MTR-0118 a world verb spent its per-run budget, MTR-0119 a world verb skipped a location in another region,
-        // MTR-0121 a world verb setting is invalid: logic.md section 41, #329)
-        assertThat(DiagnosticCodes.all()).hasSize(107);
+        // MTR-0121 a world verb setting is invalid: logic.md section 41, #329;
+        // MTR-0120 a money amount refused at run time, nothing moved: logic.md section 42, #464)
+        assertThat(DiagnosticCodes.all()).hasSize(108);
+        assertThat(DiagnosticCodes.MONEY_AMOUNT_REFUSED.code()).isEqualTo("MTR-0120");
+        assertThat(DiagnosticCodes.MONEY_AMOUNT_REFUSED.defaultSeverity()).isEqualTo(Severity.WARN);
     }
 }

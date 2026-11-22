@@ -1,5 +1,6 @@
 package dev.materione.api.logic;
 
+import dev.materione.api.diagnostics.DiagnosticCode;
 import java.util.Objects;
 
 /**
@@ -19,6 +20,14 @@ public sealed interface ActionOutcome permits ActionOutcome.Ok, ActionOutcome.Fa
         return new Failed(reason);
     }
 
+    /**
+     * The action refused a value the content gave it, a failure that carries its own diagnostic code, so the run
+     * reports that code (rate-limited) as well as the trace line (logic.md section 42, MTR-0120).
+     */
+    static ActionOutcome refused(DiagnosticCode code, String reason) {
+        return new Failed(reason, Objects.requireNonNull(code, "code"));
+    }
+
     /** True for {@link #OK}. */
     default boolean isOk() {
         return this instanceof Ok;
@@ -31,13 +40,19 @@ public sealed interface ActionOutcome permits ActionOutcome.Ok, ActionOutcome.Fa
      * The failed outcome.
      *
      * @param reason a short human sentence; never blank
+     * @param code the diagnostic the refusal carries, or null for an ordinary failure (a balance, a missing provider)
      */
-    record Failed(String reason) implements ActionOutcome {
+    record Failed(String reason, DiagnosticCode code) implements ActionOutcome {
         public Failed {
             Objects.requireNonNull(reason, "reason");
             if (reason.isBlank()) {
                 throw new IllegalArgumentException("a failed outcome must say why");
             }
+        }
+
+        /** An ordinary failure, with no diagnostic code. */
+        public Failed(String reason) {
+            this(reason, null);
         }
     }
 }

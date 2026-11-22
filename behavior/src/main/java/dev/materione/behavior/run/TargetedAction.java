@@ -1,5 +1,6 @@
 package dev.materione.behavior.run;
 
+import dev.materione.api.diagnostics.DiagnosticCode;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ReadExecutor;
@@ -10,6 +11,7 @@ import dev.materione.api.logic.TargetResolver;
 import dev.materione.behavior.flow.ActionStep;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
@@ -60,17 +62,17 @@ final class TargetedAction {
             }
             run.targetNote = "on " + resolution.targets().stream()
                     .map(ResolvedTarget::describe).collect(Collectors.joining(", "));
-            return each(run, step, view, origin, resolution.targets(), 0, new ArrayList<>());
+            return each(run, step, view, origin, resolution.targets(), 0, new ArrayList<>(), new ArrayList<>());
         });
     }
 
     private static <P> CompletionStage<ActionOutcome> each(FlowRun run, ActionStep<P> step, LogicContext view,
-            ReadExecutor origin, List<ResolvedTarget> targets, int index, List<String> failures) {
+            ReadExecutor origin, List<ResolvedTarget> targets, int index, List<String> failures,
+            List<DiagnosticCode> codes) {
         if (index == targets.size()) {
             return CompletableFuture.completedFuture(failures.isEmpty()
                     ? ActionOutcome.OK
-                    : ActionOutcome.failed(failures.size() == 1 ? failures.get(0)
-                            : failures.size() + " of " + targets.size() + " targets failed: " + failures.get(0)));
+                    : aggregate(failures, codes, targets.size()));
         }
         ResolvedTarget subject = targets.get(index);
         ReadExecutor reads = run.reads.aimedAt(subject.anchor(), origin);
@@ -92,8 +94,21 @@ final class TargetedAction {
         }).thenCompose(outcome -> {
             if (outcome instanceof ActionOutcome.Failed failed) {
                 failures.add(targets.size() > 1 ? subject.describe() + ": " + failed.reason() : failed.reason());
+                codes.add(failed.code());
             }
-            return each(run, step, view, origin, targets, index + 1, failures);
+            return each(run, step, view, origin, targets, index + 1, failures, codes);
         });
+    }
+
+    /**
+     * The step's outcome when some targets failed. It keeps a diagnostic code only when every failing target refused
+     * with that same code (logic.md section 42): a mix of an ordinary failure and a refusal is reported as the failure.
+     */
+    private static ActionOutcome aggregate(List<String> failures, List<DiagnosticCode> codes, int targetCount) {
+        String reason = failures.size() == 1 ? failures.get(0)
+                : failures.size() + " of " + targetCount + " targets failed: " + failures.get(0);
+        DiagnosticCode shared = codes.get(0);
+        boolean same = shared != null && codes.stream().allMatch(code -> Objects.equals(code, shared));
+        return same ? ActionOutcome.refused(shared, reason) : ActionOutcome.failed(reason);
     }
 }

@@ -6,6 +6,7 @@ import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.rule.RuleOptions;
 import dev.materione.behavior.run.FlowInterpreter;
 import dev.materione.behavior.run.RunOwner;
+import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.ReadRetiredException;
 import java.util.List;
@@ -172,6 +173,10 @@ public final class RuleEngine {
             // a condition that cannot be evaluated never lets the rule through
             if (e instanceof ReadUnavailableException && event.synchronousPreEventOpen()) {
                 event.requestCancel();
+            }
+            if (e instanceof CodedRefusal refusal) { // a refused value reports its own code (logic.md section 42)
+                interpreter.reporter().refused(rule, rule.path().child("if"), refusal.code(), refusal.getMessage());
+                return false;
             }
             interpreter.reporter().failure(rule, rule.path().child("if"), "condition failed: " + e.getMessage());
             return false;

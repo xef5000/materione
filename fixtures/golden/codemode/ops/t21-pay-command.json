@@ -1,0 +1,129 @@
+{
+  "task": "T21",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "commands",
+      "id": "pay",
+      "edits": [
+        {
+          "field": [
+            "pay",
+            "names"
+          ],
+          "value": [
+            "pay"
+          ]
+        },
+        {
+          "field": [
+            "pay",
+            "args"
+          ],
+          "value": [
+            {
+              "name": "to",
+              "type": "player"
+            },
+            {
+              "name": "amount",
+              "type": "number"
+            }
+          ]
+        },
+        {
+          "field": [
+            "pay",
+            "requirement"
+          ],
+          "value": "${args.amount > 0}"
+        },
+        {
+          "field": [
+            "pay",
+            "deny"
+          ],
+          "value": [
+            {
+              "message": "<red>Pay a positive amount."
+            }
+          ]
+        },
+        {
+          "field": [
+            "pay",
+            "do"
+          ],
+          "value": [
+            {
+              "require": [
+                {
+                  "take_money": {
+                    "amount": "${args.amount}"
+                  }
+                }
+              ],
+              "else": [
+                {
+                  "message": "<red>Not enough coins."
+                }
+              ]
+            },
+            {
+              "give_money": {
+                "amount": "${args.amount}",
+                "target": {
+                  "arg": "to"
+                }
+              }
+            },
+            {
+              "message": {
+                "text": "${player.name + \" paid you \" + args.amount}",
+                "target": {
+                  "arg": "to"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 6,
+      "column": 12
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 15,
+        "column": 32
+      }
+    },
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.giveMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 18,
+        "column": 15
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 1,
+    "documents": 1
+  }
+}

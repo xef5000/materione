@@ -73,7 +73,7 @@ abstract class FlowContinuations extends ControlSteps {
         consume(run, frame);
         if (outcome instanceof ActionOutcome.Failed failed) {
             return failure(run, action.path(), "action '" + action.id() + "' failed: " + failed.reason()
-                    + (note.isEmpty() ? "" : " (" + note + ")"), thrown);
+                    + (note.isEmpty() ? "" : " (" + note + ")"), thrown, failed.code());
         }
         emit(run, action.path(), TraceEvent.Type.STEP_OK, note);
         return true;

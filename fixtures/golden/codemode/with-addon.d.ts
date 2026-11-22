@@ -3605,8 +3605,11 @@ interface GiveItemActionParams extends ActionOptions {
 
 /** Parameters of `give_money`. */
 interface GiveMoneyActionParams extends ActionOptions {
-  /** Amount to give; above 0. */
-  amount: number;
+  /**
+   * Amount to give; above 0, or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  amount: number | Expr;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
   currency?: string | Ref<"currency">;
   /**
@@ -3965,8 +3968,11 @@ interface TakeItemActionParams extends ActionOptions {
 
 /** Parameters of `take_money`. */
 interface TakeMoneyActionParams extends ActionOptions {
-  /** Amount to take; above 0. */
-  amount: number;
+  /**
+   * Amount to take; above 0, or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  amount: number | Expr;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
   currency?: string | Ref<"currency">;
   /**
@@ -4198,7 +4204,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category economy
    */
-  giveMoney(params: GiveMoneyActionParams | number, options?: ActionOptions): ActionStep<"give_money">;
+  giveMoney(params: GiveMoneyActionParams | number | Expr, options?: ActionOptions): ActionStep<"give_money">;
   /**
    * Grants a permission node to the player through the active permission provider.
    * @since 2.0.0
@@ -4354,7 +4360,7 @@ interface ActionCatalog {
    * @registeredBy materione
    * @category economy
    */
-  takeMoney(params: TakeMoneyActionParams | number, options?: ActionOptions): ActionStep<"take_money">;
+  takeMoney(params: TakeMoneyActionParams | number | Expr, options?: ActionOptions): ActionStep<"take_money">;
   /**
    * Removes a permission node from the player through the active permission provider.
    * @since 2.0.0
@@ -4466,8 +4472,11 @@ interface HasItemSpaceConditionParams {
 
 /** Parameters of the `has_money` condition. */
 interface HasMoneyConditionParams {
-  /** Amount the balance must reach; above 0. */
-  amount: number;
+  /**
+   * Amount the balance must reach; above 0, or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  amount: number | Expr;
   /** Currency id, e.g. gems or shop:gems; the default currency when omitted. */
   currency?: string | Ref<"currency">;
 }
@@ -4578,7 +4587,7 @@ interface ConditionCatalog {
    * @registeredBy materione
    * @category economy
    */
-  hasMoney(params: HasMoneyConditionParams | number): Condition<"has_money">;
+  hasMoney(params: HasMoneyConditionParams | number | Expr): Condition<"has_money">;
   /**
    * True when the player holds the permission node (or at least min of several)
    * @since 2.0.0
