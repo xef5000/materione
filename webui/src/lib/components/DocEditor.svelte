@@ -3,6 +3,7 @@
   import AssetPicker from './AssetPicker.svelte';
   import RichTextEditor from './RichTextEditor.svelte';
   import MaterialPicker from './MaterialPicker.svelte';
+  import DraftConflict from './DraftConflict.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
   import {
@@ -115,11 +116,20 @@
     if (!schema) mode = 'yaml';
   }
 
+  /** "Use server version" on the conflict banner: the owner's explicit choice, so no second confirmation. */
+  async function useServer() {
+    if (!session.channel) return;
+    numericInputs = {};
+    numericErrors = {};
+    await reloadDocumentDraft(draft, session.channel, true);
+    if (!schema) mode = 'yaml';
+  }
+
   const staleOnDisk = $derived(draft.stale);
 
-  // External edits reach open tabs as a flag. A clean tab re-fetches the
-  // authoritative bytes right away; a dirty tab keeps its edits and shows
-  // the banner — the watcher must never clobber unsaved work.
+  // A document that moved on the server reaches the draft through syncDraftsWithServer, which re-reads a clean one
+  // itself; this catches a clean draft flagged stale some other way (a save whose read-back failed). A dirty tab keeps
+  // its edits and shows the conflict banner — nothing may clobber unsaved work.
   $effect(() => {
     if (staleOnDisk && !dirty && !saving && !draft.loading && !draft.uncertain && !draft.error && session.channel) {
       const channel = session.channel;
@@ -289,12 +299,7 @@
     </label>
   {/if}
 
-  {#if staleOnDisk}
-    <div class="stale-banner">
-      changed on disk — your unsaved edits are kept
-      <button onclick={() => void load()}>discard and reload</button>
-    </div>
-  {/if}
+  <DraftConflict {draft} onUseServer={useServer} />
 
   {#if error}
     <p class="error">{error}</p>

@@ -344,6 +344,101 @@ export async function reconcileDocumentDraft(
   }
 }
 
+/**
+ * A document that moved on the server outside this tab's own save: an approved code-mode transaction or its revert, a
+ * hand edit, another editor session. `rev` is the revision the server now holds when the source knows it (a draft that
+ * already holds that revision is current and is left alone); `deleted` says the file is gone.
+ */
+export interface ServerChange {
+  pack: string;
+  path: string;
+  rev?: number | null;
+  deleted?: boolean;
+}
+
+/**
+ * The one way the draft store learns that the server's copy moved (web.md section 4 "Caches and refresh"). Every surface
+ * (the studio's detail view, the Files tab, the GUI studio, the Blockbench owner field) reads its document through a
+ * draft, so this is the only place a stale copy can be dropped or flagged:
+ *
+ * - no cached copy, or one that is not loaded: nothing to do, the next open reads the server;
+ * - a copy nobody shows and nothing was typed into: dropped (`loaded = false`), so the next surface to open reads fresh;
+ * - a copy on screen and untouched: re-read in place;
+ * - a copy with unsaved edits (or an unknown save outcome): never overwritten and never silently kept as if current,
+ *   reconciled against the server's copy. Edits on other fields are kept on top of it; an overlap, or YAML typed over a
+ *   file that moved, marks the draft `stale` (a conflict) and the owner chooses (`keepDraftOverServer` or a reload).
+ *
+ * `changes` omitted: any document may have moved (a reload push no save of this tab explains), so every loaded draft
+ * is probed by revision, one read each, and only those that moved are touched.
+ */
+export async function syncDraftsWithServer(channel: RpcChannel, changes?: readonly ServerChange[]): Promise<void> {
+  const named = changes === undefined ? null : new Map(changes.map((change) => [`${change.pack}/${change.path}`, change]));
+  const targets = draftStore.documents.filter((draft) => named === null || named.has(`${draft.pack}/${draft.path}`));
+  await Promise.all(targets.map((draft) => syncDraft(channel, draft, named?.get(`${draft.pack}/${draft.path}`))));
+}
+
+async function syncDraft(channel: RpcChannel, draft: DocumentDraft, change: ServerChange | undefined): Promise<void> {
+  // A read that began before the change may hold the old copy: let it land, then judge what it landed.
+  const pending = loads.get(draft);
+  if (pending) await pending;
+  // A save in flight ends with the server's newest copy (or a revision conflict that flags the draft itself).
+  if (!draft.loaded || draft.saving) return;
+  const known = typeof change?.rev === 'number' && change.deleted !== true ? change.rev : null;
+  if (known !== null && draft.rev >= known) return;
+  const idle = !draftDirty(draft) && !draft.uncertain;
+  if (idle && !retained.has(draft)) {
+    draft.loaded = false;
+    draft.stale = false;
+    draft.error = '';
+    return;
+  }
+  if (known === null && change?.deleted !== true) {
+    // Revision unknown: a read tells whether anything moved before a draft with edits is disturbed.
+    try {
+      if (Number(unwrap(await ops.get(channel, draft.pack, draft.path)).rev ?? 0) === draft.rev) return;
+    } catch {
+      // unreadable counts as moved: the reload or reconcile below reports why
+    }
+  }
+  if (draft.saving) return;
+  if (idle) await reloadDocumentDraft(draft, channel, true);
+  else await reconcileDocumentDraft(draft, channel);
+}
+
+/** The server's copy of a draft's document, for the owner to read next to the draft before choosing. */
+export async function readServerVersion(draft: DocumentDraft, channel: RpcChannel): Promise<{ rev: number; raw: string }> {
+  const fresh = unwrap(await ops.get(channel, draft.pack, draft.path));
+  return { rev: Number(fresh.rev ?? 0), raw: String(fresh.raw ?? '') };
+}
+
+/**
+ * "Keep my draft" on a conflict: the draft moves onto the server's current revision with its own edits (field edits, or the
+ * YAML text) on top, so the next Save & apply writes them over the server's copy, by the owner's choice. Writes nothing.
+ */
+export async function keepDraftOverServer(draft: DocumentDraft, channel: RpcChannel): Promise<void> {
+  if (draft.saving || draft.loading) return;
+  draft.loading = true;
+  try {
+    const fresh = unwrap(await ops.get(channel, draft.pack, draft.path));
+    const yaml = rawDraftDirty(draft) ? draft.raw : null;
+    const pending = clone(draft.edits);
+    snapshot(draft, fresh);
+    if (yaml !== null) {
+      draft.raw = yaml;
+    } else {
+      for (const edit of pending) {
+        if (edit.remove) removeDraftField(draft, edit.field);
+        else setDraftField(draft, edit.field, edit.value);
+      }
+    }
+    draft.notice = `Your draft now sits on the server's revision ${draft.rev}. Save & apply writes it over the server's copy.`;
+  } catch (error) {
+    draft.error = `Could not read the server's copy: ${error instanceof Error ? error.message : String(error)}`;
+  } finally {
+    draft.loading = false;
+  }
+}
+
 export function markDraftsDisconnected(): void {
   for (const draft of draftStore.documents) {
     if (draft.saving) {

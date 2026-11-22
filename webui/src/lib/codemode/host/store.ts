@@ -182,9 +182,22 @@ export type ProposalInput = Pick<ProgramResult, 'ok' | 'pack' | 'operations' | '
 /** A read of a stored document (the editor's `browse.get`), used only to show what a change replaces. */
 export type DocumentReader = (pack: string, path: string) => Promise<{ text: string; revision: number } | null>;
 
+/** The documents one applied write (a transaction or a revert) changed, as its report lists them. */
+export interface WrittenDocuments {
+  /** The pack they are in; null when a revert the audit named gave none (any pack's document at those paths may have moved). */
+  pack: string | null;
+  /** `rev` is the revision the server holds now; null for a deleted document. */
+  documents: readonly { path: string; rev: number | null; deleted: boolean }[];
+}
+
 export interface StoreOptions {
   transport: TransactionTransport;
   now?: () => number;
+  /**
+   * Called after every applied write with the documents its report lists, so whatever caches a copy of them (the editor's
+   * open documents) can drop it. Fail soft: a throwing listener never breaks the write's bookkeeping.
+   */
+  onWritten?: (written: WrittenDocuments) => void;
   /** Reads the stored text of a document the dry run reports as changed or deleted, so the review can draw its diff. Optional. */
   readDocument?: DocumentReader;
 }
@@ -251,6 +264,7 @@ export class ProposalStore {
   private readonly transport: TransactionTransport;
   private readonly now: () => number;
   private readonly readDocument: DocumentReader | null;
+  private readonly onWritten: ((written: WrittenDocuments) => void) | null;
   private grants = new GrantSet();
   private readonly sessionCreated = new Set<string>();
   private readonly entries: Entry[] = [];
@@ -264,6 +278,7 @@ export class ProposalStore {
     this.transport = options.transport;
     this.now = options.now ?? Date.now;
     this.readDocument = options.readDocument ?? null;
+    this.onWritten = options.onWritten ?? null;
     this.agent = Object.freeze({
       propose: (result: ProposalInput, opts: ProposeOptions) => this.propose(result, opts),
       declarePlan: (declaration: { title?: string; objects: readonly string[] }) => this.declarePlan(declaration),
@@ -715,6 +730,7 @@ export class ProposalStore {
 
   /** After a write: what the session created is never "existing"; waiting proposals over what changed are stale. */
   private afterWrite(pack: string | null, report: TransactionReport, source: string, own: boolean): void {
+    this.announceWritten(pack, report);
     const changed = new Set<string>();
     for (const document of report.documents) {
       if (typeof document.path !== 'string') continue;
@@ -744,6 +760,23 @@ export class ProposalStore {
         });
         other.state = 'stale';
       }
+    }
+  }
+
+  /** Tells the owner of the store what the write changed (a document it moved from is gone too). */
+  private announceWritten(pack: string | null, report: TransactionReport): void {
+    if (this.onWritten === null) return;
+    const documents: { path: string; rev: number | null; deleted: boolean }[] = [];
+    for (const document of report.documents) {
+      if (typeof document.path !== 'string') continue;
+      const deleted = document.kind === 'deleted';
+      documents.push({ path: document.path, rev: !deleted && typeof document.rev === 'number' ? document.rev : null, deleted });
+      if (typeof document.movedFrom === 'string') documents.push({ path: document.movedFrom, rev: null, deleted: true });
+    }
+    try {
+      this.onWritten({ pack, documents });
+    } catch {
+      // fail soft: the caches are a convenience, the write is done
     }
   }
 

@@ -27,6 +27,7 @@ export {
   type RevertPreview,
   type Snapshot,
   type StoreOptions,
+  type WrittenDocuments,
 } from './store';
 export {
   CODEMODE_CAPABILITY,
