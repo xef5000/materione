@@ -57,7 +57,7 @@ public final class StepKinds {
                         "Suspends the flow for a number of ticks without blocking a thread.",
                         List.of(ParameterSchema.of("ticks", ParameterType.INTEGER, true).withEditor(
                                 EditorMetadata.defaults("ticks", ParameterType.INTEGER)
-                                        .withRange(0d, (double) MAX_TICKS, "ticks"))),
+                                        .withRange(0d, (double) MAX_TICKS, "ticks")).acceptingExpression()),
                         true, "ticks", List.of(), List.of(), ""),
                 new StepKind("stop", "Stop",
                         "Ends this run, optionally cancelling the underlying event.",

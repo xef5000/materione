@@ -11,6 +11,7 @@ import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
@@ -22,6 +23,7 @@ import dev.materione.plugin.gui.prompt.PromptReply;
 import dev.materione.plugin.gui.prompt.PromptService;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
@@ -66,10 +68,12 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
      * @param method the input method that asks
      * @param text the question, rendered when the step runs
      * @param target where the answer goes
-     * @param timeoutSeconds how long the player may take to answer
+     * @param timeoutSeconds how long the player may take to answer: a number, or a template that renders to one
+     *        (logic.md section 42, #470); a template that renders out of range refuses the step before the question is asked
      * @param cancelWord the word that cancels the question, or null for none
      */
-    public record Params(InputMethod method, TemplateText text, Target target, int timeoutSeconds, String cancelWord) {}
+    public record Params(InputMethod method, TemplateText text, Target target, Quantity timeoutSeconds,
+            String cancelWord) {}
 
     private static final int DEFAULT_TIMEOUT_SECONDS = 60;
     private static final String DEFAULT_CANCEL_WORD = "cancel";
@@ -106,7 +110,8 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("timeout", ParameterType.INTEGER, false,
                                 String.valueOf(DEFAULT_TIMEOUT_SECONDS),
-                                "Seconds the player has to answer, from 1 to 600", null, null),
+                                "Seconds the player has to answer, from 1 to 600; or a template that renders to them",
+                                null, null).acceptingExpression(),
                         new ParameterSchema("cancel_word", ParameterType.STRING, false, DEFAULT_CANCEL_WORD,
                                 "A word that cancels the question; empty for none", null, null)),
                 "1.0.0"), LogicCategory.GUI);
@@ -130,7 +135,8 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
                 "method '" + methodId + "' is not an input method (chat, sign or anvil)"));
         Target target = targetOf(params.text("var"), params.environment().pack());
         TemplateText text = params.template("text");
-        int timeout = params.integer("timeout", DEFAULT_TIMEOUT_SECONDS, 1, PromptService.MAX_TIMEOUT_SECONDS);
+        Quantity timeout = Quantity.integerOr(params, "timeout", DEFAULT_TIMEOUT_SECONDS, 1,
+                PromptService.MAX_TIMEOUT_SECONDS);
         Object rawCancel = params.raw("cancel_word").orElse(DEFAULT_CANCEL_WORD);
         if (!(rawCancel instanceof String word)) {
             throw new IllegalArgumentException("cancel_word is a word, or an empty string for none");
@@ -180,8 +186,17 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
             return CompletableFuture.completedFuture(ActionOutcome.failed(reason));
         }
         String question = params.text().render(context);
-        return prompts.begin(new PromptService.Request(player, params.method(), question, params.cancelWord(),
-                params.timeoutSeconds(), reads::active, reply -> settle(params, context, session, reply)));
+        // the timeout renders first (on the thread its reads need); a refused one asks nothing, and the else: runs
+        return params.timeoutSeconds().resolveResumable(context, reads).thenCompose(timeout -> {
+            OptionalInt seconds = timeout.wholeValue(context);
+            if (seconds.isEmpty()) {
+                return CompletableFuture.completedFuture(ActionOutcome.refused(DiagnosticCodes.QUANTITY_REFUSED,
+                        timeout.refusal("timeout", context)));
+            }
+            return reads.on(threading(), () -> prompts.begin(new PromptService.Request(player, params.method(),
+                    question, params.cancelWord(), seconds.getAsInt(), reads::active,
+                    reply -> settle(params, context, session, reply)))).thenCompose(started -> started);
+        });
     }
 
     /** Writes the answer where the step says, or fails with the reason it went unanswered. Runs on the player's thread. */

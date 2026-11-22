@@ -3433,23 +3433,25 @@ interface StepBuilders {
   stop(options?: { readonly cancel?: boolean; readonly cancel_session_runs?: boolean }): Step;
   /**
    * Suspends the flow for a number of ticks without blocking a thread.
-   * @param value Range: 0 to 1728000 ticks.
+   * @param value Range: 0 to 1728000 ticks. Accepts an expression: `m.expr` or an `m.fn` result.
    */
-  wait(value: number): Step;
+  wait(value: number | Expr): Step;
 }
 
 /** The options any action may carry besides its own parameters. */
 interface ActionOptions {
   /**
-   * Probability from 0 to 1 that the action runs.
+   * Probability from 0 to 1 that the action runs; or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  chance?: number;
+  chance?: number | Expr;
   /**
-   * Ticks to wait before the action runs; the flow waits with it.
+   * Ticks to wait before the action runs, or a template that renders to them; the flow waits with it.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 0
    */
-  delay?: number;
+  delay?: number | Expr;
 }
 
 /** What the step of an action that guards what follows may carry besides the action options. */
@@ -3694,8 +3696,11 @@ interface GuiRefreshActionParams extends ActionOptions {
 
 /** Parameters of `gui.slot_item`. */
 interface GuiSlotItemActionParams extends ActionOptions {
-  /** The container slot, from 0 at the top-left. */
-  slot: number;
+  /**
+   * The container slot, from 0 at the top-left; or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  slot: number | Expr;
   /** clear, take, set_amount, repair or enchant. */
   op: "clear" | "take" | "set_amount" | "repair" | "enchant";
   /** set_amount only: the new amount, 0 clears the slot. */
@@ -3809,15 +3814,17 @@ interface PotionActionParams extends ActionOptions {
   /** Effect type, e.g. speed. */
   type: string;
   /**
-   * Duration in ticks.
+   * Duration in ticks; or a template that renders to them.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 200
    */
-  duration?: number;
+  duration?: number | Expr;
   /**
-   * Amplifier; 0 is level I.
+   * Amplifier, 0 to 255; 0 is level I; or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 0
    */
-  amplifier?: number;
+  amplifier?: number | Expr;
   /**
    * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
    * @defaultValue self
@@ -3840,10 +3847,11 @@ interface PromptActionParams extends ActionOptions, GuardOptions {
   /** Where the answer goes: a run-local name, or session.<name> for the open GUI. */
   var: string | Ref<"variable">;
   /**
-   * Seconds the player has to answer, from 1 to 600.
+   * Seconds the player has to answer, from 1 to 600; or a template that renders to them.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 60
    */
-  timeout?: number;
+  timeout?: number | Expr;
   /**
    * A word that cancels the question; empty for none.
    * @defaultValue cancel
@@ -3915,15 +3923,17 @@ interface SoundActionParams extends ActionOptions {
    */
   sound: string | Ref<"sound"> | Expr;
   /**
-   * Volume.
+   * Volume; or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  volume?: number;
+  volume?: number | Expr;
   /**
-   * Pitch.
+   * Pitch; or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 1
    */
-  pitch?: number;
+  pitch?: number | Expr;
   /**
    * Who hears it.
    * @defaultValue player
@@ -4076,20 +4086,23 @@ interface TitleActionParams extends ActionOptions {
    */
   subtitle?: string | Expr;
   /**
-   * Fade-in in ticks.
+   * Fade-in in ticks; or a template that renders to them.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 10
    */
-  fade_in?: number;
+  fade_in?: number | Expr;
   /**
-   * Time fully shown, in ticks.
+   * Time fully shown, in ticks; or a template that renders to them.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 70
    */
-  stay?: number;
+  stay?: number | Expr;
   /**
-   * Fade-out in ticks.
+   * Fade-out in ticks; or a template that renders to them.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
    * @defaultValue 20
    */
-  fade_out?: number;
+  fade_out?: number | Expr;
   /**
    * Who or what the action acts on: self (the player the rule runs for), event.target (the entity the trigger carries), {arg: name}, {player: name}, or {nearby: {radius, type, limit}}.
    * @defaultValue self
@@ -4565,8 +4578,11 @@ interface HasPermissionConditionParams {
   permission?: string;
   /** A list of nodes; every one must hold unless min is set. */
   permissions?: JsonValue;
-  /** How many of permissions must hold (default: all) */
-  min?: number;
+  /**
+   * How many of permissions must hold (default: all); or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  min?: number | Expr;
 }
 
 /** Parameters of the `in_gui` condition. */
@@ -4609,8 +4625,11 @@ interface IsNearConditionParams {
 
 /** Parameters of the `slot_has` condition. */
 interface SlotHasConditionParams {
-  /** The container slot, from 0 at the top-left. */
-  slot: number;
+  /**
+   * The container slot, from 0 at the top-left; or a template that renders to one.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  slot: number | Expr;
   /** Materione item id, or minecraft:<material>; any item when absent. */
   item?: string | Ref<"item">;
   /**

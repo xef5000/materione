@@ -140,7 +140,7 @@ class MoneyAmountExpressionTest {
             assertThatThrownBy(() -> has.test(parsed, withAmount(bad)))
                     .as("has_money with %s", bad)
                     .isInstanceOfSatisfying(CodedRefusal.class, refusal -> {
-                        assertThat(refusal.code()).isEqualTo(DiagnosticCodes.MONEY_AMOUNT_REFUSED);
+                        assertThat(refusal.code()).isEqualTo(DiagnosticCodes.QUANTITY_REFUSED);
                         assertThat(refusal.getMessage()).startsWith("amount must be a number above 0");
                     });
         }
@@ -150,7 +150,7 @@ class MoneyAmountExpressionTest {
     void theRefusedOutcomeCarriesTheMoneyCodeAndAnOrdinaryFailureDoesNot() {
         var refused = give.execute(give.parse(reader("amount", "${args.amount}")), withAmount("lots"));
         assertThat(refused).isInstanceOfSatisfying(ActionOutcome.Failed.class, failed -> {
-            assertThat(failed.code()).isEqualTo(DiagnosticCodes.MONEY_AMOUNT_REFUSED);
+            assertThat(failed.code()).isEqualTo(DiagnosticCodes.QUANTITY_REFUSED);
             assertThat(failed.reason()).startsWith("amount must be a number above 0");
         });
         // an insufficient balance is an ordinary failure: no diagnostic code, so nothing is reported beyond the trace
@@ -196,6 +196,6 @@ class MoneyAmountExpressionTest {
         assertThatThrownBy(() -> has.testResumable(parsed, withAmount("lots"), reads).toCompletableFuture().join())
                 .isInstanceOfSatisfying(java.util.concurrent.CompletionException.class, failure ->
                         assertThat(failure.getCause()).isInstanceOfSatisfying(CodedRefusal.class,
-                                refusal -> assertThat(refusal.code()).isEqualTo(DiagnosticCodes.MONEY_AMOUNT_REFUSED)));
+                                refusal -> assertThat(refusal.code()).isEqualTo(DiagnosticCodes.QUANTITY_REFUSED)));
     }
 }

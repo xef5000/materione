@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.FunctionDescription;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.ValueExpression;
@@ -58,7 +59,8 @@ class ActionResumableTest {
         var calls = new AtomicInteger();
         var compiler = mixedOwnerCompiler(scheduler, Threading.GLOBAL, Threading.PLAYER_REGION, calls, "subtitle");
         var params = new TitleAction.Params(compiler.template("${hop()}"),
-                Optional.of(compiler.template("${legacy()}")), 1, 2, 3);
+                Optional.of(compiler.template("${legacy()}")), Quantity.constant(1, 0, 72_000, true),
+                Quantity.constant(2, 0, 72_000, true), Quantity.constant(3, 0, 72_000, true));
         var player = new PlayerFake();
         var result = new TitleAction().executeResumable(params, player.context(), reads).toCompletableFuture();
         scheduler.runNext();

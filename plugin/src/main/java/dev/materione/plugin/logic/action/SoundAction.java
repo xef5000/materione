@@ -1,11 +1,13 @@
 package dev.materione.plugin.logic.action;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Subjects;
@@ -14,8 +16,10 @@ import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.support.Quantities;
 import dev.materione.plugin.logic.support.ResolvedText;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.bukkit.Bukkit;
@@ -35,8 +39,11 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
     /** Who hears the sound. */
     public enum Scope { PLAYER, WORLD, SERVER }
 
-    /** The parsed step. */
-    public record Params(TemplateText sound, float volume, float pitch, Scope scope) {}
+    /**
+     * The parsed step. Volume and pitch are quantities: a literal is checked at load, a template is checked as the
+     * sound plays (logic.md section 42, #470).
+     */
+    public record Params(TemplateText sound, Quantity volume, Quantity pitch, Scope scope) {}
 
     @Override
     public String id() {
@@ -49,8 +56,10 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
                 List.of(
                         new ParameterSchema("sound", ParameterType.STRING, true, null,
                                 "Sound key, e.g. minecraft:block.note_block.pling", null, null).acceptingExpression().withWidget("sound", ""),
-                        new ParameterSchema("volume", ParameterType.DECIMAL, false, "1", "Volume", null, null),
-                        new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1", "Pitch", null, null),
+                        new ParameterSchema("volume", ParameterType.DECIMAL, false, "1",
+                                "Volume; or a template that renders to one", null, null).acceptingExpression(),
+                        new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1",
+                                "Pitch; or a template that renders to one", null, null).acceptingExpression(),
                         new ParameterSchema("scope", ParameterType.ENUM, false, "player",
                                 "Who hears it", List.of("player", "world", "server"), null)),
                 "2.0.0"), LogicCategory.PLAYER, "sound").withTargets(TargetKind.PLAYER);
@@ -74,18 +83,28 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
         }
         return new Params(
                 params.template("sound"),
-                (float) params.decimal("volume", 1d, 0d, 1_000d),
-                (float) params.decimal("pitch", 1d, 0d, 1_000d),
+                Quantity.decimalOr(params, "volume", 1d, 0d, 1_000d),
+                Quantity.decimalOr(params, "pitch", 1d, 0d, 1_000d),
                 scope);
     }
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
+        OptionalDouble volumeValue = params.volume().value(context);
+        if (volumeValue.isEmpty()) {
+            return ActionOutcome.refused(DiagnosticCodes.QUANTITY_REFUSED, params.volume().refusal("volume", context));
+        }
+        OptionalDouble pitchValue = params.pitch().value(context);
+        if (pitchValue.isEmpty()) {
+            return ActionOutcome.refused(DiagnosticCodes.QUANTITY_REFUSED, params.pitch().refusal("pitch", context));
+        }
+        float volume = (float) volumeValue.getAsDouble();
+        float pitch = (float) pitchValue.getAsDouble();
         Player player = Subjects.player(context).orElse(null);
         if (params.scope() == Scope.SERVER) {
             String key = params.sound().render(context);
             for (Player listener : Bukkit.getOnlinePlayers()) {
-                listener.playSound(listener.getLocation(), key, params.volume(), params.pitch());
+                listener.playSound(listener.getLocation(), key, volume, pitch);
             }
             return ActionOutcome.OK;
         }
@@ -95,11 +114,11 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
         String key = params.sound().render(context);
         if (params.scope() == Scope.WORLD) {
             for (Player listener : player.getWorld().getPlayers()) {
-                listener.playSound(player.getLocation(), key, params.volume(), params.pitch());
+                listener.playSound(player.getLocation(), key, volume, pitch);
             }
             return ActionOutcome.OK;
         }
-        player.playSound(player.getLocation(), key, params.volume(), params.pitch());
+        player.playSound(player.getLocation(), key, volume, pitch);
         return ActionOutcome.OK;
     }
 
@@ -109,7 +128,8 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }
         return ResolvedText.resolve(params.sound(), context, reads)
-                .thenCompose(sound -> reads.on(threading(params),
-                        () -> execute(new Params(sound, params.volume(), params.pitch(), params.scope()), context)));
+                .thenCompose(sound -> Quantities.resolve(context, reads, params.volume(), params.pitch())
+                        .thenCompose(timing -> reads.on(threading(params), () -> execute(
+                                new Params(sound, timing[0], timing[1], params.scope()), context))));
     }
 }

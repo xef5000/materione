@@ -146,8 +146,8 @@ class FlowStepsCompileTest {
                       with: { n: 2 }
                 """, "tail: [ { a: x } ]");
 
-        assertThat(((WaitStep) rule.steps().get(0)).ticks()).isEqualTo(5);
-        assertThat(((WaitStep) rule.steps().get(1)).ticks()).isEqualTo(10);
+        assertThat(((WaitStep) rule.steps().get(0)).ticks().literal()).isEqualTo(5);
+        assertThat(((WaitStep) rule.steps().get(1)).ticks().literal()).isEqualTo(10);
         assertThat(rule.steps().get(2)).isEqualTo(new StopStep(rule.steps().get(2).path(), false, false));
         assertThat(rule.steps().get(3)).isEqualTo(new StopStep(rule.steps().get(3).path(), false, false));
         assertThat(rule.steps().get(4)).isEqualTo(new StopStep(rule.steps().get(4).path(), true, false));

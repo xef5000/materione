@@ -14,7 +14,7 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.escrow.runtime.CustodyConsume;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.GuiRun;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;

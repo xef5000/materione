@@ -1,8 +1,10 @@
 package dev.materione.behavior.run;
 
 import dev.materione.api.diagnostics.DiagnosticCode;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.Cancellation;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.ReadRetiredException;
@@ -20,6 +22,7 @@ import dev.materione.behavior.flow.WaitStep;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 
@@ -153,9 +156,55 @@ abstract class ControlSteps {
         return true;
     }
 
+    /**
+     * {@code wait}: parks for its ticks. A template is rendered first, on the thread its reads need, and a value that is
+     * not a whole number in range fails the step under MTR-0120 before the run parks (logic.md section 42, #470).
+     */
     final boolean wait(FlowRun run, Frame frame, WaitStep step) {
+        long ticks;
+        if (step.ticks().isTemplate()) {
+            if (!await(run, step.path(), () -> step.ticks().resolveResumable(run.view(), run.reads.captureOrigin()))) {
+                return false;
+            }
+            Quantity resolved;
+            try {
+                resolved = take(run);
+            } catch (ReadUnavailableException unavailable) {
+                failClosed(run, step.path(), unavailable);
+                return false;
+            } catch (RuntimeException failed) {
+                consume(run, frame);
+                return failure(run, step.path(), "wait failed: " + reasonOf(failed), true,
+                        failed instanceof CodedRefusal refusal ? refusal.code() : null);
+            }
+            OptionalInt value = resolved.wholeValue(run.view());
+            if (value.isEmpty()) {
+                consume(run, frame);
+                return failure(run, step.path(), resolved.refusal("wait", run.view()), false,
+                        DiagnosticCodes.QUANTITY_REFUSED);
+            }
+            ticks = value.getAsInt();
+        } else {
+            ticks = (long) step.ticks().literal();
+        }
         consume(run, frame);
-        return !park(run, step.path(), Threading.PLAYER_REGION, step.ticks(), true);
+        return !park(run, step.path(), Threading.PLAYER_REGION, ticks, true);
+    }
+
+    /** The result of a resumable evaluation, read off the run's stage; see {@link FlowContinuations#await}. */
+    @SuppressWarnings("unchecked")
+    static <T> T take(FlowRun run) {
+        try {
+            return (T) run.evaluation.join();
+        } catch (java.util.concurrent.CompletionException failure) {
+            Throwable cause = failure.getCause();
+            if (cause instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            throw failure;
+        } finally {
+            run.evaluation = null;
+        }
     }
 
     final boolean stop(FlowRun run, Frame frame, StopStep step) {

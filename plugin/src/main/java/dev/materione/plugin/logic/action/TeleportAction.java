@@ -15,7 +15,7 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.support.ResolvedText;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;

@@ -2,6 +2,7 @@ package dev.materione.plugin.logic.support;
 
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.ReadExecutor;
 import java.util.List;
 import java.util.Map;

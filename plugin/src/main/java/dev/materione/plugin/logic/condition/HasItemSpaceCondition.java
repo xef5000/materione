@@ -19,7 +19,7 @@ import dev.materione.plugin.logic.support.ItemMatch;
 import dev.materione.plugin.logic.support.ItemRef;
 import dev.materione.plugin.logic.support.ItemSlots;
 import dev.materione.plugin.logic.support.ItemTemplates;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import dev.materione.plugin.logic.support.Stacks;
 import java.util.List;
 import java.util.Objects;

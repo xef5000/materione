@@ -6,8 +6,10 @@ import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.TargetSpec;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -19,7 +21,9 @@ import java.util.Optional;
  * <p>An action map carries exactly one key that is not a universal property: the action id. The
  * universal properties are {@code chance}, {@code delay} and the editor hint {@code node}. A map
  * that breaks this skips the rule ({@code MTR-0021}); an id the registry does not know, or whose
- * type rejects the parameters, skips the step alone ({@code MTR-0057}).
+ * type rejects the parameters, skips the step alone ({@code MTR-0057}). A literal {@code chance} or
+ * {@code delay} is checked here; a template is compiled with the action's own parameters and checked
+ * as the step runs (logic.md section 42, #470).
  */
 final class ActionCompiler {
 
@@ -36,14 +40,14 @@ final class ActionCompiler {
     Step compile(Map<String, Object> shape, StepPath path) {
         String key = null;
         Object payload = null;
-        double chance = 1.0;
-        long delayTicks = 0;
+        Object chance = 1.0;
+        Object delay = 0L;
         for (var entry : shape.entrySet()) {
             String name = entry.getKey();
             if (name.equals(ActionStep.CHANCE_KEY)) {
-                chance = ratio(entry.getValue(), path);
+                chance = timing(entry.getValue(), path, ActionStep.CHANCE_KEY);
             } else if (name.equals(ActionStep.DELAY_KEY)) {
-                delayTicks = ticks(entry.getValue(), path);
+                delay = timing(entry.getValue(), path, ActionStep.DELAY_KEY);
             } else if (key == null) {
                 key = name;
                 payload = entry.getValue();
@@ -56,10 +60,44 @@ final class ActionCompiler {
             throw unit.structural(path, "bad action: no action type key",
                     "each action is a mapping like { run_command: \"say hi\" }");
         }
-        return resolve(key, payload, chance, delayTicks, path);
+        return resolve(key, payload, chance, delay, path);
     }
 
-    private Step resolve(String key, Object payload, double chance, long delayTicks, StepPath path) {
+    /**
+     * The value of a universal key, checked when it is a literal: a template is returned as written and compiled with
+     * the action ({@link #bind}). A literal is the number the key always took; anything else is refused at load.
+     */
+    private Object timing(Object value, StepPath path, String key) {
+        if (isTemplate(value)) {
+            return value;
+        }
+        return key.equals(ActionStep.CHANCE_KEY) ? ratio(value, path) : ticks(value, path);
+    }
+
+    /** True for a string holding a template: the one shape a universal key reads as an expression. */
+    static boolean isTemplate(Object value) {
+        return value instanceof String text && (text.contains("${") || text.contains("%"));
+    }
+
+    /**
+     * The ticks of a {@code wait} whose value is a template (logic.md section 42, #470): compiled with a recorder of its own,
+     * so its roots are checked at load like any expression; the value is read when the step runs.
+     */
+    Quantity waitTicks(Object ticks, StepPath path) {
+        var recorder = new RecordingExpressions(unit.context.lookup.functions());
+        try {
+            var reader = Shapes.reader(new LinkedHashMap<>(Map.of("ticks", ticks)), recorder, unit.context.environment);
+            Quantity quantity = Quantity.integerOr(reader, "ticks", 0, 0, (int) WaitStep.MAX_TICKS);
+            recorder.check(unit, path);
+            return quantity;
+        } catch (IllegalArgumentException e) {
+            unit.problem(DiagnosticCodes.EXPRESSION_INVALID, Severity.WARN, path, e.getMessage(),
+                    "fix the expression syntax; the wait was skipped");
+            throw Skip.step();
+        }
+    }
+
+    private Step resolve(String key, Object payload, Object chance, Object delay, StepPath path) {
         Optional<ActionType<?>> resolved = unit.context.lookup.action(key);
         if (resolved.isEmpty()) {
             unit.problem(DiagnosticCodes.LOGIC_STEP_REJECTED, Severity.WARN, path, "unknown action '" + key + "'",
@@ -67,7 +105,7 @@ final class ActionCompiler {
             throw Skip.step();
         }
         try {
-            return bind(key, resolved.get(), payload, chance, delayTicks, path);
+            return bind(key, resolved.get(), payload, chance, delay, path);
         } catch (RuntimeException e) {
             // a type that knows its own problem names its code (logic.md §3.2); everything else is MTR-0057
             if (e instanceof ParseRejection rejection) {
@@ -84,13 +122,20 @@ final class ActionCompiler {
     }
 
     /** Captures the type's parameter type so parse and bind agree on it. */
-    private <P> Step bind(
-            String key, ActionType<P> type, Object payload, double chance, long delayTicks, StepPath path) {
+    private <P> Step bind(String key, ActionType<P> type, Object payload, Object chance, Object delay, StepPath path) {
         var recorder = new RecordingExpressions(unit.context.lookup.functions());
         ActionDescription description = type.describe();
         var reader = Shapes.reader(
                 Shapes.paramsOf(key, description.shorthand(), payload), recorder, unit.context.environment);
-        ActionStep<P> step = ActionStep.bind(path, key, type, reader, chance, delayTicks);
+        // the universal keys are read the way a parameter is: one reader over both, so a template compiles with the
+        // same recorder and its roots are checked with the action's own
+        var timings = new LinkedHashMap<String, Object>();
+        timings.put(ActionStep.CHANCE_KEY, chance);
+        timings.put(ActionStep.DELAY_KEY, delay);
+        var timingReader = Shapes.reader(timings, recorder, unit.context.environment);
+        Quantity chanceQuantity = Quantity.decimalOr(timingReader, ActionStep.CHANCE_KEY, 1d, 0d, 1d);
+        Quantity delayQuantity = Quantity.integerOr(timingReader, ActionStep.DELAY_KEY, 0, 0, (int) WaitStep.MAX_TICKS);
+        ActionStep<P> step = ActionStep.bind(path, key, type, reader, chanceQuantity, delayQuantity);
         step = target(step, description, reader);
         assert Shapes.declaresExpressions(type.describe().self().parameters(), reader.expressionKeys())
                 : "action '" + key + "' binds " + reader.expressionKeys()

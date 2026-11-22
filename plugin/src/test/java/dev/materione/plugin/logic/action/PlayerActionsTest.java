@@ -60,9 +60,9 @@ class PlayerActionsTest {
         void parsesTheTimingsWithVanillaDefaults() {
             var parsed = action.parse(reader(params("title", "Hi")));
             assertThat(parsed.subtitle()).isEmpty();
-            assertThat(parsed.fadeIn()).isEqualTo(10);
-            assertThat(parsed.stay()).isEqualTo(70);
-            assertThat(parsed.fadeOut()).isEqualTo(20);
+            assertThat(parsed.fadeIn().literal()).isEqualTo(10);
+            assertThat(parsed.stay().literal()).isEqualTo(70);
+            assertThat(parsed.fadeOut().literal()).isEqualTo(20);
         }
 
         @Test

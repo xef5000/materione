@@ -640,12 +640,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0121", Severity.WARN, "A world verb setting is invalid; the default is used");
 
     /**
-     * A money amount that is a template rendering to something other than a number above 0 and at most 1.0E12 (text,
-     * zero, a negative number, or an oversized one). The step that holds it fails or is false, and nothing moves
-     * (logic.md section 42, #464). Rate-limited per rule and code, as the other run-time codes are.
+     * A template value that renders outside the range its parameter takes: a money amount (not a number above 0 and at
+     * most 1.0E12, logic.md section 42, #464), a potion duration or amplifier, a title timing, a sound volume or pitch, a
+     * prompt timeout, a slot, a permission count, or a step's chance, delay or wait (logic.md section 42, #470). The step
+     * fails, or the condition is false, and nothing is done. A literal is checked at load instead. Rate-limited per rule
+     * and code, as the other run-time codes are.
      */
-    public static final DiagnosticCode MONEY_AMOUNT_REFUSED =
-            new DiagnosticCode("MTR-0120", Severity.WARN, "Money amount refused at run time; nothing moved");
+    public static final DiagnosticCode QUANTITY_REFUSED =
+            new DiagnosticCode("MTR-0120", Severity.WARN, "A template value refused at run time; the step did nothing");
 
     /**
      * A protection provider threw while it was asked (protection.md section 6, #466). The call counts as a deny, so a broken
@@ -822,7 +824,7 @@ public final class DiagnosticCodes {
             VERB_BUDGET_SPENT,
             VERB_REGION_REFUSED,
             VERB_SETTING_INVALID,
-            MONEY_AMOUNT_REFUSED,
+            QUANTITY_REFUSED,
             PROTECTION_PROVIDER_FAILED,
             PROTECTION_SETTING_INVALID,
             PROTECTION_PROVIDER_UNUSABLE);

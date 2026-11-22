@@ -36,6 +36,7 @@ here.
 | **Escrow account** | The record, inside the player's PDC, of the stacks a player has in `durable: required` input slots. Written in the same owner-thread step as the inventory, so the two are saved atomically; recovered on join before any interaction. | gui-input-durability.md §5.3, §5.7 |
 | **Escrow ledger** | `storage/escrow/<uuid>.ledger`: the append-only, per-player record of exit decisions (a stack returned, consumed or owed) that makes an exit durable before its effect runs; compacted after `escrow_retention_days`, quarantined, never deleted, when unreadable. | gui-input-durability.md §5.3, plugin.md §7 |
 | **Expression engine** | The one universal condition/interpolation language across all content types (single settled decision; PlaceholderAPI resolves inside strings). | runtime-systems.md §2.1 |
+| **Quantity** | A numeric parameter or step key (an amount, a timing, a slot, a count, `chance`, `delay`, `wait`) that takes a number or a template that renders to one: a literal is checked at load, a template when the step runs, and a value out of range is refused under `MTR-0120`. | logic.md §42 (decisions taken in #470) |
 | **Facet** | One of the three aspects of a resource: appearance (pack-bound), behavior (server-side), metadata. | master §5.1 |
 | **Fail-soft** | Content errors quarantine a resource/pack; the server never crashes, wedges, or half-applies. | master D6 |
 | **Fingerprint** | Hash of an asset; drives incremental compile (unchanged asset → unchanged pack entry). | plugin.md §4.2 |

@@ -4,7 +4,7 @@ import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.provider.Currency;
 import dev.materione.api.logic.provider.CurrencyCatalog;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import java.util.OptionalDouble;
 import java.util.regex.Pattern;
 

@@ -13,6 +13,7 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.registry.RegistryEntry;
+import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.action.PromptAction;
 import java.util.ArrayList;
@@ -75,7 +76,7 @@ class PromptActionTest {
 
         assertThat(params.method()).isSameAs(chat);
         assertThat(params.target()).isEqualTo(new PromptAction.Session("search"));
-        assertThat(params.timeoutSeconds()).isEqualTo(30);
+        assertThat(params.timeoutSeconds().literal()).isEqualTo(30);
         assertThat(params.cancelWord()).isEqualTo("stop");
     }
 
@@ -85,7 +86,7 @@ class PromptActionTest {
 
         assertThat(params.method()).isSameAs(chat);
         assertThat(params.target()).isEqualTo(new PromptAction.Local("answer"));
-        assertThat(params.timeoutSeconds()).isEqualTo(60);
+        assertThat(params.timeoutSeconds().literal()).isEqualTo(60);
         assertThat(params.cancelWord()).isEqualTo("cancel");
     }
 
@@ -109,6 +110,30 @@ class PromptActionTest {
     void aTimeoutOutsideOneToSixHundredSecondsIsRefused() {
         assertThatIllegal(prompt(Map.of("timeout", 0)));
         assertThatIllegal(prompt(Map.of("timeout", 601)));
+    }
+
+    /**
+     * The timeout is an expression (logic.md section 42, #470): it renders before the question is asked, a value in range
+     * asks it, and a value out of range refuses the step under MTR-0120 with no question put to the player.
+     */
+    @Test
+    void aTemplateTimeoutRendersBeforeTheQuestionAndARefusedOneAsksNothing() {
+        Player player = PromptServiceTest.player(UUID.randomUUID(), messages);
+        PromptAction.Params params = action.parse(ParamReader.of(
+                Map.of("text", "Name it", "var", "answer", "timeout", "${args.t}"), EngineExpressions.INSTANCE));
+        assertThat(params.timeoutSeconds().isTemplate()).isTrue();
+
+        var inRange = new MapLogicContext(Map.of("args", Map.of("t", 30))).with(Facets.PLAYER, player);
+        assertThat(params.timeoutSeconds().value(inRange).getAsDouble()).isEqualTo(30);
+
+        var refused = new MapLogicContext(Map.of("args", Map.of("t", 0))).with(Facets.PLAYER, player);
+        ActionOutcome outcome = action.executeResumable(params, refused, ReadExecutor.INLINE)
+                .toCompletableFuture().join();
+        assertThat(outcome).isInstanceOfSatisfying(ActionOutcome.Failed.class, failed -> {
+            assertThat(failed.code()).isEqualTo(DiagnosticCodes.QUANTITY_REFUSED);
+            assertThat(failed.reason()).isEqualTo("timeout must be a whole number in 1..600, not \"0\"");
+        });
+        assertThat(gateway.pending(1)).isFalse();
     }
 
     @Test

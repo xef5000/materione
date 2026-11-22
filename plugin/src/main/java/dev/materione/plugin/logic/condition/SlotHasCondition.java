@@ -1,10 +1,15 @@
 package dev.materione.plugin.logic.condition;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Quantity;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -15,6 +20,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.concurrent.CompletionStage;
 
 /**
  * {@code slot_has: {slot: 13}}, {@code slot_has: {slot: 13, item: corpus:gem_red, amount: 2}}: true when an input
@@ -30,11 +37,11 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
     /**
      * The parsed condition.
      *
-     * @param slot the container slot
+     * @param slot the container slot: a number, or a template that renders to one (logic.md section 42, #470)
      * @param item the identity to match, or empty for any item
      * @param amount how many the slot must hold at least
      */
-    public record Params(int slot, Optional<String> item, int amount) {
+    public record Params(Quantity slot, Optional<String> item, int amount) {
 
         public Params {
             Objects.requireNonNull(item, "item");
@@ -59,7 +66,8 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
                 "True when an input slot of this GUI holds the item, at least this amount",
                 List.of(
                         new ParameterSchema("slot", ParameterType.INTEGER, true, null,
-                                "The container slot, from 0 at the top-left", null, null),
+                                "The container slot, from 0 at the top-left; or a template that renders to one", null, null)
+                                .acceptingExpression(),
                         new ParameterSchema("item", ParameterType.STRING, false, null,
                                 "Materione item id, or minecraft:<material>; any item when absent", null, null).withWidget("item", ""),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
@@ -69,7 +77,7 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
 
     @Override
     public Params parse(ParamReader params) {
-        int slot = params.requiredInteger("slot", 0, 53);
+        Quantity slot = Quantity.requiredInteger(params, "slot", 0, 53);
         Optional<String> item = params.optionalText("item").map(SlotHasCondition::identity);
         int amount = params.integer("amount", 1, 1, MAX_AMOUNT);
         return new Params(slot, item, amount);
@@ -77,15 +85,27 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
 
     @Override
     public boolean test(Params params, LogicContext context) {
+        // a refused slot is a content error whatever the context, so it is reported before the GUI is asked for
+        OptionalInt slot = params.slot().wholeValue(context);
+        if (slot.isEmpty()) {
+            throw new CodedRefusal(DiagnosticCodes.QUANTITY_REFUSED, params.slot().refusal("slot", context));
+        }
         GuiSession session = context.facet(GuiSession.FACET).orElse(null);
         if (session == null) {
             return false;
         }
-        StackView held = slots.peek(session, params.slot());
+        StackView held = slots.peek(session, slot.getAsInt());
         if (held.empty() || held.amount() < params.amount()) {
             return false;
         }
         return params.item().map(id -> id.equals(held.id())).orElse(true);
+    }
+
+    /** The template slot renders first, on the thread its own reads need, then the slot is read (as has_money). */
+    @Override
+    public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor executor) {
+        return params.slot().resolveResumable(context, executor).thenCompose(slot ->
+                executor.on(Threading.ANY, () -> test(new Params(slot, params.item(), params.amount()), context)));
     }
 
     /** The identity an author wrote: a bare vanilla name is {@code minecraft:<name>}, a Materione id is kept. */

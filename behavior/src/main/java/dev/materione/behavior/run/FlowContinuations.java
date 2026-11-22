@@ -1,11 +1,15 @@
 package dev.materione.behavior.run;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.logic.CodedRefusal;
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.TargetResolver;
 import dev.materione.api.logic.Threading;
 import dev.materione.behavior.flow.ActionStep;
 import dev.materione.behavior.flow.StepPath;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ThreadLocalRandom;
@@ -25,16 +29,50 @@ abstract class FlowContinuations extends ControlSteps {
 
     final <P> boolean action(FlowRun run, Frame frame, ActionStep<P> action) {
         if (run.stage == 0) {
+            double chance;
+            long delayTicks;
+            if (action.timingIsTemplate()) {
+                // a template chance or delay renders first, on the thread its reads need, before the roll (logic.md section 42, #470)
+                if (!await(run, action.path(), () -> action.resolveTiming(run.view(), run.reads.captureOrigin()))) {
+                    return false;
+                }
+                ActionStep.Timing timing;
+                try {
+                    timing = take(run);
+                } catch (ReadUnavailableException unavailable) {
+                    failClosed(run, action.path(), unavailable);
+                    return false;
+                } catch (RuntimeException failed) {
+                    consume(run, frame);
+                    return failure(run, action.path(), "action '" + action.id() + "' failed: " + reasonOf(failed), true,
+                            failed instanceof CodedRefusal refusal ? refusal.code() : null);
+                }
+                OptionalDouble resolvedChance = timing.chance().value(run.view());
+                OptionalInt resolvedDelay = timing.delayTicks().wholeValue(run.view());
+                if (resolvedChance.isEmpty() || resolvedDelay.isEmpty()) {
+                    // a refused value: the step does nothing, and the code names it (MTR-0120, logic.md section 42, #470)
+                    consume(run, frame);
+                    String refusal = resolvedChance.isEmpty()
+                            ? timing.chance().refusal(ActionStep.CHANCE_KEY, run.view())
+                            : timing.delayTicks().refusal(ActionStep.DELAY_KEY, run.view());
+                    return failure(run, action.path(), refusal, false, DiagnosticCodes.QUANTITY_REFUSED);
+                }
+                chance = resolvedChance.getAsDouble();
+                delayTicks = resolvedDelay.getAsInt();
+            } else {
+                chance = action.chance().literal();
+                delayTicks = (long) action.delayTicks().literal();
+            }
             run.stage = 1;
-            if (action.chance() < 1 && ThreadLocalRandom.current().nextDouble() >= action.chance()) {
-                emit(run, action.path(), TraceEvent.Type.STEP_SKIPPED, "chance " + action.chance());
+            if (chance < 1 && ThreadLocalRandom.current().nextDouble() >= chance) {
+                emit(run, action.path(), TraceEvent.Type.STEP_SKIPPED, "chance " + chance);
                 consume(run, frame);
                 return true;
             }
-            if (action.delayTicks() > 0) {
+            if (delayTicks > 0) {
                 run.stage = 2; // the delay is served when the run comes back
                 Threading back = action.threading() == Threading.GLOBAL ? Threading.GLOBAL : Threading.PLAYER_REGION;
-                return !park(run, action.path(), back, action.delayTicks(), true);
+                return !park(run, action.path(), back, delayTicks, true);
             }
             run.stage = 2;
         }
@@ -213,21 +251,6 @@ abstract class FlowContinuations extends ControlSteps {
             }
         });
         return false;
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T> T take(FlowRun run) {
-        try {
-            return (T) run.evaluation.join();
-        } catch (java.util.concurrent.CompletionException failure) {
-            Throwable cause = failure.getCause();
-            if (cause instanceof RuntimeException runtime) {
-                throw runtime;
-            }
-            throw failure;
-        } finally {
-            run.evaluation = null;
-        }
     }
 
     private void dropped(FlowRun run, long token) {

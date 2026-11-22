@@ -20,7 +20,7 @@ import dev.materione.plugin.logic.support.InventoryPlan;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.ItemRef;
 import dev.materione.plugin.logic.support.ItemView;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import dev.materione.plugin.logic.support.Stacks;
 import java.util.List;
 import java.util.Optional;
