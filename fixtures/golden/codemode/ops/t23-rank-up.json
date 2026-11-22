@@ -98,7 +98,7 @@
                       {
                         "broadcast": "${\"<gold>\" + player.name + ' is now a knight!'}"
                       },
-                      "gui.close"
+                      "view.close"
                     ]
                   },
                   {
@@ -133,7 +133,7 @@
                       {
                         "broadcast": "${\"<gold>\" + player.name + ' is now a lord!'}"
                       },
-                      "gui.close"
+                      "view.close"
                     ]
                   }
                 ],

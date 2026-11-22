@@ -10,8 +10,8 @@
       "layer": "sell",
       "do": [
         {
-          "gui.open": {
-            "gui": "sample:confirm",
+          "view.open": {
+            "view": "sample:confirm",
             "args": {
               "question": "<yellow>Are you sure?"
             }

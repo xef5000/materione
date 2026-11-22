@@ -18,7 +18,7 @@ class OverlayLogicContextTest {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", player);
         root.put("vars", new LinkedHashMap<String, Object>());
-        root.put("gui", Map.of("page", Map.of("players", Map.of("number", 2, "count", 4))));
+        root.put("view", Map.of("page", Map.of("players", Map.of("number", 2, "count", 4))));
         return new MapLogicContext(root);
     }
 

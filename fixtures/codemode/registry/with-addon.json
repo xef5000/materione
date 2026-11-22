@@ -637,67 +637,6 @@
           "available": true,
           "category": "gui",
           "deferred": false,
-          "description": "Returns to the GUI the player came from, with its arguments and session variables",
-          "displayName": "Back",
-          "id": "gui.back",
-          "parameters": [],
-          "registeredBy": "materione",
-          "sinceVersion": "1.0.0",
-          "threading": "player_region"
-        },
-        {
-          "available": true,
-          "category": "gui",
-          "deferred": false,
-          "description": "Closes the GUI this flow belongs to",
-          "displayName": "Close GUI",
-          "id": "gui.close",
-          "parameters": [],
-          "registeredBy": "materione",
-          "sinceVersion": "1.0.0",
-          "threading": "player_region"
-        },
-        {
-          "available": true,
-          "category": "gui",
-          "deferred": false,
-          "description": "Opens a GUI for the player, replacing the window they have; the old one goes on the back stack",
-          "displayName": "Open GUI",
-          "id": "gui.open",
-          "parameters": [
-            {
-              "advanced": false,
-              "description": "The GUI to open: pack:id, or a name in this GUI's pack",
-              "id": "gui",
-              "label": "Gui",
-              "order": 0,
-              "referenceKind": "gui",
-              "required": true,
-              "section": "general",
-              "type": "reference",
-              "uiHint": "reference"
-            },
-            {
-              "advanced": true,
-              "description": "Arguments the GUI opens with, name to text; templates allowed",
-              "id": "args",
-              "label": "Args",
-              "order": 0,
-              "required": false,
-              "section": "general",
-              "type": "raw",
-              "uiHint": "advanced"
-            }
-          ],
-          "registeredBy": "materione",
-          "shorthand": "gui",
-          "sinceVersion": "1.0.0",
-          "threading": "player_region"
-        },
-        {
-          "available": true,
-          "category": "gui",
-          "deferred": false,
           "description": "Moves a list of the open GUI to another page: next, previous, first, last, or a page number. The window shows the page and gui.page runs",
           "displayName": "Page list",
           "id": "gui.page",
@@ -2113,6 +2052,103 @@
             "player",
             "entity"
           ],
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Returns to the view the player came from, with its arguments and session values",
+          "displayName": "Back",
+          "id": "view.back",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Closes the view this flow belongs to, or the named view if it is the one the player has open",
+          "displayName": "Close view",
+          "id": "view.close",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Close only if this view is the one shown: pack:id, or a name in this view's pack; the flow's own view when omitted",
+              "id": "view",
+              "label": "View",
+              "order": 0,
+              "referenceKind": "view",
+              "required": false,
+              "section": "general",
+              "type": "reference",
+              "uiHint": "reference"
+            },
+            {
+              "advanced": false,
+              "description": "The view kind (gui, dialog) when the id is shared by two kinds",
+              "id": "kind",
+              "label": "Kind",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "view",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Opens a view for the player, replacing the one they have of that kind; the old one goes on the view history",
+          "displayName": "Open view",
+          "id": "view.open",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The view to open: pack:id, or a name in this view's pack",
+              "id": "view",
+              "label": "View",
+              "order": 0,
+              "referenceKind": "view",
+              "required": true,
+              "section": "general",
+              "type": "reference",
+              "uiHint": "reference"
+            },
+            {
+              "advanced": false,
+              "description": "The view kind (gui, dialog) when the id is shared by two kinds, which an id alone cannot tell apart",
+              "id": "kind",
+              "label": "Kind",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "description": "Arguments the view opens with, name to text; templates allowed",
+              "id": "args",
+              "label": "Args",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "view",
+          "sinceVersion": "1.0.0",
           "threading": "player_region"
         },
         {
@@ -7820,27 +7856,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -7920,27 +7974,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8020,27 +8092,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8145,27 +8235,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8325,27 +8433,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8454,27 +8580,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8568,27 +8712,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8693,27 +8855,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -8830,27 +9010,45 @@
               "type": "integer"
             },
             {
-              "description": "The GUI's id, pack:name",
+              "description": "The view's id, pack:name",
               "hosts": [],
-              "path": "gui.id",
+              "path": "view.id",
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "description": "The view's kind: gui",
               "hosts": [],
-              "path": "gui.args.*",
+              "path": "view.kind",
+              "type": "string"
+            },
+            {
+              "description": "An argument the view was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
+              "hosts": [],
+              "path": "view.args.*",
               "type": "raw"
             },
             {
-              "description": "A session variable of this open GUI",
+              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
               "hosts": [],
-              "path": "gui.session.*",
+              "path": "view.item",
               "type": "raw"
+            },
+            {
+              "description": "The key the view is bound to; empty until keyed state exists (views.md section 3.7)",
+              "hosts": [],
+              "path": "view.key",
+              "type": "string"
             },
             {
               "description": "The page state of a list in this GUI",
               "hosts": [],
-              "path": "gui.page.*",
+              "path": "view.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "hosts": [],
+              "path": "vars.session.*",
               "type": "raw"
             },
             {
@@ -10936,7 +11134,7 @@
           },
           {
             "advanced": true,
-            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in gui.session.search (or var:), ignoring case",
+            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in vars.session.search (or var:), ignoring case",
             "example": "{fields: [name]}",
             "id": "search",
             "label": "Search",
@@ -14130,7 +14328,13 @@
             "type": "raw",
             "uiHint": "advanced"
           }
-        ]
+        ],
+        "view": {
+          "rerenderDefault": "on_change",
+          "supportsKey": false,
+          "supportsTarget": false,
+          "viewerRule": "opened"
+        }
       },
       {
         "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",

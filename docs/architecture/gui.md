@@ -387,7 +387,7 @@ only (§9.4).
   (no emoji replacement). Permission, online player and "GUI is live" are checked on the caller's
   thread and refuse at once; the window is built and opened on the viewer's region thread. Items come
   from the item factory (`MaterioneStacks.build`, amount clamped to the stack size). Since #214 the window
-  is opened by `GuiOpener`, the one open path, which creates the player's `GuiSession` (arguments, session
+  is opened by `GuiOpener`, the one open path, which creates the player's viewer record (`ViewerRecord`, views.md §16: arguments, session
   variables, back stack) and fires `gui.opening` and `gui.open` (logic.md §6.1, §21); `GuiRuntime` is the
   API facade in front of it, and `GuiMenu` is the window holder that knows its session.
   When an initial open is deferred through a click, it opens only the same immutable live definition

@@ -30,7 +30,7 @@
             "on": "click:right",
             "do": [
               {
-                "gui.open": "bench:shop"
+                "view.open": "bench:shop"
               },
               {
                 "sound": "block.note_block.chime"

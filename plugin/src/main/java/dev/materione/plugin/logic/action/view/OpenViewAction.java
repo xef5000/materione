@@ -16,6 +16,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.view.ViewBridge;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewParams;
 import dev.materione.plugin.view.ViewRun;
 import dev.materione.plugin.view.open.OpenRequest;
 import dev.materione.plugin.view.open.OpenResult;
@@ -40,7 +41,7 @@ import java.util.concurrent.CompletionStage;
 public final class OpenViewAction implements ActionType<OpenViewAction.Params> {
 
     /** The parsed step: the view as written, and the argument templates. */
-    public record Params(String view, Map<String, TemplateText> args) {
+    public record Params(String view, String kind, Map<String, TemplateText> args) {
 
         public Params {
             args = Map.copyOf(args);
@@ -61,12 +62,15 @@ public final class OpenViewAction implements ActionType<OpenViewAction.Params> {
     @Override
     public ActionDescription describe() {
         return new ActionDescription(new SelfDescription("Open view",
-                "Opens a view (a GUI, or a dialog) for the player, replacing the one they have of that kind; "
+                "Opens a view for the player, replacing the one they have of that kind; "
                         + "the old one goes on the view history",
                 List.of(
                         new ParameterSchema("view", ParameterType.REFERENCE, true, null,
                                 "The view to open: pack:id, or a name in this view's pack", null, null)
                                 .withWidget("reference", "view"),
+                        new ParameterSchema("kind", ParameterType.STRING, false, null,
+                                "The view kind (gui, dialog) when the id is shared by two kinds, which an id alone cannot "
+                                        + "tell apart", null, null),
                         new ParameterSchema("args", ParameterType.RAW, false, null,
                                 "Arguments the view opens with, name to text; templates allowed", null, null)),
                 "1.0.0"), LogicCategory.GUI, "view");
@@ -87,7 +91,7 @@ public final class OpenViewAction implements ActionType<OpenViewAction.Params> {
                 args.put(name, section.template(name));
             }
         }
-        return new Params(view, args);
+        return new Params(view, ViewParams.optional(params, "kind"), args);
     }
 
     @Override
@@ -129,7 +133,7 @@ public final class OpenViewAction implements ActionType<OpenViewAction.Params> {
         }
         NamespacedId near = run.record() == null ? null : run.record().definition();
         String nearKind = run.record() == null ? null : run.record().kind();
-        ViewKinds.Resolution resolution = run.services().kinds().resolve(params.view(), near, nearKind);
+        ViewKinds.Resolution resolution = run.services().kinds().resolve(params.view(), near, nearKind, params.kind());
         if (!resolution.ok()) {
             return new Prepared(run, null, resolution.problem());
         }

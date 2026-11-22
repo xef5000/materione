@@ -3,8 +3,8 @@ package dev.materione.api.logic.variable;
 import java.util.Optional;
 
 /**
- * The {@code session} variables of one open GUI (logic.md §3.1): they survive a refresh and
- * {@code gui.back}, and end with the window. The GUI runtime implements this over its
+ * The {@code session} values of one open view (logic.md §3.1, views.md §3.4): they survive a refresh and
+ * {@code view.back}, and end with the window. The GUI runtime implements this over its
  * session and puts it into a run's context under {@link VariableFacets#SESSION}; a run with no open
  * session has no such facet, so {@code vars.session.*} reads empty and writes fail.
  */

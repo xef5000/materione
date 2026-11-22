@@ -21,7 +21,7 @@
 > | **D12** (master §3.1) | The whole document. The engine gains two primitives (§2.2), each passing U1 to U5; the backpack itself is content (§3) and a preset (§4) that obeys R1 to R7, the by-hand rule (R4) above all. |
 > | **D1** | The author's file holds the declaration only (§4.1). Stack contents are runtime state in the stack, not content; nothing becomes a second source of truth (§5.3). |
 > | **D2, D6** | The preset is resolved by a pipeline stage with graph edges item → preset → GUI (§4.3); no "apply preset" path writes files. |
-> | **D4** | The behavior is one `click:right` rule and one `gui.open` step on the one ECA engine; the native listeners go away (§3.1). |
+> | **D4** | The behavior is one `click:right` rule and one `view.open` step on the one ECA engine; the native listeners go away (§3.1). |
 > | **D5** | Both new primitives and the preset self-describe through registries, so the editor (§7) and the SDK (§8) render them with no hand-written surface. |
 > | **D8** | Every stack write is an owner-thread memory step; no IO on a region thread (§6.3). |
 > | **D13** | The agent declares the preset or writes the composition; both are staged operations (§8). |
@@ -63,8 +63,8 @@ and the tests of §10 pin the fix:
 | # | Need | Primitive | Today | Class |
 |---|---|---|---|---|
 | 1 | Right-click with the item opens storage, and the vanilla use (placing a `CHEST` material) does not happen | Item `click` trigger with the `right` detail (`on: click:right`, logic.md §14 decision 3) and the `cancel` action | Shipped | P |
-| 2 | A chest window of 1 to 6 rows with a per-item title | A `gui` resource with `container: chest_N` (gui.md §12.4) and a text layer templated on an open argument (`${gui.args.title}`, logic.md §6.4 dynamic title) | Shipped | P |
-| 3 | The item passes its parameters to the window | `gui.open` with `args`, typed `open.args` (logic.md §6.1) | Shipped | P |
+| 2 | A chest window of 1 to 6 rows with a per-item title | A `gui` resource with `container: chest_N` (gui.md §12.4) and a text layer templated on an open argument (`${view.args.title}`, logic.md §6.4 dynamic title) | Shipped | P |
+| 3 | The item passes its parameters to the window | `view.open` with `args`, typed `open.args` (logic.md §6.1) | Shipped | P |
 | 4 | Player items may be put in and taken out of the window | `slots` layer with `input: true` (logic.md §6.5, §25) | Shipped | P+ (primitives.md §4.7) |
 | 5 | **The window knows which stack it was opened about**, and keeps knowing it while the stack sits in an inventory slot | **The run's item carried into a view** | **Missing** | **G** |
 | 6 | **The slots load from, and are held by, that stack**, not returned to the player on close | **Custody with a stack holder** | **Missing** (custody has one holder, the player's account) | **G** |
@@ -84,7 +84,7 @@ it and the other reuses it.
 
 > **As built by #333 step 1 ([`logic.md`](logic.md) §38).** Step 1 landed first and built the *run's* half only: the stack of a run is
 > a `StackRef` (api, an opaque handle with its owner player) given to the run's variable binding by the trigger that fired it, and the
-> item-scope store reads and writes through it. It did **not** build the GUI half: no session records a subject stack, `gui.open` does
+> item-scope store reads and writes through it. It did **not** build the GUI half: no session records a subject stack, `view.open` does
 > not carry one, and every `vars.item.*` in a GUI is `MTR-0060` at load. P-A reuses the handle rather than adding a second one: the
 > subject reference of the table below (owner, slot, holder id, checked at each use) is a `StackRef` implementation that resolves the
 > live stack and refuses on a mismatch; the GUI run's binding is built with it (`VariableService.bind(player, stack)`), and `item`
@@ -92,10 +92,10 @@ it and the other reuses it.
 
 | | Statement |
 |---|---|
-| What it is | `gui.open` run from a flow that has an item records that stack as the session's **subject stack**: a reference made of the owner player, the inventory slot index and the stack's holder id (§5.1). |
-| How content reads it | `gui.item.*` in expressions (the same item view `slot.item.*` exposes), and as the default target of P-B. A GUI opened with no subject (a command, `/materione gui open`) reads `gui.item` as null and a layer that needs it renders inert with a diagnostic (§9, D-1). |
+| What it is | `view.open` run from a flow that has an item records that stack as the session's **subject stack**: a reference made of the owner player, the inventory slot index and the stack's holder id (§5.1). |
+| How content reads it | `view.item` in expressions (the same item view `slot.item.*` exposes), and as the default target of P-B. A GUI opened with no subject (a command, `/materione gui open`) reads `view.item` as null and a layer that needs it renders inert with a diagnostic (§9, D-1). |
 | Liveness | The reference is checked at each use: same player, same slot, same holder id. A mismatch ends the session (§6.4 H2). |
-| U-tests | U1 names a capability (a view's subject), not a backpack. U2 any item trigger, any GUI. U3 content passes it with `gui.open`, no Java. U4 part of the `gui.open` action's and the GUI context's self-description. U5 validated offline: a GUI that reads `gui.item` and is opened by a command is a load-time warning. |
+| U-tests | U1 names a capability (a view's subject), not a backpack. U2 any item trigger, any GUI. U3 content passes it with `view.open`, no Java. U4 part of the `view.open` action's and the GUI context's self-description. U5 validated offline: a GUI that reads `view.item` and is opened by a command is a load-time warning. |
 
 **P-B: custody with a stack holder (need 6).** primitives.md §5.1 step (2), and the second holder #334 schedules ("then stack
 holder (#304)"). The `slots` layer names its holder, defaulting to today's behavior exactly (#334's sketch):
@@ -142,12 +142,12 @@ behavior:
   - on: click:right
     do:
       - cancel: {}
-      - gui.open:
+      - view.open:
           id: "materione:backpack_${preset.rows}"   # §4.2, check for row D: a templated id, or six `if` branches
           args: { title: "${preset.title}", allow_nested: "${preset.allow_nested}" }
 ```
 
-`gui.open` from this rule carries the clicked stack as the session's subject (P-A).
+`view.open` from this rule carries the clicked stack as the session's subject (P-A).
 
 ### 3.2 The built-in GUIs
 
@@ -167,7 +167,7 @@ backpack_3:
       type: text
       x: 8
       y: 6
-      text: "${gui.args.title}"
+      text: "${view.args.title}"
       font: default
       color: "#404040"
     - id: storage
@@ -175,7 +175,7 @@ backpack_3:
       region: container
       input: true
       holder: item
-      accept: "${!slot.item.holds_custody || gui.args.allow_nested}"   # Q4: nesting denied by default (need 8)
+      accept: "${!slot.item.holds_custody || view.args.allow_nested}"   # Q4: nesting denied by default (need 8)
 ```
 
 No code names these resources (master §7.3 "No special case"): the preset definition names them, which is content naming content.
@@ -184,7 +184,7 @@ whose storage accepts nothing (D-1).
 
 **Title fidelity.** Today's title is a vanilla inventory title through `MaterioneText.parse` (legacy `&` codes and the stored form of
 master §5.7, plugin.md §6.1). The GUI title is compiled text. Whether formatting inside a templated argument renders is recorded as
-unverified (logic.md §34, the confirm dialog's `${gui.args.question}`). Row R (§11) checks it on the client; if it does not render, the
+unverified (logic.md §34, the confirm dialog's `${view.args.question}`). Row R (§11) checks it on the client; if it does not render, the
 text layer path gains the §5.7 stored form for templated arguments, which is a text-pipeline fix every GUI benefits from, not a backpack
 special case.
 
@@ -223,7 +223,7 @@ the backpack's, and its spelling is decided when the first such preset is design
 
 A declaration's parameters reach the definition as a typed, read-only `preset.*` context in its expressions, not by text substitution
 (the recipes' `{{param}}`): substitution would be a second templating language and an injection seam for a `title` that contains
-`${...}`. **Check for row D:** whether `gui.open`'s `id` accepts a template. If not, the definition uses six `if` branches on
+`${...}`. **Check for row D:** whether `view.open`'s `id` accepts a template. If not, the definition uses six `if` branches on
 `preset.rows`, which is uglier and equally honest; the parameter schema bounds `rows` to 1..6 either way.
 
 ### 4.3 Resolution
@@ -365,7 +365,7 @@ Once Phase B is green, the built-in backpack keeps `best_effort` as its default 
 | **H3** | Nested backpacks | Bounded by the size cap at any depth (P-B). Insertion of a holder stack into a holder is refused by default, and the preset's `allow_nested: true` opts in (Q4, answered); existing nested stacks can always be taken out, because `accept:` gates only insertion. |
 | **H4** | The backpack put into itself | Impossible under the pin (H1): its slot is locked. |
 | **H5** | Two viewers | One open view per holder stack in v1: a second open of the same stack (same player and slot) replaces the first, which closes and writes. Two players cannot reach one stack in vanilla play. Multi-viewer views are #335. |
-| **H6** | `rows` shrinks on reload while open, or between opens | The store keeps its length (P-B *Capacity*). Stacks past the new view stay stored and are listed by `gui.item` for content that wants to show "N hidden"; increasing `rows` again shows them. Fixes B1. The hidden tail is not returned to the player (Q8, answered): nothing leaves custody without the player's act. |
+| **H6** | `rows` shrinks on reload while open, or between opens | The store keeps its length (P-B *Capacity*). Stacks past the new view stay stored and are listed by `view.item` for content that wants to show "N hidden"; increasing `rows` again shows them. Fixes B1. The hidden tail is not returned to the player (Q8, answered): nothing leaves custody without the player's act. |
 | **H7** | Cloned identity (creative middle-click, B4) | The subject reference uses the slot as well as the id, so writes go to the stack that was opened. Contents duplicate with the clone, as a shulker box's do in creative; this is vanilla behavior and not custody's to prevent. |
 | **H8** | Death, quit, kick, stop, plugin disable while open | `InventoryCloseEvent` fires before the save (gui-input-durability.md F4, F7): the session closes and the final write runs. On death the stack drops or is kept with its contents inside, as any item. |
 | **H9** | The item definition stops being a backpack (declaration removed, item deleted) while stacks exist | Contents stay in the stacks untouched (the holder keys are not removed). The stack cannot open until a declaration or a by-hand rule names it again. Diagnostic D-5 is a doctor-level info, not a deletion. |
@@ -411,7 +411,7 @@ Start workspace's type starters (master §9.1), and a preset resource opens in a
 |---|---|
 | The declaration | Unchanged under S1 (Q1): `m.mechanics.backpack({ rows: 3, title: "Traveler's Pack" })` (agent-benchmark.md T03's program passes as is). A content maker's preset is declared the same way, by a member generated from its `params:`. |
 | A content maker's preset | `preset` is a content type, so the generated SDK has its builder like any type's (codemode.md §3.5: a self-describing registry entry appears with no SDK code); an agent creates a preset in the author's pack with the ordinary staged operations, then declares it. Creating one is new content and applies without approval; editing an existing preset asks once per object per session, and the review shows every declaring item as affected (R3). |
-| The by-hand route | With P-A and P-B shipped, the `holder: "item"` value appears on the generated `slots` layer builder and `gui.item` in the context types; T03's by-hand program (a `click:right` rule, `gui.open`, a GUI with a `holder: "item"` input layer) type-checks. Today it fails with the `[CUSTODY]` error of agent-benchmark.md T03. |
+| The by-hand route | With P-A and P-B shipped, the `holder: "item"` value appears on the generated `slots` layer builder and `view.item` in the context types; T03's by-hand program (a `click:right` rule, `view.open`, a GUI with a `holder: "item"` input layer) type-checks. Today it fails with the `[CUSTODY]` error of agent-benchmark.md T03. |
 | The built-in GUIs | Readable and referenceable as `m.ref.gui("materione:backpack_3")`; never writable (master §7.3). |
 | The expansion | `m.read.expand(ref)` only once master §14.7 (iv) is answered; until then absent. |
 | Approval | Declaring a preset on a new item applies without approval; adding it to an existing item is a change to existing content and asks once per object per session (codemode.md §5.6). |
@@ -427,7 +427,7 @@ in plugin.md §5.
 
 | Ref | Severity | When |
 |---|---|---|
-| **D-1** | warning (load) / info (runtime) | A `holder: item` layer, or an expression reading `gui.item`, in a GUI that can be opened with no subject (it has `open.commands`, or a `gui.open` of it runs from a flow with no item). At runtime the layer accepts nothing and the window says why on the actionbar. |
+| **D-1** | warning (load) / info (runtime) | A `holder: item` layer, or an expression reading `view.item`, in a GUI that can be opened with no subject (it has `open.commands`, or a `view.open` of it runs from a flow with no item). At runtime the layer accepts nothing and the window says why on the actionbar. |
 | **D-2** | warning, rate-limited per player | A stack holder session ended because its subject stack changed under it (§6.4 H2), naming the player, the slot and what changed. |
 | **D-3** | warning | A stack holder transfer was refused: the store would exceed its size cap, or the store could not be encoded. The click did nothing (the shape of `MTR-0102` for the account; may reuse it if the owner prefers one code per refusal kind). |
 | **D-4** | error (load) | A preset name collides with a registered mechanic, or a declaration names a preset that does not exist or does not apply to this content type. The declaration is quarantined; the rest of the item loads. |
@@ -453,7 +453,7 @@ in plugin.md §5.
 | Golden | The built-in `backpack_1..6` compiled screens | §3.2 |
 | Integration (1.21.4 harness) | Open, put, take, close, re-open; a stack written by the native mechanic shows its contents; shrink and regrow `rows` across reloads keeps every stack; drop key and self-insertion refused while open; quit while open persists | B1 to B4, H1, H6, H8 |
 | Integration (Phase B) | Kill-boundary rows for the stack holder in `PaperEscrowCrashIT`: a kill after a click and before the next save, the stack in main hand, off hand and storage | §6.2 |
-| Codegen | The generated `.d.ts` golden gains `holder` and `gui.item`; T03's by-hand program type-checks (`fixtures/codemode/corpus/t03-backpack.*`) | §8 |
+| Codegen | The generated `.d.ts` golden gains `holder` and `view.item`; T03's by-hand program type-checks (`fixtures/codemode/corpus/t03-backpack.*`) | §8 |
 | Editor | The `?modules` fixture adds, configures and removes the backpack preset module; the settings panel is schema-derived. A `?preset-studio` fixture creates a preset, edits its parameters and rules, sees Used by, and opens `materione:backpack` read-only | §7, §7.1 |
 | QA catalog | `backpack.opens-builtin-gui` (visual: the window, its title, its rows), `backpack.legacy-contents` (auto: a pre-migration stack's contents), `backpack.pinned-while-open` (auto), `backpack.shrink-keeps-items` (auto), `backpack.nesting-refused` (auto), `backpack.title-formatting` (visual), `presets.user-preset-applies` (auto: a content maker's preset declared on two items behaves on both) | player-visible behavior (`qa/README.md`) |
 
@@ -465,8 +465,8 @@ Each row is one issue and one PR, sized for one agent. Rows are ordered by depen
 
 | Row | Work | Depends on | Agent |
 |---|---|---|---|
-| **R** | Probe on the 26.x seam: a templated title argument with legacy and MiniMessage formatting in a GUI without art (§3.2 *Title fidelity*); `gui.open` with a templated id; screenshots | none | Haiku |
-| **A** | P-A: the subject stack on `gui.open` from an item run, `gui.item.*` in context, the liveness check, D-1 (load half). Coordinate with #333 step 1 (one implementation) | none | Sonnet, high |
+| **R** | Probe on the 26.x seam: a templated title argument with legacy and MiniMessage formatting in a GUI without art (§3.2 *Title fidelity*); `view.open` with a templated id; screenshots | none | Haiku |
+| **A** | P-A: the subject stack on `view.open` from an item run, `view.item` in context, the liveness check, D-1 (load half). Coordinate with #333 step 1 (one implementation) | none | Sonnet, high |
 | **B** | P-B Phase A: `holder: item` on `slots` (schema, studio field, self-description), the stack store over the shipped keys, the per-tick mirror, capacity, the pin, the 256 KiB cap, D-1 runtime half, D-2, D-3, the `holds_custody` item property (need 8); unit and harness tests; the legacy-bytes golden captured from today's mechanic; T03 by-hand corpus update | A | Sonnet, high |
 | **G** | The six built-in GUIs `materione:backpack_1..6` (vanilla look, nesting refused unless `allow_nested`), their compiled goldens, `backpack.opens-builtin-gui` visual QA | B, R | Haiku |
 | **T** | The `preset` content type (§4.4): registration through the public content-type registry, its schema (`params:`, `applies_to:`, contributed `behavior:`/`flows:`), lossless round-trip fixtures, validation that a contributed field exists on the host's schema (R4), namespacing and the cross-pack reference rules, D-6; the type's self-description golden and the generated SDK builder | none | Sonnet, high |
@@ -502,6 +502,6 @@ recorded there; part (i) is settled for items only; (iii) pinning and versioning
 | **Q9** | The built-in GUIs' look | Vanilla chest without art (today's look); a Materione-styled backpack art | **Vanilla** in row G; art is content and can follow without a design change. |
 
 **Not verified in this design** (read from code and docs, not run): defects B1 to B5 (read from `BackpackMechanic`; row B's harness
-tests confirm them before fixing); whether `gui.open` accepts a templated id and whether formatting in a templated title argument renders
+tests confirm them before fixing); whether `view.open` accepts a templated id and whether formatting in a templated title argument renders
 (row R); the mirror's cost against the plugin.md §9 click budget (row B); that a bundle interaction can move a stack out of its slot while
 another container is open on 1.21.4 and 26.1.2 (row B's pin tests).

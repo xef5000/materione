@@ -19,6 +19,6 @@ p.commands.create("trade", {
     m.actions.setVar({ var: req, op: "set", value: "pending" }),
     m.actions.message({ text: "<gold>Trade request sent.", target: { arg: "target" } }),
     m.actions.custodyTransfer({ from: "offer", to: "other" }),
-    m.actions.guiOpen(tradeGui),
+    m.actions.viewOpen(tradeGui),
   ],
 });

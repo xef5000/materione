@@ -154,7 +154,7 @@ export default [
 
   test({
     id: 'guilogic.open-and-back',
-    title: 'on guilogic:menu (page=2) the open button (slot 13) replaces the window with guilogic:detail carrying item=sword and from=Probe (and fires the menu\'s close with reason=replaced), and the detail\'s up button (slot 4) runs gui.back: the menu is back with the arguments it was opened with',
+    title: 'on guilogic:menu (page=2) the open button (slot 13) replaces the window with guilogic:detail carrying item=sword and from=Probe (and fires the menu\'s close with reason=replaced), and the detail\'s up button (slot 4) runs view.back: the menu is back with the arguments it was opened with',
     covers: COVERS,
     dependsOn: ['guilogic.click-message-sound'],
     timeoutMs: 240_000,

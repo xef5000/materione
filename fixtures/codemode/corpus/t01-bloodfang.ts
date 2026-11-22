@@ -57,5 +57,5 @@ menu.rules.add(m.triggers.guiClick({ layer: "upgrade" }), () => ({
 
 sword.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({
   if: m.conditions.all([m.conditions.hasPermission("rpg.weapons"), m.expr`${ctx.player.sneaking}`]),
-  do: [m.actions.guiOpen(menu)],
+  do: [m.actions.viewOpen(menu)],
 }));

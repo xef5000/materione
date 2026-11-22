@@ -119,9 +119,9 @@ test('invalid YAML is kept as a draft: the error is on its line, nothing reaches
   await expect(state(page)).toHaveAttribute('data-state', 'error');
 
   // fixed: it applies
-  await type(page, 'behavior:\n  - on: gui.open\n    do:\n      - gui.close\n');
+  await type(page, 'behavior:\n  - on: gui.open\n    do:\n      - view.close\n');
   await save(page);
-  expect((await file(page)).behavior).toEqual([{ on: 'gui.open', do: ['gui.close'] }]);
+  expect((await file(page)).behavior).toEqual([{ on: 'gui.open', do: ['view.close'] }]);
 });
 
 test('a draft that was not applied survives a change made in another tab, until the author discards it', async ({ page }) => {
@@ -141,7 +141,7 @@ test('a draft that was not applied survives a change made in another tab, until 
 
 test('an edit the logic edits refuse (a rule with no on:) is not applied, and says why', async ({ page }) => {
   await openScript(page);
-  await editor(page).fill('behavior:\n  - do:\n      - gui.close\n');
+  await editor(page).fill('behavior:\n  - do:\n      - view.close\n');
   await expect(state(page)).toHaveAttribute('data-state', 'error');
   await expect(page.getByTestId('script-error')).toContainText('on:');
   await page.waitForTimeout(1200);

@@ -83,7 +83,7 @@ m.summary("Adds the Bloodfang sword with a bleed on the entity it hits, a level 
 // The first attempt reaches for a helper the SDK does not have: an ordinary mistake, fixed in the next turn.
 const SNEAK_RULE_WRONG = `sword.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({
   if: m.all(m.conditions.hasPermission("rpg.weapons"), m.expr<boolean>\`\${ctx.player.sneaking}\`),
-  do: [m.actions.guiOpen(menu)],
+  do: [m.actions.viewOpen(menu)],
 }));`;
 
 const SNEAK_RULE = `sword.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({
@@ -92,7 +92,7 @@ const SNEAK_RULE = `sword.rules.add(m.triggers.click({ detail: "right" }), (ctx)
     m.steps.if(m.conditions.hasPermission("rpg.weapons"), {
       else: [m.actions.message("<red>You may not use Bloodfang."), m.steps.stop()],
     }),
-    m.actions.guiOpen(menu),
+    m.actions.viewOpen(menu),
   ],
 }));`;
 

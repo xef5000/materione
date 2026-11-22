@@ -70,6 +70,11 @@ export interface TypeInfo {
    * flag is for what the author is told (a rename of such a file renames the resource). Absent: only the keyed form.
    */
   flatFile?: boolean;
+  /**
+   * The view facet (views.md section 9): present when this type is a view kind (a container GUI, later a dialog and a
+   * HUD). The editor reads it to know which resources a `view` reference offers; absent: not a view kind.
+   */
+  view?: { viewerRule: string; rerenderDefault: string; supportsTarget: boolean; supportsKey: boolean };
   parameters: TypeParam[];
 }
 

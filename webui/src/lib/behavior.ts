@@ -41,7 +41,7 @@ export interface BehaviorActionInfo extends Described {
   registeredBy?: string;
 }
 
-/** A variable a trigger guarantees to its rules (`player.name`, `gui.args.*`). */
+/** A variable a trigger guarantees to its rules (`player.name`, `view.args.*`). */
 export interface BehaviorContextVariable {
   path: string;
   type: string;

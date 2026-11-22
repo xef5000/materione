@@ -14,6 +14,7 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.view.ViewBridge;
 import dev.materione.plugin.view.ViewKind;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewParams;
 import dev.materione.plugin.view.ViewRun;
 import dev.materione.plugin.view.ViewerRecord;
 import java.util.List;
@@ -31,7 +32,7 @@ import java.util.Optional;
 public final class CloseViewAction implements ActionType<CloseViewAction.Params> {
 
     /** The step's only parameter: the view to close if it is the one shown; null for the run's own view. */
-    public record Params(String view) {}
+    public record Params(String view, String kind) {}
 
     private final ViewBridge bridge;
 
@@ -51,7 +52,9 @@ public final class CloseViewAction implements ActionType<CloseViewAction.Params>
                 List.of(new ParameterSchema("view", ParameterType.REFERENCE, false, null,
                         "Close only if this view is the one shown: pack:id, or a name in this view's pack; "
                                 + "the flow's own view when omitted", null, null)
-                        .withWidget("reference", "view")),
+                        .withWidget("reference", "view"),
+                        new ParameterSchema("kind", ParameterType.STRING, false, null,
+                                "The view kind (gui, dialog) when the id is shared by two kinds", null, null)),
                 "1.0.0"), LogicCategory.GUI, "view");
     }
 
@@ -62,7 +65,8 @@ public final class CloseViewAction implements ActionType<CloseViewAction.Params>
 
     @Override
     public Params parse(ParamReader params) {
-        return new Params(params.has("view") ? params.text("view") : null);
+        // a blank view (the editor's empty shorthand) is none: the flow's own view
+        return new Params(ViewParams.optional(params, "view"), ViewParams.optional(params, "kind"));
     }
 
     @Override
@@ -75,7 +79,7 @@ public final class CloseViewAction implements ActionType<CloseViewAction.Params>
             ViewRun run = ViewRun.ofPlayer(bridge, context);
             ViewerRecord own = run.record();
             ViewKinds.Resolution resolution = run.services().kinds().resolve(
-                    params.view(), own == null ? null : own.definition(), own == null ? null : own.kind());
+                    params.view(), own == null ? null : own.definition(), own == null ? null : own.kind(), params.kind());
             if (!resolution.ok()) {
                 return ActionOutcome.failed(resolution.problem());
             }

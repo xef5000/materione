@@ -10,7 +10,7 @@ p.guis.create("vault", {
       region: "container",
       input: true,
       durable: "required",
-      keep: { holder: "vault:${player.uuid}:${gui.args.n}" },
+      keep: { holder: "vault:${player.uuid}:${view.args.n}" },
     }),
   ],
 });

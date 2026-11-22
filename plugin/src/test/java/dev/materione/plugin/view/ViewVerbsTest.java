@@ -169,6 +169,45 @@ class ViewVerbsTest {
     }
 
     @Test
+    void theKindSwitchNamesWhichViewAnIdMeansWhenTwoKindsShareIt() {
+        // demo:shop is a GUI and a dialog; without kind: nothing can tell them apart, with it either opens
+        ActionOutcome ambiguous = open(Map.of("view", "demo:shop"), null);
+        assertThat(ambiguous).isInstanceOf(ActionOutcome.Failed.class);
+        assertThat(((ActionOutcome.Failed) ambiguous).reason()).contains("more than one view").contains("kind:");
+
+        assertThat(open(Map.of("view", "demo:shop", "kind", "dialog"), null)).isEqualTo(ActionOutcome.OK);
+        assertThat(f.sessions.current(f.viewer.id(), "dialog").orElseThrow().definition()).isEqualTo(GuiFixture.id("shop"));
+
+        assertThat(open(Map.of("view", "demo:shop", "kind", "gui"), null)).isEqualTo(ActionOutcome.OK);
+        assertThat(f.sessions.current(f.viewer.id(), "gui").orElseThrow().definition()).isEqualTo(GuiFixture.id("shop"));
+    }
+
+    @Test
+    void anUnknownKindOrAKindThatLacksTheViewFailsWithWhatItLooked() {
+        ActionOutcome unknown = open(Map.of("view", "demo:shop", "kind", "map"), menu);
+        assertThat(((ActionOutcome.Failed) unknown).reason()).startsWith("no view kind 'map'").contains("dialog").contains("gui");
+
+        ActionOutcome lacks = open(Map.of("view", "demo:ask", "kind", "gui"), menu);
+        assertThat(lacks).isEqualTo(ActionOutcome.failed("no live gui matches 'demo:ask'"));
+    }
+
+    @Test
+    void viewCloseTakesTheKindSwitchAndTreatsABlankViewAsTheFlowsOwn() {
+        assertThat(open(Map.of("view", "demo:shop", "kind", "dialog"), menu)).isEqualTo(ActionOutcome.OK);
+        ViewerRecord shopDialog = f.sessions.current(f.viewer.id(), "dialog").orElseThrow();
+
+        ActionOutcome closed = run(new CloseViewAction(f.bridge.view()),
+                Map.of("view", "demo:shop", "kind", "dialog"), context(menu));
+        assertThat(closed).isEqualTo(ActionOutcome.OK);
+        assertThat(shopDialog.endedBecause()).isEqualTo(CloseReason.ACTION);
+        assertThat(menu.isOpen()).isTrue();
+
+        // the editor's empty shorthand (view.close: "") is the bare step: the flow's own view
+        assertThat(run(new CloseViewAction(f.bridge.view()), Map.of("view", ""), context(menu))).isEqualTo(ActionOutcome.OK);
+        assertThat(menu.endedBecause()).isEqualTo(CloseReason.ACTION);
+    }
+
+    @Test
     void aKindWhoseViewersAreFormedByACondition_isNotOpenable() {
         ActionOutcome outcome = open(Map.of("view", "demo:mana"), menu);
 

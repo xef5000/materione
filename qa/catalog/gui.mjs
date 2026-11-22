@@ -881,7 +881,7 @@ export default [
         await page.locator('[data-entry="action:run_command"]').click();
         await fill('behavior.0.do.1', 'say shop opened');
         await dragOut('behavior.0.do.1', 'after');
-        await page.locator('[data-entry="action:gui.close"]').click();
+        await page.locator('[data-entry="action:view.close"]').click();
         await page.getByTestId('logic-canvas').focus();
         await page.keyboard.press('0');
         await ctx.browser.browserShot('logic-tab-flow');
@@ -960,7 +960,7 @@ test({
         await save();
         ctx.expect(parse(fs.readFileSync(GUI_FILE, 'utf8')).qa_chest.behavior).toEqual([
           { on: 'gui.click', layer, do: [{ message: 'MATERIONE-QA-LINKAGE' }] },
-          { on: 'gui.click', layer, do: ['gui.close'] },
+          { on: 'gui.click', layer, do: ['view.close'] },
         ]);
 
         // Design: delete the layer, and the dialog's "Delete the rules" takes the rules with it

@@ -1,6 +1,6 @@
 # Views over state: many viewers; the GUI, the dialog and the HUD as view kinds (#335) — design
 
-> **Status.** Design, for review on the PR that adds it (`Refs #335`). Nothing here is built. The owner decided on 2026-11-19
+> **Status.** Design, for review on the PR that adds it (`Refs #335`). **Row V0 is built (#455, §16); rows V1 to V6 are not.** The owner decided on 2026-11-19
 > (dialogs design, PR #451, answer Q7) that this document is written **before** dialogs (#6) and the HUD (#7) are built, so
 > that both are built to it once and not twice. The document is therefore pulled forward from M7; dialogs and the HUD stay M6.
 > The parts that need keyed state (#333 step 2) stay M7 and are marked as such (§6, §13). **The owner answered every question
@@ -732,7 +732,7 @@ Haiku). The milestone column is the owner's answer to Q6.
 
 | Row | Scope | Depends on | Milestone | Size | Agent |
 |---|---|---|---|---|---|
-| **V0** ([#455](https://github.com/xef5000/materione/issues/455)) | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, the generic `ViewerRecord` with kind payloads replacing `GuiSession`/`GuiSessions`/`SessionHistory` (§3.8); `view.open`, `view.close`, `view.back` with the per-player view history across kinds, replacing `gui.open`/`gui.close`/`gui.back`; `view.*` as the one view root, replacing `gui.id`/`gui.args`/`gui.page`/`gui.session` (§3.7); `%materione_view_open%`/`_last%`; the view facet in self-descriptions (`gui` declares it); the built-in browser, recipes, showcase, fixtures, QA catalog and SDK goldens updated in the same PR (§7.1) | #6 row G (the `OpenGate` extraction from `GuiOpener`) merged first, or folded into the same PR | M6 | M | Sonnet, high |
+| **V0** ([#455](https://github.com/xef5000/materione/issues/455), **built**, §16) | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, the generic `ViewerRecord` with kind payloads replacing `GuiSession`/`GuiSessions`/`SessionHistory` (§3.8); `view.open`, `view.close`, `view.back` with the per-player view history across kinds, replacing `gui.open`/`gui.close`/`gui.back`; `view.*` as the one view root, replacing `gui.id`/`gui.args`/`gui.page`/`gui.session` (§3.7); `%materione_view_open%`/`_last%`; the view facet in self-descriptions (`gui` declares it); the built-in browser, recipes, showcase, fixtures, QA catalog and SDK goldens updated in the same PR (§7.1) | #6 row G (the `OpenGate` extraction from `GuiOpener`) merged first, or folded into the same PR | M6 | M | Sonnet, high |
 | **V1** ([#456](https://github.com/xef5000/materione/issues/456)) | Read extraction and `ReadsIndex` built at the shadow swap (with visibility/content roles); the `session` store behind the port (declared `scope: session`, typed and defaulted, owner Q9; `MTR-0063` for an undeclared name), removing the `GuiSessionVariables.put` bypass; the observer on `write` and `mutate` for `player`, `server`, `session`; `predicate` candidates; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default `on_change`); shipped fixtures and built-in GUIs that relied on no automatic re-render updated in the same PR; acceptance cases 1 to 3 of §11.1; `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
 | **V2** ([#457](https://github.com/xef5000/materione/issues/457)) | `view.refresh` (selectors none / `view` / `var`+`holder`), replacing `gui.refresh`; `in_view` replacing `in_gui`; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
 | #6 row S | `DialogOpener` and the dialog payload as the dialog kind on V0, reached through `view.open`/`view.close`; `rerender:` on dialogs via V1, V2; `MTR-V03` | V0 (V1, V2 for `on_change`) | M6 | (dialogs.md) | (dialogs.md) |
@@ -806,3 +806,67 @@ reversible by the owner.
 - [`README.md`](README.md): the index row for this document.
 - [`primitives.md`](primitives.md) §5.3: a pointer to this design.
 - [`../glossary.md`](../glossary.md): the **View kind** entry.
+
+---
+
+## 16. As built: row V0 (#455)
+
+Row V0 is built, and it folds in dialogs row G (the `OpenGate` extraction, dialogs.md §13.3), as §13 allows. This section
+records what shipped and every decision the build took beyond §3 to §9; the design above is unchanged. Rows V1 to V6 are not
+built.
+
+### 16.1 What shipped
+
+| Part | As built |
+|---|---|
+| **Open gate (row G)** | `plugin.view.open.OpenGate` admits a kind-neutral `Subject(kind, id, plan)`; `OpenSpecGate` is the one implementation. A kind supplies two things: its name (the usage line `/materione <kind> open <id>`, the bypass node `materione.<kind>.bypass.<pack>.<id>`) and an `OpenContexts` that builds the context the requirement and deny steps run against (`GuiOpenGates.of` wires the GUI's). `OpenGateParityTest` runs one table of cases against a `gui` and a `dialog` subject. |
+| **Viewer record** | `plugin.view.ViewerRecord` replaces `GuiSession`: identity (player, kind, definition), binding (`args`, typed `view.args`), the session values (`sessionValues()`, until V1 moves them behind the store port), the window and the prompt hold, the end state, and a kind payload (`ViewerPayload`). `GuiViewerState` (`plugin.gui.session`) is the GUI's payload: list pages, last render, displayed definition, clocks, ticker claims. A record's `Snapshot` is `(kind, definition, args, session values, payload state)`. `ViewerRecord.FACET` carries it into the runs it starts. |
+| **Registry** | `ViewRegistry` replaces `GuiSessions`: one record per kind per player (a dialog over a container displaces nothing), indexed by player and by definition; `showingKey` is the reserved key index (V5) and answers empty. `ViewHistory` replaces `SessionHistory` (16 deep, per player, spans kinds); `last` is a `ViewRef` written `<kind>:<id>`. |
+| **Kind SPI** | `ViewKind` (internal): `contentType`, `facet`, `minInterval`, `reads` (default empty, V1), `resolve`, `open`, `close`, `render`. `ViewKinds` is the directory by content type; `GuiViewKind` implements the GUI over `GuiOpener`, `GuiLifecycle` and `GuiLiveRefresh`. `GuiStack` registers it. |
+| **Verbs** | `view.open` (`view`, optional `kind`, `args`), `view.close` (optional `view`, optional `kind`), `view.back`, in `logic.action.view`; `gui.open`, `gui.close` and `gui.back` are gone, with no alias. |
+| **Context** | `view.id`, `view.kind`, `view.args.*`, `view.item` and `view.key` (absent until V3 and V5), `view.page.*`; `vars.session.*` is the one spelling of a window-local value and is declared in every GUI trigger's context. The compiler's root check (`MTR-0060`) admits `view` and no longer `gui`; the list component's search, the content list source and the page text read `view.*` and `vars.session.*`. |
+| **Placeholders** | `%materione_view_open%` and `%materione_view_last%`, answered by `ViewRegistryPort` as `<kind>:<id>` (`gui:shop:menu`); `ViewPort` replaces `GuiSessionPort` in `api`. |
+| **View facet** | `ContentType.view()` returns an optional `ViewFacet(viewerRule, rerenderDefault, supportsTarget, supportsKey)`; `GuiType` declares `opened`, `on_change`, `false`, `false`. `authoring.describe` reports it as a `view` block on the type; the SDK generator reads it (V0-4). |
+| **Ban test** | `MutationGuard` is installed on the registry; every mutator of a record and of its payload reports to it. `ViewerOwnerThreadTest` drives open, click, refresh, ticker, back, close and quit through one recording "owner" thread and asserts every mutation ran there, asserts reads from another thread mutate nothing, proves the guard catches an intruder, and scans the main sources so that only `plugin.view` and `plugin.gui` call a mutator. |
+
+### 16.2 Decisions beyond the design
+
+Taken by the owner's principles (allow more, X and Y with a switch, annoyance is expensive).
+
+| # | Decision | Why |
+|---|---|---|
+| V0-1 | **`view.open` and `view.close` take an optional `kind:`.** An id that two kinds share (a GUI `shop` and a dialog `shop`) is refused as ambiguous, with the kinds named; `kind: dialog` picks one. A bare name written inside a view prefers a definition of the same kind in the same pack before it means another kind. | The ids of two content types can coincide, and no spelling of the id alone then reaches the second kind; a switch costs a parameter, a refusal would cost an author the dialog. |
+| V0-2 | **`view.close` with no `view:` closes the flow's own view of whatever kind; with `view:` it closes that definition if the player has it open, from any rule.** A blank `view:` (the editor's empty shorthand) is none, and a new Close view node is the bare step. | §3.6 said "close only if that definition is the one shown"; reading it from the player's records, not the run's, lets an item rule close a shop. |
+| V0-3 | **A `view.open` that names, by a static id, a kind no verb opens (a `predicate` kind, a HUD) is `MTR-0057`**, reported by the level-3 reference check at warning severity, and the step fails the same way at run time. | `MTR-0057`'s meaning is "step rejected at load" (plugin.md §5); the check reads the content types' view facets through `StaticReferences.viewKinds()`, so a HUD kind is rejected the day it registers, with no list in `core`. A host that names no view kinds does not judge the reference. |
+| V0-4 | **The reference kind `view` names the union of the view kinds.** The editor's reference field offers the resources of every type that declares the facet; the SDK types `view` as the union of `Ref<"gui">`, `Ref<"dialog">` and the rest, and a type that declares the facet gets a sentence in its generated doc comment. | The facet is the only list of kinds (D5). |
+| V0-5 | **The view verbs stay in the `gui` palette category** until a second kind exists. | A new category is a registry entry that recolours the palette and moves goldens for no author benefit. |
+| V0-6 | **`window` and the prompt hold are on the generic record**, not on the GUI payload. | Every opened kind has a screen that a record shows and a prompt can hide (dialogs.md §7.3). |
+| V0-7 | **`in_gui`, `gui.refresh` and the `gui.opening`, `gui.open`, `gui.close`, `gui.page`, `gui.click…` triggers stay.** `in_gui` and `gui.refresh` are row V2; the triggers name GUI events (§3.7), and `gui.page` and `gui.slot_item` are component verbs (§14.2 D-12). | As the design. |
+| V0-8 | **The facet's `rerenderDefault` and the `rerender:` field.** `gui` already declares `on_change`, which is the kind's contract, but the behavior (automatic re-render) and the schema field are row V1; until then a GUI re-renders as it did. | Declaring the contract now keeps the self-description from changing again in V1. |
+| V0-9 | **No diagnostic code is allocated.** `MTR-0057` (V0-3), `MTR-0060`, `MTR-0063` and `MTR-0105` keep their meanings; `MTR-V01` to `MTR-V04` belong to later rows. | Codes are API (plugin.md §5). |
+| V0-10 | **`GuiBridge` carries the `ViewBridge`** (`bridge.view()`) that the generic verbs hold, and binding the GUI runtime binds both. | The built-in logic registration takes one bridge in a dozen overloads; a later kind's stack registers its `ViewKind` in the same `ViewKinds`. |
+| V0-11 | **A new action node whose shorthand parameter is optional is born as the bare name** (the Logic tab's palette): `view.close`, not `view.close: ""`. | The common step is the bare one; an optional parameter is not worth a field the author must clear. |
+
+### 16.3 Breaking changes made, by §7.1 row
+
+| §7.1 row | Changed here |
+|---|---|
+| `gui.open`, `gui.close`, `gui.back` → `view.*` (V0) | the actions and their self-description, the built-in browser, the logic recipes (`back_button`, `close_button`, `confirm_dialog`), the fixture and showcase packs, the code-mode corpus and chat script, the SDK (`viewOpen`, `viewClose`, `viewBack`), the Logic tab's specs |
+| `gui.id`, `gui.args.*`, `gui.page.*` → `view.*` (V0) | `GuiContexts`, the trigger context schema, the compiler roots, the list and tree sources, the page text, the open requirement of every `open:` block, the fixture packs, the browser |
+| `gui.session.*` removed (V0) | `vars.session.*` only: the list search, the browser's conditions, the overlay fixtures |
+| `GuiSession`, `SessionHistory`, `GuiSessionPort` (V0) | `ViewerRecord` + `GuiViewerState`, `ViewHistory`, `ViewPort` / `ViewRegistryPort` |
+| `%materione_gui_open%`, `%materione_gui_last%` (V0) | `%materione_view_open%`, `%materione_view_last%`; the editor's completion list and its spec |
+
+Every golden changed by this row is §7.1 row V0: the recipe goldens (`fixtures/golden/recipes/`: `view.back`, `view.close`,
+`view.open`), the registry snapshot and the demo snapshot (`fixtures/codemode/registry/`, `fixtures/golden/editor-demo-snapshot.json`:
+the three actions, the `view.*` context, the `view` facet on `gui`), the SDK declarations (`fixtures/golden/codemode/*.d.ts`) and the
+operation lists of T09, T19 and T23 (`fixtures/golden/codemode/ops/`: `view.close`, `view.open`).
+
+### 16.4 Tests
+
+`ViewRegistryTest` (kinds, history across kinds, the definition index, the reserved key index), `ViewRegistryPortTest`,
+`ViewVerbsTest` (a second kind registered beside the GUI: open reaches it, back reopens it, a predicate kind is refused, the `kind:`
+switch), `ViewerOwnerThreadTest` (the ban test), `ViewFacetSelfDescriptionTest`, `OpenGateParityTest`, core
+`ViewReferenceValidationTest` (the `MTR-0057` and `MTR-0105` cases), webui `codemode-generate.spec.ts` (the facet, the union
+reference, a second kind with no generator change) and the Logic tab specs. QA catalog: `views.verbs.open-replace-back-close` and
+`views.placeholders.open-and-last` (`qa/catalog/views.mjs`, not yet run: they need the probe).

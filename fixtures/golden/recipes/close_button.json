@@ -8,7 +8,7 @@
       "on": "gui.click",
       "layer": "close",
       "do": [
-        "gui.close"
+        "view.close"
       ]
     }
   ]

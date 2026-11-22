@@ -89,7 +89,7 @@
             "on": "gui.click",
             "layer": "warp_spawn",
             "do": [
-              "gui.close",
+              "view.close",
               {
                 "teleport": {
                   "x": 0,
@@ -114,7 +114,7 @@
             "on": "gui.click",
             "layer": "warp_mines",
             "do": [
-              "gui.close",
+              "view.close",
               {
                 "teleport": {
                   "x": 120,
@@ -139,7 +139,7 @@
             "on": "gui.click",
             "layer": "warp_arena",
             "do": [
-              "gui.close",
+              "view.close",
               {
                 "teleport": {
                   "x": -300,

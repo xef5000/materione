@@ -22,7 +22,7 @@ export function capital(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-/** `run_command` and `gui.open` become `runCommand` and `guiOpen`. */
+/** `run_command` and `view.open` become `runCommand` and `viewOpen`. */
 export function camel(text: string): string {
   const parts = words(text);
   const name = parts.map((word, index) => (index === 0 ? word.charAt(0).toLowerCase() + word.slice(1) : capital(word))).join('');

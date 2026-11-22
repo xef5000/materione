@@ -8,7 +8,7 @@ type ContentTypeName = "block" | "command" | "currency" | "effect" | "furniture"
 /** What a `Ref` can point at: a content type, or an asset kind a field names. */
 type RefKind = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "quest" | "recipe" | "rule" | "sound" | "template" | "texture" | "variable";
 /** The action ids this server registers. */
-type ActionId = "actionbar" | "break_blocks" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "damage" | "drop_item" | "example:greet" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.back" | "gui.close" | "gui.open" | "gui.page" | "gui.refresh" | "gui.slot_item" | "heal" | "launch" | "message" | "particle" | "potion" | "prompt" | "run_command" | "set_block" | "set_var" | "sound" | "stack.edit" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title" | "velocity";
+type ActionId = "actionbar" | "break_blocks" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "damage" | "drop_item" | "example:greet" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.page" | "gui.refresh" | "gui.slot_item" | "heal" | "launch" | "message" | "particle" | "potion" | "prompt" | "run_command" | "set_block" | "set_var" | "sound" | "stack.edit" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title" | "velocity" | "view.back" | "view.close" | "view.open";
 /** The condition ids this server registers. */
 type ConditionId = "can_break" | "can_build" | "can_interact" | "has_exp" | "has_item" | "has_item_space" | "has_money" | "has_permission" | "in_gui" | "in_world" | "is_near" | "slot_has" | "var";
 /** The mechanic ids this server registers. */
@@ -439,6 +439,7 @@ interface GlyphHandle extends ResourceHandle<"glyph", GlyphFields> {}
 /**
  * A container screen (a chest, hopper or dispenser) designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items.
  * Content type `gui`, stored under `guis/`.
+ * A view kind: a gui is opened by `view.open` and closed by `view.close`, and it re-renders on its own when what it reads changes (`rerender: off` turns that off).
  */
 interface GuiFields {
   /**
@@ -2031,14 +2032,21 @@ interface GuiClickContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
     readonly click: {
       /** The click kind: left, right, shift_left, shift_right, middle, double, drop, ctrl_drop, number_key, swap_offhand. */
       readonly type: ContextValue<string>;
@@ -2090,14 +2098,21 @@ interface GuiClickInventoryContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
     readonly click: {
       /** The click kind: left, right, shift_left, shift_right, middle, double, drop, ctrl_drop, number_key, swap_offhand. */
       readonly type: ContextValue<string>;
@@ -2148,14 +2163,21 @@ interface GuiClickOutsideContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
     readonly click: {
       /** left or right. */
       readonly type: ContextValue<string>;
@@ -2200,14 +2222,21 @@ interface GuiCloseContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
     readonly close: {
       /** Why it ended: player, action, replaced, quit. */
       readonly reason: ContextValue<string>;
@@ -2245,14 +2274,21 @@ interface GuiOpenContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
   };
 }
 
@@ -2286,14 +2322,21 @@ interface GuiOpeningContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
   };
 }
 
@@ -2332,14 +2375,21 @@ interface GuiPageContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
     readonly page: {
       /** The page now shown, from 1. */
       readonly index: ContextValue<number>;
@@ -2384,14 +2434,21 @@ interface GuiSlotChangeContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
     readonly slot: {
       /** The container slot, from 0. */
       readonly index: ContextValue<number>;
@@ -2441,14 +2498,21 @@ interface GuiTickContext {
       /** Player slots. */
       readonly max: ContextValue<number>;
     };
-    readonly gui: {
-      /** The GUI's id, pack:name. */
+    readonly view: {
+      /** The view's id, pack:name. */
       readonly id: ContextValue<string>;
+      /** The view's kind: gui. */
+      readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      readonly session: { readonly [name: string]: ContextValue<unknown> };
+      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      readonly item: ContextValue<unknown>;
+      /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
+      readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
-    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
+      readonly session: { readonly [name: string]: ContextValue<unknown> };
+    };
   };
 }
 
@@ -3664,22 +3728,6 @@ interface GivePermissionActionParams extends ActionOptions {
   permission: string;
 }
 
-/** Parameters of `gui.back`. */
-interface GuiBackActionParams extends ActionOptions {
-}
-
-/** Parameters of `gui.close`. */
-interface GuiCloseActionParams extends ActionOptions {
-}
-
-/** Parameters of `gui.open`. */
-interface GuiOpenActionParams extends ActionOptions {
-  /** The GUI to open: pack:id, or a name in this GUI's pack. */
-  gui: Ref<"gui">;
-  /** Arguments the GUI opens with, name to text; templates allowed. */
-  args?: JsonValue;
-}
-
 /** Parameters of `gui.page`. */
 interface GuiPageActionParams extends ActionOptions {
   /** The list layer's id. */
@@ -4160,6 +4208,28 @@ interface VelocityActionParams extends ActionOptions {
   target?: JsonValue;
 }
 
+/** Parameters of `view.back`. */
+interface ViewBackActionParams extends ActionOptions {
+}
+
+/** Parameters of `view.close`. */
+interface ViewCloseActionParams extends ActionOptions {
+  /** Close only if this view is the one shown: pack:id, or a name in this view's pack; the flow's own view when omitted. */
+  view?: Ref<"gui">;
+  /** The view kind (gui, dialog) when the id is shared by two kinds. */
+  kind?: string;
+}
+
+/** Parameters of `view.open`. */
+interface ViewOpenActionParams extends ActionOptions {
+  /** The view to open: pack:id, or a name in this view's pack. */
+  view: Ref<"gui">;
+  /** The view kind (gui, dialog) when the id is shared by two kinds, which an id alone cannot tell apart. */
+  kind?: string;
+  /** Arguments the view opens with, name to text; templates allowed. */
+  args?: JsonValue;
+}
+
 interface ActionCatalog {
   /**
    * Shows text above the player's hotbar.
@@ -4262,27 +4332,6 @@ interface ActionCatalog {
    * @category server
    */
   givePermission(params: GivePermissionActionParams | string, options?: ActionOptions): ActionStep<"give_permission">;
-  /**
-   * Returns to the GUI the player came from, with its arguments and session variables.
-   * @since 1.0.0
-   * @registeredBy materione
-   * @category gui
-   */
-  guiBack(params?: GuiBackActionParams): ActionStep<"gui.back">;
-  /**
-   * Closes the GUI this flow belongs to.
-   * @since 1.0.0
-   * @registeredBy materione
-   * @category gui
-   */
-  guiClose(params?: GuiCloseActionParams): ActionStep<"gui.close">;
-  /**
-   * Opens a GUI for the player, replacing the window they have; the old one goes on the back stack.
-   * @since 1.0.0
-   * @registeredBy materione
-   * @category gui
-   */
-  guiOpen(params: GuiOpenActionParams | Ref<"gui">, options?: ActionOptions): ActionStep<"gui.open">;
   /**
    * Moves a list of the open GUI to another page: next, previous, first, last, or a page number. The window shows the page and gui.page runs.
    * @since 1.0.0
@@ -4439,6 +4488,27 @@ interface ActionCatalog {
    * @category world
    */
   velocity(params?: VelocityActionParams): ActionStep<"velocity">;
+  /**
+   * Returns to the view the player came from, with its arguments and session values.
+   * @since 1.0.0
+   * @registeredBy materione
+   * @category gui
+   */
+  viewBack(params?: ViewBackActionParams): ActionStep<"view.back">;
+  /**
+   * Closes the view this flow belongs to, or the named view if it is the one the player has open.
+   * @since 1.0.0
+   * @registeredBy materione
+   * @category gui
+   */
+  viewClose(params?: ViewCloseActionParams | Ref<"gui">, options?: ActionOptions): ActionStep<"view.close">;
+  /**
+   * Opens a view for the player, replacing the one they have of that kind; the old one goes on the view history.
+   * @since 1.0.0
+   * @registeredBy materione
+   * @category gui
+   */
+  viewOpen(params: ViewOpenActionParams | Ref<"gui">, options?: ActionOptions): ActionStep<"view.open">;
 }
 
 /** Parameters of the `can_break` condition. */
@@ -5618,7 +5688,7 @@ interface ListLayerParams extends GuiLayerCommon {
    */
   sort?: JsonValue;
   /**
-   * Which entries a search keeps: { fields: [name] }, matched against the text in gui.session.search (or var:), ignoring case.
+   * Which entries a search keeps: { fields: [name] }, matched against the text in vars.session.search (or var:), ignoring case.
    * @example {fields: [name]}
    */
   search?: JsonValue;

@@ -422,7 +422,7 @@ during the handshake→channel handover instead of dropping them (a dropped fram
 desyncs the strict receive sequence).
 
 *As built (M6 preview in game, #185; `args` since #214):* `runtime.openGui` (`{id, args?}`, where the optional
-`args` is a flat object of name to text, number or boolean, read by the GUI's rules as `gui.args.<name>`; anything
+`args` is a flat object of name to text, number or boolean, read by the GUI's rules as `view.args.<name>`; anything
 nested is `MTR-0008`, and a release that predates it ignores the field) opens the live GUI for the session's
 approved player, the player who opened the session in game. It answers `{queued}` (true while the
 window is still opening on that player's thread) or refuses with the api's diagnostic; a session with

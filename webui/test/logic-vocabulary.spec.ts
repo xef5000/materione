@@ -88,7 +88,10 @@ describe('the palette', () => {
 describe('what a new node is born as', () => {
   it('an action with a shorthand starts with that parameter, one without parameters is a bare name', () => {
     expect(defaultActionStep(vocabulary.actions.get('sound')!)).toEqual({ sound: '' });
-    expect(defaultActionStep(vocabulary.actions.get('gui.close')!)).toBe('gui.close');
+    expect(defaultActionStep(vocabulary.actions.get('view.back')!)).toBe('view.back');
+    // an optional shorthand is left out: a new Close view node is the bare step, not view.close: ''
+    expect(defaultActionStep(vocabulary.actions.get('view.close')!)).toBe('view.close');
+    expect(defaultActionStep(vocabulary.actions.get('view.open')!)).toEqual({ 'view.open': '' });
     expect(defaultActionStep(vocabulary.actions.get('give_exp')!)).toEqual({ give_exp: 1 });
   });
 

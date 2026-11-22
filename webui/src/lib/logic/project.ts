@@ -56,7 +56,7 @@ export interface GraphNode {
 }
 
 interface Authored {
-  /** The step was not a mapping (a bare name such as `- gui.close`) and is rebuilt as it was. */
+  /** The step was not a mapping (a bare name such as `- view.close`) and is rebuilt as it was. */
   literal?: { value: unknown };
   /** The authored map with the lists the ports carry left out. */
   own?: Json;

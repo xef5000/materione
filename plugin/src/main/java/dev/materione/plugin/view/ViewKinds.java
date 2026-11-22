@@ -60,12 +60,28 @@ public final class ViewKinds {
      *     of that name beside it before it means a dialog elsewhere
      */
     public Resolution resolve(String written, NamespacedId near, String nearKind) {
+        return resolve(written, near, nearKind, null);
+    }
+
+    /**
+     * As {@link #resolve(String, NamespacedId, String)}, with the kind named: the switch for an id that two kinds
+     * share (a GUI `shop` and a dialog `shop` of one pack), which no spelling of the id alone can tell apart.
+     *
+     * @param onlyKind the content type name of the kind to look in ({@code gui}, {@code dialog}), or null for every kind
+     */
+    public Resolution resolve(String written, NamespacedId near, String nearKind, String onlyKind) {
+        if (onlyKind != null && !kinds.containsKey(onlyKind)) {
+            return Resolution.failed("no view kind '" + onlyKind + "'; the kinds are " + kinds.keySet().stream().sorted().toList());
+        }
         var matches = new ArrayList<Resolved>();
         for (ViewKind kind : kinds.values()) {
+            if (onlyKind != null && !kind.contentType().equals(onlyKind)) {
+                continue;
+            }
             kind.resolve(written, near).ifPresent(id -> matches.add(new Resolved(kind, id)));
         }
         if (matches.isEmpty()) {
-            return Resolution.failed("no live view matches '" + written + "'");
+            return Resolution.failed("no live " + (onlyKind != null ? onlyKind : "view") + " matches '" + written + "'");
         }
         if (matches.size() > 1 && nearKind != null) {
             // a sibling of the same kind in the same pack outranks the rest, as a bare name always has
@@ -80,7 +96,7 @@ public final class ViewKinds {
         if (matches.size() > 1) {
             return Resolution.failed("'" + written + "' names more than one view (" + matches.stream()
                     .map(match -> match.kind().contentType() + " " + match.id()).sorted().toList()
-                    + "); write the pack and id");
+                    + "); write the pack and id, or the kind: beside the view:");
         }
         return Resolution.of(matches.get(0));
     }

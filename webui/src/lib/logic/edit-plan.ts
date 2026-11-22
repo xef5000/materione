@@ -6,7 +6,7 @@
  * A step's own value (`sound: x`, `if: cond`, `wait: 20`) is patched with `patchStep`; a branch key never is
  * (section 19, decision 3), so a `choose` case is rewritten by replacing the step with a copy that holds the change,
  * which keeps its place, its `node:` position and everything under it (section 26, decision 10). A step written as a
- * bare name (`- gui.close`) has nothing to patch and gets the same replacement.
+ * bare name (`- view.close`) has nothing to patch and gets the same replacement.
  *
  * Pure of the DOM and of Svelte.
  */

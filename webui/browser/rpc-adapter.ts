@@ -844,8 +844,8 @@ const RECIPE_RULES: Record<string, (params: Record<string, unknown>) => Record<s
       'gui.refresh',
     ],
   }],
-  close_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['gui.close'] }],
-  back_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['gui.back'] }],
+  close_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['view.close'] }],
+  back_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['view.back'] }],
   welcome_message: (p) => [{ on: 'gui.open', do: [{ message: p.text }] }],
 };
 

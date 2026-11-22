@@ -4,7 +4,7 @@ import java.util.concurrent.CompletionStage;
 
 /**
  * One action in the {@code actions} registry (logic.md §4.1): the verb a rule step runs
- * ({@code run_command}, {@code message}, later {@code take_money}, {@code gui.open}). Built-ins and
+ * ({@code run_command}, {@code message}, later {@code take_money}, {@code view.open}). Built-ins and
  * addons implement this one interface and register through
  * {@link LogicApi#actions()}; the engine, the editor palette and the docs read the same registry.
  *
@@ -26,7 +26,7 @@ import java.util.concurrent.CompletionStage;
  *       not retain {@code context}, and must not block.
  *   <li><b>describe</b> is read for the vocabulary on demand; it must be cheap and return an
  *       equal value each time. Its parameter schema is the schema {@code parse} reads.
- *   <li><b>id</b> is the local name an author writes ({@code take_money}, {@code gui.open}). It
+ *   <li><b>id</b> is the local name an author writes ({@code take_money}, {@code view.open}). It
  *       must equal the {@code value} of the {@code NamespacedId} the type is registered under;
  *       Materione's own types register under {@code materione:}, which authors may omit, while
  *       addon types are written qualified ({@code example:greet}).

@@ -337,10 +337,10 @@ SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are bu
 
 **Names.** The collection of a content type is its `directory` (`p.items`, `p.guis`, `p.currencies`); its record type is
 `<Name>Fields` and its handle `<Name>Handle`. An action, condition, mechanic, trigger, GUI component, recipe or source is a method
-of its catalog, named by the camel-cased local part of its id (`run_command` is `runCommand`, `gui.open` is `guiOpen`,
+of its catalog, named by the camel-cased local part of its id (`run_command` is `runCommand`, `view.open` is `viewOpen`,
 `materione:backpack` is `backpack`). Two entries whose local parts collide are told apart by their namespaces
 (`exampleGreet`, `otherGreet`); an id without a namespace is never renamed. The registry id is always in the return type
-(`ActionStep<"gui.open">`) and the TSDoc carries `@since`, `@registeredBy`, `@category` and, for an entry the server reports
+(`ActionStep<"view.open">`) and the TSDoc carries `@since`, `@registeredBy`, `@category` and, for an entry the server reports
 unavailable (a provider that is not installed), a plain line `Unavailable on the connected server: <reason>` (not `@deprecated`: a missing provider is a configuration of the recorded server, not a verdict on the entry). A registry's ids are
 also exported as literal unions (`ActionId`, `TriggerId`, `RefKind`, `Capability`, ...).
 
@@ -1307,7 +1307,7 @@ menu.layers.addButton({
 sword.rules.add({
   on: m.triggers.click({ detail: "right" }),
   if: m.expr`player.sneaking`,
-  do: [ m.actions.guiOpen(menu) ],
+  do: [ m.actions.viewOpen(menu) ],
 });
 
 m.summary("Adds the Bloodfang sword with a level and XP, a bleed on hit, a level-up GUI costing 500 coins, gated by rpg.weapons.");
@@ -1421,7 +1421,7 @@ report the same findings, the dry run against the operation that removed the con
 
 **What is a reference comes from self-description, not from a list of names.** `RegistryLogicVocabulary` reads each registered
 action's and condition's parameters: one drawn with the `item` widget, or a `REFERENCE` that declares its `referenceKind`
-(`gui.open`'s `gui` now does), names content of that kind. A parameter that names content and declares neither is invisible to
+(`view.open`'s `view` now does, as a kind that names every view type), names content of that kind. A parameter that names content and declares neither is invisible to
 the check; the audit below says which were closed by #355 and which remain.
 
 **Dynamic references stay run-time.** A value with a template (`${...}`) or a placeholder (`%...%`) is an expression; it is
@@ -1434,7 +1434,7 @@ declare it, so the walker cannot see it):
 |---|---|---|---|---|---|
 | `give_item.item`, `take_item.item`, `has_item.item` | item | yes (`item` widget) | `minecraft:` form only | **yes** | rest at run time; templates are expressions |
 | `has_item_space.item`, `slot_has.item` | item | yes (`item` widget, #355) | none | **yes** | rest at run time |
-| `gui.open.gui` | GUI | yes (`REFERENCE`, kind `gui`, added in #363) | none | **yes** | run time (`no live GUI matches`) |
+| `view.open.view` | view (any kind) | yes (`REFERENCE`, kind `view`, #455; was `gui.open.gui`, #363) | none | **yes** | run time (`no live view matches`) |
 | `in_gui.id` | GUI | declared for the SDK (`reference` widget, kind `gui`, #355); still a `STRING`, so the level-3 walker does not read it | id format | no | run time |
 | `give_money.currency`, `take_money.currency`, `has_money.currency` | currency | declared for the SDK (`reference` widget, kind `currency`, #355); the validator resolves no `currency` kind yet | none | no | run time (`unknown currency`) |
 | `sound.sound`, `stop_sound.sound` | sound | yes (`sound` widget) | none | no: a key may name a resource-pack event no pack declares; not decided (see below) | run time |

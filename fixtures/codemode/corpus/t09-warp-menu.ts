@@ -18,7 +18,7 @@ const menu = p.guis.create("warps", {
 
 for (const w of warps) {
   menu.rules.add(m.triggers.guiClick({ layer: `warp_${w.id}` }), () => ({
-    do: [m.actions.guiClose(), m.actions.teleport({ x: w.at[0], y: w.at[1], z: w.at[2], world: "world" })],
+    do: [m.actions.viewClose(), m.actions.teleport({ x: w.at[0], y: w.at[1], z: w.at[2], world: "world" })],
   }));
 }
 

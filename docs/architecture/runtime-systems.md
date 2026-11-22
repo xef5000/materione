@@ -557,10 +557,10 @@ browser uses only what the GUI runtime offers every author:
 | Browser feature | Mechanism (all generic) |
 |---|---|
 | The list of packs, folders and items | the `list` component over the **`content` list source** (below), 45 slots a page |
-| Opening a pack or a folder | `gui.open` of the same GUI with the row's location as the argument `path` |
-| Going up | `gui.back`, which restores the previous window on the page it was left on |
+| Opening a pack or a folder | `view.open` of the same GUI with the row's location as the argument `path` |
+| Going up | `view.back`, which restores the previous window on the page it was left on |
 | Search | the `prompt` action (chat) writing `session.search`, and the list's `search:` key |
-| Page indicator, "nothing here" and "no results" | `text` layers in the title, reading `gui.page.entries.*` |
+| Page indicator, "nothing here" and "no results" | `text` layers in the title, reading `view.page.entries.*` |
 | Taking an item | `give_item`, in a flow guarded by the `has_permission` condition |
 | Who may open it | the GUI's `open:` block (`permission: materione.browse`, typed arguments `path`, `search`) |
 
@@ -597,7 +597,7 @@ and `search`.
 **Search.** The list's `search:` matches **every whitespace-separated word** of the text against the row's id and its plain
 display name (formatting tags and legacy colour codes removed), ignoring case, in any order: `ruby sword` finds
 `Ruby Sword` and `shop:ruby_sword`. `/materione browse red gem` opens the browser already searching: the command
-only names the GUI and passes `search`, and the GUI's `gui.open` rule applies it. The search button asks for the words in
+only names the GUI and passes `search`, and the GUI's `view.open` rule applies it. The search button asks for the words in
 chat (the window closes while the question waits and comes back with the answer applied); `cancel`, a timeout or leaving
 the server is no answer and changes nothing. A search shows items from every pack, wherever they are filed.
 

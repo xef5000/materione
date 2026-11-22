@@ -61,7 +61,7 @@ async function buildFlow(page: Page): Promise<void> {
   await page.keyboard.press('Enter');
 
   await dragOut(page, port(page, 'behavior.0.do.1', 'after'));
-  await pick(page, 'action:gui.close');
+  await pick(page, 'action:view.close');
 }
 
 const EXPECTED = `main:
@@ -72,7 +72,7 @@ const EXPECTED = `main:
       do:
         - sound: block.chest.open
         - run_command: say shop opened
-        - gui.close
+        - view.close
 `;
 
 /** The saved GUI's behavior, as YAML, from the fixture's document. */
@@ -110,7 +110,7 @@ test('nodes are coloured by registry category and wired in the source colour', a
   expect(await colour('behavior.0')).toBe(await token('--logic-trigger'));
   expect(await colour('behavior.0.do.0')).toBe(await token('--logic-player')); // Play sound
   expect(await colour('behavior.0.do.1')).toBe(await token('--logic-server')); // Run command
-  expect(await colour('behavior.0.do.2')).toBe(await token('--logic-gui')); // Close GUI
+  expect(await colour('behavior.0.do.2')).toBe(await token('--logic-gui')); // Close view
   expect(new Set(await Promise.all(['behavior.0', 'behavior.0.do.0', 'behavior.0.do.1', 'behavior.0.do.2'].map(colour))).size).toBe(4);
   await expect(page.locator('[data-wire]')).toHaveCount(3);
 });
@@ -136,7 +136,7 @@ test('a join, a loop and a second wire out of a port are refused with a one-line
   await expect(hint(page)).toContainText('already feeds');
 
   await drag(port(page, 'behavior.0.do.2', 'after'), node(page, 'behavior.0.do.0').locator('header'));
-  await expect(hint(page)).toHaveText('That would make a loop: Play sound already leads to Close GUI.');
+  await expect(hint(page)).toHaveText('That would make a loop: Play sound already leads to Close view.');
 
   await expect(page.locator('.node')).toHaveCount(4);
   await expect(page.locator('[data-wire]')).toHaveCount(3);
@@ -215,13 +215,13 @@ test('the keyboard builds and edits: / adds, Enter on a port inserts, arrows wal
   await port(page, 'behavior.0', 'out').focus();
   await page.keyboard.press('Enter');
   await page.getByRole('textbox', { name: 'Search the palette' }).fill('close');
-  await page.locator('[data-entry="action:gui.close"]').click();
-  await expect(node(page, 'behavior.0.do.0')).toHaveAttribute('data-op', 'gui.close');
+  await page.locator('[data-entry="action:view.close"]').click();
+  await expect(node(page, 'behavior.0.do.0')).toHaveAttribute('data-op', 'view.close');
 
   await page.getByTestId('logic-canvas').focus();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId('logic-selection')).toContainText('Close GUI');
+  await expect(page.getByTestId('logic-selection')).toContainText('Close view');
   await page.keyboard.press('f');
   await page.keyboard.press('Delete');
   await expect(node(page, 'behavior.0.do.0')).toHaveCount(0);
