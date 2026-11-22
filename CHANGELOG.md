@@ -517,6 +517,20 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **The editor no longer shows stale content after an approved code-mode transaction or its revert (#461, web.md section 6
+  "Caches and refresh").** After the owner approved a transaction that changed an existing item, the Content tab thumbnail
+  updated but the detail view still showed the old name, lore and material, and the Files tab the old file; a revert had the
+  same problem. The editor keeps one cache of document bytes (the draft store) and only the catalog was refreshed. Now the
+  transaction's (or revert's) own list of changed documents drives one function, `syncDraftsWithServer`, which re-reads a view
+  that shows an untouched copy, drops a copy no view shows (so reopening reads the server), and never overwrites a draft with
+  unsaved edits: edits on other fields stay pending on the new revision, and an overlap marks a **conflict** with a banner
+  offering **Use server version**, **Keep my draft** (the next Save & apply is then the owner's explicit overwrite) and
+  **Compare**. The same function now serves the file watcher's `push.document.changed` (which only flagged open Files tabs
+  before, and never the detail view) and a `push.reload` no write of this tab explains (another editor session wrote): open
+  documents are probed by revision, one read each. No server or protocol change. Tests: webui `stale-after-write` (vitest),
+  `codemode-stale.pw.ts` (browser, reproduces the bug without the fix); QA
+  `editor.browser-codemode-open-views-follow-transaction` (not run, not blessed). The cloud editor's static bundle changes: the
+  owner deploys.
 - **A currency file with its fields at the top level now defines its currency, and a file that defines nothing says so (#469,
   logic.md section 18, plugin.md section 5).** `currencies/gems.yml` holding `integration: xp` and `display_name: Gems` is the
   currency `shop:gems`, named by the file, which is the form a single-currency file takes; the keyed form (`gems:` then the

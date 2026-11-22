@@ -911,6 +911,39 @@ cannot read, forge, replay, or reorder anything.
   IndexedDB (some private modes) drafts stay in-tab only. Normal saves stay on
   `authoring.setFields`/`edit.put`: `authoring.transaction` is code mode's reviewed-proposal path
   ([codemode.md](codemode.md)), not the studio's save.
+- **Caches and refresh (as built, M6, #461).** The editor holds **one cache of document bytes: the
+  draft store** (`drafts.svelte.ts`). The studio's detail view, the Files tab, the GUI studio, the
+  appearance panel and the Blockbench owner field all read a document through its draft, and the
+  catalog (resources, summaries, thumbnails) is a separate read-only projection refreshed by the
+  coalescer above. A document that moves on the server outside the tab's own save must therefore
+  reach the draft store, and it does so through **one function, `syncDraftsWithServer`**, with three
+  feeds and no per-surface patch:
+  1. **A write this tab made behind the editors' backs.** An applied `authoring.transaction` or
+     `authoring.revertTransaction` returns the documents it changed (path, new `rev`, deleted); the
+     review store hands that list to `noteDocumentsChanged`, which arms the one catalog refresh and
+     syncs exactly those drafts. (Before #461 the transaction's reload push refreshed the catalog
+     only, so the thumbnail updated while the detail view and the Files tab kept the old bytes, and
+     a reopened view read the cached draft.)
+  2. **`push.document.changed`** (the watcher: hand edits, git pulls, in-game file edits): the same
+     function over the one named document.
+  3. **A `push.reload`** no write of this tab explains (another editor session or the console
+     wrote; the server pushes no per-document list for API writes): the burst's one refresh also
+     probes every loaded draft by revision (one `browse.get` each, batched into the relay round)
+     and touches only those that moved. A save of this tab costs the same probe and finds nothing.
+
+  What a sync does to a draft depends only on what the draft holds: not loaded: nothing (the next
+  open reads the server); loaded, nothing typed and **no surface showing it**: dropped
+  (`loaded = false`), so the next view to open it reads fresh; loaded, untouched and showing:
+  re-read in place; a draft that already holds the reported revision: left alone. **A draft with
+  unsaved edits is never overwritten and never kept as if current**: it is reconciled against the
+  server's copy. Edits on fields the server did not touch stay pending on the new base; an overlap
+  with a changed field, YAML typed over a file that moved, or a deleted file marks the draft
+  `stale`, which is the **conflict**: Save is blocked and the conflict banner (`DraftConflict`,
+  shown in the studio and the Files tab) offers **Use server version** (drop the draft, read the
+  file), **Keep my draft** (rebase the draft onto the server's revision with its edits on top; the
+  next Save & apply is the owner's explicit overwrite) and **Compare** (the draft's YAML or staged
+  field edits beside the server's text). A browser-kept draft (#427) goes through the same path
+  when it is restored on reconnect. Nothing here writes to the server.
 - **Schema-driven studios**: registry metadata declares labels, sections/facets, ordering,
   constraints, reference targets, structured children, conditional visibility, widgets, and
   creation capabilities. The UI provides reusable controls and domain previews; it does not

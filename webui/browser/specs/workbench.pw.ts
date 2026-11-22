@@ -331,12 +331,11 @@ test('retains pending raw YAML across workspace navigation and external edits un
   await page.evaluate(() =>
     window.__materioneTestControls?.externalEdit('fixture_pack', 'items/ruby_blade.yml'),
   );
-  await expect(page.getByText('changed on disk — your unsaved edits are kept')).toBeVisible();
+  await expect(page.getByTestId('draft-conflict')).toContainText('Your draft is kept and nothing was overwritten');
   await expect(rawYaml).toHaveValue(pendingYaml);
   await expect(page.getByRole('button', { name: 'Save & apply' })).toBeDisabled();
 
-  page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'discard and reload' }).click();
+  await page.getByRole('button', { name: 'Use server version' }).click();
   await expect
     .poll(async () => rawYaml.inputValue())
     .toContain('Ruby Blade (external edit)');
