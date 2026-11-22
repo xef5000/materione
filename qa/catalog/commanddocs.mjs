@@ -78,7 +78,7 @@ export default [
 
   test({
     id: 'commanddocs.permission-denied',
-    title: 'a player without the permission of commands:staff is refused before anything else: after "deop Probe", /staff tells Probe "no permission (commands.staff)", the executor answers outcome=denied and the flow never prints',
+    title: 'a player without the permission of commands:vip (visible: always) is refused before anything else: after "deop Probe", /vip tells Probe "no permission (commands.vip)", the executor answers outcome=denied and the flow never prints',
     mode: 'auto',
     covers: COVERS,
     dependsOn: ['commands.give-basic'],
@@ -87,13 +87,94 @@ export default [
       await ctx.reset();
       const restoreOperator = (await ctx.rcon('deop Probe')).includes('Made Probe no longer a server operator');
       try {
-        await typedChat(ctx, 'staff', undefined, { waitForTree: true });
-        await ctx.waitForServerLog(/MATERIONE-COMMAND alias=staff command=commands:staff outcome=denied/, { timeoutMs: 20_000 });
-        await ctx.waitForChat(/no permission \(commands\.staff\)/);
+        await typedChat(ctx, 'vip', undefined, { waitForTree: true });
+        await ctx.waitForServerLog(/MATERIONE-COMMAND alias=vip command=commands:vip outcome=denied/, { timeoutMs: 20_000 });
+        await ctx.waitForChat(/no permission \(commands\.vip\)/);
         const log = String(await ctx.serverLogText());
-        ctx.expect(log.includes('MATERIONE-COMMANDS-STAFF Probe')).toBe(false);
+        ctx.expect(log.includes('MATERIONE-COMMANDS-VIP Probe')).toBe(false);
       } finally {
         if (restoreOperator) await ctx.rcon('op Probe');
+      }
+    },
+  }),
+
+  // #467, logic.md section 40, "Decisions taken in #467"
+  test({
+    id: 'commanddocs.hidden-from-completion',
+    title: 'a command whose permission the player lacks is not in their completion list (visible: permitted, the default): after "deop Probe", typing "/sta" offers no "staff" while "/vi" offers "vip" (visible: always), and running /staff reaches nothing',
+    mode: 'visual',
+    covers: COVERS,
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      const restoreOperator = (await ctx.rcon('deop Probe')).includes('Made Probe no longer a server operator');
+      try {
+        // /deop re-sends the player's command tree (the server does it on every change of operator status)
+        await ctx.exec('mc.setScreen(new net.minecraft.client.gui.screens.ChatScreen("/sta", false)); return "typed"');
+        await ctx.sleep(1200); // the client asks the server for completions
+        await ctx.shot('commanddocs-hidden-sta');
+        ctx.needsEyes('the chat box holds "/sta" and the completion popup does NOT list "staff" (Probe lacks commands.staff and the command is visible: permitted)');
+        await ctx.exec('mc.setScreen(new net.minecraft.client.gui.screens.ChatScreen("/vi", false)); return "typed"');
+        await ctx.sleep(1200);
+        await ctx.shot('commanddocs-visible-always-vi');
+        ctx.needsEyes('the chat box holds "/vi" and the completion popup lists "vip" (commands:vip is visible: always, so it is shown to a player without its permission)');
+        await ctx.exec('mc.setScreen(null); return "closed"');
+        await typedChat(ctx, 'staff', undefined, { waitForTree: true });
+        await ctx.sleep(1500);
+        const log = String(await ctx.serverLogText());
+        ctx.expect(log.includes('MATERIONE-COMMANDS-STAFF Probe')).toBe(false);
+        ctx.expect(/alias=staff command=commands:staff outcome=denied/.test(log)).toBe(false);
+      } finally {
+        if (restoreOperator) await ctx.rcon('op Probe');
+      }
+    },
+  }),
+
+  test({
+    id: 'commanddocs.out-of-range-refused',
+    title: 'commands:grant bounds its number (min 1, max 100): /grant 50 3 runs and prints "MATERIONE-COMMANDS-GRANT Probe amount 50 3"; /grant 500 is refused while it is parsed ("must not be more than 100" in chat) and the flow never prints',
+    mode: 'auto',
+    covers: COVERS,
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await typedChat(ctx, 'grant 50 3', undefined, { waitForTree: true });
+      await ctx.waitForServerLog(/MATERIONE-COMMANDS-GRANT Probe amount 50 times 3/, { timeoutMs: 20_000 });
+      await typedChat(ctx, 'grant 500', undefined, { waitForTree: true });
+      await ctx.waitForChat(/must not be more than 100/i);
+      await typedChat(ctx, 'grant 0.5', undefined, { waitForTree: true });
+      await ctx.waitForChat(/must not be less than 1/i);
+      const log = String(await ctx.serverLogText());
+      ctx.expect(log.includes('MATERIONE-COMMANDS-GRANT Probe amount 500')).toBe(false);
+      ctx.expect(log.includes('MATERIONE-COMMANDS-GRANT Probe amount 0.5')).toBe(false);
+    },
+  }),
+
+  test({
+    id: 'commanddocs.selector-runs-per-player',
+    title: 'a player argument with selector: true takes a vanilla selector: as an operator /hug @a runs the flow once for the one player it matches ("MATERIONE-COMMANDS-HUG Probe hugs Probe", exactly once), /hug @a[name=Nobody] runs nothing and answers outcome=nomatch, and after "deop Probe" /hug @a is refused by the server',
+    mode: 'auto',
+    covers: COVERS,
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      const wasOperator = !(await ctx.rcon('op Probe')).includes('Nothing changed');
+      try {
+        await typedChat(ctx, 'hug @a', undefined, { waitForTree: true });
+        await ctx.waitForServerLog(/MATERIONE-COMMANDS-HUG Probe hugs Probe/, { timeoutMs: 20_000 });
+        await typedChat(ctx, 'hug @a[name=Nobody]', undefined, { waitForTree: true });
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=hug outcome=nomatch/, { timeoutMs: 20_000 });
+        await ctx.rcon('deop Probe');
+        await typedChat(ctx, 'hug @a', undefined, { waitForTree: true });
+        await ctx.sleep(1500);
+        const log = String(await ctx.serverLogText());
+        ctx.expect(log.split('MATERIONE-COMMANDS-HUG Probe hugs Probe').length - 1).toBe(1);
+      } finally {
+        if (!wasOperator) await ctx.rcon('deop Probe');
+        else await ctx.rcon('op Probe');
       }
     },
   }),

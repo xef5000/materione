@@ -40,13 +40,17 @@ import org.bukkit.entity.Player;
  *   <li><b>Requirement.</b> Evaluated against the sender and the typed arguments; a broken requirement fails closed.
  *       The bypass node {@code materione.command.bypass.<pack>.<id>} skips it and nothing else. A failed requirement
  *       runs the {@code deny:} steps as the sender's run; with none, the sender is told it is not met.
- *   <li><b>The flow.</b> One {@code command.run} event through the rule engine: {@code args.*} (typed),
- *       {@code command.name} and {@code command.label} in context, the sender as the run's subject.
+ *   <li><b>The throttle.</b> The document's {@code cooldown}, {@code charges} and {@code per} (the rule's own, logic.md §16),
+ *       spent once for the typed command however many players a selector named; a command held back runs its
+ *       {@code on_cooldown} flow, or tells the sender how long is left.
+ *   <li><b>The flow.</b> One {@code command.run} event through the rule engine for each run (one, or one per player a
+ *       selector matched): {@code args.*} (typed), {@code command.name} and {@code command.label} in context, the sender
+ *       as the run's subject.
  * </ol>
  *
  * <p>Called on the thread that owns the sender; every world access the flow makes goes through the actions and the
  * thread gateway as for any run (D8). Each outcome is logged as {@code MATERIONE-COMMAND alias=<a> command=<id>
- * outcome=ran|denied|usage|console|refused|gone}, which the harness and the QA suite read.
+ * outcome=ran|denied|usage|console|refused|cooldown|spent|gone}, which the harness and the QA suite read.
  */
 public final class CommandRuns implements DocumentCommands {
 

@@ -879,7 +879,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41).
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41); #467 took `MTR-0125` (§40).
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -4363,10 +4363,10 @@ a link, a `/pay <player> <amount>`) had no home. It adds one content type, `comm
 `open:` declares into one schema that both read, and defines `open:` as the sugar of the second. Nothing in it is named for a use case: T27
 (`/discord`) is a document of three lines, T21 (`/pay`) is the same document with #331's `target:` (and does not pass the benchmark yet, for a gap
 of its own that is not this primitive: "Benchmark" below), and the `claim` and `browse` commands that are hard-coded today are the follow-up the
-issue names, not built here. The code is in `content.logic` (`CommandSchema`), `content.commands`
-(`CommandType`, `CommandDefinition`), `behavior.flow` (`FlowCompiler.document`), `plugin.gui.open` (the shared machinery: `OpenPlan`, `ArgParser`,
-`ArgType`, `OpenCommandTree`, the registrar and the handler, and `OpenDeclaration`, `DocumentCommands`), `plugin.commands` (`RuntimeCommands`,
-`CommandDocuments`, `CommandRuns`) and `plugin.logic.trigger` (`CommandTriggers`). Each decision is reversible by the owner.
+issue names, not built here. The code is in `content.commands` (`CommandSchema`, `CommandType`, `CommandDefinition`), `behavior.flow`
+(`FlowCompiler.document`), `plugin.commands` (the command system: `OpenPlan`, `ArgParser`, `ArgType`, `OpenCommandTree`, the registrar and the handler,
+`OpenDeclaration` and `DocumentCommands`, with `RuntimeCommands`, `CommandDocuments` and `CommandRuns`; they were in `plugin.gui.open` until #467
+moved them, see "Decisions taken in #467" below) and `plugin.logic.trigger` (`CommandTriggers`). Each decision is reversible by the owner.
 
 **Traceability.**
 
@@ -4412,7 +4412,7 @@ pay:
 
 ### Decisions
 
-1. **One schema source, referenced by both.** `CommandSchema` (`content.logic`) reads, checks and writes the block (names, arguments, permission,
+1. **One schema source, referenced by both.** `CommandSchema` (`content.commands`) reads, checks and writes the block (names, arguments, permission,
    requirement, deny) and draws its self-description once (`CommandSchema.argumentFields()` is the `args` entry's fields in `authoring.describe`).
    `GuiOpen`, the reader of #221, is now a thin spelling of it (`Dialect.OPEN`); the command document is the other (`Dialect.COMMAND`). The dialect
    decides three things and nothing else: the key that holds the names (`commands` in `open:`, `names` in a document), whether a key outside the
@@ -4431,8 +4431,8 @@ pay:
    window is created (§6.1) and costs a GUI open no flow run. The equivalence is proven by content, not asserted: the `commands` fixture pack holds
    `commands:menu` with `open: {commands: [cmenu]}` and `commands:menu2`, a document whose flow is `gui.open: {gui: commands:menu, args: {page:
    "${args.page}"}}`, and `CommandsPipelineTest` shows both compile to the same names, argument shape and gate. **What is not the same, on purpose:**
-   a GUI opened by name is still gated by the opener (permission, arguments, requirement, in the order of §23 decision 5) and a GUI's `gui.args` stay
-   text; a document's gate and `args` are decision 3 and 4 below. Neither changes for an existing GUI.
+   a GUI opened by name is still gated by the opener (permission, arguments, requirement, in the order of §23 decision 5); a document's gate and `args`
+   are decision 3 and 4 below. (#467 made a GUI's `gui.args` typed as a document's `args.*` are: "Decisions taken in #467", row 3.)
 3. **The gate of a command is permission, console, arguments, requirement.** `CommandRuns` runs it on the sender's thread, in this order, and each
    refusal is one logged outcome (`MATERIONE-COMMAND alias=<a> command=<id> outcome=...`):
    `denied` (the sender lacks `permission:`; the console holds every node), `console` (a sender with no player and no `console: true`),
@@ -4446,7 +4446,7 @@ pay:
    item's rules go through and `${...}` paths are checked against the trigger's schema (an unknown root is `MTR-0060`). Its context is the sender's
    tree as any player-subject event has it (`player.*`, `location.*`, `world.*`, `server.*`, `vars`), `args.*`, `command.name` and `command.label`.
    `args.*` carries the **typed** values: an `int` as an integer, a `number` as a double, a `boolean` as a boolean, and everything else as text. A
-   GUI's `gui.args` stay text (changing them would change every existing `open:` flow), and the consequence is real: with text, `${args.amount} > 0`
+   GUI's `gui.args` were text when this shipped (#467 typed them, row 3 below), and the consequence was real: with text, `${args.amount} > 0`
    would compare as strings. An optional argument left out with no default is absent (`${args.x}` reads as nothing); one with a default carries it.
    `args` is already the name of a called flow's own arguments (§2.4), and one engine rule changed so both read: a called flow's arguments shadow
    the run's `args` only when the call passed some, so a flow a command `call`s with no `with:` reads the command's `args.*`, and one called with
@@ -4548,31 +4548,112 @@ CUSTODY.
 
 ### Owner questions
 
-1. **Hide a command from players who cannot run it?** The tree's `requires` checks only that the name is declared (as for `open:`), so a player without
-   `permission:` sees the command in tab completion and is refused when they run it. Putting the permission in `requires` hides it, and makes
-   a refusal silent (Brigadier answers "unknown command"). Keep the visible refusal, or hide?
-2. **Numeric bounds on an argument.** The benchmark's draft of `/pay` wrote `amount: {type: number, min: 1}`. The shared schema has no `min` or `max`
-   (decision 4 uses `requirement: "args.amount > 0"`, which works and refuses with the author's own message). A bound is a schema change for `open:`
-   too, and the editor's typed `SetOpen` carries the record: add `min` and `max` to `int` and `number`, or leave it to the requirement?
-3. **Type `gui.args` too?** A document's `args` are typed and a GUI's `gui.args` are text, so the same argument is `5` in one and `"5"` in the other.
-   Typing `gui.args` is a change to every existing `open:` flow (a comparison that was a string comparison becomes numeric). Leave the split until a
-   release can carry it?
-4. **Rule options on a command.** A rule has `cooldown`, `charges`, `per` and `on_cooldown`; a command's `do:` has none, because the document is not a
-   rule list. A `/daily` is a `command` plus a cooldown, which T04 and T05 write as rule options. Should the document take the same four keys (one
-   more shared schema, read by the same `RuleOptions`), or is a cooldown a step (`require` on a variable) for a command?
-5. **Offline players and selectors.** A `player` argument is an exact online name, as for `open:` (§23 decision 11); `@a` and an offline name are
-   refused. Money to an offline player is out of #331 too. Keep, or add an `offline_player` type?
-6. **The package name.** The shared machinery stays in `plugin.gui.open` (decision 1) to avoid moving a dozen classes and their tests for no
-   behavior. Moving it to `plugin.command` is a rename; worth doing with `claim` and `browse` (the follow-up), when `open` stops being the larger
-   half of it?
+None open. The six this section asked were decided by the owner on 2026-11-21 and built by #467; each is answered, with its rationale, in
+"Decisions taken in #467" at the end of this section (a question's number there is its number here).
 
 ### Not built, on purpose
 
 `claim` and `browse` as built-in content (the follow-up the issue names); the graph Logic tab on a command document (#367); a per-argument
-permission (§23 decision 19); `min` and `max` on an argument (question 2); rule options on a document (question 4); a Bedrock or prompt surface for
+permission (§23 decision 19); a Bedrock or prompt surface for
 arguments (§23 decision 20); a command with a different flow per name, or a subcommand tree (a command is one name, its aliases, and one argument
 list: a `choice` argument and a `choose` step compose the same thing); a `custom` trigger or a command-run trigger for rule documents (primitives.md
 §5.5: the flow of a command is the command's, not a rule's `on:`).
+
+### Decisions taken in #467
+
+[#467](https://github.com/xef5000/materione/issues/467) answers the six owner questions above. The owner decided them on 2026-11-21 by the project's
+principles: **allow as much as possible and restrict only when needed; offer X *and* Y behind a switch rather than choosing; spend code to avoid
+annoyance, above all for a first-time user.** Nothing here is a new primitive: each row widens the one schema (`CommandSchema`), the one tree
+(`OpenCommandTree`) or the one gate (`CommandRuns`) that `open:` and a `command` document already share, so a key added to one is in the other.
+No public release exists, so nothing migrates (the lossless round trip still binds: every existing GUI and command fixture is byte-identical).
+Each decision is reversible by the owner.
+
+| # | Question | Decision | Why |
+|---|---|---|---|
+| 1 | show a command to players who lack its permission? | **both, behind `visible:`**. `permitted` (the default) puts the permission in the Brigadier `requires`, so a player without it never sees the command in completion and typing it is Brigadier's "unknown command"; `always` keeps the earlier behaviour (shown, refused with `no permission (node)`). The same key on `open:` | the default matches Bukkit and avoids "why can I see a command I cannot run"; the switch keeps the visible, explained refusal for a server that wants it |
+| 2 | `min` / `max` on `int` / `number`? | **yes.** The Brigadier integer and double types carry the bounds, so the client refuses an out-of-range value while it is typed; the server refuses it at parse with the usage line, which shows the range. `requirement:` stays for anything relational | the earliest, cheapest refusal is the best one, and the bound is part of the declaration, not a condition to write by hand |
+| 3 | type `gui.args` too? | **yes.** A GUI's `gui.args.*` are typed exactly as a command's `args.*` (an `int` an integer, a `number` a double, a `boolean` a boolean, the rest text). The session still keeps the text (a snapshot and `gui.back` replay it) | one schema should give one result; there is no public release to protect |
+| 4 | rule options on a command? | **yes.** `cooldown`, `charges`, `per` and `on_cooldown`, with the rule's meaning, read by the one rule compiler | a `/daily` is a command plus a cooldown, and the cooldown message already is the `on_cooldown` flow |
+| 5 | offline players and selectors for `player` args? | **all of them, as options.** `offline: true` and `selector: true`; the default stays an online player by name with completion | a server that wants `/seen <player>` or `/hug @a` should not need a second type or a hand-written parser |
+| 6 | move the machinery out of `plugin.gui.open`? | **yes, now,** to `plugin.commands` (and `CommandSchema` to `content.commands`): a pure move, no behaviour change | it is the command system, not a GUI detail |
+
+**Row 6, the move.** `ArgParser`, `ArgType`, `OpenArgSpec`, `OpenPlan`, `OpenUsage`, `OpenCommandTree`, `OpenCommandHandler`, `OpenCommandRegistrar`,
+`OpenDeclaration`, `DocumentCommands` and `PlayerNames` are in `plugin.commands`; what opens a window (`GuiOpener`, `GuiLifecycle`, `OpenGate`,
+`OpenSpecGate`, `OpenRequest`, `OpenResult`) stays in `plugin.gui.open`. Class names are kept, so the move is a diff of package lines. The size guard
+(`LogicCodeOrganisationTest`) and the listeners-are-adapters rule (`MaterioneArchRules.LISTENERS_ARE_ADAPTERS`) now cover the new packages, so the code that
+left `plugin.gui` did not leave their reach.
+
+**Row 1, `visible`.** `visible: permitted | always` (default `permitted`) on a command document and on `open:`. With `permitted` the root literal's
+`requires` is `declared && (permission is none || sender.hasPermission(permission))`, read from the live plan at each check, so an edit to `permission:` or
+`visible:` takes effect without a reload. The permission is still checked in the gate (it is the only check for a GUI opened through the API, and for a
+command a `requires` does not cover, such as one reached through `/execute`), so `always` and the API path say `no permission (node)` as before. What a
+player's client shows is what the server last sent: Brigadier syncs a player's tree when they join and when the server re-sends it (`updateCommands`),
+so a permission granted mid-session reaches the completion at the next resync, while running the command works at once because `requires` is asked
+again at run time. The console holds every node, so it always sees the command. A value other than the two reads as `permitted` with a problem.
+
+**Row 2, `min` and `max`.** On `args` entries of type `int` and `number`; any other type with them is a warning and the bounds are ignored. An `int` rounds its
+bounds inward (`min: 1.5` is 2, `max: 9.9` is 9), so an author is never told a whole number is out of a range it is inside. A range no value fits
+(`min` above `max`) drops both bounds with a warning (`MTR-0066`, the code the other argument problems use), so the argument is
+unbounded rather than unusable. A `default` outside the bounds is dropped with the same warning. The usage line shows the range:
+`<amount:number(1..100)>`, `[times:int(>=1)=1]`. The tree's argument shape includes the bounds, so a changed bound asks for the one rate-limited reload
+that a changed argument type does.
+
+**Row 3, typed `gui.args`.** `GuiSession.typedArgs()` is the arguments through `ArgParser.typed` with the GUI's own `open:` block, set by the opener when it
+creates the session; `GuiContexts.build` puts it under `gui.args`, and the open gate hands the requirement the same typed values. A GUI with no `open:` block
+has none typed and keeps its arguments as text. `gui.args.*` is now `raw` in the trigger's self-description. A `number` argument `2` reads as the
+double 2, so a message shows `2` and `${gui.args.ratio} * 2` is 4. The text a session keeps (`GuiSession.args()`, its snapshot, `gui.back`) is unchanged.
+
+**Row 4, rule options on a command.** The four keys are described once, in `api.logic.RuleThrottle`, which `RuleParser.RULE_OPTIONS` (the rule's) and
+`CommandType` (the document's) both list, so their descriptions cannot differ; the registry goldens show the document's four entries equal to the rule's.
+`FlowCompiler.document` hands them to the one `RuleCompiler`, so a bad `per:` or a broken `on_cooldown` step is reported with the problems of any rule,
+at `per` or `on_cooldown.0` in the document. The meaning is the rule's (§16): `cooldown` is milliseconds, `charges` the uses in all, `per` is `player`
+(the sender, the default) or `global`, `on_cooldown` the steps that run when the cooldown held the command back, reading `${cooldown.remaining}`.
+**One typed command is one use**, however many players its selector names: `RuleEngine.fireOnce` spends the cooldown and a charge once, then runs the flow for each
+run. Two things differ from a rule, because a command has a sender who is waiting for an answer: a command held back by its cooldown with no `on_cooldown`
+tells the sender `/x is on cooldown: N seconds left` (a rule stays silent), and a command whose charges are spent says `/x has no uses left`; each is one logged
+outcome (`cooldown`, `spent`) beside `ran`. An author who wants silence writes `on_cooldown: []`. The gate order is permission, console, arguments,
+requirement, then the throttle, so a refused command costs no use. A GUI's `open:` has no throttle keys (a GUI is not a flow).
+
+**Row 5, offline players and selectors.**
+
+- **`offline: true`** accepts a player who is online, or who has joined this server before and is in the user cache (`Bukkit.getOfflinePlayerIfCached`; it
+  never asks the profile service, so an unknown name is refused, not looked up on the main thread). The value is the name in its own spelling. The run's
+  subject is still the sender; the offline name is text in `args.<name>`, so an action that needs the player online (`target: {arg: who}` on `message`, `give_item`
+  or a money verb) fails soft with the resolver's own reason `no player named 'x' is online` (§39 rule 2), and a flow that only stores or compares the name
+  works. Completion offers the online players and then those who joined before, from a player-data listing that is read at most twice a minute.
+- **`selector: true`** makes the tree's type Paper's players selector, so the client parses and completes `@p`, `@a[distance=..5]` and the online names itself.
+  Paper checks the vanilla selector permission (`minecraft.command.selector`) when it parses, so a sender without it is refused by the server before the
+  command runs. A plain name still works (online, or offline too when both switches are set; the server then completes the names, because the client's own
+  completion cannot know the offline ones). Selector and plain value both reach the command as text: the selector is resolved with the sender's own position
+  (`@p` is nearest to them, `@s` is them) into the matched players' names.
+- **One run per matched player.** The flow of a command document runs once for each player a selector matched, in the order the server lists them, with
+  `args.<name>` the player's name in that run; the requirement is checked for each (a refused player does not stop the others) and the throttle is spent once.
+  The runs are capped at **16 in all**, as `nearby` caps `limit` (§39): the rest are dropped, the command runs for the first 16, and `MTR-0125` (a warning, once per
+  command per ten seconds) says how many it matched. With two selector arguments the runs are their combinations, up to the same 16. A selector that matches nobody
+  runs nothing and tells the sender `no player matches <selector>`. A GUI opens once: a selector in an `open:` argument opens it for the first player it matches.
+- The key is allowed only on a `player` argument; on another type it is a problem and is ignored.
+
+**Diagnostics.** One code: `MTR-0125` (a selector matched more players than the cap). Every other problem of the six rows uses an existing code:
+`MTR-0021` (a shape problem of a command document, a warning on it) or `MTR-0008` (the same problem in a GUI's `open:` block) for a bad `visible`, a bound on the wrong
+type or a non-number bound, and `MTR-0066` for a range or a default that cannot hold; the throttle keys report as any rule's. The block `MTR-0106` to `MTR-0117` stays reserved, `MTR-0118` to `MTR-0124` are taken.
+
+**Editor and SDK.** Nothing hand-written: the document's self-description grew `visible`, `cooldown`, `charges`, `per` and `on_cooldown` and the `args` entry grew
+`min`, `max`, `offline` and `selector`, so the studio's form, `authoring.describe`, the registry goldens and the generated `.d.ts` (`p.commands.create`) show them.
+The typed `SetOpen` of a GUI carries the same keys over the wire (`visible` on the block, `min`, `max`, `offline`, `selector` on an argument; all optional, so an older
+client's edit still reads).
+
+**Verification.** `CommandTypeTest` (the self-description, the shared throttle entries, the keys read, written and checked), `ArgParserTest` and `OpenPlanTest` (bounds,
+the usage range, offline, the default, visibility), `OpenCommandTreeTest` and `CommandDocumentRegistrarTest` (the bounded node refuses while parsed; `requires` hides a
+command; the shape carries the bounds), `OpenSpecGateTest` (typed `gui.args` in the session, in a rule and in a numeric requirement), `CommandRunsTest` (cooldown, `on_cooldown`,
+`per`, charges, one use for several runs, the requirement per run), `RuleEngineTest` (`fireOnce`), `ArgInvocationsTest` (the runs and the cap), and `PaperCommandsIT`
+on Paper 1.21.4 (a player without the permission is not shown the command and one with `visible: always` is; an out-of-range number never runs; an offline player
+is accepted and completed; a selector is refused to a sender without the vanilla permission and, for an operator, runs the flow once for each player it matches;
+a cooldown holds the second run). QA `commanddocs.hidden-from-completion`, `.out-of-range-refused` and `.selector-runs-per-player` (**not run and not blessed**: they need
+the local 26.x probe, and blessing runs happen on main).
+
+**Not built, on purpose.** Folia (nothing here ran on a native Folia server, as for the rest of §40); a restart-proof cooldown (a command's is in memory like a rule's,
+and the `cooldown_gate` recipe of §30 is the persistent one); money to an offline player (a gap of its own, §39: a verb that needs the player online fails soft);
+the 16-run cap as a setting (it is the same bound `nearby` has, and a pack that wants more runs writes a loop it can see).
 
 ---
 

@@ -263,7 +263,13 @@ node --test harness\protocol\floor-bot.test.mjs
   that does not read and for a player who is not online, a permission refusal for a player without the node and the run once they have it
   (`/staff`; an op holds every node nobody registered), a requirement that fails with its deny steps and is skipped by the bypass node (an
   operator holds that too), a console refused unless `console: true`, and
-  the tree's completions (`dprobe tab`) for a player argument and a choice. Paper only; nothing here ran on Folia.
+  the tree's completions (`dprobe tab`) for a player argument and a choice. #467 added: `visible` (`dprobe cmdlist <player> <names...>` says
+  which root commands the server's tree shows the player: `canUse` with their own source, which is what their client completes; `staff`
+  is hidden from a non-operator and `vip`, `visible: always`, is shown and refuses with `outcome=denied`), `min` and `max` (an out-of-range
+  number is refused while the command is parsed, so its flow never prints), `offline` (`dprobe join` then `dprobe leave` makes a player who
+  joined before; completion lists them), `selector` (`@s`, `@a`, `@a[name=Bob]` run the flow once per matched player; a sender without
+  the vanilla selector permission is refused by the server; a selector that matches nobody logs `MATERIONE-OPEN-COMMAND alias=<a>
+  outcome=nomatch`), and the cooldown of a command (`outcome=cooldown`, or its `on_cooldown` flow). Paper only; nothing here ran on Folia.
 - **Money from a command argument** (`PaperEconomyIT`, `EconomyRunner`, logic.md section 42, #464). Runs by default (one boot). The
   `economy` fixture pack names the harness's test economy, `harness:stub` (`EconomyStub`, an implementation of the product's currency SPI
   with balances in memory, registered by the durability probe, which depends on the product). `dprobe grant` and `dprobe balance` read and

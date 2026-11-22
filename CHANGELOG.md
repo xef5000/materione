@@ -28,6 +28,24 @@ releases may change file formats, settings and the public API.
   providers present. Harness `PaperProtectionIT` (a stand-in provider registered through the SPI: a deny stops a break before the
   event path, `event` mode ignores the port, `can_build` reads it); fixture pack `protection`; QA `protection.*` (not run, not
   blessed). Not built: a cache (adapters read in-memory indexes), per-provider overrides, PlotSquared's per-plot flags.
+- **Commands follow-ups (#467, M6, logic.md section 40, "Decisions taken in #467").** The six questions #330 left open, decided by the
+  owner's principles (allow as much as possible; X and Y behind a switch; spend code to avoid annoyance). **`visible: permitted | always`**
+  on a command document and on `open:`: by default the permission is in the Brigadier `requires`, so a player without it never sees the
+  command in completion; `always` keeps the earlier behaviour (shown, refused with `no permission (node)`). **`min` and `max`** on `int`
+  and `number` arguments: the client refuses an out-of-range value as it is typed, the server refuses it at parse with a usage line that
+  shows the range (an `int` rounds its bounds inward; an empty range or an out-of-range default is dropped with `MTR-0066`). **A GUI's
+  `gui.args.*` are typed** exactly as a command's `args.*` are (a whole number is an integer, `true` a boolean); the session keeps the
+  text. **`cooldown`, `charges`, `per` and `on_cooldown` on a command document**, described once in `api.logic.RuleThrottle` and read by
+  the one rule compiler, with the rule's meaning; one typed command is one use (`RuleEngine.fireOnce`), a command held back by its
+  cooldown with no `on_cooldown` tells the sender how long is left, and one out of charges says so. **`offline: true`** on a `player`
+  argument accepts any player who has joined before (the user cache; never a profile lookup), and an action that needs the player
+  online fails soft as before; **`selector: true`** accepts vanilla selectors (`@p`, `@a[distance=..5]`; the sender needs the vanilla
+  selector permission) and a selector that matches several players runs the flow once per player, at most 16, with `MTR-0125` past it.
+  **The command machinery moved** from `plugin.gui.open` to `plugin.commands` and `CommandSchema` from `content.logic` to
+  `content.commands`: a pure move, with the size guard and the listener rule covering the new packages. No file format changes (every
+  existing GUI and command fixture is byte-identical); the studio form, `authoring.describe`, the registry goldens and the generated
+  `.d.ts` show the new keys from the self-description, and the typed `SetOpen` carries them. New diagnostic `MTR-0125`. Harness
+  `PaperCommandsIT` (grown, with a new `dprobe cmdlist`); fixture `commands/options.yml`; QA `commanddocs.*` (not run, not blessed).
 - **Commands as content (#330, M6, logic.md section 40).** A new content type, `command` (`commands/`): `names`, typed `args`
   (`string`, `int`, `number`, `player`, `boolean`, `choice`, each with `optional`, `default` and `suggest`), `permission`,
   `requirement`, `deny`, `console` and one flow, `do:`, with `flows:` for named flows. The names, arguments and gate are the block a
@@ -46,7 +64,7 @@ releases may change file formats, settings and the public API.
   `FlowCompiler.document`. Benchmark: T27 (`/discord`) passes, T02 loses CMD; T21 (`/pay`) passes everything that is a command and
   fails on a new gap, QTY (the money actions read `amount` as a literal). Harness `PaperCommandsIT` (with a new `dprobe tab`); QA
   `commanddocs.*` (not run, not blessed); fixture pack `commands`. Not built: `claim` and `browse` as built-in content, the graph Logic tab
-  on a command document (#367), `min` and `max` on an argument, rule options on a document.
+  on a command document (#367).
 - **Entity and world verbs (#329, M6.5, D12, logic.md section 41).** Nine universal actions, each one registry entry with a full self-description and an expression marker on every computed quantity: `heal` (clamps at the maximum, fails on a dead subject), `damage` (attributed to the run's player so protection and combat plugins see a normal blow; optional vanilla `cause`), `velocity` (relative to the facing with `forward`, `up`, `strafe`, or world `x`, `y`, `z`; `set` or `add`), `particle` (colour and size for dust), `launch` (from the eyes, with spread and count; the projectile carries the item id so `entity.hit` finds the launching item), `break_blocks` (a box of radius up to 4, as the player by default so protection is asked per block, leaving the broken block to vanilla), `set_block` (a vanilla or Materione block, the placement asked first), `drop_item` and `stack.edit` (patches name, lore, model or damage of the stack the run is about, never replacing it). `heal`, `damage`, `velocity`, `particle` and `launch` take `target:` (#331). One typed location value `at` (`event`, `player`, `target`, offsets). Every world mutation runs on the thread that owns its location (D8). Caps with three new diagnostics: `MTR-0118` (a per-run budget spent: 2,048 blocks, 2,000 particles, 16 projectiles, 128 dropped stacks; or a verb-event chain 4 deep), `MTR-0119` (a location in another region skipped) and `MTR-0121` (a bad `world_verbs_*` setting); every cap is overridable in `settings.yml`. API: `RunMeter`, `VariableBinding#stack`, `ParamReader#templates`. The one change to existing behavior: an item's `break` now carries the broken block's coordinates as `location` (it carried the player's position). The `entity.hit`, `player.hurt` and item `break` events a verb raises are answered by every rule but the one that caused them (a "blocks mined" counter hears the whole 3 by 3; the excavator does not recurse), with a depth cap of 4; `damage` reports a blow a listener cancelled as a failed step; an item's `break` carries `block.*` (type, x, y, z, face); `break_blocks` takes `relative_to: facing`. Benchmark: T12, T13, T14 and follow-up F2 pass; T20 and F5 keep only TIMER (and VIEW). Harness `PaperWorldVerbsIT`; QA `worldverbs.*` (not run, not blessed); fixture pack `worldverbs`. Not built: #21's shapes and aura triggers (it stays open), `spawn`, `kill`, attribute modifiers, a face-relative shape.
 - **Target addressing: an action on another player or entity (#331, M6.5, logic.md section 39).** An action that can act on
   something other than the player the rule runs for takes an optional `target:`: `self` (the default), `event.target` (the entity

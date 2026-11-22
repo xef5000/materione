@@ -118,9 +118,28 @@ interface CommandFields {
     default?: string;
     /** The completions the command offers; for a choice, also the only values it accepts. */
     suggest?: JsonValue[];
+    /** The smallest value an int or a number accepts; the client refuses a smaller one as it is typed. */
+    min?: number;
+    /** The largest value an int or a number accepts; the client refuses a larger one as it is typed. */
+    max?: number;
+    /**
+     * For a player: also accept any player who has joined before, not only one who is online.
+     * @defaultValue false
+     */
+    offline?: boolean;
+    /**
+     * For a player: also accept a vanilla selector (@p, @a[distance=..5]) when the sender may use selectors; a command runs once for each player it matches, up to 16.
+     * @defaultValue false
+     */
+    selector?: boolean;
   }>;
   /** The permission node a sender needs; none means anyone may run it. */
   permission?: string;
+  /**
+   * Who sees the command in completion: permitted (only players who hold its permission) or always (everyone, refused with a message when they run it)
+   * @defaultValue permitted
+   */
+  visible?: "permitted" | "always";
   /** A condition the sender must meet; the deny steps run when it fails. */
   requirement?: ConditionValue;
   /** Steps that run when the requirement fails, then the command is refused. */
@@ -130,6 +149,23 @@ interface CommandFields {
    * @defaultValue false
    */
   console?: boolean;
+  /**
+   * Milliseconds before this rule can fire again.
+   * @defaultValue 0
+   */
+  cooldown?: number;
+  /** How many times the rule can fire in total. */
+  charges?: number;
+  /**
+   * Whether cooldown and charges count per player or for the whole server.
+   * @defaultValue player
+   */
+  per?: "player" | "global";
+  /**
+   * Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the whole seconds left, rounded up.
+   * Inside these steps: `cooldown.remaining` (integer), the whole seconds left in the cooldown window, rounded up.
+   */
+  on_cooldown?: readonly Step[];
   /**
    * The steps the command runs: the one flow model, with ${args.*}, ${command.name} and ${command.label} in context.
    * Inside these steps: `args.*` (raw), the typed arguments the sender gave, by name: whole numbers and numbers as numbers, true and false as booleans, everything else as text; `command.name` (string), the command's first name; `command.label` (string), the name the sender typed.
@@ -1947,7 +1983,7 @@ interface GuiClickContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2006,7 +2042,7 @@ interface GuiClickInventoryContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2064,7 +2100,7 @@ interface GuiClickOutsideContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2116,7 +2152,7 @@ interface GuiCloseContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2161,7 +2197,7 @@ interface GuiOpenContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2202,7 +2238,7 @@ interface GuiOpeningContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2248,7 +2284,7 @@ interface GuiPageContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2300,7 +2336,7 @@ interface GuiSlotChangeContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2357,7 +2393,7 @@ interface GuiTickContext {
     readonly gui: {
       /** The GUI's id, pack:name. */
       readonly id: ContextValue<string>;
-      readonly args: { readonly [name: string]: ContextValue<string> };
+      readonly args: { readonly [name: string]: ContextValue<unknown> };
       readonly session: { readonly [name: string]: ContextValue<unknown> };
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
