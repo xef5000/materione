@@ -75,7 +75,7 @@ public final class OpenSpecGate implements OpenGate {
             return Admission.usage(OpenUsage.refusal("/materione gui open " + gui.id(), plan, parsed.error()));
         }
         if (plan.hasRequirement() && !permissions.has(viewer, OpenPlan.bypassNode(gui.id()))) {
-            LogicContext context = GuiContexts.open(viewer, gui.id(), parsed.values(), variables);
+            LogicContext context = GuiContexts.open(viewer, gui.id(), ArgParser.typed(plan, parsed.values()), variables);
             if (!plan.requirementMet(context)) {
                 if (plan.deny() != null) {
                     denies.run(plan.deny(), context, RunOwner.of(viewer.id().toString(), viewer.player()));

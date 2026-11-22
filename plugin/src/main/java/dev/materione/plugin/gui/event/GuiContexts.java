@@ -44,7 +44,7 @@ public final class GuiContexts {
         root.put("server", serverVars());
         var gui = new LinkedHashMap<String, Object>();
         gui.put("id", session.gui().toString());
-        gui.put("args", session.args());
+        gui.put("args", session.typedArgs());
         gui.put("session", session.vars());
         gui.put("page", session.pages());
         root.put("gui", gui);
@@ -57,15 +57,16 @@ public final class GuiContexts {
 
     /**
      * The context a GUI's open requirement and its deny steps run against (logic.md §6.1). There is no
-     * session yet, so the session variables and pages are empty, and {@code gui.args} is the typed argument
-     * values the open was given. The player and the server are as for any GUI run.
+     * session yet, so the session variables and pages are empty, and {@code gui.args} is the argument values the open
+     * was given: typed (an {@code int} an integer, a {@code number} a double) when the gate passes them so, as the
+     * session's own {@code gui.args} are. The player and the server are as for any GUI run.
      */
-    public static MapLogicContext open(Viewer viewer, NamespacedId gui, Map<String, String> args) {
+    public static MapLogicContext open(Viewer viewer, NamespacedId gui, Map<String, ?> args) {
         return open(viewer, gui, args, null);
     }
 
     public static MapLogicContext open(
-            Viewer viewer, NamespacedId gui, Map<String, String> args, VariableService variables) {
+            Viewer viewer, NamespacedId gui, Map<String, ?> args, VariableService variables) {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", playerVars(viewer));
         root.put("server", serverVars());

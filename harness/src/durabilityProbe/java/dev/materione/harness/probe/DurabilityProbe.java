@@ -280,6 +280,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "fill" -> fill(player(args[1]), args[2], Integer.parseInt(args[3]));
                 case "cmd" -> command(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
                 case "tab" -> tab(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
+                case "cmdlist" -> cmdlist(player(args[1]), java.util.Arrays.copyOfRange(args, 2, args.length));
                 case "arm" -> arm(args[1]);
                 case "disable" -> disableProduct();
                 case "save" -> save(player(args[1]));
@@ -480,6 +481,26 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
         java.util.List<String> sorted = completions == null ? java.util.List.of()
                 : completions.stream().sorted().toList();
         log("tab ok=true player=" + player.getName() + " buffer=[" + buffer + "] completions=" + sorted);
+    }
+
+    /**
+     * Says which of {@code names} the server's command tree shows the player: a root command whose {@code requires} fails
+     * for them is not synced to their client, so it is neither completed nor offered. The tree is asked the way the server
+     * asks it when it builds the player's command packet: {@code canUse} with the player's own source.
+     */
+    private void cmdlist(Player player, String[] names) throws Exception {
+        Object server = R.call(Bukkit.getServer(), "getServer");
+        Object root = R.call(R.call(R.call(server, "getCommands"), "getDispatcher"), "getRoot");
+        Object source = R.call(handle(player), "createCommandSourceStack");
+        java.util.List<String> shown = new java.util.ArrayList<>();
+        for (String name : names) {
+            Object node = R.call(root, "getChild", name);
+            if (node != null && Boolean.TRUE.equals(R.call(node, "canUse", source))) {
+                shown.add(name);
+            }
+        }
+        java.util.Collections.sort(shown);
+        log("cmdlist ok=true player=" + player.getName() + " visible=" + shown);
     }
 
     /** Re-arms the product's crash gate from inside the server: the gate reads the property's current value. */

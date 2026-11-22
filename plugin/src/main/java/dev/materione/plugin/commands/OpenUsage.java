@@ -27,9 +27,20 @@ public final class OpenUsage {
         return error + ". " + of(prefix, plan);
     }
 
+    /** The range of a bounded number: {@code (1..100)}, {@code (>=1)} or {@code (<=100)}; nothing when unbounded. */
+    private static String range(OpenArgSpec arg) {
+        if (arg.min() != null && arg.max() != null) {
+            return "(" + ArgType.bound(arg.min()) + ".." + ArgType.bound(arg.max()) + ")";
+        }
+        if (arg.min() != null) {
+            return "(>=" + ArgType.bound(arg.min()) + ")";
+        }
+        return arg.max() != null ? "(<=" + ArgType.bound(arg.max()) + ")" : "";
+    }
+
     private static String token(OpenArgSpec arg) {
         String type = arg.type() == ArgType.CHOICE ? String.join("|", arg.suggest()) : arg.type().word();
-        String body = arg.name() + ":" + type + (arg.defaultValue() == null ? "" : "=" + arg.defaultValue());
+        String body = arg.name() + ":" + type + range(arg) + (arg.defaultValue() == null ? "" : "=" + arg.defaultValue());
         return arg.required() ? "<" + body + ">" : "[" + body + "]";
     }
 }

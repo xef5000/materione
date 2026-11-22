@@ -205,7 +205,11 @@ public final class GuiAuthoringOps {
                     arg.has("optional") && arg.get("optional").getAsBoolean(),
                     arg.has("default") && !arg.get("default").isJsonNull()
                             ? EditorContentOps.nodeValue(arg.get("default")) : null,
-                    stringsOf(arg.get("suggest"))));
+                    stringsOf(arg.get("suggest")),
+                    numberOf(arg, "min"),
+                    numberOf(arg, "max"),
+                    arg.has("offline") && arg.get("offline").getAsBoolean(),
+                    arg.has("selector") && arg.get("selector").getAsBoolean()));
         }
         var deny = new ArrayList<Object>();
         for (JsonElement step : arrayOf(block, "deny")) {
@@ -217,7 +221,20 @@ public final class GuiAuthoringOps {
                 EditorContentOps.optionalString(block, "permission"),
                 block.has("requirement") && !block.get("requirement").isJsonNull()
                         ? EditorContentOps.nodeValue(block.get("requirement")) : null,
-                deny);
+                deny,
+                EditorContentOps.optionalString(block, "visible"));
+    }
+
+    /** A number of an argument as the wire carries it (a bound), or null when absent. */
+    private static Number numberOf(JsonObject object, String field) {
+        if (!object.has(field) || object.get(field).isJsonNull()) {
+            return null;
+        }
+        Object value = EditorContentOps.nodeValue(object.get(field));
+        if (value instanceof Number number) {
+            return number;
+        }
+        throw new IllegalArgumentException("'" + field + "' must be a number");
     }
 
     /** The {@code open:} block as the typed view writes it for {@code gui.get} and {@code gui.edit}. */
@@ -234,11 +251,26 @@ public final class GuiAuthoringOps {
                 entry.add("default", EditorContentOps.jsonOf(arg.defaultValue()));
             }
             entry.add("suggest", EditorContentOps.jsonOf(arg.suggest()));
+            if (arg.min() != null) {
+                entry.addProperty("min", arg.min());
+            }
+            if (arg.max() != null) {
+                entry.addProperty("max", arg.max());
+            }
+            if (arg.offline()) {
+                entry.addProperty("offline", true);
+            }
+            if (arg.selector()) {
+                entry.addProperty("selector", true);
+            }
             args.add(entry);
         }
         json.add("args", args);
         if (open.permission() != null) {
             json.addProperty("permission", open.permission());
+        }
+        if (open.visible() != null) {
+            json.addProperty("visible", open.visible());
         }
         if (open.requirement() != null) {
             json.add("requirement", EditorContentOps.jsonOf(open.requirement()));

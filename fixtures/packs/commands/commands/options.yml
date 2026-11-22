@@ -1,0 +1,58 @@
+# The options of a command's arguments and gate (#467, logic.md section 40, "Decisions taken in #467"). One command per
+# top-level key; each announces itself with a `say MATERIONE-COMMANDS-...` line the harness and the QA suite read.
+
+# visible: a node the player lacks hides the command from completion (the default, `permitted`); `visible: always` keeps it
+# in the list and refuses with a message when it is run. `staff` (server.yml) is the first; this is the second.
+vip:
+  description: "Harness and QA: a permission with visible: always"
+  names: [vip]
+  permission: commands.vip
+  visible: always
+  do:
+    - run_command: "say MATERIONE-COMMANDS-VIP ${player.name}"
+
+# min and max: the client refuses a value outside the range as it is typed, and the server refuses it with the usage line
+grant:
+  description: "Harness and QA: /grant <amount 1..100>"
+  names: [grant]
+  args:
+    - {name: amount, type: number, min: 1, max: 100}
+    - {name: times, type: int, min: 1, max: 5, default: "1"}
+  do:
+    - run_command: "say MATERIONE-COMMANDS-GRANT ${player.name} amount ${args.amount} times ${args.times}"
+
+# offline: a player who joined before and is not online is accepted (the name is text; an action that needs the player online
+# fails soft on its own)
+seen:
+  description: "Harness and QA: a player argument that may be offline"
+  names: [seen]
+  args:
+    - {name: who, type: player, offline: true}
+  do:
+    - run_command: "say MATERIONE-COMMANDS-SEEN ${player.name} saw ${args.who}"
+
+# selector: a vanilla selector is accepted when the sender may use selectors, and the flow runs once for each player it matches
+hug:
+  description: "Harness and QA: a player argument that may be a selector"
+  names: [hug]
+  args:
+    - {name: who, type: player, selector: true}
+  do:
+    - run_command: "say MATERIONE-COMMANDS-HUG ${player.name} hugs ${args.who}"
+
+# the rule options on a command: one use of the cooldown per typed command, whatever it names
+daily:
+  description: "Harness and QA: a cooldown on a command"
+  names: [daily]
+  cooldown: 600000
+  do:
+    - run_command: "say MATERIONE-COMMANDS-DAILY ${player.name}"
+
+waits:
+  description: "Harness and QA: the on_cooldown flow is the message"
+  names: [waits]
+  cooldown: 600000
+  on_cooldown:
+    - run_command: "say MATERIONE-COMMANDS-WAITS ${player.name} cooling ${cooldown.remaining > 0}"
+  do:
+    - run_command: "say MATERIONE-COMMANDS-WAITS ${player.name} ran"

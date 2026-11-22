@@ -337,7 +337,7 @@ public final class OpenCommandRegistrar {
         return OpenCommandTree.build(
                 alias,
                 args,
-                source -> handler.declared(alias),
+                source -> handler.visibleTo(alias, source.getSender()),
                 context -> handler.run(alias, context),
                 argument -> handler.suggestions(alias, argument));
     }

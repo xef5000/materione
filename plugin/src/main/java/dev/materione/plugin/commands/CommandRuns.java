@@ -13,6 +13,7 @@ import dev.materione.plugin.commands.OpenPlan;
 import dev.materione.plugin.commands.OpenUsage;
 import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.runtime.behavior.BehaviorService;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,7 +106,7 @@ public final class CommandRuns implements DocumentCommands {
     }
 
     @Override
-    public void run(NamespacedId command, String alias, CommandSender sender, Map<String, String> raw) {
+    public void run(NamespacedId command, String alias, CommandSender sender, List<Map<String, String>> runs) {
         Optional<RuntimeCommands.Live> found = live(command);
         if (found.isEmpty()) {
             mark(alias, command, "gone"); // a reload took the command between the tree and the run
@@ -125,28 +126,53 @@ public final class CommandRuns implements DocumentCommands {
             mark(alias, command, "console");
             return;
         }
-        ArgParser.Result parsed = ArgParser.parse(plan, raw, players);
-        if (!parsed.ok()) {
-            sender.sendMessage(Component.text(OpenUsage.refusal("/" + alias, plan, parsed.error()),
-                    NamedTextColor.YELLOW));
-            mark(alias, command, "usage");
-            return;
-        }
-        MapLogicContext context = context(live, alias, sender, player, ArgParser.typed(plan, parsed.values()));
-        Object anchor = player;
-        if (plan.hasRequirement() && !sender.hasPermission(OpenPlan.commandBypassNode(command))
-                && !plan.requirementMet(context)) {
-            if (plan.deny() != null) {
-                engine.interpreter().start(plan.deny(), context, RunOwner.of(playerKey(player), anchor));
-            } else {
-                sender.sendMessage(Component.text("the requirement for /" + alias + " is not met", NamedTextColor.RED));
+        var typed = new ArrayList<ArgParser.Result>();
+        for (Map<String, String> raw : runs) {
+            ArgParser.Result parsed = ArgParser.parse(plan, raw, players);
+            if (!parsed.ok()) {
+                sender.sendMessage(Component.text(OpenUsage.refusal("/" + alias, plan, parsed.error()),
+                        NamedTextColor.YELLOW));
+                mark(alias, command, "usage");
+                return;
             }
-            mark(alias, command, "refused");
+            typed.add(parsed);
+        }
+        boolean bypass = plan.hasRequirement() && sender.hasPermission(OpenPlan.commandBypassNode(command));
+        var events = new ArrayList<BehaviorEvent>();
+        for (ArgParser.Result parsed : typed) {
+            MapLogicContext context = context(live, alias, sender, player, ArgParser.typed(plan, parsed.values()));
+            if (plan.hasRequirement() && !bypass && !plan.requirementMet(context)) {
+                if (plan.deny() != null) {
+                    engine.interpreter().start(plan.deny(), context, RunOwner.of(playerKey(player), player));
+                } else {
+                    sender.sendMessage(Component.text("the requirement for /" + alias + " is not met",
+                            NamedTextColor.RED));
+                }
+                mark(alias, command, "refused");
+                continue;
+            }
+            events.add(new BehaviorEvent(CommandType.TRIGGER, "", context, null, player));
+        }
+        if (events.isEmpty()) {
             return;
         }
-        var event = new BehaviorEvent(CommandType.TRIGGER, "", context, null, anchor);
-        engine.fire(List.of(live.flow()), event);
-        mark(alias, command, "ran");
+        // one typed command is one use of the cooldown and of a charge, however many players its selector named
+        RuleEngine.Throttled result = engine.fireOnce(live.flow(), events);
+        switch (result.result()) {
+            case RAN -> mark(alias, command, "ran");
+            case COOLING -> {
+                if (live.flow().onCooldown().isEmpty()) {
+                    long seconds = (result.remainingMs() + 999) / 1000;
+                    sender.sendMessage(Component.text("/" + alias + " is on cooldown: " + seconds + " second"
+                            + (seconds == 1 ? "" : "s") + " left", NamedTextColor.RED));
+                }
+                mark(alias, command, "cooldown");
+            }
+            case SPENT -> {
+                sender.sendMessage(Component.text("/" + alias + " has no uses left", NamedTextColor.RED));
+                mark(alias, command, "spent");
+            }
+        }
     }
 
     /**

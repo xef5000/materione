@@ -78,14 +78,9 @@ public final class RuleEngine {
                     || !rule.filters().matches(event.filterFacts())) {
                 continue;
             }
-            String throttleKey = throttleKey(rule, event);
             // 0 when the rule may fire; otherwise the cooldown blocked it and only its on_cooldown flow may run
-            long blockedMs = cooldowns.tryFireRemaining(throttleKey, now, rule.options().cooldownMs());
-            if (blockedMs > 0) {
-                if (rule.onCooldown().isEmpty()) {
-                    continue;
-                }
-            } else if (!cooldowns.trySpendCharge(throttleKey + ":charges", rule.options().charges())) {
+            long blockedMs = throttle(rule, event, now);
+            if (blockedMs == SPENT || (blockedMs > 0 && rule.onCooldown().isEmpty())) {
                 continue;
             }
             var result = ResumableConditions.test(rule.condition(), event.context(), gate.executor())
@@ -141,6 +136,71 @@ public final class RuleEngine {
             start(rule, event, gate, blockedMs);
         }
         gate.close();
+    }
+
+    /** What {@link #throttle} answers when the rule's charges are used up. */
+    private static final long SPENT = -1;
+
+    /**
+     * The rule's throttle (logic.md §16): 0 when it may fire now (the cooldown window and one charge are recorded), the
+     * milliseconds still open when the cooldown blocked it, or {@link #SPENT} when its charges are used up.
+     */
+    private long throttle(Rule rule, BehaviorEvent event, long now) {
+        String throttleKey = throttleKey(rule, event);
+        long blockedMs = cooldowns.tryFireRemaining(throttleKey, now, rule.options().cooldownMs());
+        if (blockedMs > 0) {
+            return blockedMs;
+        }
+        return cooldowns.trySpendCharge(throttleKey + ":charges", rule.options().charges()) ? 0 : SPENT;
+    }
+
+    /** How a {@link #fireOnce} ended: the flow ran, the cooldown held it back, or its charges are used up. */
+    public enum Gated {
+        RAN,
+        COOLING,
+        SPENT
+    }
+
+    /**
+     * What {@link #fireOnce} did.
+     *
+     * @param result whether the flow ran
+     * @param remainingMs for {@link Gated#COOLING}, the milliseconds left in the window; otherwise 0
+     */
+    public record Throttled(Gated result, long remainingMs) {}
+
+    /**
+     * Fires one rule at several events through <em>one</em> use of its throttle: a command typed once at several
+     * players (logic.md §40) is one use of the cooldown and of a charge, however many players it names. The gate is
+     * decided by the first event; when it passes, the flow runs once for each event with the throttle already spent,
+     * and when the cooldown blocks it the rule's {@code on_cooldown} flow runs once, for the first event. The rule-level
+     * {@code if:} is not evaluated (the one rule that comes here, a command's, has none: its gate is the open path's).
+     *
+     * @param events one event per run, at least one; all carry the same subject
+     */
+    public Throttled fireOnce(Rule rule, List<BehaviorEvent> events) {
+        BehaviorEvent first = events.get(0);
+        long blockedMs = throttle(rule, first, clock.getAsLong());
+        if (blockedMs == SPENT) {
+            return new Throttled(Gated.SPENT, 0);
+        }
+        if (blockedMs > 0) {
+            if (!rule.onCooldown().isEmpty()) {
+                var gate = interpreter.gateReads(ownerOf(first), first::synchronousPreEventOpen);
+                try {
+                    start(rule, first, gate, blockedMs);
+                } finally {
+                    gate.close();
+                    first.closePreEvent();
+                }
+            }
+            return new Throttled(Gated.COOLING, blockedMs);
+        }
+        Rule spent = rule.unthrottled();
+        for (BehaviorEvent event : events) {
+            fire(List.of(spent), event);
+        }
+        return new Throttled(Gated.RAN, 0);
     }
 
     /**

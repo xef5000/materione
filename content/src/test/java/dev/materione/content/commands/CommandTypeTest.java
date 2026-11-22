@@ -51,16 +51,96 @@ class CommandTypeTest {
         var parameters = type.describe().parameters();
 
         assertThat(parameters).extracting(ParameterSchema::id).containsExactly(
-                "description", "names", "args", "permission", "requirement", "deny", "console", "do", "flows");
+                "description", "names", "args", "permission", "visible", "requirement", "deny", "console", "cooldown",
+                "charges", "per", "on_cooldown", "do", "flows");
         assertThat(parameters.stream().filter(ParameterSchema::required).map(ParameterSchema::id))
                 .containsExactly("names", "do");
         // the flow is a list of steps of the one flow model, and says which variables its steps read beside the trigger's
-        var flow = parameters.get(7);
+        var flow = parameters.get(12);
         assertThat(flow.semantics().valueKind()).isEqualTo(ParameterSchema.KIND_STEPS);
         assertThat(flow.semantics().scope()).extracting(variable -> variable.path())
                 .containsExactly("args.*", "command.name", "command.label");
-        assertThat(parameters.get(4).semantics().valueKind()).isEqualTo(ParameterSchema.KIND_CONDITION);
-        assertThat(parameters.get(5).semantics().valueKind()).isEqualTo(ParameterSchema.KIND_STEPS);
+        assertThat(parameters.get(5).semantics().valueKind()).isEqualTo(ParameterSchema.KIND_CONDITION);
+        assertThat(parameters.get(6).semantics().valueKind()).isEqualTo(ParameterSchema.KIND_STEPS);
+    }
+
+    @Test
+    void theThrottleKeysAreTheRulesAndNotACopy() {
+        var parameters = type.describe().parameters();
+        var throttle = parameters.stream().filter(parameter -> java.util.Set.of("cooldown", "charges", "per", "on_cooldown")
+                .contains(parameter.id())).toList();
+
+        // same id, type, default, description and allowed values as the rule's own entries (editor placement differs)
+        assertThat(throttle).hasSize(4);
+        var rule = dev.materione.api.logic.RuleThrottle.options();
+        for (int i = 0; i < rule.size(); i++) {
+            assertThat(throttle.get(i).id()).isEqualTo(rule.get(i).id());
+            assertThat(throttle.get(i).type()).isEqualTo(rule.get(i).type());
+            assertThat(throttle.get(i).defaultValue()).isEqualTo(rule.get(i).defaultValue());
+            assertThat(throttle.get(i).description()).isEqualTo(rule.get(i).description());
+            assertThat(throttle.get(i).allowedValues()).isEqualTo(rule.get(i).allowedValues());
+            assertThat(throttle.get(i).semantics()).isEqualTo(rule.get(i).semantics());
+        }
+        assertThat(parameters.stream().filter(parameter -> parameter.id().equals("visible")).findFirst().orElseThrow()
+                .allowedValues()).containsExactly("permitted", "always");
+    }
+
+    @Test
+    void visibleBoundsAndPlayerOptionsReadWriteAndRoundTripThroughTheOneSchema() {
+        var raw = Map.<String, Object>of(
+                "names", List.of("pay"),
+                "visible", "always",
+                "args", List.of(
+                        Map.of("name", "to", "type", "player", "offline", true, "selector", true),
+                        Map.of("name", "amount", "type", "number", "min", 1, "max", 99.5),
+                        Map.of("name", "n", "type", "int", "min", 2)));
+        var parsed = CommandSchema.read(raw, CommandSchema.Dialect.COMMAND);
+
+        assertThat(parsed.problems()).isEmpty();
+        assertThat(parsed.spec().visible()).isEqualTo("always");
+        assertThat(parsed.spec().args().get(0).offline()).isTrue();
+        assertThat(parsed.spec().args().get(0).selector()).isTrue();
+        assertThat(parsed.spec().args().get(1).min()).isEqualTo(1);
+        assertThat(parsed.spec().args().get(1).max()).isEqualTo(99.5);
+        assertThat(parsed.spec().args().get(2).max()).isNull();
+        assertThat(CommandSchema.check(parsed.spec(), CommandSchema.Dialect.COMMAND)).isEmpty();
+        // written back as authored, in the documented key order
+        var written = CommandSchema.write(parsed.spec(), CommandSchema.Dialect.COMMAND);
+        assertThat(written.keySet()).containsExactly("names", "args", "visible");
+        assertThat(CommandSchema.read(written, CommandSchema.Dialect.COMMAND).spec()).isEqualTo(parsed.spec());
+    }
+
+    @Test
+    void anOpenBlockTakesTheSameKeys() {
+        var raw = Map.<String, Object>of(
+                "commands", List.of("shop"), "visible", "permitted",
+                "args", List.of(Map.of("name", "page", "type", "int", "min", 1, "max", 9)));
+        var open = GuiOpen.read(raw);
+
+        assertThat(open.problems()).isEmpty();
+        assertThat(open.spec().visible()).isEqualTo("permitted");
+        assertThat(open.spec().args().get(0).min()).isEqualTo(1);
+    }
+
+    @Test
+    void aBadVisibleABoundOnTheWrongTypeAndAnEmptyRangeAreProblems() {
+        var raw = Map.<String, Object>of(
+                "names", List.of("x"), "visible", "sometimes",
+                "args", List.of(
+                        Map.of("name", "a", "type", "string", "min", 1),
+                        Map.of("name", "b", "type", "int", "min", 5, "max", 2),
+                        Map.of("name", "c", "type", "int", "min", "low"),
+                        Map.of("name", "d", "type", "int", "offline", true)));
+        var parsed = CommandSchema.read(raw, CommandSchema.Dialect.COMMAND);
+        var found = new java.util.ArrayList<>(parsed.problems());
+        found.addAll(CommandSchema.check(parsed.spec(), CommandSchema.Dialect.COMMAND));
+
+        assertThat(found).extracting(Diagnostic::message).anySatisfy(message -> assertThat(message).contains("visible"))
+                .anySatisfy(message -> assertThat(message).contains("'a' has min or max"))
+                .anySatisfy(message -> assertThat(message).contains("'b' has a min above its max"))
+                .anySatisfy(message -> assertThat(message).contains("'c' min must be a number"))
+                .anySatisfy(message -> assertThat(message).contains("'d' has offline or selector"));
+        assertThat(parsed.spec().visible()).isNull(); // an unknown value reads as the default
     }
 
     @Test
@@ -69,7 +149,7 @@ class CommandTypeTest {
 
         assertThat(args.nested()).isEqualTo(CommandSchema.argumentFields());
         assertThat(args.nested()).extracting(ParameterSchema::id)
-                .containsExactly("name", "type", "optional", "default", "suggest");
+                .containsExactly("name", "type", "optional", "default", "suggest", "min", "max", "offline", "selector");
         assertThat(args.nested().get(1).allowedValues()).containsExactlyInAnyOrderElementsOf(CommandSchema.ARG_TYPES);
     }
 

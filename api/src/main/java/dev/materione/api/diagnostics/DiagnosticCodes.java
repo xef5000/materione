@@ -672,6 +672,15 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0124", Severity.WARN, "A protection provider cannot be used on this server");
 
     /**
+     * A selector argument of a command matched more players than one typed command makes runs for (logic.md section 40, #467): a
+     * {@code player} argument with {@code selector: true} runs the command once per matched player, at most 16 in all, as
+     * {@code nearby} caps its limit. The matches past the cap are dropped and the command runs for the rest. Reported at most
+     * once per command per ten seconds, with the command and the count it matched.
+     */
+    public static final DiagnosticCode COMMAND_SELECTOR_CAPPED =
+            new DiagnosticCode("MTR-0125", Severity.WARN, "A command's selector matched more players than it runs for");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -789,6 +798,7 @@ public final class DiagnosticCodes {
             OPEN_COMMAND_CONFLICT,
             OPEN_REQUIREMENT_INVALID,
             OPEN_TREE_RESYNC,
+            COMMAND_SELECTOR_CAPPED,
             RECIPE_LOAD_FAILED,
             RECIPE_PARAMETER_REFUSED,
             RECIPE_EXPANSION_REFUSED,

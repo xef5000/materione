@@ -1,6 +1,7 @@
 package dev.materione.plugin.commands;
 
 import dev.materione.api.NamespacedId;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.bukkit.command.CommandSender;
@@ -21,7 +22,7 @@ public interface DocumentCommands {
         }
 
         @Override
-        public void run(NamespacedId command, String alias, CommandSender sender, Map<String, String> raw) {
+        public void run(NamespacedId command, String alias, CommandSender sender, List<Map<String, String>> runs) {
             // nothing declares a command
         }
     };
@@ -35,7 +36,9 @@ public interface DocumentCommands {
      * refusal costs nothing and every world access goes through the gateway from there.
      *
      * @param alias the name the sender typed
-     * @param raw the arguments as the tree sent them, by name, before typing
+     * @param runs the arguments of each run as the tree sent them, by name, before typing: one run, or one per player a
+     *     selector matched (logic.md §40, #467). The sender's gate (permission, console) is decided once; the typing and
+     *     the requirement per run; the throttle once for all of them
      */
-    void run(NamespacedId command, String alias, CommandSender sender, Map<String, String> raw);
+    void run(NamespacedId command, String alias, CommandSender sender, List<Map<String, String>> runs);
 }

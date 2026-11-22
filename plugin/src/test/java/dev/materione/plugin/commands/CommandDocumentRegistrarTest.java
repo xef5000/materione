@@ -88,6 +88,73 @@ class CommandDocumentRegistrarTest {
         return new OpenArg(name, type, false, null, List.of());
     }
 
+    private static CommandSourceStack sourceHolding(boolean permission) {
+        var sender = (org.bukkit.command.CommandSender) Proxy.newProxyInstance(
+                CommandSourceStack.class.getClassLoader(), new Class<?>[] {org.bukkit.command.CommandSender.class},
+                (proxy, method, args) -> "hasPermission".equals(method.getName()) ? permission : null);
+        return (CommandSourceStack) Proxy.newProxyInstance(
+                CommandSourceStack.class.getClassLoader(), new Class<?>[] {CommandSourceStack.class},
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "getSender" -> sender;
+                    case "hashCode" -> 1;
+                    case "equals" -> proxy == args[0];
+                    default -> null;
+                });
+    }
+
+    private static OpenDeclaration guarded(String id, String visible, OpenArg... args) {
+        var spec = new OpenSpec(List.of(id), List.of(args), "pack.use", null, List.of(), visible);
+        NamespacedId owner = NamespacedId.of("pack", id);
+        return new OpenDeclaration(OpenDeclaration.Kind.COMMAND, owner,
+                OpenPlan.compile(owner, spec, null, "command.run", "", null));
+    }
+
+    @Test
+    void aCommandIsHiddenFromThePlayersWhoLackItsPermissionUnlessItIsAlwaysVisible() {
+        documents.add(guarded("quiet", null));
+        documents.add(guarded("loud", "always"));
+        documents.add(command("free", List.of("free")));
+        handler.documents(new DocumentCommands() {
+            @Override
+            public java.util.Optional<OpenPlan> plan(NamespacedId command) {
+                return documents.stream().filter(d -> d.id().equals(command)).map(OpenDeclaration::plan).findFirst();
+            }
+
+            @Override
+            public void run(NamespacedId command, String alias, org.bukkit.command.CommandSender sender,
+                    java.util.List<java.util.Map<String, String>> runs) {
+                throw new AssertionError("nothing runs in this test");
+            }
+        });
+
+        registrar.onCommands(commands);
+
+        var quiet = dispatcher.getRoot().getChild("quiet");
+        var loud = dispatcher.getRoot().getChild("loud");
+        var free = dispatcher.getRoot().getChild("free");
+        // the default: requires carries the permission, so Brigadier neither syncs nor runs it for a player without it
+        assertThat(quiet.canUse(sourceHolding(true))).isTrue();
+        assertThat(quiet.canUse(sourceHolding(false))).isFalse();
+        // visible: always keeps the old behaviour: shown, and refused with the message when it runs
+        assertThat(loud.canUse(sourceHolding(false))).isTrue();
+        assertThat(free.canUse(sourceHolding(false))).isTrue();
+    }
+
+    @Test
+    void theBoundsSurviveIntoTheTreeNodes() {
+        var bounded = new OpenArg("n", "int", false, null, List.of(), 1, 10, false, false);
+        var amount = new OpenArg("a", "number", false, null, List.of(), 0.5, null, false, false);
+        documents.add(command("count", List.of("count"), bounded, amount));
+
+        registrar.onCommands(commands);
+
+        var n = (ArgumentCommandNode<?, ?>) dispatcher.getRoot().getChild("count").getChild("n");
+        var a = (ArgumentCommandNode<?, ?>) n.getChild("a");
+        assertThat(((com.mojang.brigadier.arguments.IntegerArgumentType) n.getType()).getMinimum()).isEqualTo(1);
+        assertThat(((com.mojang.brigadier.arguments.IntegerArgumentType) n.getType()).getMaximum()).isEqualTo(10);
+        assertThat(((com.mojang.brigadier.arguments.DoubleArgumentType) a.getType()).getMinimum()).isEqualTo(0.5);
+    }
+
     @Test
     void aDocumentsNamesReachTheTreeWithTheirTypedArguments() {
         documents.add(command("pay", List.of("pay", "give-coins"), arg("to", "player"), arg("amount", "number")));
@@ -241,7 +308,7 @@ class CommandDocumentRegistrarTest {
 
             @Override
             public void run(NamespacedId command, String alias, org.bukkit.command.CommandSender sender,
-                    java.util.Map<String, String> raw) {
+                    java.util.List<java.util.Map<String, String>> runs) {
                 throw new AssertionError("a suggestion runs nothing");
             }
         });
@@ -265,7 +332,7 @@ class CommandDocumentRegistrarTest {
 
             @Override
             public void run(NamespacedId command, String alias, org.bukkit.command.CommandSender sender,
-                    java.util.Map<String, String> raw) {
+                    java.util.List<java.util.Map<String, String>> runs) {
                 throw new AssertionError("a suggestion runs nothing");
             }
         });

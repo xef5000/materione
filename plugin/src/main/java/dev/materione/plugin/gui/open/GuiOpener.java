@@ -1,5 +1,7 @@
 package dev.materione.plugin.gui.open;
 
+import dev.materione.plugin.commands.ArgParser;
+
 import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
@@ -84,6 +86,9 @@ public final class GuiOpener {
         }
 
         var session = new GuiSession(viewer.id(), viewer.name(), gui.id(), admission.args());
+        if (gui.open() != null) {
+            session.typedArgs(ArgParser.typed(gui.open(), admission.args())); // one schema, one result (logic.md §40)
+        }
         if (request.restore() != null) {
             session.restore(request.restore());
         }

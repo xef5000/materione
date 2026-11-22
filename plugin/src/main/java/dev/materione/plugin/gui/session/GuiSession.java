@@ -42,6 +42,7 @@ public final class GuiSession {
     private final String playerName;
     private final NamespacedId gui;
     private final Map<String, String> args;
+    private volatile Map<String, Object> typedArgs;
     private final Map<String, Object> vars = new ConcurrentHashMap<>();
     private final Map<String, Object> pages = new ConcurrentHashMap<>();
     private final AtomicReference<CloseReason> ended = new AtomicReference<>();
@@ -87,6 +88,21 @@ public final class GuiSession {
     /** The arguments the GUI was opened with (read by rules as {@code gui.args.<name>}). */
     public Map<String, String> args() {
         return args;
+    }
+
+    /**
+     * The arguments as rules read them (logic.md section 40, #467): an {@code int} argument is an integer, a {@code number} a
+     * double, a {@code boolean} a boolean, everything else the text it is, exactly as a command's {@code args.*}. A GUI
+     * with no {@code open:} block has none typed, and this is its {@link #args()}.
+     */
+    public Map<String, Object> typedArgs() {
+        Map<String, Object> typed = typedArgs;
+        return typed != null ? typed : Collections.<String, Object>unmodifiableMap(args);
+    }
+
+    /** Sets the typed reading of the arguments, once, when the session is opened (the opener types them with the block). */
+    public void typedArgs(Map<String, Object> typed) {
+        this.typedArgs = Collections.unmodifiableMap(new LinkedHashMap<>(typed));
     }
 
     /**

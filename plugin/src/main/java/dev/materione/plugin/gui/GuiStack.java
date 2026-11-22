@@ -118,7 +118,7 @@ public final class GuiStack {
         opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
-        this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
+        this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server(), diagnostics);
         this.openCommands = new OpenCommandRegistrar(plugin, openHandler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);

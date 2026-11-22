@@ -60,6 +60,73 @@ class OpenPlanTest {
     }
 
     @Test
+    void boundsAndPlayerOptionsAndVisibilityCompile() {
+        OpenPlan plan = plan(shop("""
+                    commands: [shop]
+                    permission: shop.use
+                    visible: always
+                    args:
+                      - { name: amount, type: int, min: 1.5, max: 9.9, default: 3 }
+                      - { name: ratio, type: number, min: 0 }
+                      - { name: who, type: player, offline: true, selector: true }
+                """));
+
+        assertThat(plan.visibleAlways()).isTrue();
+        // an int rounds its bounds inward
+        assertThat(plan.args().get(0).min()).isEqualTo(2.0);
+        assertThat(plan.args().get(0).max()).isEqualTo(9.0);
+        assertThat(plan.args().get(0).defaultValue()).isEqualTo("3");
+        assertThat(plan.args().get(1).min()).isEqualTo(0.0);
+        assertThat(plan.args().get(1).max()).isNull();
+        assertThat(plan.args().get(2).offline()).isTrue();
+        assertThat(plan.args().get(2).selector()).isTrue();
+        assertThat(plan.problems()).isEmpty();
+    }
+
+    @Test
+    void aDefaultOutsideItsBoundsIsDroppedAndAnEmptyRangeIsIgnored() {
+        OpenPlan plan = plan(shop("""
+                    commands: [shop]
+                    args:
+                      - { name: amount, type: int, min: 1, max: 5, default: 50 }
+                      - { name: other, type: int, min: 9, max: 2 }
+                """));
+
+        assertThat(plan.args().get(0).defaultValue()).isNull();
+        assertThat(plan.args().get(1).min()).isNull();
+        assertThat(plan.args().get(1).max()).isNull();
+        assertThat(plan.problems()).extracting(Diagnostic::code)
+                .containsExactly(DiagnosticCodes.OPEN_ARGUMENT_INVALID, DiagnosticCodes.OPEN_ARGUMENT_INVALID);
+    }
+
+    @Test
+    void aCommandIsVisibleOnlyToThoseWhoMayRunItUnlessItIsAlwaysVisible() {
+        OpenPlan permitted = plan(shop("""
+                    commands: [shop]
+                    permission: shop.use
+                """));
+        OpenPlan always = plan(shop("""
+                    commands: [shop]
+                    permission: shop.use
+                    visible: always
+                """));
+        OpenPlan open = plan(shop("""
+                    commands: [shop]
+                """));
+        java.util.function.Function<Boolean, org.bukkit.command.CommandSender> holder = permission -> (org.bukkit.command.CommandSender) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[] {org.bukkit.command.CommandSender.class},
+                (proxy, method, args) -> "hasPermission".equals(method.getName()) ? permission : null);
+        org.bukkit.command.CommandSender with = holder.apply(true);
+        org.bukkit.command.CommandSender without = holder.apply(false);
+
+        assertThat(permitted.visibleAlways()).isFalse();
+        assertThat(permitted.visibleTo(with)).isTrue();
+        assertThat(permitted.visibleTo(without)).isFalse();
+        assertThat(always.visibleTo(without)).isTrue();
+        assertThat(open.visibleTo(without)).isTrue(); // no permission: nothing to hide it behind
+    }
+
+    @Test
     void aDefaultThatDoesNotReadAsItsTypeIsDroppedWithAWarning() {
         OpenPlan plan = plan(shop("""
                     commands: [shop]
