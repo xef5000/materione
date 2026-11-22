@@ -11,6 +11,8 @@ import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.RunMeter;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.protection.ProtectionActor;
+import dev.materione.api.protection.ProtectionAnswer;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -37,12 +39,14 @@ import org.bukkit.entity.Player;
  *
  * <p><b>As the player</b> (the default) the player is asked first through the placement path ({@code BlockPlaceEvent}),
  * so a protection plugin that would stop them placing there stops the verb, and the step fails with "refused by a
- * listener". {@code as_player: false} places with no actor and asks nobody, and works in a run with no player.
+ * listener". With the protection port (logic.md §43) the port is asked first in {@code protection_mode: both}, and alone in {@code
+ * port}. {@code as_player: false} places with no actor: in {@code event} mode it asks nobody, otherwise it asks the port with no
+ * actor; it works in a run with no player.
  *
  * <p><b>Budget.</b> One block is charged to the run's block budget, shared with {@code break_blocks}
  * ({@link WorldVerbs#MAX_BLOCKS_PER_RUN}, {@code MTR-0118}). A block outside the thread's region is placed on its own
  * region's thread, except as the player (the placement event must run beside the player), where it is refused
- * ({@code MTR-0119}).
+ * ({@code MTR-0119}); in {@code protection_mode: port} there is no event, so the block is reached on its own region.
  */
 public final class SetBlockAction implements ActionType<SetBlockAction.Params> {
 
@@ -118,7 +122,10 @@ public final class SetBlockAction implements ActionType<SetBlockAction.Params> {
                             }
                             Location location = where.location();
                             Object rule = context.facet(RunMeter.FACET).map(RunMeter::origin).orElse(null);
-                            if (params.asPlayer() && !verbs.regions().ownedHere(location)) {
+                            // the event path needs the player's thread beside the block; the port alone does not
+                            // (protection_mode: port, protection.md section 5), so there the block is reached on its own region
+                            if (params.asPlayer() && verbs.protection().runsEventPath()
+                                    && !verbs.regions().ownedHere(location)) {
                                 verbs.regionRefused("set_block", 1);
                                 return Stages.failed("the block lies in a region this thread does not own");
                             }
@@ -148,8 +155,9 @@ public final class SetBlockAction implements ActionType<SetBlockAction.Params> {
         } catch (IllegalArgumentException e) {
             return ActionOutcome.failed("'" + text + "' is not a block");
         }
-        if (params.asPlayer() && !verbs.blocks().mayPlace(player, block, data)) {
-            return ActionOutcome.failed("the placement was refused by a listener");
+        ActionOutcome refusal = refusal(params, player, block, data);
+        if (refusal != null) {
+            return refusal;
         }
         return verbs.blocks().place(block, data) == BlockOps.Result.DONE
                 ? ActionOutcome.OK : ActionOutcome.failed("the block could not be placed");
@@ -160,13 +168,32 @@ public final class SetBlockAction implements ActionType<SetBlockAction.Params> {
         if (blocks.isEmpty() || !blocks.get().exists(id)) {
             return ActionOutcome.failed("no Materione block '" + id + "' is loaded");
         }
-        if (params.asPlayer()) {
-            // the same question a vanilla placement asks; the host block's data stands in for the custom block's
-            if (!verbs.blocks().mayPlace(player, block, block.getBlockData())) {
-                return ActionOutcome.failed("the placement was refused by a listener");
-            }
+        // the same question a vanilla placement asks; the host block's data stands in for the custom block's
+        ActionOutcome refusal = refusal(params, player, block, block.getBlockData());
+        if (refusal != null) {
+            return refusal;
         }
         return blocks.get().place(block, id) ? ActionOutcome.OK : ActionOutcome.failed("the block could not be placed");
+    }
+
+    /**
+     * Whether the placement may go on: null when it may, else the failed outcome that says why. The protection port is asked first
+     * when the mode asks it (as the player, or with no actor for {@code as_player: false}), and then, for a player's placement in a
+     * mode that runs the event path, the placement event (logic.md §43).
+     */
+    private ActionOutcome refusal(Params params, Player player, Block block, BlockData data) {
+        var protection = verbs.protection();
+        if (protection.asksPort()) {
+            ProtectionActor actor = params.asPlayer() ? ProtectionActor.of(player) : ProtectionActor.none();
+            ProtectionAnswer answer = protection.canPlace(actor, block.getLocation());
+            if (answer.denied()) {
+                return ActionOutcome.failed("the placement was " + answer.describeDenial());
+            }
+        }
+        if (params.asPlayer() && protection.runsEventPath() && !verbs.blocks().mayPlace(player, block, data)) {
+            return ActionOutcome.failed("the placement was refused by a listener");
+        }
+        return null;
     }
 
     /** The Materione block id {@code text} names, or null when it is a vanilla block. */

@@ -192,6 +192,41 @@ class IntegrationsGuardTest {
         assertThat(host.channels).containsExactly("BungeeCord");
     }
 
+    @Test
+    void anEnabledProtectedPluginWhoseApiCannotLoadIsReportedAsMtr0124AndNothingRegisters() {
+        var host = new Host(Set.of("WorldGuard", "Towny", "BentoBox"));
+        var registered = new ArrayList<String>();
+        var protection = proxy(dev.materione.api.protection.ProtectionApi.class, (method, args) -> {
+            if (method.getName().equals("register")) {
+                registered.add(((dev.materione.api.protection.ProtectionPort) args[1]).name());
+                return (dev.materione.api.protection.ProtectionApi.Registration) () -> { };
+            }
+            throw new UnsupportedOperationException(method.getName());
+        });
+        var diagnostics = new Diagnostics();
+
+        new Integrations(host.plugin, logicOf(new RecordingProviders()), protection, diagnostics, false).refresh();
+
+        assertThat(registered).isEmpty();
+        assertThat(diagnostics.published).hasSize(3).allSatisfy(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo(DiagnosticCodes.PROTECTION_PROVIDER_UNUSABLE);
+            assertThat(diagnostic.message()).contains("event path still covers");
+        });
+    }
+
+    @Test
+    void anAbsentProtectedPluginRegistersNothingAndIsNeverLoaded() {
+        var host = new Host(Set.of());
+        var protection = proxy(dev.materione.api.protection.ProtectionApi.class, (method, args) -> {
+            throw new UnsupportedOperationException(method.getName());
+        });
+        var diagnostics = new Diagnostics();
+
+        new Integrations(host.plugin, logicOf(new RecordingProviders()), protection, diagnostics, false).refresh();
+
+        assertThat(diagnostics.published).isEmpty();
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> T proxy(Class<T> type, BiFunction<java.lang.reflect.Method, Object[], Object> answers) {
         return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type},

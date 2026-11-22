@@ -10,6 +10,8 @@ import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Subjects;
 import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.protection.ProtectionActor;
+import dev.materione.api.protection.ProtectionAnswer;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -27,6 +29,7 @@ import java.util.regex.Pattern;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.projectiles.ProjectileSource;
 import org.bukkit.util.Vector;
 
@@ -38,7 +41,8 @@ import org.bukkit.util.Vector;
  *
  * <p>The projectile goes through the server's own launch path (so a protection plugin may veto it) and carries the id of
  * the item the run is about, so when it lands {@code entity.hit} runs that item's rules even if the shooter has switched
- * hands. Fails when the type is not a projectile, the shooter cannot shoot, or every launch was vetoed.
+ * hands. Fails when the type is not a projectile, the shooter cannot shoot, the protection port refuses the shot (logic.md §43:
+ * {@code canUse} at the shooter's eyes, asked in modes {@code both} and {@code port}), or every launch was vetoed.
  *
  * <p><b>Budgets.</b> One step launches at most {@link WorldVerbs#MAX_LAUNCH_PER_STEP}; one run at most
  * {@link WorldVerbs#MAX_LAUNCHES_PER_RUN} ({@code MTR-0118}, and the step fails).
@@ -137,6 +141,15 @@ public final class LaunchAction implements ActionType<LaunchAction.Params> {
             double spread, int count, Optional<String> item) {
         if (living.isDead() || !living.isValid()) {
             return ActionOutcome.failed("the shooter is dead");
+        }
+        if (verbs.protection().asksPort()) {
+            // using an item at a place: a claim or a region may forbid it (a no-use flag); the launch event is the effect itself,
+            // so port and both behave alike (protection.md section 8)
+            ProtectionActor actor = living instanceof Player player ? ProtectionActor.of(player) : ProtectionActor.none();
+            ProtectionAnswer answer = verbs.protection().canUse(actor, living.getEyeLocation());
+            if (answer.denied()) {
+                return ActionOutcome.failed("the launch was " + answer.describeDenial());
+            }
         }
         Vector aim = living.getEyeLocation().getDirection();
         int launched = 0;

@@ -6,6 +6,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -21,6 +22,14 @@ public interface Regions {
     boolean ownedHere(Location location);
 
     /**
+     * Whether the calling thread owns {@code entity}. The default asks for its location, which a server overrides with the
+     * entity form (reading an entity's location from another region is itself unsafe on Folia).
+     */
+    default boolean ownedHere(Entity entity) {
+        return ownedHere(entity.getLocation());
+    }
+
+    /**
      * Runs {@code task} on the thread that owns {@code location}: inline when this thread already does, else on that
      * region's thread, completing the stage there. A task that throws fails the stage; it is never lost.
      */
@@ -32,6 +41,11 @@ public interface Regions {
             @Override
             public boolean ownedHere(Location location) {
                 return Bukkit.isOwnedByCurrentRegion(location);
+            }
+
+            @Override
+            public boolean ownedHere(Entity entity) {
+                return Bukkit.isOwnedByCurrentRegion(entity);
             }
 
             @Override

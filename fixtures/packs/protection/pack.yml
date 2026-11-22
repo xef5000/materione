@@ -1,0 +1,9 @@
+# The protection fixture pack (#466, logic.md section 43, docs/architecture/protection.md): content that changes the world and asks
+# itself whether it may. One item breaks a flat 3 by 3 as the player and places a block above the broken one as nobody
+# (`as_player: false`); one rule document asks `can_build` and `can_break`. Every rule announces itself with a console line
+# (`say MATERIONE-PROTECTION-...`, via run_command) for the headless harness (PaperProtectionIT). The harness probe registers a
+# stand-in provider through the protection SPI; no real protection plugin runs. No other fixture suite loads this pack.
+id: protection
+version: 1.0.0
+schema_version: 1
+depends: []

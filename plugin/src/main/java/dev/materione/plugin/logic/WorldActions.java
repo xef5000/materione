@@ -26,7 +26,7 @@ final class WorldActions {
     static List<ActionType<?>> all(ItemCatalog items, WorldVerbs world) {
         return List.of(
                 new HealAction(),
-                new DamageAction(world.damageWatch()),
+                new DamageAction(world.damageWatch(), world.protection()),
                 new VelocityAction(),
                 new ParticleAction(world),
                 new LaunchAction(world),

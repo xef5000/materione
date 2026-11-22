@@ -13,6 +13,7 @@ import dev.materione.api.logic.TriggerType;
 import dev.materione.api.logic.trace.LogicTraces;
 import dev.materione.api.logic.trace.TraceLimits;
 import dev.materione.api.logic.variable.VariablesApi;
+import dev.materione.api.protection.ProtectionApi;
 import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.diagnostics.Diagnostic;
@@ -71,6 +72,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final VariableService variables;
     private final TraceHub traces;
     private final TracePump pump;
+    private volatile ProtectionApi protection;
     private boolean closed;
 
     /**
@@ -222,6 +224,20 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     @Override
     public LogicProviders providers() {
         return providers;
+    }
+
+    /** Binds the protection port the plugin built from its settings (logic.md §43); until then {@link #protection()} throws. */
+    public void bindProtection(ProtectionApi protection) {
+        this.protection = Objects.requireNonNull(protection, "protection");
+    }
+
+    @Override
+    public ProtectionApi protection() {
+        ProtectionApi bound = protection;
+        if (bound == null) {
+            throw new IllegalStateException("LogicApi sub-api 'protection' is not wired yet");
+        }
+        return bound;
     }
 
     /**

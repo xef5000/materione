@@ -1,0 +1,18 @@
+# The conditions over the protection port (logic.md section 43): content asking whether it may, before it acts. A player who joins
+# is asked about the block above their feet. The condition reads the port whatever `protection_mode` says.
+protection:
+  description: "Harness: can_build and can_break over the protection port"
+  behavior:
+    - id: builder_asks
+      on: player.join
+      do:
+        - if: {can_build: {at: {of: player, y: 1}}}
+          then:
+            - run_command: "say MATERIONE-PROTECTION-BUILD ${player.name} yes"
+          else:
+            - run_command: "say MATERIONE-PROTECTION-BUILD ${player.name} no"
+        - if: {can_break: {at: {of: player, y: 1}, as_player: false}}
+          then:
+            - run_command: "say MATERIONE-PROTECTION-BREAK ${player.name} yes"
+          else:
+            - run_command: "say MATERIONE-PROTECTION-BREAK ${player.name} no"

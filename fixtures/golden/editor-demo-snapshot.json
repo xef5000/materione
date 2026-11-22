@@ -2234,6 +2234,114 @@
       "conditions": [
         {
           "available": true,
+          "category": "world",
+          "description": "True unless a protection provider (WorldGuard, a claim plugin, an addon's own) says the actor may not break the block there. True when nothing protects the place. Asks the providers whatever protection_mode says",
+          "displayName": "Can break",
+          "id": "can_break",
+          "parameters": [
+            {
+              "advanced": true,
+              "default": "player",
+              "description": "Where: event (the location of the trigger), player (default), or {of, x, y, z} with a world-axis offset in blocks",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Ask as the run's player; false asks with no actor (may the world do this by itself?)",
+              "id": "as_player",
+              "label": "As Player",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "at",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "description": "True unless a protection provider (WorldGuard, a claim plugin, an addon's own) says the actor may not place a block there. True when nothing protects the place. Asks the providers whatever protection_mode says",
+          "displayName": "Can build",
+          "id": "can_build",
+          "parameters": [
+            {
+              "advanced": true,
+              "default": "player",
+              "description": "Where: event (the location of the trigger), player (default), or {of, x, y, z} with a world-axis offset in blocks",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Ask as the run's player; false asks with no actor (may the world do this by itself?)",
+              "id": "as_player",
+              "label": "As Player",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "at",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "description": "True unless a protection provider (WorldGuard, a claim plugin, an addon's own) says the actor may not open or press what is there. True when nothing protects the place. Asks the providers whatever protection_mode says",
+          "displayName": "Can interact",
+          "id": "can_interact",
+          "parameters": [
+            {
+              "advanced": true,
+              "default": "player",
+              "description": "Where: event (the location of the trigger), player (default), or {of, x, y, z} with a world-axis offset in blocks",
+              "id": "at",
+              "label": "At",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Ask as the run's player; false asks with no actor (may the world do this by itself?)",
+              "id": "as_player",
+              "label": "As Player",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "at",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
           "category": "player",
           "description": "True when the player holds at least the amount of experience points or levels",
           "displayName": "Has experience",

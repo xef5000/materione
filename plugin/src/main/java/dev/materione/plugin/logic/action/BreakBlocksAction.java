@@ -9,6 +9,8 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.RunMeter;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.protection.ProtectionActor;
+import dev.materione.api.protection.ProtectionAnswer;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -24,6 +26,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -38,8 +42,10 @@ import org.bukkit.entity.Player;
  *
  * <p><b>As the player</b> (the default) each block goes through the player's own break path: protection and claim plugins
  * are asked as for a mined block, the tool's enchantments and durability apply, and a vetoed block stays. {@code drops:
- * false} breaks without items. <b>{@code as_player: false}</b> is the world acting with no actor: nothing is asked, so a
- * pack that writes it takes that choice on purpose; it works in a run with no player.
+ * false} breaks without items. With the protection port (logic.md §43) the port is asked first in {@code protection_mode:
+ * both}, and alone in {@code port}. <b>{@code as_player: false}</b> is the world acting with no actor: in {@code event}
+ * mode nothing is asked, and otherwise the port is asked with no actor, so a claim may still refuse it; it works in a run
+ * with no player.
  *
  * <p><b>Outcome.</b> OK when at least one block was broken or none was breakable (an excavator in a hollow). Failed when
  * blocks were eligible and none could be broken (all vetoed or in another region), with the counts, so a {@code require}
@@ -47,7 +53,8 @@ import org.bukkit.entity.Player;
  *
  * <p><b>Budgets.</b> The shape is at most 9 by 9 by 9 (729 blocks) a step; a run changes at most
  * {@link WorldVerbs#MAX_BLOCKS_PER_RUN} blocks across {@code break_blocks} and {@code set_block} ({@code MTR-0118}).
- * A block in a region this thread does not own is skipped when it must be broken as the player ({@code MTR-0119}).
+ * A block in a region this thread does not own is skipped when it must be broken as the player ({@code MTR-0119}), except in
+ * {@code protection_mode: port}, where the port answers on the block's own region and the block is broken there.
  */
 public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Params> {
 
@@ -152,9 +159,26 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
             }
             List<Location> cells = cells(where.location(), radius);
             Tally tally = new Tally();
-            CompletionStage<Tally> done = params.asPlayer()
-                    ? reads.on(threading(), () -> asPlayer(player, cells, params.drops(), tally, rule))
-                    : plain(cells, 0, params.drops(), tally, rule);
+            boolean drops = params.drops();
+            CompletionStage<Tally> done;
+            if (params.asPlayer() && verbs.protection().runsEventPath()) {
+                done = reads.on(threading(), () -> asPlayer(player, cells, drops, tally, rule));
+            } else if (params.asPlayer()) {
+                // protection_mode: port. The port answers alone, so the player need not stand beside every block: each block is
+                // asked and broken on its own region's thread, with the tool captured on the player's (protection.md section 5)
+                done = reads.on(threading(), () -> {
+                    var held = player.getInventory().getItemInMainHand();
+                    return held == null ? null : held.clone();
+                }).thenCompose(tool -> {
+                    ProtectionActor actor = ProtectionActor.of(player);
+                    return each(cells, 0, tally, rule,
+                            block -> guarded(actor, block, tally, () -> verbs.blocks().breakWith(tool, block, drops)));
+                });
+            } else {
+                ProtectionActor nobody = ProtectionActor.none();
+                done = each(cells, 0, tally, rule,
+                        block -> guarded(nobody, block, tally, () -> verbs.blocks().breakPlain(block, drops)));
+            }
             return done.thenApply(t -> outcome(t));
         })));
     }
@@ -194,6 +218,8 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
         int denied;
         int failed;
         int refused;
+        /** What the first protection provider that refused a block said, or null when no provider did. */
+        String denial;
     }
 
     private ActionOutcome outcome(Tally tally) {
@@ -203,7 +229,8 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
         if (tally.broken > 0 || tally.denied + tally.failed + tally.refused == 0) {
             return ActionOutcome.OK;
         }
-        return ActionOutcome.failed("no block was broken (" + tally.denied + " refused by a listener, "
+        return ActionOutcome.failed("no block was broken (" + tally.denied + " "
+                + (tally.denial == null ? "refused by a listener" : tally.denial) + ", "
                 + tally.refused + " in another region, " + tally.failed + " could not be broken)");
     }
 
@@ -229,6 +256,7 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
 
     @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
     private Tally asPlayer(Player player, List<Location> cells, boolean drops, Tally tally, Object rule) {
+        ProtectionActor actor = ProtectionActor.of(player);
         for (Location cell : cells) {
             if (!cell.getWorld().isChunkLoaded(cell.getBlockX() >> 4, cell.getBlockZ() >> 4)) {
                 continue;
@@ -241,6 +269,11 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
             if (!eligible(block)) {
                 continue;
             }
+            // both: the port answers first and denies early; the event path below is the player's own break
+            if (denied(actor, block, tally)) {
+                tally.denied++;
+                continue;
+            }
             try (var scope = VerbScope.enter(rule)) {
                 record(tally, verbs.blocks().breakAs(player, block, drops));
             }
@@ -248,14 +281,36 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
         return tally;
     }
 
+    /** Whether the protection port, when this mode asks it, denies {@code actor} breaking {@code block}; says why in the tally. */
+    private boolean denied(ProtectionActor actor, Block block, Tally tally) {
+        if (!verbs.protection().asksPort()) {
+            return false;
+        }
+        ProtectionAnswer answer = verbs.protection().canBreak(actor, block.getLocation());
+        if (answer.denied() && tally.denial == null) {
+            tally.denial = answer.describeDenial();
+        }
+        return answer.denied();
+    }
+
+    /** The port's question, then {@code action}: what one block does on the thread that owns it. */
+    private BlockOps.Result guarded(ProtectionActor actor, Block block, Tally tally, Supplier<BlockOps.Result> action) {
+        return denied(actor, block, tally) ? BlockOps.Result.DENIED : action.get();
+    }
+
+    /**
+     * Each cell in turn, on the thread that owns it (a hop when this one does not), through {@code breaker}: the world acting with
+     * no actor, or, in {@code protection_mode: port}, the player's tool after the port's answer.
+     */
     @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
-    private CompletionStage<Tally> plain(List<Location> cells, int index, boolean drops, Tally tally, Object rule) {
+    private CompletionStage<Tally> each(List<Location> cells, int index, Tally tally, Object rule,
+            Function<Block, BlockOps.Result> breaker) {
         if (index >= cells.size()) {
             return CompletableFuture.completedFuture(tally);
         }
         Location cell = cells.get(index);
         if (!cell.getWorld().isChunkLoaded(cell.getBlockX() >> 4, cell.getBlockZ() >> 4)) {
-            return plain(cells, index + 1, drops, tally, rule);
+            return each(cells, index + 1, tally, rule, breaker);
         }
         return verbs.regions().at(cell, () -> {
             Block block = cell.getBlock();
@@ -263,13 +318,13 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
                 return null;
             }
             try (var scope = VerbScope.enter(rule)) {
-                return verbs.blocks().breakPlain(block, drops);
+                return breaker.apply(block);
             }
         }).thenCompose(result -> {
             if (result != null) {
                 record(tally, result);
             }
-            return plain(cells, index + 1, drops, tally, rule);
+            return each(cells, index + 1, tally, rule, breaker);
         });
     }
 

@@ -81,6 +81,8 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.escrow.runtime.EscrowRuntime escrowRuntime;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
     private dev.materione.plugin.logic.world.WorldVerbs worldVerbs;
+    /** The protection port: providers, mode and the one question (protection.md); built with the logic phase. */
+    private dev.materione.plugin.protection.ProtectionService protectionService;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
     private dev.materione.core.storage.RestartStaging restartStaging;
     private dev.materione.plugin.runtime.DatapackService datapackService;
@@ -246,6 +248,11 @@ public final class MaterionePlugin extends JavaPlugin {
     /** The custom-block world runtime; null before the commands phase. */
     public dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks() {
         return customBlocks;
+    }
+
+    /** The protection port (protection.md, logic.md section 43); null before the logic phase. */
+    public dev.materione.plugin.protection.ProtectionService protection() {
+        return protectionService;
     }
 
     /** The furniture cluster runtime; null before the commands phase. */
@@ -498,9 +505,17 @@ public final class MaterionePlugin extends JavaPlugin {
         var threadProbe = dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER;
         var currencyReads = new dev.materione.plugin.logic.currency.CurrencyReads(folia, threadProbe);
         // the world verbs act through one platform (logic.md section 41); the custom-block runtime binds into it below
+        java.util.Map<String, Object> settingValues = settings == null ? java.util.Map.of() : settings.values();
+        // the protection port every verb that changes the world asks (protection.md, logic.md section 43); the adapters
+        // for the region and claim plugins register into it from registerProviders()
+        protectionService = new dev.materione.plugin.protection.ProtectionService(
+                dev.materione.plugin.protection.ProtectionSettings.read(settingValues, diagnostics::publish),
+                dev.materione.plugin.logic.world.Regions.server(this, scheduling), folia, diagnostics::publish,
+                System::currentTimeMillis);
+        getServer().getPluginManager().registerEvents(protectionService, this);
+        logic.bindProtection(protectionService);
         worldVerbs = dev.materione.plugin.logic.world.WorldVerbs.server(this, scheduling, diagnostics::publish,
-                dev.materione.plugin.logic.world.WorldLimits.read(
-                        settings == null ? java.util.Map.of() : settings.values(), diagnostics::publish));
+                dev.materione.plugin.logic.world.WorldLimits.read(settingValues, diagnostics::publish), protectionService);
         dev.materione.plugin.logic.world.VerbScope.reportChainsTo(diagnostics::publish);
         if (worldVerbs.damageWatch() instanceof org.bukkit.event.Listener watch) {
             getServer().getPluginManager().registerEvents(watch, this); // the last word on a damage event (logic.md section 41)
@@ -552,7 +567,8 @@ public final class MaterionePlugin extends JavaPlugin {
         }
         // every successful swap refreshes the currency catalog from the same view the rest of content reads
         pipeline.observeSwaps((previous, live) -> logic.updateCurrencies(live));
-        integrations = new dev.materione.integrations.Integrations(this, logic, diagnostics, proxyTransfer);
+        integrations = new dev.materione.integrations.Integrations(this, logic, logic.protection(), diagnostics,
+                proxyTransfer);
         integrations.start();
     }
 
@@ -567,7 +583,20 @@ public final class MaterionePlugin extends JavaPlugin {
         }
         if (logic != null) {
             logLogicProviders();
+            logProtection();
         }
+    }
+
+    /**
+     * The protection marker (harness and QA marker): the mode and the providers present, in the order they are asked
+     * (protection.md section 3).
+     */
+    private void logProtection() {
+        var protection = logic.protection();
+        String names = protection.providers().stream().map(dev.materione.api.protection.ProtectionApi.ProviderInfo::name)
+                .collect(java.util.stream.Collectors.joining(","));
+        getLogger().info("MATERIONE-PROTECTION-OK mode=" + protection.mode().name().toLowerCase(java.util.Locale.ROOT)
+                + " providers=" + (names.isEmpty() ? "none" : names));
     }
 
     /**
@@ -876,6 +905,7 @@ public final class MaterionePlugin extends JavaPlugin {
         customBlocks = new dev.materione.plugin.runtime.blocks.CustomBlockService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior, placements);
         getServer().getPluginManager().registerEvents(customBlocks, this);
+        customBlocks.bindProtection(protectionService); // a placement the player did not ask the event path about asks the port
         if (worldVerbs != null) {
             worldVerbs.bindCustomBlocks(customBlocks); // set_block and break_blocks reach Materione blocks through it
         }
@@ -886,6 +916,7 @@ public final class MaterionePlugin extends JavaPlugin {
         // so no placement index — roots persist in their chunks
         furniture = new dev.materione.plugin.runtime.furniture.FurnitureService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior);
+        furniture.bindProtection(protectionService); // furniture placed or taken up asks the port
         getServer().getPluginManager().registerEvents(furniture, this);
         // Preserve HIGH-priority ordering: the ECA bridge precedes native mechanics.
         mechanics.start();

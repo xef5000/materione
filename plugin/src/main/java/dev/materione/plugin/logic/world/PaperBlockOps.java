@@ -76,6 +76,20 @@ public final class PaperBlockOps implements BlockOps {
     }
 
     @Override
+    public Result breakWith(ItemStack tool, Block block, boolean drops) {
+        CustomBlocks blocks = custom.current();
+        if (blocks != null && blocks.remove(block, drops)) {
+            return Result.DONE;
+        }
+        if (drops) {
+            boolean broken = tool == null ? block.breakNaturally() : block.breakNaturally(tool);
+            return broken ? Result.DONE : Result.FAILED;
+        }
+        block.setType(Material.AIR, true);
+        return Result.DONE;
+    }
+
+    @Override
     public boolean mayPlace(Player player, Block block, BlockData data) {
         BlockState replaced = block.getState();
         Material material = data.getMaterial();

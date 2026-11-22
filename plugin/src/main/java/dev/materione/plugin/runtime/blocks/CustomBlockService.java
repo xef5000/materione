@@ -96,6 +96,25 @@ public final class CustomBlockService implements Listener, dev.materione.plugin.
     /** Per-key rate limiting for world diagnostics (MTR-0024/0026). */
     private final Map<String, Long> lastReport = new ConcurrentHashMap<>();
     private volatile Snapshot snapshot;
+    /** The protection port (protection.md): asked before a placement the interact event alone would not have vetted. */
+    private volatile dev.materione.plugin.protection.ProtectionService protection =
+            dev.materione.plugin.protection.ProtectionService.inert();
+
+    /** Binds the protection port the plugin built from its settings (logic.md section 43). */
+    public void bindProtection(dev.materione.plugin.protection.ProtectionService protection) {
+        this.protection = protection;
+    }
+
+    /**
+     * Whether the protection port, when the mode asks it, denies {@code player} placing at {@code target}. The event path of these
+     * placements is the interact event the handlers ride (a plugin that cancels it stops them first), so the port is the one
+     * extra check, in modes {@code both} and {@code port}.
+     */
+    private boolean portDenies(Player player, Block target) {
+        var port = protection;
+        return port.asksPort() && port.canPlace(dev.materione.api.protection.ProtectionActor.of(player),
+                target.getLocation()).denied();
+    }
 
     private static final class Snapshot {
         final RuntimeRegistries source;
@@ -550,6 +569,9 @@ public final class CustomBlockService implements Listener, dev.materione.plugin.
         if (!target.isReplaceable() || identify(target).isPresent()) {
             return; // no room — vanilla use of the clicked block proceeds
         }
+        if (portDenies(event.getPlayer(), target)) {
+            return; // the port refused the placement: nothing is placed, and vanilla's own use of the click proceeds
+        }
         event.setCancelled(true);
         place(target, def.get(), orientationOf(event.getPlayer(), clicked, target));
         behavior.fireBlockEvent(dev.materione.behavior.rule.EventTypes.PLACE, null, event.getPlayer(),
@@ -648,6 +670,10 @@ public final class CustomBlockService implements Listener, dev.materione.plugin.
         if (!stacked && (!target.isReplaceable() || identify(target).isPresent())) {
             return false; // no room — the click falls through to the interact below
         }
+        if (portDenies(event.getPlayer(), stacked ? clicked : target)) {
+            event.setCancelled(true); // we own this click against our own block: refused, nothing placed, nothing used
+            return true;
+        }
         event.setCancelled(true); // both results: we own this click end to end
         if (!stacked) {
             place(target, def.get(), orientationOf(event.getPlayer(), clicked, target));
@@ -740,11 +766,15 @@ public final class CustomBlockService implements Listener, dev.materione.plugin.
         if (held.getType().isOccluding() && !entitiesClear(target)) {
             return false; // vanilla refuses full cubes placed inside entities
         }
+        if (portDenies(player, target)) {
+            return false; // the port refused it: the click falls through, nothing was changed
+        }
         org.bukkit.block.BlockState replaced = target.getState();
         target.setBlockData(data);
         BlockPlaceEvent announced = new BlockPlaceEvent(
                 target, replaced, clicked, held, player, true, event.getHand());
-        if (!announced.callEvent()) {
+        // protection_mode: port answers through the port alone, so the announcing event is not raised for the check
+        if (protection.runsEventPath() && !announced.callEvent()) {
             target.setBlockData(replaced.getBlockData());
             return false; // a plugin vetoed it — the click falls through
         }

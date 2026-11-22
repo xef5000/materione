@@ -3,6 +3,7 @@ package dev.materione.plugin.logic.world;
 import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 /**
  * The platform's way to change one block (logic.md §41), in two voices. <b>As a player</b> the change goes through the
@@ -36,6 +37,15 @@ public interface BlockOps {
 
     /** Breaks {@code block} with no actor and no event. */
     Result breakPlain(Block block, boolean drops);
+
+    /**
+     * Breaks {@code block} the way {@code tool} would, with no event: the break of {@code protection_mode: port}, where the
+     * port has already answered and the event path is not run (protection.md section 4). The tool's drops apply; its
+     * durability is not spent. The default is a plain break.
+     */
+    default Result breakWith(ItemStack tool, Block block, boolean drops) {
+        return breakPlain(block, drops);
+    }
 
     /** Asks whether {@code player} may place {@code data} at {@code block} (a {@code BlockPlaceEvent}); changes nothing. */
     boolean mayPlace(Player player, Block block, BlockData data);

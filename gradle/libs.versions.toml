@@ -47,6 +47,18 @@ bstats = "3.2.1"
 # verify before relying on it); LuckPerms' API is MIT on Maven Central.
 vault-api = "1.7.1"
 luckperms-api = "5.4"
+# Protection adapters (docs/architecture/protection.md section 9, #466): the API artifacts each region or claim plugin publishes
+# in its own official repository, compileOnly and non-transitive in :integrations. Adapters were written from each plugin's own
+# public API (read with javap), never from another project's protection library. Not built, and why, in protection.md section 9:
+# Lands, Residence (JitPack-only), FactionsUUID (no maintained published API).
+worldguard = "7.0.14"
+worldedit = "7.3.10"
+griefprevention = "16.16.0"
+towny = "0.103.2.16"
+plotsquared = "7.6.1"
+huskclaims = "1.5.10"
+husktowns = "3.1.4"
+bentobox = "2.7.0"
 
 # Harness server pin — single source of truth for CI + integration tests.
 # The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
@@ -102,6 +114,17 @@ undertow-core = { module = "io.undertow:undertow-core", version.ref = "undertow"
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 vault-api = { module = "com.github.MilkBowl:VaultAPI", version.ref = "vault-api" }
 luckperms-api = { module = "net.luckperms:api", version.ref = "luckperms-api" }
+worldguard-bukkit = { module = "com.sk89q.worldguard:worldguard-bukkit", version.ref = "worldguard" }
+worldguard-core = { module = "com.sk89q.worldguard:worldguard-core", version.ref = "worldguard" }
+worldedit-bukkit = { module = "com.sk89q.worldedit:worldedit-bukkit", version.ref = "worldedit" }
+worldedit-core = { module = "com.sk89q.worldedit:worldedit-core", version.ref = "worldedit" }
+griefprevention = { module = "me.ryanhamshire:GriefPrevention", version.ref = "griefprevention" }
+towny = { module = "com.palmergames.bukkit.towny:towny", version.ref = "towny" }
+plotsquared-core = { module = "com.intellectualsites.plotsquared:plotsquared-core", version.ref = "plotsquared" }
+plotsquared-bukkit = { module = "com.intellectualsites.plotsquared:plotsquared-bukkit", version.ref = "plotsquared" }
+huskclaims-bukkit = { module = "net.william278.huskclaims:huskclaims-bukkit", version.ref = "huskclaims" }
+husktowns-bukkit = { module = "net.william278.husktowns:husktowns-bukkit", version.ref = "husktowns" }
+bentobox = { module = "world.bentobox:bentobox", version.ref = "bentobox" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }

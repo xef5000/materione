@@ -12,6 +12,8 @@ import dev.materione.api.logic.RunMeter;
 import dev.materione.api.logic.Subjects;
 import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.protection.ProtectionActor;
+import dev.materione.api.protection.ProtectionAnswer;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -20,6 +22,7 @@ import dev.materione.plugin.logic.support.Quantity;
 import dev.materione.plugin.logic.support.Stages;
 import dev.materione.plugin.logic.world.DamageWatch;
 import dev.materione.plugin.logic.world.VerbScope;
+import dev.materione.plugin.protection.ProtectionService;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -53,6 +56,7 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
     public record Params(Quantity amount, Optional<NamespacedKey> cause) {}
 
     private final DamageWatch watch;
+    private final ProtectionService protection;
 
     /** A damage that cannot tell whether its blow was vetoed (every blow lands); the server's uses the other constructor. */
     public DamageAction() {
@@ -61,7 +65,16 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
 
     /** @param watch what learns whether the blow was cancelled, at the last word of the event */
     public DamageAction(DamageWatch watch) {
+        this(watch, ProtectionService.inert());
+    }
+
+    /**
+     * @param watch what learns whether the blow was cancelled, at the last word of the event
+     * @param protection the protection port, asked whether the attacker may hurt the victim when the mode asks it (logic.md §43)
+     */
+    public DamageAction(DamageWatch watch, ProtectionService protection) {
         this.watch = watch;
+        this.protection = protection;
     }
 
     @Override
@@ -135,6 +148,15 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
             return ActionOutcome.OK;
         }
         Entity responsible = attacker != null && attacker != subject ? attacker : null;
+        if (protection.asksPort() && attacker != subject) {
+            // the port answers first (a PvP flag, a claim's no-damage rule); the damage event below is the effect itself, so the
+            // event path is not a separate check here and port and both behave alike (protection.md section 8)
+            ProtectionActor actor = attacker == null ? ProtectionActor.none() : ProtectionActor.of(attacker);
+            ProtectionAnswer answer = protection.canDamage(actor, subject);
+            if (answer.denied()) {
+                return ActionOutcome.failed("the damage was " + answer.describeDenial());
+            }
+        }
         try (var scope = VerbScope.enter(rule)) {
             if (cause.isPresent()) {
                 DamageType type = io.papermc.paper.registry.RegistryAccess.registryAccess()
