@@ -301,8 +301,18 @@ identically (D6).
   resources; its path never names one, so moving a file between folders renames nothing.
   The one exception is a directory in `PackLayout.SINGLE_RESOURCE_DIRS` (`currencies/`, #469): a file
   with no keyed resource and with top-level fields is one resource, named by the file's name, and its
-  fields are that resource's (`PackResources.declared` reads the document as `{<file name>: fields}`,
-  and the read view refuses edits, so the file is saved as written). A keyed file is read as before.
+  fields are that resource's (`PackResources.declared` reads the document as `{<file name>: fields}`;
+  that read view is `LosslessYamlDocument.asSingleResource`). Everything that reads or writes resources
+  by id goes through the same view (`PackResources.keyedView`): the editor's listing and `parsed` trees,
+  the summaries, and the one write path (`DocumentStore.setScalar`, `setScalars` and `patched`, which
+  `bulk` and the authoring transaction share), where an edit addressed `[<file name>, field...]` is made
+  on the file's own top level, so a flat file keeps its shape and every other byte (#475). An edit that
+  would put a mapping at the top level (the file would then read as keyed), one naming another resource,
+  and one naming the whole file are refused as `MTR-0008`. `ContentType.flatFile()` reports the rule in
+  the type's self-description for the editor and the SDK; it reads `SINGLE_RESOURCE_DIRS` and a test pins
+  that no type disagrees with it. A copy of a flat file is a flat file named by the new id; moving it to
+  another name renames the resource (moving it between folders renames nothing, as ever). A keyed file is
+  read as before.
   Two declarations of one id and content type in the same pack, in siblings or across folders,
   resolve identically and are never order-dependent: the **first** document in discovery order
   keeps the id; every later declaration is excluded before validation, the graph and compile (it is

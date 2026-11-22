@@ -105,6 +105,23 @@ describe('the generator', () => {
     expect(lost.every((line) => line.startsWith('type ') || line.startsWith('// Surface:'))).toBe(true);
   });
 
+  it('says in the types which content type takes a flat file, from the self-description and nowhere else (#475)', () => {
+    const surface = surfaceOf(current);
+    // the registry says it; the generator keeps no list of directories
+    expect(surface.contentTypes.filter((type) => type.flatFile).map((type) => type.directory)).toEqual(['currencies']);
+    const text = generateSdk(surface);
+    const sentence = 'A file may also hold one currency as its top-level fields, with the file name as its id';
+    expect(text).toContain(sentence);
+    // exactly one type says it, and a registry that does not send the flag says nothing
+    expect(text.split(sentence).length - 1).toBe(1);
+    const silent = structuredClone(surface);
+    for (const type of silent.contentTypes) delete type.flatFile;
+    expect(generateSdk(silent)).not.toContain('top-level fields');
+    // the flag is read as data: only a literal true counts
+    const hostile = assembleSurface({ types: [{ name: 'a', flatFile: 'yes' }, { name: 'b', flatFile: true }] }, null);
+    expect(hostile.contentTypes.map((type) => type.flatFile)).toEqual([undefined, true]);
+  });
+
   it('drops what a server does not send: an empty describe yields an empty, valid surface', () => {
     const text = generateSdk(assembleSurface({}, null));
     expect(text).toContain('type Capability = string;');

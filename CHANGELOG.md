@@ -9,6 +9,22 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The editor and code mode work on a currency file written as one currency's top-level fields (#475, logic.md section 18,
+  web.md section 4.2, codemode.md).** `currencies/gems.yml` holding `integration: xp` and `display_name: Gems` (the flat form #469
+  made load) is now **one resource named by the file** in the editor: the Content tab lists it as `Gems` (not each field as a
+  resource), it opens as `pack:gems` with the normal currency form, and a field edit (a save, a bulk change, an authoring
+  transaction, a code-mode `m.edit(ref).set({...})`) writes the field **at the top level of the same file**, keeping every comment
+  and unknown key byte for byte and never rewriting it to the keyed form. One write path serves both shapes: edits stay addressed
+  `[gems, display_name]` and the server maps them (`PackResources.keyedView`), so the SDK and the editor carry no flat-file code.
+  An edit that would put a mapping at the top level (the file would then read as keyed), one naming another resource, and one
+  naming the whole file are refused (`MTR-0008`) with nothing written. A copy of a flat file is a flat file named by the new id;
+  renaming it in the editor renames the currency (the hint says so); a new currency is still created keyed. Which directories
+  take the form is now **self-description**: `ContentType.flatFile()`, `flatFile: true` on the type in `authoring.describe`, and a
+  sentence in that type's doc comment in the generated SDK types (no directory list in TypeScript; a test pins that no type
+  disagrees with `PackLayout.SINGLE_RESOURCE_DIRS`). The read view of a flat file now takes edits (it refused them in #469).
+  Tests: core `FlatFileAuthoringTest`, `CurrencyFileShapeTest`; web `EditorContentOpsTest`; plugin `FlatCurrencyPipelineTest`;
+  webui `browser`, `codemode-core` and `codemode-generate` specs; QA `editor.browser-flat-currency-file` (not run, not
+  blessed). No new diagnostic code. The cloud editor's bundle changes (types, a rename hint): the owner deploys.
 - **Protection port: ask region and claim plugins before a world change (#466, M6.5, D12, logic.md section 43,
   docs/architecture/protection.md).** One question, "may this actor change this place?", asked by every verb that changes the world
   on someone's behalf. `ProtectionPort` (an SPI in `api.protection`: `canBreak`, `canPlace`, `canInteract`, `canDamage`, `canUse`; an

@@ -14043,6 +14043,7 @@
         "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",
         "directory": "currencies",
         "displayName": "Currency",
+        "flatFile": true,
         "name": "currency",
         "parameters": [
           {
@@ -20531,6 +20532,7 @@
       "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",
       "directory": "currencies",
       "displayName": "Currency",
+      "flatFile": true,
       "name": "currency",
       "parameters": [
         {

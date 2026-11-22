@@ -397,7 +397,21 @@ documents carry a read-only `computed` block — the server-allocated codepoint
 and the studio preview renders it). The `parsed` tree in `browse.get` (and in
 every write's returned view) is string-keyed at every depth: YAML-1.1 boolean
 keys come back as the text the runtime reads (`on`/`off`), so a bare ECA `on:`
-reaches the rule editor as `on`, not `"true"`. Asset uploads are capped per extension:
+reaches the rule editor as `on`, not `"true"`. *A flat file (#475):* a file in a directory that takes the flat form
+(`currencies/gems.yml` holding one currency as its top-level fields, logic.md section 18) is **one resource named by the
+file**, and the server presents it as it presents a keyed one, so no editor or SDK code reads the shape: `browse.resources`
+and `authoring.summaries` list the one id `gems` (not each field as a resource), `browse.get`'s `parsed` is
+`{gems: {...its fields}}` beside the file's own `raw`, and a field edit is addressed `[gems, display_name]` exactly as for a
+keyed file. Where the file takes the form is **self-description**, never a list the editor keeps: `authoring.describe`'s
+`types[]` entry carries `flatFile: true` (and the field is absent on every other type), the SDK's generated types say it in
+that type's doc comment, and the editor uses the flag for one thing, the rename hint (renaming such a file renames the
+resource, because the file name is its id). The server maps the edit to the file's top level on the one write path every
+write shares (`PackResources.keyedView`, then `DocumentStore`'s `setScalar`, `setScalars` and `patched`; the
+authoring transaction, `bulk` and the single-document calls all reach it), so the file keeps its shape and every comment and
+unknown key byte for byte; an edit that would put a mapping at the top level (the file would then read as keyed), one
+that names another resource, and one that names the whole file are refused (`MTR-0008`) and nothing is written. A copy of a
+flat file is a flat file named by the new id, and a new currency is still created in the keyed form (the demo editor's in-tab
+server keeps the recorded snapshot's shapes and has no flat file). Asset uploads are capped per extension:
 2 MiB for textures/models, 8 MiB for audio (`ogg`/`oga`) — bigger sources wait
 for M5's chunk flow. Still illustrative-only:
 import pack, pre-apply report / apply confirm, preview renders,

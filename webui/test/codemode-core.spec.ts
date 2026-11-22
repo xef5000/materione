@@ -324,6 +324,43 @@ describe('every kind of operation, and what it stages', () => {
   });
 });
 
+describe('a flat file is a resource like any other (#475): one id, the file name, and the same edit', () => {
+  // the server lists `currencies/gems.yml` (top-level fields, no id inside) as the resource `gems`, opens it keyed by
+  // that name and writes a field edit addressed [id, field] at the file's top level: the SDK needs no flat-file code
+  const world: World = {
+    packs: ['shop'],
+    resources: { shop: [{ type: 'currencies', path: 'currencies/gems.yml', id: 'gems' }] },
+    documents: { 'shop/currencies/gems.yml': { rev: 4, parsed: { gems: { integration: 'xp', display_name: 'Gems', decimals: 0 } } } },
+  };
+
+  it('reads the flat currency as any other, and stages an edit to it addressed by the file name', async () => {
+    const { result } = await run({
+      surface,
+      world,
+      program: `const ref = m.ref.currency("shop:gems");
+        const view = await m.read.get(ref);
+        const rows = (await m.read.resources({ pack: "shop", type: "currency" })).map((r) => r.id + "@" + r.path);
+        m.edit(ref).set({ display_name: "Jewels", decimals: 2 });
+        m.edit(ref).unset("decimals");
+        return { rows, name: view.fields.display_name, integration: view.fields.integration, path: view.path, revision: view.revision };`,
+    });
+    expect(errorsOf(result)).toEqual([]);
+    expect(result.returned).toEqual({ rows: ['gems@currencies/gems.yml'], name: 'Gems', integration: 'xp', path: 'currencies/gems.yml', revision: 4 });
+    expect(result.operations).toEqual([
+      { kind: 'setFields', path: 'currencies/gems.yml', rev: 4, edits: [{ field: ['gems', 'display_name'], value: 'Jewels' }, { field: ['gems', 'decimals'], value: 2 }] },
+      { kind: 'setFields', path: 'currencies/gems.yml', rev: 4, edits: [{ field: ['gems', 'decimals'], remove: true }] },
+    ]);
+  });
+
+  it('creates a new currency in the keyed form, as before: a create operation with the id and its edits', async () => {
+    const { result } = await run({ surface, world, program: 'm.pack("shop").currencies.create("coins", { integration: "xp" });' });
+    expect(errorsOf(result)).toEqual([]);
+    expect(result.operations).toEqual([
+      { kind: 'create', type: 'currencies', id: 'coins', edits: [{ field: ['coins', 'integration'], value: 'xp' }] },
+    ]);
+  });
+});
+
 describe('errors a program can cause are structured, never thrown strings', () => {
   const world: World = { packs: ['bench', 'other'], builtin: ['materione'], resources: { bench: [{ type: 'items', path: 'items/sword.yml', id: 'sword' }, { type: 'items', path: 'items/swordfish.yml', id: 'swordfish' }] }, documents: { 'bench/items/sword.yml': { rev: 1, parsed: { sword: {} } } } };
   const go = (program: string, limits = {}) => run({ surface, program, world, limits });

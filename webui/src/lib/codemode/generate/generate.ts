@@ -413,7 +413,11 @@ function contentTypes(ctx: Context): string[] {
     const authored = type.parameters.filter((param) => param.uiHint !== HINT_RULES);
     lines.push(
       '',
-      ...doc([sentence(type.description) ?? sentence(type.displayName), `Content type \`${type.name}\`${type.directory ? `, stored under \`${type.directory}/\`` : ''}.`], 0),
+      ...doc([
+        sentence(type.description) ?? sentence(type.displayName),
+        `Content type \`${type.name}\`${type.directory ? `, stored under \`${type.directory}/\`` : ''}.`,
+        type.flatFile ? `A file may also hold one ${type.name} as its top-level fields, with the file name as its id; it is read, listed and edited like a keyed one, and keeps its shape when edited.` : undefined,
+      ], 0),
       `interface ${fields} {`,
       ...propertyLines(authored, fields, 1, ctx),
       '}',

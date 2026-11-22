@@ -24,6 +24,7 @@ import dev.materione.core.document.Documents;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.pipeline.ContentResource;
+import dev.materione.core.pipeline.PackResources;
 import dev.materione.core.pipeline.ResourceCompiler;
 import dev.materione.core.pipeline.TemplateResolver;
 import java.io.IOException;
@@ -628,13 +629,13 @@ final class AuthoringTransactions {
             String onDisk = api.declaredElsewhere(pack, type, path, id);
             if (onDisk != null) {
                 Work held = docs.get(onDisk);
-                if (held == null || (held.text != null && declares(held.text, id))) {
+                if (held == null || (held.text != null && declares(held.path, held.text, id))) {
                     return onDisk;
                 }
             }
             for (Work other : docs.values()) {
                 if (!other.path.equals(path) && other.text != null && other.path.startsWith(type + "/")
-                        && declares(other.text, id)) {
+                        && declares(other.path, other.text, id)) {
                     return other.path;
                 }
             }
@@ -722,7 +723,7 @@ final class AuthoringTransactions {
             String type = op.fromPath().contains("/") ? op.fromPath().substring(0, op.fromPath().indexOf('/')) : "";
             String path = AuthoringApiImpl.documentPath(type, op.folder(), op.resourceId());
             Work work = freeSlot(index, path, type, op.resourceId());
-            String content = AuthoringApiImpl.rekeyedCopy(source.text, op.resourceId());
+            String content = AuthoringApiImpl.rekeyedCopyOf(op.fromPath(), source.text, op.resourceId());
             work.text = DocumentStore.patched(path, content, storeEdits(op.edits()));
             touched(index, work);
         }
@@ -809,7 +810,7 @@ final class AuthoringTransactions {
         void editLogic(int index, TransactionOperation.EditLogic op) throws IOException {
             Work work = existing(index, op.path());
             guard(work, op.expectedRevision());
-            Map<String, Object> tree = AuthoringApiImpl.parsed(work.text);
+            Map<String, Object> tree = AuthoringApiImpl.parsed(op.path(), work.text);
             ApiResult<List<FieldEdit>> staged = api.logic().stage(pack, op.path(), tree, op.edits());
             applyStaged(work, staged);
         }
@@ -817,7 +818,7 @@ final class AuthoringTransactions {
         void editGui(int index, TransactionOperation.EditGui op) throws IOException {
             Work work = existing(index, op.path());
             guard(work, op.expectedRevision());
-            Map<String, Object> tree = AuthoringApiImpl.parsed(work.text);
+            Map<String, Object> tree = AuthoringApiImpl.parsed(op.path(), work.text);
             ApiResult<List<FieldEdit>> staged = api.gui().stage(pack, op.path(), tree, op.edits());
             applyStaged(work, staged);
         }
@@ -850,7 +851,7 @@ final class AuthoringTransactions {
             Set<String> wanted = new LinkedHashSet<>();
             for (Work work : docs.values()) {
                 if (work.text != null) {
-                    for (Map<String, Object> resource : resources(work.text).values()) {
+                    for (Map<String, Object> resource : resources(work.path, work.text).values()) {
                         String link = TemplateResolver.text(resource, "template");
                         if (link != null) {
                             wanted.add(TemplateResolver.shortRef(AuthoringApiImpl.namespaceOf(pack), link));
@@ -867,20 +868,23 @@ final class AuthoringTransactions {
                 }
                 String prefix = template ? "" : TemplateResolver.ITEM_PREFIX;
                 if (work.original != null) {
-                    resources(work.original).keySet().forEach(id -> pool.remove(prefix + pack + ":" + id));
+                    resources(work.path, work.original).keySet().forEach(id -> pool.remove(prefix + pack + ":" + id));
                 }
                 if (work.text != null) {
-                    resources(work.text).forEach((id, resource) -> pool.put(prefix + pack + ":" + id, resource));
+                    resources(work.path, work.text).forEach((id, resource) -> pool.put(prefix + pack + ":" + id, resource));
                 }
             }
             return pool;
         }
     }
 
-    /** The resources of a document's text: each root key whose value is a mapping, by key, in file order. */
-    private static Map<String, Map<String, Object>> resources(String text) {
+    /**
+     * The resources of a document's text: each root key whose value is a mapping, by key, in file order; a flat file
+     * (#475) holds one, named by the file at {@code path}.
+     */
+    private static Map<String, Map<String, Object>> resources(String path, String text) {
         Map<String, Map<String, Object>> out = new LinkedHashMap<>();
-        var document = LosslessYaml.parse(text);
+        var document = PackResources.keyedView(path, LosslessYaml.parse(text));
         if (document.parseError().isPresent()) {
             return out;
         }
@@ -892,8 +896,8 @@ final class AuthoringTransactions {
         return out;
     }
 
-    private static boolean declares(String text, String id) {
-        return resources(text).containsKey(id);
+    private static boolean declares(String path, String text, String id) {
+        return resources(path, text).containsKey(id);
     }
 
     // ------------------------------------------------------------------
@@ -1059,7 +1063,7 @@ final class AuthoringTransactions {
                 own.addAll(gui.ok() ? gui.value() : gui.diagnostics());
             } else if (logicWired && hasLogic(directory)) {
                 behaviorRan = true;
-                validateLogic(text, directory, own);
+                validateLogic(path, text, directory, own);
             }
             return own;
         }
@@ -1179,7 +1183,7 @@ final class AuthoringTransactions {
         /** Each resource of the document through the content type's own parse, diagnose and compile. */
         private void compileResources(String path, String text, ContentType type, Map<String, Map<String, Object>> pool,
                 Allocations allocations, List<Diagnostic> out) {
-            for (Map.Entry<String, Map<String, Object>> resource : resources(text).entrySet()) {
+            for (Map.Entry<String, Map<String, Object>> resource : resources(path, text).entrySet()) {
                 NamespacedId id;
                 try {
                     id = NamespacedId.of(plan.pack, resource.getKey());
@@ -1206,11 +1210,11 @@ final class AuthoringTransactions {
 
         /** The flow compiler over each resource's {@code behavior:} and {@code flows:}. */
         @SuppressWarnings("unchecked")
-        private void validateLogic(String text, String directory, List<Diagnostic> out) {
+        private void validateLogic(String path, String text, String directory, List<Diagnostic> out) {
             // a rule document is a behavior host with no resource of its own: the host the warning is about
             boolean command = "commands".equals(directory);
             String host = "rules".equals(directory) ? "rule" : command ? "command" : null;
-            for (Map.Entry<String, Map<String, Object>> resource : resources(text).entrySet()) {
+            for (Map.Entry<String, Map<String, Object>> resource : resources(path, text).entrySet()) {
                 // the rules' bare on: key loads as a YAML-1.1 boolean: normalized, as the editor's parsed view is
                 Object behavior = command
                         ? commandRules(resource.getValue())

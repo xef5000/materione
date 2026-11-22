@@ -720,6 +720,56 @@ class EditorContentOpsTest {
         assertThat(seen).isEmpty();
     }
 
+    /**
+     * A type that takes a flat file says so in its self-description (#475): the editor and the SDK learn it from here,
+     * and a type that does not say nothing, so the wire of every other type is unchanged.
+     */
+    @Test
+    void describeFlagsATypeThatTakesAFlatFileAndNoOther() {
+        ContentType flat = new ContentType() {
+            @Override
+            public String name() {
+                return "currency";
+            }
+
+            @Override
+            public String directory() {
+                return "currencies";
+            }
+
+            @Override
+            public boolean flatFile() {
+                return true;
+            }
+
+            @Override
+            public SelfDescription describe() {
+                return new SelfDescription("Currency", "A test currency.", List.of(), "test");
+            }
+
+            @Override
+            public Optional<Object> parse(
+                    NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void compile(
+                    Object definition, NamespacedId allocatedModelId, PackEmitter emitter, Allocations allocations) {}
+        };
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                () -> List.of(typeWith(), flat), List::of, EditorContentOpsTest::actor,
+                () -> dev.materione.api.registry.BehaviorVocabulary.empty());
+
+        JsonObject data = payload(dispatcher.dispatch(request("authoring.describe", "1")));
+
+        JsonObject thing = data.getAsJsonArray("types").get(0).getAsJsonObject();
+        JsonObject currency = data.getAsJsonArray("types").get(1).getAsJsonObject();
+        assertThat(thing.has("flatFile")).isFalse();
+        assertThat(currency.get("flatFile").getAsBoolean()).isTrue();
+    }
+
     /** A content type whose only interesting part is the parameters it declares. */
     private static ContentType typeWith(ParameterSchema... parameters) {
         return new ContentType() {

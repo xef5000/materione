@@ -435,6 +435,12 @@ list the program stages *is* the request's `operations`, untouched):
 accepts the same number again) and never for a document the program creates (S3). A stored document's rules continue its
 count: `index` is the number it had when read plus what the program has added.
 
+A **flat file** (`currencies/gems.yml` holding one currency as its top-level fields, logic.md section 18) needs nothing of the SDK
+(#475): the server lists it as the resource `gems`, `m.read.get` returns its fields under that name like any other resource, and
+`m.edit(ref).set({...})` stages the same `setFields` with `field: ["gems", "display_name"]`, which the server's one write path makes at
+the file's top level. The generated types name the form in the content type's doc comment, from the type's self-description
+(`flatFile`); `create` still writes the keyed form, and a rename is a `duplicate` and a `delete`.
+
 Not staged by the SDK yet, and not hidden: **`move`** (the moved document's own key would also have to be re-keyed, which the
 server's `Move` does not do), **`guiEdit`** (a GUI is authored through its `layers` field and `gui.click` rules, S10; the
 `GuiEdit` vocabulary has no SDK helper), rule and step patches, moves and removals, and named flows as edits (a `flows` field

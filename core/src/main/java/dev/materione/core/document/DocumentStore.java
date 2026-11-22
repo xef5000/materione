@@ -3,6 +3,7 @@ package dev.materione.core.document;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
 import dev.materione.core.pipeline.PackLayout;
+import dev.materione.core.pipeline.PackResources;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -342,8 +343,10 @@ public final class DocumentStore {
                     new ResourceRef(pack, type, relative, "<parse error>"), document, null));
             return;
         }
-        document.data().keySet().forEach(id -> visitor.accept(new ResourceDocument(
-                new ResourceRef(pack, type, relative, String.valueOf(id)), document, null)));
+        // a flat file (#475) is one resource named by the file, and its document reads as keyed by that id
+        LosslessYamlDocument keyed = PackResources.keyedView(relative, document);
+        keyed.data().keySet().forEach(id -> visitor.accept(new ResourceDocument(
+                new ResourceRef(pack, type, relative, String.valueOf(id)), keyed, null)));
     }
 
     private static ResourceDocument unreadableResource(
@@ -406,7 +409,7 @@ public final class DocumentStore {
                     return;
                 }
                 String relative = type + "/" + name;
-                for (String id : topLevelKeys(child)) {
+                for (String id : topLevelKeys(relative, child)) {
                     ResourceRef ref = new ResourceRef(pack, type, relative, id);
                     if (query == null || (pack + ":" + id + " " + relative)
                             .toLowerCase(Locale.ROOT).contains(query.toLowerCase(Locale.ROOT))) {
@@ -419,8 +422,11 @@ public final class DocumentStore {
         }
     }
 
-    /** Top-level mapping keys of one YAML file — the resource ids it holds. */
-    private List<String> topLevelKeys(Path file) {
+    /**
+     * Top-level mapping keys of one YAML file — the resource ids it holds; a flat file (#475) holds one, named by the
+     * file ({@link PackResources#keyedView}).
+     */
+    private List<String> topLevelKeys(String relative, Path file) {
         try {
             LosslessYamlDocument document =
                     LosslessYaml.parse(Files.readString(file, StandardCharsets.UTF_8));
@@ -430,7 +436,7 @@ public final class DocumentStore {
                 return List.of("<parse error>");
             }
             List<String> keys = new ArrayList<>();
-            document.data().keySet().forEach(key -> keys.add(String.valueOf(key)));
+            PackResources.keyedView(relative, document).data().keySet().forEach(key -> keys.add(String.valueOf(key)));
             return keys;
         } catch (IOException | RuntimeException e) {
             return List.of("<unreadable>");
@@ -616,6 +622,8 @@ public final class DocumentStore {
                 throw new IllegalStateException(
                         "document does not parse: " + document.parseError().get());
             }
+            // a flat file (#475) takes the edit addressed [id, field...] and writes the field at its top level
+            document = PackResources.keyedView(path, document);
             String updated;
             try {
                 updated = document.withScalar(value, fieldPath.toArray(String[]::new)).save();
@@ -686,6 +694,7 @@ public final class DocumentStore {
                 throw new IllegalStateException(
                         "document does not parse: " + document.parseError().get());
             }
+            document = PackResources.keyedView(path, document);
             String updated;
             try {
                 for (FieldEdit edit : edits) {
@@ -725,6 +734,8 @@ public final class DocumentStore {
         if (document.parseError().isPresent()) {
             throw new IllegalStateException(path + " does not parse: " + document.parseError().get());
         }
+        // the one write path of every shape (#475): a flat file takes [id, field...] edits at its top level
+        document = PackResources.keyedView(path, document);
         try {
             for (FieldEdit edit : edits) {
                 String[] field = edit.field().toArray(String[]::new);

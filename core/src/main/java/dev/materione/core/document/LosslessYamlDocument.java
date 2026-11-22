@@ -32,26 +32,40 @@ public final class LosslessYamlDocument {
     private final String raw;
     private final Map<String, Object> data;
     private final String parseError;
-    /** True for the read view of a flat file (see {@link #asSingleResource}): the text is the file's, not the view's. */
-    private final boolean singleResourceView;
+    /**
+     * For the view of a flat file (see {@link #asSingleResource}): the file's own document, whose text the view saves
+     * and whose top level an edit addressed to the view lands on. Null for every other document.
+     */
+    private final LosslessYamlDocument flatFile;
+    /** The resource id the view reads the flat file as; null for every other document. */
+    private final String flatKey;
 
     LosslessYamlDocument(String raw, Map<String, Object> data, String parseError) {
-        this(raw, data, parseError, false);
+        this(raw, data, parseError, null, null);
     }
 
-    private LosslessYamlDocument(String raw, Map<String, Object> data, String parseError, boolean singleResourceView) {
+    private LosslessYamlDocument(
+            String raw, Map<String, Object> data, String parseError, LosslessYamlDocument flatFile, String flatKey) {
         this.raw = Objects.requireNonNull(raw, "raw");
         // a top-level key with no value (`sword:` with nothing under it) is a null value, not a reason to refuse the file
         this.data = Collections.unmodifiableMap(new LinkedHashMap<>(data));
         this.parseError = parseError;
-        this.singleResourceView = singleResourceView;
+        this.flatFile = flatFile;
+        this.flatKey = flatKey;
     }
 
     /**
      * The read view of a flat document (#469): the document's own top-level fields, read as the one resource {@code key}
      * of the file, so {@code data()} is {@code {key: fields}} exactly as a keyed document of that resource reads. The
-     * text is still the file's: {@link #save()} returns it unchanged, and an edit on the view is refused, because an
-     * edit of a flat file is an edit of the file as it is written. A document that did not parse has no view.
+     * text is still the file's: {@link #save()} returns it, never a keyed rewrite.
+     *
+     * <p>An edit addressed to the view is addressed the way a keyed document's is, {@code [key, field...]}, and lands
+     * on the file's top level as {@code [field...]}: one write path for both shapes, so the file keeps its shape and
+     * every comment and unknown field byte for byte (master section 5.6). The result is a view again. Three edits
+     * are refused with {@link UnsupportedOperationException}: one not addressed to {@code key}; one addressed to the
+     * whole resource (the resource is the file, so it is deleted as a file); and one that would put a mapping at the
+     * top level, because the file would then read as keyed and its fields would stop being fields. A document that
+     * did not parse has no view.
      *
      * @param key the resource id the file's name gives (the file name without its {@code .yml})
      */
@@ -60,7 +74,16 @@ public final class LosslessYamlDocument {
         if (parseError != null) {
             return this;
         }
-        return new LosslessYamlDocument(raw, Map.<String, Object>of(key, data), null, true);
+        LosslessYamlDocument file = flatFile != null ? flatFile : this;
+        return new LosslessYamlDocument(file.raw, Map.<String, Object>of(key, file.data), null, file, key);
+    }
+
+    /**
+     * Whether a top-level value is a mapping: the test that makes a file keyed (each such key is a resource id), as
+     * {@code PackResources} reads a file's shape. A flat file has none.
+     */
+    public boolean hasTopLevelMapping() {
+        return data.values().stream().anyMatch(Map.class::isInstance);
     }
 
     /** Non-null when the file failed to parse (already reflected in the data view being empty). */
@@ -110,7 +133,9 @@ public final class LosslessYamlDocument {
      * {@link UnsupportedOperationException} says so instead of guessing.
      */
     public LosslessYamlDocument withScalar(Object value, String... path) {
-        refuseEditOfView();
+        if (flatFile != null) {
+            return onFlatFile(path, rest -> flatFile.withScalar(value, rest));
+        }
         if (path.length == 0) {
             throw new IllegalArgumentException("empty path");
         }
@@ -184,7 +209,9 @@ public final class LosslessYamlDocument {
      * so simple fields keep producing one-line diffs.
      */
     public LosslessYamlDocument withNode(Object value, String... path) {
-        refuseEditOfView();
+        if (flatFile != null) {
+            return onFlatFile(path, rest -> flatFile.withNode(value, rest));
+        }
         if (path.length == 0) {
             throw new IllegalArgumentException("empty path");
         }
@@ -239,7 +266,9 @@ public final class LosslessYamlDocument {
      * {@link UnsupportedOperationException} rather than guessed at.
      */
     public LosslessYamlDocument withoutNode(String... path) {
-        refuseEditOfView();
+        if (flatFile != null) {
+            return onFlatFile(path, flatFile::withoutNode);
+        }
         if (path.length == 0) {
             throw new IllegalArgumentException("empty path");
         }
@@ -385,11 +414,30 @@ public final class LosslessYamlDocument {
         return render(value);
     }
 
-    private void refuseEditOfView() {
-        if (singleResourceView) {
-            throw new UnsupportedOperationException(
-                    "a flat document is read as one resource; edit the file as it is written");
+    /**
+     * An edit addressed to the view of a flat file, made on the file itself: the path's first segment is the resource
+     * id the view reads the file as, and the rest is the field's path inside the file.
+     */
+    private LosslessYamlDocument onFlatFile(
+            String[] path, java.util.function.Function<String[], LosslessYamlDocument> edit) {
+        if (path.length == 0) {
+            throw new IllegalArgumentException("empty path");
         }
+        if (!flatKey.equals(path[0])) {
+            throw new UnsupportedOperationException("this file holds one resource, '" + flatKey
+                    + "', whose fields are at its top level; it has no resource '" + path[0] + "'");
+        }
+        if (path.length == 1) {
+            throw new UnsupportedOperationException("'" + flatKey + "' is the whole file; edit one of its fields, "
+                    + "or delete the file to remove the resource");
+        }
+        LosslessYamlDocument edited = edit.apply(java.util.Arrays.copyOfRange(path, 1, path.length));
+        if (edited.hasTopLevelMapping()) {
+            throw new UnsupportedOperationException("'" + String.join(".", path) + "' would put a mapping at the "
+                    + "top level of a file that holds one resource as its fields, so the file would read as keyed; "
+                    + "key the resource by its id inside the file first");
+        }
+        return edited.asSingleResource(flatKey);
     }
 
     /** Re-derives the data view after an edit (formatting is already correct). */

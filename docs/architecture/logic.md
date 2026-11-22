@@ -1515,7 +1515,15 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
    one currency's fields and the file name is its id, so `currencies/gems.yml` with `integration: xp` is `shop:gems`.
    A file that mixes the two, or declares no currency, is reported (`MTR-0008`, plugin.md §5), and a flat file with no
    `integration` is refused as `MTR-0062` with both shapes named. The editor's new-currency scaffold writes the keyed
-   form; the flat form is for a file written by hand.
+   form; the flat form is for a file written by hand, and the editor and code mode work on it as on a keyed one (#475,
+   web.md section 4.2). It is listed as one currency named by the file; its form opens as `pack:<file name>`; a field edit
+   (the editor's, a bulk change's, a transaction's, a code-mode `m.edit(...).set(...)`) writes the field **at the top
+   level of the same file**, with every comment and unknown key kept and no rewrite to the keyed form. An edit that
+   would put a mapping at the top level (an integration's nested option) is refused rather than let the file read as
+   keyed, so such an option is written in the keyed form. Which directories take the form is the type's
+   self-description (`flatFile`), not a list the editor keeps. A copy of a flat file is a flat file named by the new id;
+   renaming it in the editor renames the file, which is renaming the currency (references to the old id then report as
+   unresolved); the SDK has no rename, so a program duplicates and deletes.
 2. **Money is runtime state, so nothing is emitted to the pack.** The type's `compile` is a no-op. The
    defined currencies travel as a runtime view (`RuntimeCurrencies`) built by the same apply that builds
    items and sounds, and they swap with it (D6). The catalog never stores a balance.
@@ -5044,8 +5052,8 @@ failed the same way before it was keyed. A pipeline test confirmed it on the sho
 were `economy:coins` and the probe's, never `showcase:points`). The fix accepts the flat form for `currencies/` (item 1 above), reports
 a file that declares no resource or mixes the two shapes as `MTR-0008`, and keeps the showcase file flat, so the QA showcase entries
 (`showcase.shop-buy-with-points`, `showcase.shop-buy-refused-without-points`) exercise the flat form on a live server; they are not run
-here. Two things stay open. The web editor's resource forms read keyed documents only, so a flat currency file is not offered as a
-resource there (a follow-up for the editor). A top-level key with no value (`sword:` with nothing under it) used to abort the whole reload,
+here. The web editor's resource forms read keyed documents only, so a flat currency file was not offered as a
+resource there; that is fixed in #475 (item 1 above, web.md section 4.2). A top-level key with no value (`sword:` with nothing under it) used to abort the whole reload,
 because the lossless document refused null values; it now reads as null, and a keyed file reports that key with `MTR-0008` while its
 other resources load.
 

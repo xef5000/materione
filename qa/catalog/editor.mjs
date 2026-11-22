@@ -492,6 +492,63 @@ function feedProposal(page, name, options = {}) {
 
 export default [
   test({
+    id: 'editor.browser-flat-currency-file',
+    title: 'a currency file of top-level fields (no id inside) is listed as one currency named by the file, opens in Files as sample:<file name>, and a Display name save writes the field at the top level and keeps the file flat',
+    // #475: the file's shape comes from the type's self-description (flatFile) and the one authoring write path
+    // (PackResources.keyedView), so the editor lists, opens and edits it as any resource without a rewrite to keyed form.
+    covers: [
+      ...BROWSER_COVERS,
+      'core/src/main/java/dev/materione/core/pipeline/PackResources.java',
+      'core/src/main/java/dev/materione/core/document/LosslessYamlDocument.java',
+      'core/src/main/java/dev/materione/core/authoring/AuthoringTransactions.java',
+      'content/src/main/java/dev/materione/content/currency/CurrencyType.java',
+      'api/src/main/java/dev/materione/api/content/ContentType.java',
+    ],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const file = path.join(SERVER_SAMPLE, 'currencies', 'qa_flat_gems.yml');
+      const text = '# a flat currency: the file name is its id\nintegration: xp\ndisplay_name: QA Gems\ndecimals: 0\n';
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+      try {
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        const page = await ctx.browser.openEditor();
+        await page.getByLabel('project').selectOption('sample');
+
+        // listed in Content as one currency, named by the file
+        await page.getByRole('button', { name: 'Content', exact: true }).click();
+        await page.locator('nav.types').getByRole('button', { name: /Currencies/ }).click();
+        await page.locator('input.search').fill('qa flat gems');
+        await page.getByRole('option', { name: /Qa flat gems/ }).waitFor({ state: 'visible', timeout: 20_000 });
+
+        // opened in Files, it is the resource sample:qa_flat_gems with its normal form
+        await page.getByRole('button', { name: 'Files', exact: true }).click();
+        await page.locator('input.filter').fill('qa_flat_gems');
+        const entry = page.locator('button.label[title="currencies/qa_flat_gems.yml"]');
+        await entry.waitFor({ state: 'visible', timeout: 20_000 });
+        await entry.click();
+        await page.getByRole('heading', { name: 'sample:qa_flat_gems', exact: true })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        const editor = page.locator('article');
+        const name = editor.getByLabel('Display name', { exact: true });
+        await name.waitFor({ state: 'visible' });
+        ctx.expect(await name.inputValue()).toBe('QA Gems');
+
+        // a field edit lands at the top level of the same file: no keyed rewrite, every other line kept
+        await name.fill('QA Jewels');
+        await name.press('Tab');
+        await editor.getByRole('button', { name: 'Save & apply' }).click();
+        await waitForFileApply(page);
+        ctx.expect(fs.readFileSync(file, 'utf8')).toBe(text.replace('display_name: QA Gems', 'display_name: QA Jewels'));
+      } finally {
+        fs.rmSync(file, { force: true });
+        try { await ctx.rcon('materione reload'); } catch (e) { ctx.log(`restore reload failed: ${e?.message ?? e}`); }
+      }
+    },
+  }),
+
+  test({
     id: 'editor.browser-rapid-saves',
     title: 'rapid sample:ruby_sword Files saves keep the final name live after the queued reload completes',
     covers: [
