@@ -1,5 +1,7 @@
 package dev.materione.plugin.gui.open;
 
+import dev.materione.plugin.commands.PlayerNames;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.behavior.rule.Rule;

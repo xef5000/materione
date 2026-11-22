@@ -828,8 +828,9 @@ plugin/  dev.materione.plugin.gui          (#214) GuiStack (the wiring), GuiBrid
                                             GuiLookup, GuiMenu, GuiRuntime (the API facade), RuntimeGuis, GuiListener
                                             (the click policy table)
 plugin/  dev.materione.plugin.gui.session  (#214) GuiSession, GuiSessions, SessionHistory (back stack), CloseReason
-plugin/  dev.materione.plugin.gui.open     (#214) GuiOpener, GuiLifecycle, OpenRequest, OpenResult, OpenGate;
-                                            (#215) OpenCommandRegistrar, ArgParser
+plugin/  dev.materione.plugin.gui.open     (#214) GuiOpener, GuiLifecycle, OpenRequest, OpenResult, OpenGate; (#215) OpenSpecGate
+plugin/  dev.materione.plugin.commands     (#215, moved by #467) the command system both `open:` and a `command` document use:
+                                            OpenCommandRegistrar, OpenCommandHandler, OpenCommandTree, ArgParser, ArgType, OpenPlan
 plugin/  dev.materione.plugin.gui.render   (#214) WindowRenderer; (#216) SlotRenderer, TitleRenderer, RenderDiff, RefreshClock
 plugin/  dev.materione.plugin.gui.input    (#214) ClickKind, ClickClassifier, ClickRouter, GuiClick, GuiInput, InventoryInput,
                                             InputGuard, LayerVisibility, GuiWindowListener; (#218) SlotPolicy, InputSlots
@@ -2252,7 +2253,7 @@ that result depends on the probe player's operator state. The unit tests cover t
 
 #215 shipped the open path's stages 2 to 4 (§6.1) and the command surface that starts it. The block is the
 `OpenSpec` of #221 (§19), unchanged in shape. Each decision is reversible by the owner. The code is in
-`plugin.gui.open` (the gate, the commands, the compile), `content.gui.logic` (the block's reader) and
+`plugin.gui.open` (the gate) and `plugin.commands` (the commands and the compile; they were in `plugin.gui.open` until #467), `content.gui.logic` (the block's reader) and
 `behavior.flow.FlowCompiler` (two entry points). The diagnostic codes are `MTR-0066` to `MTR-0069`, reserved for
 this PR; the surface is in [`plugin.md`](plugin.md) §5.
 

@@ -34,6 +34,8 @@ class LogicCodeOrganisationTest {
             Path.of("..", "behavior", "src", "main", "java", "dev", "materione", "behavior", "run"),
             Path.of("src", "main", "java", "dev", "materione", "plugin", "logic"),
             Path.of("src", "main", "java", "dev", "materione", "plugin", "gui"),
+            Path.of("src", "main", "java", "dev", "materione", "plugin", "commands"),
+            Path.of("..", "content", "src", "main", "java", "dev", "materione", "content", "commands"),
             Path.of("..", "content", "src", "main", "java", "dev", "materione", "content", "gui", "logic"));
 
     private static final int MAX_LINES = 400;

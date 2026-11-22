@@ -1,4 +1,4 @@
-package dev.materione.content.logic;
+package dev.materione.content.commands;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;

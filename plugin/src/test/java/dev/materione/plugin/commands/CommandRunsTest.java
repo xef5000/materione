@@ -10,7 +10,7 @@ import dev.materione.content.commands.CommandDefinition;
 import dev.materione.content.commands.CommandType;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.gui.GuiFixture;
-import dev.materione.plugin.gui.open.PlayerNames;
+import dev.materione.plugin.commands.PlayerNames;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;

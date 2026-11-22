@@ -10,10 +10,8 @@ import { test, typedChat } from './_lib.mjs';
 
 const COVERS = [
   'content/src/main/java/dev/materione/content/commands/**',
-  'content/src/main/java/dev/materione/content/logic/CommandSchema.java',
   'behavior/src/main/java/dev/materione/behavior/flow/FlowCompiler.java',
   'plugin/src/main/java/dev/materione/plugin/commands/**',
-  'plugin/src/main/java/dev/materione/plugin/gui/open/**',
   'plugin/src/main/java/dev/materione/plugin/logic/trigger/CommandTriggers.java',
   'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
   'fixtures/packs/commands/**',

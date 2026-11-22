@@ -16,7 +16,7 @@ import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.list.CompiledListLayer;
 import dev.materione.plugin.gui.list.ListLayerCompiler;
 import dev.materione.plugin.gui.input.InputSlots;
-import dev.materione.plugin.gui.open.OpenPlan;
+import dev.materione.plugin.commands.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import java.util.ArrayList;
 import java.util.Collection;

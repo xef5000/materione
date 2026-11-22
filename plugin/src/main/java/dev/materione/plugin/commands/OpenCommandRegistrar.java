@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.materione.api.NamespacedId;

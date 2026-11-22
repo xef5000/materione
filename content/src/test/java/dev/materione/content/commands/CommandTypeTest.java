@@ -6,7 +6,6 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.content.gui.logic.GuiOpen;
-import dev.materione.content.logic.CommandSchema;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.testing.golden.GoldenFiles;
 import java.io.IOException;

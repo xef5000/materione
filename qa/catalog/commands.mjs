@@ -43,7 +43,7 @@ export default [
   test({
     id: 'commands.typed-gui-alias',
     title: 'normal client chat opens /opentest tools, reports malformed choice usage, and runs the food denial without opening another window',
-    covers: ['plugin/src/main/java/dev/materione/plugin/gui/open/**',
+    covers: ['plugin/src/main/java/dev/materione/plugin/gui/open/**', 'plugin/src/main/java/dev/materione/plugin/commands/**',
       'qa/catalog/_lib.mjs', 'scripts/probe/command.mjs',
       'fixtures/packs/guilogic/guis/opener.yml'],
     timeoutMs: 180_000,

@@ -8,7 +8,7 @@ import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.ParsedRules;
 import dev.materione.content.commands.CommandDefinition;
 import dev.materione.content.commands.CommandType;
-import dev.materione.plugin.gui.open.OpenPlan;
+import dev.materione.plugin.commands.OpenPlan;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Optional;

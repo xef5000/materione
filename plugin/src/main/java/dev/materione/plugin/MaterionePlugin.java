@@ -886,7 +886,7 @@ public final class MaterionePlugin extends JavaPlugin {
                     new dev.materione.plugin.commands.CommandRuns(
                             getLogger(), () -> pipeline.runtime().registries(),
                             dev.materione.plugin.commands.CommandRuns.over(behavior), logic.engine(),
-                            dev.materione.plugin.gui.open.PlayerNames.server()),
+                            dev.materione.plugin.commands.PlayerNames.server()),
                     () -> dev.materione.plugin.commands.RuntimeCommands.declarations(
                             pipeline.runtime().registries()),
                     () -> dev.materione.plugin.commands.RuntimeCommands.declarations(pipeline.builtRegistries()));

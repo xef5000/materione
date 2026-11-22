@@ -15,7 +15,6 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.content.Templates;
-import dev.materione.content.logic.CommandSchema;
 import dev.materione.content.logic.LogicSchemas;
 import dev.materione.core.document.LosslessYaml;
 import java.util.ArrayList;

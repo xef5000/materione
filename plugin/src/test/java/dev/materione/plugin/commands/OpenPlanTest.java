@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
