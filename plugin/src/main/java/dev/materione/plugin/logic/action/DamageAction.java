@@ -8,6 +8,7 @@ import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.RunMeter;
 import dev.materione.api.logic.Subjects;
 import dev.materione.api.logic.TargetKind;
 import dev.materione.api.logic.Threading;
@@ -17,6 +18,7 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.support.Quantities;
 import dev.materione.plugin.logic.support.Quantity;
 import dev.materione.plugin.logic.support.Stages;
+import dev.materione.plugin.logic.world.DamageWatch;
 import dev.materione.plugin.logic.world.VerbScope;
 import java.util.List;
 import java.util.Locale;
@@ -49,6 +51,18 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
 
     /** The parsed step. */
     public record Params(Quantity amount, Optional<NamespacedKey> cause) {}
+
+    private final DamageWatch watch;
+
+    /** A damage that cannot tell whether its blow was vetoed (every blow lands); the server's uses the other constructor. */
+    public DamageAction() {
+        this(DamageWatch.NONE);
+    }
+
+    /** @param watch what learns whether the blow was cancelled, at the last word of the event */
+    public DamageAction(DamageWatch watch) {
+        this.watch = watch;
+    }
 
     @Override
     public String id() {
@@ -106,13 +120,14 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
             if (amount.isEmpty()) {
                 return Stages.failed("amount must be a number from 0 to " + (int) MAX_AMOUNT);
             }
-            return reads.on(threading(), () -> hurt(victim, subject, attacker, amount.getAsDouble(), params.cause()));
+            Object rule = context.facet(RunMeter.FACET).map(RunMeter::origin).orElse(null);
+            return reads.on(threading(), () -> hurt(victim, subject, attacker, amount.getAsDouble(), params.cause(), rule));
         });
     }
 
     @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
-    private static ActionOutcome hurt(Damageable victim, Entity subject, Player attacker, double amount,
-            Optional<NamespacedKey> cause) {
+    private ActionOutcome hurt(Damageable victim, Entity subject, Player attacker, double amount,
+            Optional<NamespacedKey> cause, Object rule) {
         if (subject.isDead() || !subject.isValid()) {
             return ActionOutcome.failed("the subject is dead");
         }
@@ -120,7 +135,7 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
             return ActionOutcome.OK;
         }
         Entity responsible = attacker != null && attacker != subject ? attacker : null;
-        try (var scope = VerbScope.damaging()) {
+        try (var scope = VerbScope.enter(rule)) {
             if (cause.isPresent()) {
                 DamageType type = io.papermc.paper.registry.RegistryAccess.registryAccess()
                         .getRegistry(io.papermc.paper.registry.RegistryKey.DAMAGE_TYPE).get(cause.get());
@@ -131,13 +146,19 @@ public final class DamageAction implements ActionType<DamageAction.Params> {
                 if (responsible != null) {
                     source.withCausingEntity(responsible).withDirectEntity(responsible);
                 }
-                victim.damage(amount, source.build());
+                return landed(subject, () -> victim.damage(amount, source.build()));
             } else if (responsible != null) {
-                victim.damage(amount, responsible);
+                return landed(subject, () -> victim.damage(amount, responsible));
             } else {
-                victim.damage(amount);
+                return landed(subject, () -> victim.damage(amount));
             }
         }
-        return ActionOutcome.OK;
+    }
+
+    /** The blow's outcome: a damage event a listener cancelled is a failed step ({@code require} can answer it), said quietly. */
+    private ActionOutcome landed(Entity subject, Runnable blow) {
+        return watch.observe(subject, blow) == DamageWatch.Result.CANCELLED
+                ? ActionOutcome.failed("the damage was cancelled by a listener")
+                : ActionOutcome.OK;
     }
 }

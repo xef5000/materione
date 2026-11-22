@@ -7,6 +7,7 @@ import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.RunMeter;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -51,7 +52,10 @@ import org.bukkit.entity.Player;
 public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Params> {
 
     /** The parsed step. */
-    public record Params(Optional<Triple> shape, LocationSpec at, boolean asPlayer, boolean drops) {}
+    public record Params(Optional<Triple> shape, LocationSpec at, boolean asPlayer, boolean drops, Relative relativeTo) {}
+
+    /** What the axes of {@code shape} are measured along. */
+    enum Relative { WORLD, FACING }
 
     private final WorldVerbs verbs;
 
@@ -71,9 +75,14 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
                 "Breaks the blocks of a box around a location, as the player by default so protection is asked",
                 List.of(
                         new ParameterSchema("shape", ParameterType.RAW, false, "0",
-                                "The box's radius in blocks per axis, 0 to " + WorldVerbs.MAX_RADIUS
-                                        + ": one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box",
+                                "The box's radius in blocks per axis, 0 to " + verbs.limits().radius()
+                                        + ": one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box. With "
+                                        + "relative_to: facing the axes are across, up and depth",
                                 null, null),
+                        new ParameterSchema("relative_to", ParameterType.ENUM, false, "world",
+                                "world measures the shape along the world axes; facing measures it across and up from the "
+                                        + "face the player hit (else the way they look), with z the depth: [1, 1, 0] is the "
+                                        + "flat 3 by 3 in front of the player", List.of("world", "facing"), null),
                         new ParameterSchema("at", ParameterType.RAW, false, "event",
                                 "The centre: event (the broken block, for a break rule), player, or {of, x, y, z}",
                                 null, null),
@@ -92,9 +101,10 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
 
     @Override
     public Params parse(ParamReader params) {
-        return new Params(Triple.read(params, "shape", 0, WorldVerbs.MAX_RADIUS, true),
+        return new Params(Triple.read(params, "shape", 0, verbs.limits().radius(), true),
                 LocationSpec.read(params, "at", LocationSpec.Anchor.EVENT, false),
-                params.bool("as_player", true), params.bool("drops", true));
+                params.bool("as_player", true), params.bool("drops", true),
+                params.enumValue("relative_to", Relative.class, Relative.WORLD));
     }
 
     @Override
@@ -108,11 +118,19 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
         if (params.asPlayer() && player == null) {
             return Stages.failed("there is no player to break blocks as; write as_player: false for a run with none");
         }
+        Object rule = context.facet(RunMeter.FACET).map(RunMeter::origin).orElse(null);
+        String face = context.value("block.face") instanceof String text ? text : "";
+        if (params.relativeTo() == Relative.FACING && face.isEmpty() && player == null) {
+            return Stages.failed("relative_to: facing needs a player or a trigger that carries the face of a block");
+        }
+        CompletionStage<Location> looking = params.relativeTo() == Relative.FACING && face.isEmpty()
+                ? reads.on(threading(), player::getLocation)
+                : CompletableFuture.completedFuture(null);
         CompletionStage<Optional<Triple>> shape = params.shape().isEmpty()
                 ? CompletableFuture.completedFuture(Optional.empty())
                 : params.shape().get().resolve(context, reads).thenApply(Optional::of);
-        return shape.thenCompose(resolved -> params.at().resolveOffset(context, reads).thenCompose(at ->
-                at.resolve(context, reads, verbs)).thenCompose(where -> {
+        return looking.thenCompose(look -> shape.thenCompose(resolved -> params.at().resolveOffset(context, reads)
+                .thenCompose(at -> at.resolve(context, reads, verbs)).thenCompose(where -> {
             if (where.location() == null) {
                 return Stages.failed(where.problem());
             }
@@ -120,22 +138,54 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
             if (resolved.isPresent()) {
                 var values = resolved.get().values(context);
                 if (values.isEmpty()) {
-                    return Stages.failed("shape must be whole numbers from 0 to " + WorldVerbs.MAX_RADIUS);
+                    return Stages.failed("shape must be whole numbers from 0 to " + verbs.limits().radius());
                 }
                 radius = new int[] {(int) values.get().x(), (int) values.get().y(), (int) values.get().z()};
             }
+            if (params.relativeTo() == Relative.FACING) {
+                radius = oriented(radius, face, look);
+            }
             long volume = (2L * radius[0] + 1) * (2L * radius[1] + 1) * (2L * radius[2] + 1);
-            if (!WorldVerbs.within(context, WorldVerbs.BLOCKS, volume, WorldVerbs.MAX_BLOCKS_PER_RUN)) {
-                verbs.budgetSpent("break_blocks", WorldVerbs.MAX_BLOCKS_PER_RUN, "blocks");
-                return Stages.failed("this run has changed its " + WorldVerbs.MAX_BLOCKS_PER_RUN + " blocks");
+            if (!WorldVerbs.within(context, WorldVerbs.BLOCKS, volume, verbs.limits().blocksPerRun())) {
+                verbs.budgetSpent("break_blocks", verbs.limits().blocksPerRun(), "blocks");
+                return Stages.failed("this run has changed its " + verbs.limits().blocksPerRun() + " blocks");
             }
             List<Location> cells = cells(where.location(), radius);
             Tally tally = new Tally();
             CompletionStage<Tally> done = params.asPlayer()
-                    ? reads.on(threading(), () -> asPlayer(player, cells, params.drops(), tally))
-                    : plain(cells, 0, params.drops(), tally);
+                    ? reads.on(threading(), () -> asPlayer(player, cells, params.drops(), tally, rule))
+                    : plain(cells, 0, params.drops(), tally, rule);
             return done.thenApply(t -> outcome(t));
-        }));
+        })));
+    }
+
+    /**
+     * The radii along the world axes for a shape given across, up and depth: the depth axis is the axis of the face the player hit,
+     * or, with no face, the axis they look along (vertical when they look steeply up or down). Across and up are the other two:
+     * up stays the world's vertical unless the depth is vertical, and then across is X and up is Z.
+     */
+    static int[] oriented(int[] across, String face, Location look) {
+        int depth;
+        switch (face.toLowerCase(java.util.Locale.ROOT)) {
+            case "up", "down" -> depth = 1;
+            case "north", "south" -> depth = 2;
+            case "east", "west" -> depth = 0;
+            default -> {
+                double yaw = Math.toRadians(look.getYaw());
+                if (Math.abs(look.getPitch()) >= 60) {
+                    depth = 1;
+                } else {
+                    depth = Math.abs(Math.sin(yaw)) > Math.abs(Math.cos(yaw)) ? 0 : 2;
+                }
+            }
+        }
+        int[] world = new int[3];
+        world[depth] = across[2];
+        int acrossAxis = depth == 0 ? 2 : 0;
+        int upAxis = depth == 1 ? 2 : 1;
+        world[acrossAxis] = across[0];
+        world[upAxis] = across[1];
+        return world;
     }
 
     /** What happened to the blocks of one step. */
@@ -177,7 +227,8 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
         return cells;
     }
 
-    private Tally asPlayer(Player player, List<Location> cells, boolean drops, Tally tally) {
+    @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
+    private Tally asPlayer(Player player, List<Location> cells, boolean drops, Tally tally, Object rule) {
         for (Location cell : cells) {
             if (!cell.getWorld().isChunkLoaded(cell.getBlockX() >> 4, cell.getBlockZ() >> 4)) {
                 continue;
@@ -190,27 +241,35 @@ public final class BreakBlocksAction implements ActionType<BreakBlocksAction.Par
             if (!eligible(block)) {
                 continue;
             }
-            record(tally, verbs.blocks().breakAs(player, block, drops));
+            try (var scope = VerbScope.enter(rule)) {
+                record(tally, verbs.blocks().breakAs(player, block, drops));
+            }
         }
         return tally;
     }
 
-    private CompletionStage<Tally> plain(List<Location> cells, int index, boolean drops, Tally tally) {
+    @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
+    private CompletionStage<Tally> plain(List<Location> cells, int index, boolean drops, Tally tally, Object rule) {
         if (index >= cells.size()) {
             return CompletableFuture.completedFuture(tally);
         }
         Location cell = cells.get(index);
         if (!cell.getWorld().isChunkLoaded(cell.getBlockX() >> 4, cell.getBlockZ() >> 4)) {
-            return plain(cells, index + 1, drops, tally);
+            return plain(cells, index + 1, drops, tally, rule);
         }
         return verbs.regions().at(cell, () -> {
             Block block = cell.getBlock();
-            return eligible(block) ? verbs.blocks().breakPlain(block, drops) : null;
+            if (!eligible(block)) {
+                return null;
+            }
+            try (var scope = VerbScope.enter(rule)) {
+                return verbs.blocks().breakPlain(block, drops);
+            }
         }).thenCompose(result -> {
             if (result != null) {
                 record(tally, result);
             }
-            return plain(cells, index + 1, drops, tally);
+            return plain(cells, index + 1, drops, tally, rule);
         });
     }
 

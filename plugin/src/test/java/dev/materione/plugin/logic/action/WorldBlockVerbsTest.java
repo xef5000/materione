@@ -55,6 +55,15 @@ class WorldBlockVerbsTest {
                 .with(Facets.PLAYER, runner.player);
     }
 
+    /** The run of {@link #event()} whose trigger also named the face of the block the player looked at. */
+    private MapLogicContext withFace(String face) {
+        runner.location.setWorld(platform.terrain.world);
+        return new MapLogicContext(Map.of("player", Map.of("name", "Alex"),
+                "block", Map.of("face", face),
+                "location", Map.of("x", 10, "y", 64, "z", 10, "world", "world")))
+                .with(Facets.PLAYER, runner.player);
+    }
+
     /** A run with no player, as an explosion's. */
     private MapLogicContext playerless() {
         return new MapLogicContext(Map.of("location", Map.of("x", 10, "y", 64, "z", 10, "world", "world")));
@@ -175,6 +184,87 @@ class WorldBlockVerbsTest {
         }
 
         @Test
+        void aCounterRuleSeesEveryBlockOfTheBoxAndTheCausingRuleDoesNotRecurse() {
+            platform.terrain.fill(9, 63, 9, 11, 65, 11, Material.STONE);
+            var meter = new Meter();
+            var excavator = new Object();
+            var counter = new Object();
+            meter.origin = excavator;
+            int[] counted = {0};
+            int[] recursed = {0};
+            platform.blocks.onBreak = block -> {
+                var answering = VerbScope.allowed(List.of(excavator, counter));
+                counted[0] += answering.contains(counter) ? 1 : 0;
+                recursed[0] += answering.contains(excavator) ? 1 : 0;
+            };
+
+            assertThat(run(action, reader("shape", List.of(1, 1, 1)), event().with(RunMeter.FACET, meter)))
+                    .isEqualTo(ActionOutcome.OK);
+
+            assertThat(counted[0]).isEqualTo(27); // a "blocks mined" rule counts the whole 3 by 3
+            assertThat(recursed[0]).isZero(); // the excavator is not answered by its own breaks
+        }
+
+        @Test
+        @SuppressWarnings("try")
+        void aChainOfVerbEventsStopsAtTheDepthCap() {
+            VerbScope.reportChainsTo(platform.diagnostics::add);
+            VerbScope.resetReportsForTest();
+            try (var one = VerbScope.enter("a"); var two = VerbScope.enter("b"); var three = VerbScope.enter("c")) {
+                assertThat(VerbScope.chainStopped()).isFalse();
+                try (var four = VerbScope.enter("d")) {
+                    assertThat(VerbScope.chainStopped()).isTrue();
+                    assertThat(VerbScope.chainStopped()).isTrue(); // reported once, stopped every time
+                }
+            } finally {
+                VerbScope.reportChainsTo(null);
+            }
+
+            assertThat(platform.diagnostics).singleElement()
+                    .satisfies(d -> assertThat(d.code()).isEqualTo(DiagnosticCodes.VERB_BUDGET_SPENT));
+            assertThat(VerbScope.depth()).isZero();
+        }
+
+        @Test
+        void facingMeasuresTheShapeAcrossUpAndDepthFromTheFaceTheTriggerNamed() {
+            platform.terrain.fill(8, 62, 8, 12, 66, 12, Material.STONE);
+
+            // a flat 3 by 3 in the plane of the face the player hit: the face is up, so the plane is horizontal
+            run(action, reader("shape", List.of(1, 1, 0), "relative_to", "facing"), withFace("up"));
+
+            assertThat(platform.blocks.calls).hasSize(9).allSatisfy(call -> assertThat(call).contains(",64,"));
+        }
+
+        @Test
+        void withNoFaceFacingFollowsTheWayThePlayerLooks() {
+            platform.terrain.fill(8, 62, 8, 12, 66, 12, Material.STONE);
+            runner.location.setYaw(90f); // looking along X: the plane across is Y by Z
+
+            run(action, reader("shape", List.of(1, 1, 0), "relative_to", "facing"), event());
+
+            assertThat(platform.blocks.calls).hasSize(9).allSatisfy(call -> assertThat(call).contains("breakAs:10,"));
+        }
+
+        @Test
+        void facingNeedsAPlayerOrAFace() {
+            assertThat(run(action, reader("shape", 1, "relative_to", "facing", "as_player", false), playerless()).isOk())
+                    .isFalse();
+            assertThat(run(action, reader("shape", 1, "relative_to", "facing", "as_player", false),
+                    new MapLogicContext(Map.of("block", Map.of("face", "north"),
+                            "location", Map.of("x", 10, "y", 64, "z", 10, "world", "world")))).isOk()).isTrue();
+        }
+
+        @Test
+        void theAxesOfAFacingShapeAreAcrossUpAndDepth() {
+            // depth along X: across is Z, up is Y
+            assertThat(BreakBlocksAction.oriented(new int[] {3, 2, 1}, "east", null)).containsExactly(1, 2, 3);
+            // depth along Z: across is X, up is Y
+            assertThat(BreakBlocksAction.oriented(new int[] {3, 2, 1}, "north", null)).containsExactly(3, 2, 1);
+            // depth along Y: across is X, up is Z
+            assertThat(BreakBlocksAction.oriented(new int[] {3, 2, 1}, "down", null)).containsExactly(3, 1, 2);
+        }
+
+        @Test
         void aRunsBlocksAreCappedAndTheOverrunningStepDoesNothing() {
             var meter = new Meter();
             var context = event().with(RunMeter.FACET, meter);
@@ -207,6 +297,8 @@ class WorldBlockVerbsTest {
             assertThatThrownBy(() -> action.parse(reader("at", "target"))).hasMessageContaining("this action has no target");
             assertThatThrownBy(() -> action.parse(reader("shape", 1.5))).isInstanceOf(IllegalArgumentException.class);
             assertThat(action.parse(reader("shape", 4)).asPlayer()).isTrue(); // the defaults ask protection
+            assertThat(action.parse(reader("shape", 1)).relativeTo()).isEqualTo(BreakBlocksAction.Relative.WORLD);
+            assertThatThrownBy(() -> action.parse(reader("relative_to", "sideways"))).hasMessageContaining("relative_to must be one of");
         }
     }
 

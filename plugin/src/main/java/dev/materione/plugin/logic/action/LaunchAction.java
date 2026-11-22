@@ -76,7 +76,7 @@ public final class LaunchAction implements ActionType<LaunchAction.Params> {
                         new ParameterSchema("spread", ParameterType.DECIMAL, false, "0",
                                 "A cone around the aim, in degrees, 0 to 45", null, null).acceptingExpression(),
                         new ParameterSchema("count", ParameterType.INTEGER, false, "1",
-                                "How many, 1 to " + WorldVerbs.MAX_LAUNCH_PER_STEP, null, null).acceptingExpression()),
+                                "How many, 1 to " + verbs.limits().launchesPerStep(), null, null).acceptingExpression()),
                 "2.0.0"), LogicCategory.WORLD, "projectile").withTargets(TargetKind.PLAYER, TargetKind.ENTITY);
     }
 
@@ -94,8 +94,8 @@ public final class LaunchAction implements ActionType<LaunchAction.Params> {
         return new Params(name,
                 Quantity.optional(params, "speed", 0.05, 10).orElse(new Quantity(1.5, null, 0.05, 10, false)),
                 Quantity.optional(params, "spread", 0, 45).orElse(new Quantity(0, null, 0, 45, false)),
-                Quantity.optionalCount(params, "count", 1, WorldVerbs.MAX_LAUNCH_PER_STEP)
-                        .orElse(new Quantity(1, null, 1, WorldVerbs.MAX_LAUNCH_PER_STEP, true)));
+                Quantity.optionalCount(params, "count", 1, verbs.limits().launchesPerStep())
+                        .orElse(new Quantity(1, null, 1, verbs.limits().launchesPerStep(), true)));
     }
 
     @Override
@@ -124,9 +124,9 @@ public final class LaunchAction implements ActionType<LaunchAction.Params> {
             if (speed.isEmpty() || spread.isEmpty() || count.isEmpty()) {
                 return Stages.failed("speed, spread and count must be numbers in range");
             }
-            if (!WorldVerbs.within(context, WorldVerbs.LAUNCHES, count.getAsInt(), WorldVerbs.MAX_LAUNCHES_PER_RUN)) {
-                verbs.budgetSpent("launch", WorldVerbs.MAX_LAUNCHES_PER_RUN, "projectiles");
-                return Stages.failed("this run has launched its " + WorldVerbs.MAX_LAUNCHES_PER_RUN + " projectiles");
+            if (!WorldVerbs.within(context, WorldVerbs.LAUNCHES, count.getAsInt(), verbs.limits().launchesPerRun())) {
+                verbs.budgetSpent("launch", verbs.limits().launchesPerRun(), "projectiles");
+                return Stages.failed("this run has launched its " + verbs.limits().launchesPerRun() + " projectiles");
             }
             return reads.on(threading(), () -> fire(living, shooter, type, speed.getAsDouble(), spread.getAsDouble(),
                     count.getAsInt(), item));

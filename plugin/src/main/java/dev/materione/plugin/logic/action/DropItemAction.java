@@ -126,9 +126,9 @@ public final class DropItemAction implements ActionType<DropItemAction.Params> {
                 return Stages.failed(e.getMessage());
             }
             List<Integer> sizes = Give.split(amount, template.getMaxStackSize());
-            if (!WorldVerbs.within(context, WorldVerbs.DROPS, sizes.size(), WorldVerbs.MAX_DROP_STACKS_PER_RUN)) {
-                verbs.budgetSpent("drop_item", WorldVerbs.MAX_DROP_STACKS_PER_RUN, "stacks");
-                return Stages.failed("this run has dropped its " + WorldVerbs.MAX_DROP_STACKS_PER_RUN + " stacks");
+            if (!WorldVerbs.within(context, WorldVerbs.DROPS, sizes.size(), verbs.limits().dropStacksPerRun())) {
+                verbs.budgetSpent("drop_item", verbs.limits().dropStacksPerRun(), "stacks");
+                return Stages.failed("this run has dropped its " + verbs.limits().dropStacksPerRun() + " stacks");
             }
             return verbs.regions().at(location, () -> {
                 for (int size : sizes) {

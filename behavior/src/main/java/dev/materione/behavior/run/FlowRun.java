@@ -69,11 +69,21 @@ public final class FlowRun {
     /** What the step being executed resolved its target to, for the trace; empty when it has none (logic.md section 39). */
     volatile String targetNote = "";
     /** The run's tally of what its verbs have spent against their caps (logic.md section 41). */
-    final Meter meter = new Meter();
+    final Meter meter = new Meter(this);
 
     /** The run's {@link RunMeter}: totals by key; only the thread that currently owns the run touches it. */
     static final class Meter implements RunMeter {
         private final java.util.HashMap<String, Long> totals = new java.util.HashMap<>(4);
+        private final FlowRun run;
+
+        Meter(FlowRun run) {
+            this.run = run;
+        }
+
+        @Override
+        public Object origin() {
+            return run.rule();
+        }
 
         @Override
         public synchronized long add(String key, long amount) {

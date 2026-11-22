@@ -68,7 +68,7 @@ public final class ParticleAction implements ActionType<ParticleAction.Params> {
                         new ParameterSchema("particle", ParameterType.STRING, true, null,
                                 "A vanilla particle such as cloud, flame, heart or dust", null, null),
                         new ParameterSchema("count", ParameterType.INTEGER, false, "1",
-                                "How many, 1 to " + WorldVerbs.MAX_PARTICLES_PER_STEP + " per step", null, null)
+                                "How many, 1 to " + verbs.limits().particlesPerStep() + " per step", null, null)
                                 .acceptingExpression(),
                         new ParameterSchema("offset", ParameterType.RAW, false, null,
                                 "Spread in blocks: one number, [x, y, z], or {x, y, z}", null, null),
@@ -97,8 +97,8 @@ public final class ParticleAction implements ActionType<ParticleAction.Params> {
             throw new IllegalArgumentException("particle '" + name + "' is not a valid particle name");
         }
         Quantity count = params.raw("count").isPresent()
-                ? Quantity.requiredCount(params, "count", 1, WorldVerbs.MAX_PARTICLES_PER_STEP)
-                : new Quantity(1, null, 1, WorldVerbs.MAX_PARTICLES_PER_STEP, true);
+                ? Quantity.requiredCount(params, "count", 1, verbs.limits().particlesPerStep())
+                : new Quantity(1, null, 1, verbs.limits().particlesPerStep(), true);
         Quantity speed = Quantity.optional(params, "speed", 0, 10).orElse(new Quantity(0, null, 0, 10, false));
         Quantity size = Quantity.optional(params, "size", 0.1, 4).orElse(new Quantity(1, null, 0.1, 4, false));
         Optional<Color> color = params.optionalText("color").map(text -> {
@@ -128,8 +128,8 @@ public final class ParticleAction implements ActionType<ParticleAction.Params> {
             var count = q[0].wholeValue(context);
             var speed = q[1].value(context);
             var size = q[2].value(context);
-            if (count.isEmpty() || count.getAsInt() < 1 || count.getAsInt() > WorldVerbs.MAX_PARTICLES_PER_STEP) {
-                return Stages.failed("count must be a whole number from 1 to " + WorldVerbs.MAX_PARTICLES_PER_STEP);
+            if (count.isEmpty() || count.getAsInt() < 1 || count.getAsInt() > verbs.limits().particlesPerStep()) {
+                return Stages.failed("count must be a whole number from 1 to " + verbs.limits().particlesPerStep());
             }
             if (speed.isEmpty() || size.isEmpty()) {
                 return Stages.failed("speed and size must be numbers in range");
@@ -140,9 +140,9 @@ public final class ParticleAction implements ActionType<ParticleAction.Params> {
                             return Stages.failed(where.problem());
                         }
                         if (!WorldVerbs.within(context, WorldVerbs.PARTICLES, count.getAsInt(),
-                                WorldVerbs.MAX_PARTICLES_PER_RUN)) {
-                            verbs.budgetSpent("particle", WorldVerbs.MAX_PARTICLES_PER_RUN, "particles");
-                            return Stages.failed("this run has spawned its " + WorldVerbs.MAX_PARTICLES_PER_RUN
+                                verbs.limits().particlesPerRun())) {
+                            verbs.budgetSpent("particle", verbs.limits().particlesPerRun(), "particles");
+                            return Stages.failed("this run has spawned its " + verbs.limits().particlesPerRun()
                                     + " particles");
                         }
                         Location location = where.location();

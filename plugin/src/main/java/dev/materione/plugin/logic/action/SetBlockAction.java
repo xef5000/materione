@@ -8,6 +8,7 @@ import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.RunMeter;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
@@ -17,6 +18,7 @@ import dev.materione.plugin.logic.support.Stages;
 import dev.materione.plugin.logic.world.BlockOps;
 import dev.materione.plugin.logic.world.CustomBlocks;
 import dev.materione.plugin.logic.world.LocationSpec;
+import dev.materione.plugin.logic.world.VerbScope;
 import dev.materione.plugin.logic.world.WorldVerbs;
 import java.util.List;
 import java.util.Locale;
@@ -109,22 +111,30 @@ public final class SetBlockAction implements ActionType<SetBlockAction.Params> {
                             if (where.location() == null) {
                                 return Stages.failed(where.problem());
                             }
-                            if (!WorldVerbs.within(context, WorldVerbs.BLOCKS, 1, WorldVerbs.MAX_BLOCKS_PER_RUN)) {
-                                verbs.budgetSpent("set_block", WorldVerbs.MAX_BLOCKS_PER_RUN, "blocks");
-                                return Stages.failed("this run has changed its " + WorldVerbs.MAX_BLOCKS_PER_RUN
+                            if (!WorldVerbs.within(context, WorldVerbs.BLOCKS, 1, verbs.limits().blocksPerRun())) {
+                                verbs.budgetSpent("set_block", verbs.limits().blocksPerRun(), "blocks");
+                                return Stages.failed("this run has changed its " + verbs.limits().blocksPerRun()
                                         + " blocks");
                             }
                             Location location = where.location();
+                            Object rule = context.facet(RunMeter.FACET).map(RunMeter::origin).orElse(null);
                             if (params.asPlayer() && !verbs.regions().ownedHere(location)) {
                                 verbs.regionRefused("set_block", 1);
                                 return Stages.failed("the block lies in a region this thread does not own");
                             }
                             return verbs.regions().at(location,
-                                    () -> place(params, player, location.getBlock(), text.trim()));
+                                    () -> place(params, player, location.getBlock(), text.trim(), rule));
                         }));
     }
 
-    private ActionOutcome place(Params params, Player player, Block block, String text) {
+    @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
+    private ActionOutcome place(Params params, Player player, Block block, String text, Object rule) {
+        try (var scope = VerbScope.enter(rule)) {
+            return placeWithin(params, player, block, text);
+        }
+    }
+
+    private ActionOutcome placeWithin(Params params, Player player, Block block, String text) {
         if (params.replace() == Replace.AIR && !verbs.blocks().isAir(block)) {
             return ActionOutcome.failed("the block is occupied");
         }

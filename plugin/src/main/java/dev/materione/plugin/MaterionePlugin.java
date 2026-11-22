@@ -498,7 +498,13 @@ public final class MaterionePlugin extends JavaPlugin {
         var threadProbe = dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER;
         var currencyReads = new dev.materione.plugin.logic.currency.CurrencyReads(folia, threadProbe);
         // the world verbs act through one platform (logic.md section 41); the custom-block runtime binds into it below
-        worldVerbs = dev.materione.plugin.logic.world.WorldVerbs.server(this, scheduling, diagnostics::publish);
+        worldVerbs = dev.materione.plugin.logic.world.WorldVerbs.server(this, scheduling, diagnostics::publish,
+                dev.materione.plugin.logic.world.WorldLimits.read(
+                        settings == null ? java.util.Map.of() : settings.values(), diagnostics::publish));
+        dev.materione.plugin.logic.world.VerbScope.reportChainsTo(diagnostics::publish);
+        if (worldVerbs.damageWatch() instanceof org.bukkit.event.Listener watch) {
+            getServer().getPluginManager().registerEvents(watch, this); // the last word on a damage event (logic.md section 41)
+        }
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
                 guiBridge, currencyReads, dev.materione.platform.entity.EntityPalette.entityTypes(), worldVerbs);

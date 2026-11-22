@@ -18,8 +18,8 @@ import org.bukkit.inventory.ItemStack;
  * Materione owns (a custom block) cancels the break event to run its own teardown, so a cancelled event with an empty
  * block afterwards is a success, not a veto.
  *
- * <p>The scope of {@link VerbScope} marks every break this class makes, so the item bridge does not answer a block
- * that a verb broke as if the player had swung the tool again.
+ * <p>The caller opens the {@link VerbScope} around these calls, so the bridges answer the events they raise with every rule but
+ * the one that caused them.
  */
 public final class PaperBlockOps implements BlockOps {
 
@@ -47,22 +47,19 @@ public final class PaperBlockOps implements BlockOps {
     }
 
     @Override
-    @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
     public Result breakAs(Player player, Block block, boolean drops) {
-        try (var scope = VerbScope.breaking()) {
-            if (drops) {
-                boolean broken = player.breakBlock(block);
-                return broken || block.getType().isAir() ? Result.DONE : Result.DENIED;
-            }
-            BlockBreakEvent event = new BlockBreakEvent(block, player);
-            event.setDropItems(false);
-            Bukkit.getPluginManager().callEvent(event);
-            if (event.isCancelled()) {
-                return block.getType().isAir() ? Result.DONE : Result.DENIED;
-            }
-            block.setType(Material.AIR, true);
-            return Result.DONE;
+        if (drops) {
+            boolean broken = player.breakBlock(block);
+            return broken || block.getType().isAir() ? Result.DONE : Result.DENIED;
         }
+        BlockBreakEvent event = new BlockBreakEvent(block, player);
+        event.setDropItems(false);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            return block.getType().isAir() ? Result.DONE : Result.DENIED;
+        }
+        block.setType(Material.AIR, true);
+        return Result.DONE;
     }
 
     @Override

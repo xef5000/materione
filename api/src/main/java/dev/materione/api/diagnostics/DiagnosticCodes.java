@@ -633,6 +633,13 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0119", Severity.WARN, "A world verb skipped a location in another region");
 
     /**
+     * A {@code world_verbs_*} setting is not a whole number inside its range (logic.md section 41, #329): the default is used for
+     * that key and the rest of the settings are untouched. Reported once at load, naming the key and the range.
+     */
+    public static final DiagnosticCode VERB_SETTING_INVALID =
+            new DiagnosticCode("MTR-0121", Severity.WARN, "A world verb setting is invalid; the default is used");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -771,7 +778,8 @@ public final class DiagnosticCodes {
             TRANSACTION_REVERT_UNAVAILABLE,
             RULE_STEP_REFERENCE_UNRESOLVED,
             VERB_BUDGET_SPENT,
-            VERB_REGION_REFUSED);
+            VERB_REGION_REFUSED,
+            VERB_SETTING_INVALID);
 
     private DiagnosticCodes() {}
 

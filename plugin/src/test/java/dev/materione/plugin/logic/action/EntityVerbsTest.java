@@ -179,7 +179,7 @@ class EntityVerbsTest {
         void theScopeEndsWithTheCallSoOnlyTheVerbsOwnEventIsSuppressed() {
             run(damage, reader("amount", 4), aimedAt(runner, zed));
 
-            assertThat(dev.materione.plugin.logic.world.VerbScope.isDamaging()).isFalse();
+            assertThat(dev.materione.plugin.logic.world.VerbScope.depth()).isZero();
         }
 
         @Test
@@ -190,6 +190,38 @@ class EntityVerbsTest {
             zed.dead = false;
             assertThat(run(damage, reader("amount", 0), aimedAt(runner, zed))).isEqualTo(ActionOutcome.OK);
             assertThat(zed.calls).isEmpty();
+        }
+
+        @Test
+        void aBlowAListenerCancelledIsAFailedStepSaidQuietly() {
+            var watched = new DamageAction((victim, blow) -> {
+                blow.run();
+                return dev.materione.plugin.logic.world.DamageWatch.Result.CANCELLED;
+            });
+
+            assertThat(run(watched, reader("amount", 4), aimedAt(runner, zed)))
+                    .isEqualTo(ActionOutcome.failed("the damage was cancelled by a listener"));
+            assertThat(zed.calls).hasSize(1); // the blow was dealt through the server's own path, then judged
+        }
+
+        @Test
+        void theEventItRaisesIsAnsweredByEveryRuleButTheOneThatCausedIt() {
+            var meter = new Meter();
+            var causing = new Object();
+            var other = new Object();
+            meter.origin = causing;
+            var seen = new java.util.ArrayList<java.util.List<Object>>();
+            var watched = new DamageAction((victim, blow) -> {
+                seen.add(dev.materione.plugin.logic.world.VerbScope.allowed(java.util.List.of(causing, other)));
+                blow.run();
+                return dev.materione.plugin.logic.world.DamageWatch.Result.LANDED;
+            });
+
+            run(watched, reader("amount", 4), aimedAt(runner, zed).with(RunMeter.FACET, meter));
+
+            assertThat(seen).singleElement().satisfies(rules -> assertThat(rules).containsExactly(other));
+            assertThat(dev.materione.plugin.logic.world.VerbScope.allowed(java.util.List.of(causing, other)))
+                    .containsExactly(causing, other); // after the call everything is answered again
         }
 
         @Test

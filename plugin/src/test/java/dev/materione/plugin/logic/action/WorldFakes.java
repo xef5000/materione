@@ -100,7 +100,7 @@ final class WorldFakes {
                 }
                 case "damage" -> {
                     calls.add("damage:" + args[0] + (args.length > 1 ? ":" + describe(args[1]) : "")
-                            + (dev.materione.plugin.logic.world.VerbScope.isDamaging() ? " (in scope)" : ""));
+                            + (dev.materione.plugin.logic.world.VerbScope.depth() > 0 ? " (in scope)" : ""));
                     yield null;
                 }
                 case "setVelocity" -> {
@@ -214,6 +214,8 @@ final class WorldFakes {
         final Set<String> protectedBlocks = new HashSet<>();
         final List<String> calls = new ArrayList<>();
         boolean mayPlace = true;
+        /** Stands in for the bridges: called while a block is being broken, inside the verb's scope. */
+        java.util.function.Consumer<Block> onBreak = block -> { };
 
         FakeBlocks(Terrain terrain) {
             this.terrain = terrain;
@@ -236,6 +238,7 @@ final class WorldFakes {
         @Override
         public Result breakAs(Player player, Block block, boolean drops) {
             calls.add("breakAs:" + where(block) + (drops ? "" : ":nodrops"));
+            onBreak.accept(block);
             if (protectedBlocks.contains(where(block))) {
                 return Result.DENIED;
             }
@@ -246,6 +249,7 @@ final class WorldFakes {
         @Override
         public Result breakPlain(Block block, boolean drops) {
             calls.add("breakPlain:" + where(block) + (drops ? "" : ":nodrops"));
+            onBreak.accept(block);
             terrain.types.remove(where(block));
             return Result.DONE;
         }
@@ -323,12 +327,19 @@ final class WorldFakes {
                     }
                     return proxy(BlockData.class, (m, a) -> text);
                 },
+                dev.materione.plugin.logic.world.DamageWatch.NONE, dev.materione.plugin.logic.world.WorldLimits.DEFAULTS,
                 diagnostics::add, () -> now);
     }
 
     /** A run meter for a test: totals by key. */
     static final class Meter implements RunMeter {
         final Map<String, Long> totals = new HashMap<>();
+        Object origin;
+
+        @Override
+        public Object origin() {
+            return origin;
+        }
 
         @Override
         public long add(String key, long amount) {

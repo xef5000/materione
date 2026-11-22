@@ -912,6 +912,18 @@ interface BreakContext {
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
     };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
+    };
     readonly server: {
       /** Players online. */
       readonly online: ContextValue<number>;
@@ -1011,6 +1023,18 @@ interface ClickContext {
       readonly durability_used: ContextValue<number>;
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
+    };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
     };
     readonly server: {
       /** Players online. */
@@ -1147,6 +1171,18 @@ interface ConsumeContext {
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
     };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
+    };
     readonly server: {
       /** Players online. */
       readonly online: ContextValue<number>;
@@ -1229,6 +1265,18 @@ interface DamageContext {
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
     };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
+    };
     readonly server: {
       /** Players online. */
       readonly online: ContextValue<number>;
@@ -1300,6 +1348,18 @@ interface DeathContext {
       readonly durability_used: ContextValue<number>;
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
+    };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
     };
     readonly server: {
       /** Players online. */
@@ -1408,6 +1468,18 @@ interface DropContext {
       readonly durability_used: ContextValue<number>;
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
+    };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
     };
     readonly server: {
       /** Players online. */
@@ -1803,6 +1875,18 @@ interface EquipContext {
       readonly durability_used: ContextValue<number>;
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
+    };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
     };
     readonly server: {
       /** Players online. */
@@ -2427,6 +2511,18 @@ interface PickupContext {
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
     };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
+    };
     readonly server: {
       /** Players online. */
       readonly online: ContextValue<number>;
@@ -2914,6 +3010,18 @@ interface UnequipContext {
       /** Maximum durability, once the durability mechanic has counted. */
       readonly durability_max: ContextValue<number>;
     };
+    readonly block: {
+      /** For an item's break: the broken block's material, lowercase; empty for other item events. */
+      readonly type: ContextValue<string>;
+      /** For an item's break: the broken block's X. */
+      readonly x: ContextValue<number>;
+      /** For an item's break: the broken block's Y. */
+      readonly y: ContextValue<number>;
+      /** For an item's break: the broken block's Z. */
+      readonly z: ContextValue<number>;
+      /** For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none. */
+      readonly face: ContextValue<string>;
+    };
     readonly server: {
       /** Players online. */
       readonly online: ContextValue<number>;
@@ -3274,10 +3382,15 @@ interface ActionbarActionParams extends ActionOptions {
 /** Parameters of `break_blocks`. */
 interface BreakBlocksActionParams extends ActionOptions {
   /**
-   * The box's radius in blocks per axis, 0 to 4: one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box.
+   * The box's radius in blocks per axis, 0 to 4: one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box. With relative_to: facing the axes are across, up and depth.
    * @defaultValue 0
    */
   shape?: JsonValue;
+  /**
+   * world measures the shape along the world axes; facing measures it across and up from the face the player hit (else the way they look), with z the depth: [1, 1, 0] is the flat 3 by 3 in front of the player.
+   * @defaultValue world
+   */
+  relative_to?: "world" | "facing";
   /**
    * The centre: event (the broken block, for a break rule), player, or {of, x, y, z}.
    * @defaultValue event

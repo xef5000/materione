@@ -71,7 +71,15 @@ public final class WorldVerbsRunner {
         material(rig, problems, "1 150 0", "STONE", "the protected block");
         material(rig, problems, "2 150 0", "STONE", "a block outside the area");
         material(rig, problems, "-2 150 0", "STONE", "a block outside the area");
-        // the verb did not re-trigger the excavator for the blocks it broke: the rule ran once
+        // a counter rule on the same trigger hears every block that was really mined: the one the player mined and the seven the verb
+        // broke (the protected one was vetoed, so no break happened to hear): the events a verb raises are answered by every rule but
+        // the one that caused them
+        List<String> mined = rig.log().readAll().lines().filter(line -> line.contains(M + "MINED") && line.contains("[Server]"))
+                .map(line -> line.substring(line.indexOf(M + "MINED"))).distinct().toList();
+        if (mined.size() != 8 || mined.stream().anyMatch(line -> line.contains("MINED 1 150 0 "))) {
+            problems.add("the counter rule heard " + mined.size() + " distinct blocks, not the eight that were mined: " + mined);
+        }
+        // and the excavator's own rule was not answered by its own breaks: it ran once
         long digs = rig.log().readAll().lines().filter(line -> line.contains(M + "DUG") && line.contains("[Server]")).count();
         if (digs != 1) {
             problems.add("the excavator's rule ran " + digs + " times, not once");

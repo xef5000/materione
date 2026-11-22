@@ -98,6 +98,19 @@ public final class BuiltinTriggers {
                 ContextVariable.of("block.id", ParameterType.STRING, "The custom block's id").providedBy("block"),
                 ContextVariable.of("block.technique", ParameterType.STRING, "The block's state-space technique")
                         .providedBy("block"),
+                ContextVariable.of("block.type", ParameterType.STRING,
+                        "For an item's break: the broken block's material, lowercase; empty for other item events")
+                        .providedBy("item"),
+                ContextVariable.of("block.x", ParameterType.INTEGER, "For an item's break: the broken block's X")
+                        .providedBy("item"),
+                ContextVariable.of("block.y", ParameterType.INTEGER, "For an item's break: the broken block's Y")
+                        .providedBy("item"),
+                ContextVariable.of("block.z", ParameterType.INTEGER, "For an item's break: the broken block's Z")
+                        .providedBy("item"),
+                ContextVariable.of("block.face", ParameterType.STRING,
+                        "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), "
+                                + "empty when there is none")
+                        .providedBy("item"),
                 ContextVariable.of("furniture.id", ParameterType.STRING, "The furniture's id").providedBy("furniture"),
                 ContextVariable.of("server.online", ParameterType.INTEGER, "Players online").providedBy("item", "block"),
                 ContextVariable.of("server.max", ParameterType.INTEGER, "Player slots").providedBy("item", "block"),

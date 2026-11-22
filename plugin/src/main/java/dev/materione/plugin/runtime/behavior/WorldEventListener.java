@@ -7,7 +7,6 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.behavior.rule.EventTypes;
 import dev.materione.platform.entity.EntityPalette;
 import dev.materione.plugin.logic.world.ProjectileTags;
-import dev.materione.plugin.logic.world.VerbScope;
 import dev.materione.plugin.runtime.behavior.WorldEvents.Fire;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -62,8 +61,8 @@ public final class WorldEventListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onHit(EntityDamageByEntityEvent event) {
-        if (!events.subscribes(EventTypes.ENTITY_HIT) || VerbScope.isDamaging()) {
-            return; // damage a world verb deals is the rule's own effect, not a new blow (logic.md section 41)
+        if (!events.subscribes(EventTypes.ENTITY_HIT)) {
+            return;
         }
         Player attacker = attackerOf(event.getDamager());
         Entity target = event.getEntity();
@@ -83,7 +82,7 @@ public final class WorldEventListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onHurt(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player) || !events.subscribes(EventTypes.PLAYER_HURT)
-                || VerbScope.isDamaging() || !ownedHere(player)) {
+                || !ownedHere(player)) {
             return;
         }
         try {

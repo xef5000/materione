@@ -95,7 +95,7 @@
             {
               "advanced": true,
               "default": "0",
-              "description": "The box's radius in blocks per axis, 0 to 4: one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box",
+              "description": "The box's radius in blocks per axis, 0 to 4: one number, [x, y, z], or {x, y, z}; [1, 1, 1] is a 3 by 3 by 3 box. With relative_to: facing the axes are across, up and depth",
               "id": "shape",
               "label": "Shape",
               "order": 0,
@@ -103,6 +103,22 @@
               "section": "general",
               "type": "raw",
               "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "world",
+                "facing"
+              ],
+              "default": "world",
+              "description": "world measures the shape along the world axes; facing measures it across and up from the face the player hit (else the way they look), with z the depth: [1, 1, 0] is the flat 3 by 3 in front of the player",
+              "id": "relative_to",
+              "label": "Relative To",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
             },
             {
               "advanced": true,
@@ -5066,6 +5082,46 @@
               "type": "integer"
             },
             {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
+            },
+            {
               "description": "The furniture's id",
               "hosts": [
                 "furniture"
@@ -5305,6 +5361,46 @@
                 "block"
               ],
               "path": "block.technique",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
               "type": "string"
             },
             {
@@ -5803,6 +5899,46 @@
               "type": "integer"
             },
             {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
+            },
+            {
               "description": "Players online",
               "hosts": [
                 "item",
@@ -6015,6 +6151,46 @@
               ],
               "path": "item.durability_max",
               "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
             },
             {
               "description": "Players online",
@@ -6231,6 +6407,46 @@
               "type": "integer"
             },
             {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
+            },
+            {
               "description": "Players online",
               "hosts": [
                 "item",
@@ -6443,6 +6659,46 @@
               ],
               "path": "item.durability_max",
               "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
             },
             {
               "description": "Players online",
@@ -6659,6 +6915,46 @@
               "type": "integer"
             },
             {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
+            },
+            {
               "description": "Players online",
               "hosts": [
                 "item",
@@ -6873,6 +7169,46 @@
               "type": "integer"
             },
             {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
+            },
+            {
               "description": "Players online",
               "hosts": [
                 "item",
@@ -7085,6 +7421,46 @@
               ],
               "path": "item.durability_max",
               "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's material, lowercase; empty for other item events",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.type",
+              "type": "string"
+            },
+            {
+              "description": "For an item's break: the broken block's X",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.x",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Y",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.y",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the broken block's Z",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.z",
+              "type": "integer"
+            },
+            {
+              "description": "For an item's break: the face of the block the player looks at (up, down, north, south, east, west), empty when there is none",
+              "hosts": [
+                "item"
+              ],
+              "path": "block.face",
+              "type": "string"
             },
             {
               "description": "Players online",

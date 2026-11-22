@@ -271,7 +271,8 @@ class StackVerbsTest {
             public <T> java.util.concurrent.CompletionStage<T> at(Location location, Supplier<T> task) {
                 return CompletableFuture.completedFuture(task.get());
             }
-        }, null, launcher, name -> null, key -> null, text -> null, diagnostic -> { }, () -> 0L);
+        }, null, launcher, name -> null, key -> null, text -> null, dev.materione.plugin.logic.world.DamageWatch.NONE,
+                dev.materione.plugin.logic.world.WorldLimits.DEFAULTS, diagnostic -> { }, () -> 0L);
         Player shooter = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "isDead" -> false;

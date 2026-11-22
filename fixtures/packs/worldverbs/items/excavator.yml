@@ -11,3 +11,9 @@ excavator:
         - break_blocks: {shape: [1, 0, 1]}
         - run_command: "say MATERIONE-WORLDVERBS-DUG ${location.x} ${location.y} ${location.z}"
         - chat: "CHECK dug"
+    # a "blocks mined" counter: an event a verb raises is answered by every rule but the one that caused it (logic.md section
+    # 41), so this rule hears the block the player mined and each block the excavator really broke, while `dig` does not recurse
+    - id: count
+      on: break
+      do:
+        - run_command: "say MATERIONE-WORLDVERBS-MINED ${block.x} ${block.y} ${block.z} ${block.type}"

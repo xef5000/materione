@@ -24,4 +24,12 @@ public interface RunMeter {
 
     /** The total charged under {@code key} so far. */
     long total(String key);
+
+    /**
+     * An opaque identity of the rule this run executes, or null when it has none. A verb that raises server events names it as
+     * the cause, so the bridges do not answer the event with the very rule that caused it (logic.md §41).
+     */
+    default Object origin() {
+        return null;
+    }
 }

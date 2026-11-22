@@ -26,26 +26,11 @@ import org.bukkit.plugin.Plugin;
  * ({@code MTR-0118}, {@code MTR-0119}). One instance is built at boot and handed to the actions that need it; a test
  * builds one from fakes.
  *
- * <p>The caps live here too, so the actions, the tests and the docs read one set of numbers.
+ * <p>The caps are {@link WorldLimits}: one set of numbers that the actions, the tests and the docs read, overridable in
+ * {@code settings.yml}.
  */
 public final class WorldVerbs {
 
-    /** The largest radius of a {@code break_blocks} box on one axis. */
-    public static final int MAX_RADIUS = 4;
-    /** The most blocks one {@code break_blocks} step may name: a 9 by 9 by 9 box. */
-    public static final int MAX_BLOCKS_PER_STEP = 729;
-    /** The most blocks one run may change across its {@code break_blocks} and {@code set_block} steps. */
-    public static final long MAX_BLOCKS_PER_RUN = 2_048;
-    /** The most particles one {@code particle} step may spawn. */
-    public static final int MAX_PARTICLES_PER_STEP = 500;
-    /** The most particles one run may spawn. */
-    public static final long MAX_PARTICLES_PER_RUN = 2_000;
-    /** The most projectiles one {@code launch} step may launch. */
-    public static final int MAX_LAUNCH_PER_STEP = 16;
-    /** The most projectiles one run may launch. */
-    public static final long MAX_LAUNCHES_PER_RUN = 16;
-    /** The most item stacks one run may drop into the world with {@code drop_item}. */
-    public static final long MAX_DROP_STACKS_PER_RUN = 128;
     /** The farthest an {@code at} offset may reach on one axis, in blocks. */
     public static final double MAX_OFFSET = 64;
 
@@ -67,6 +52,8 @@ public final class WorldVerbs {
     private final Function<String, World> worlds;
     private final Function<NamespacedKey, Particle> particles;
     private final Function<String, BlockData> blockData;
+    private final DamageWatch damageWatch;
+    private final WorldLimits limits;
     private final Consumer<Diagnostic> diagnostics;
     private final LongSupplier clock;
     private final Map<String, Long> reported = new ConcurrentHashMap<>();
@@ -74,24 +61,46 @@ public final class WorldVerbs {
 
     public WorldVerbs(Regions regions, BlockOps blocks, ProjectileLauncher projectiles, Function<String, World> worlds,
             Function<NamespacedKey, Particle> particles, Function<String, BlockData> blockData,
-            Consumer<Diagnostic> diagnostics, LongSupplier clock) {
+            DamageWatch damageWatch, WorldLimits limits, Consumer<Diagnostic> diagnostics, LongSupplier clock) {
         this.regions = regions;
         this.blocks = blocks;
         this.projectiles = projectiles;
         this.worlds = worlds;
         this.particles = particles;
         this.blockData = blockData;
+        this.damageWatch = damageWatch;
+        this.limits = limits;
         this.diagnostics = diagnostics == null ? ignored -> { } : diagnostics;
         this.clock = clock;
     }
 
-    /** The server-backed platform: Paper ownership and hops through {@code gateway}, the server's block and launch paths. */
+    /** The server-backed platform with the default caps. */
     public static WorldVerbs server(Plugin plugin, SchedulingGateway gateway, Consumer<Diagnostic> diagnostics) {
+        return server(plugin, gateway, diagnostics, WorldLimits.DEFAULTS);
+    }
+
+    /**
+     * The server-backed platform: Paper ownership and hops through the scheduling gateway, the server's block and launch paths,
+     * and a {@link DamageWatch.Paper} the caller registers as a listener ({@link #damageWatch}).
+     */
+    public static WorldVerbs server(Plugin plugin, SchedulingGateway gateway, Consumer<Diagnostic> diagnostics,
+            WorldLimits limits) {
         WorldVerbs[] self = new WorldVerbs[1];
         var verbs = new WorldVerbs(Regions.server(plugin, gateway), new PaperBlockOps(() -> self[0].custom),
-                ProjectileLauncher.server(), Bukkit::getWorld, key -> Registry.PARTICLE_TYPE.get(key), Bukkit::createBlockData, diagnostics, System::currentTimeMillis);
+                ProjectileLauncher.server(), Bukkit::getWorld, key -> Registry.PARTICLE_TYPE.get(key),
+                Bukkit::createBlockData, new DamageWatch.Paper(), limits, diagnostics, System::currentTimeMillis);
         self[0] = verbs;
         return verbs;
+    }
+
+    /** The caps of this server. */
+    public WorldLimits limits() {
+        return limits;
+    }
+
+    /** What {@code damage} asks to learn whether its blow was vetoed; the server's is a listener to register. */
+    public DamageWatch damageWatch() {
+        return damageWatch;
     }
 
     public Regions regions() {
