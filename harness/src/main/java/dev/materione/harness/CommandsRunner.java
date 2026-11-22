@@ -35,8 +35,8 @@ public final class CommandsRunner {
             if (log == null) {
                 problems.add("no server log");
             } else {
-                if (!log.contains("MATERIONE-OPEN-TREE declared=14 registered=14")) {
-                    problems.add("the COMMANDS event at boot did not register the fourteen declared names from the built "
+                if (!log.contains("MATERIONE-OPEN-TREE declared=17 registered=17")) {
+                    problems.add("the COMMANDS event at boot did not register the seventeen declared names (fourteen plus the three qty- commands of #470) from the built "
                             + "registries: " + firstLineWith(log, "MATERIONE-OPEN-TREE"));
                 }
                 // visible: permitted (the default) puts the permission in requires, so a player without it cannot even
