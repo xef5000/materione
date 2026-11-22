@@ -1,0 +1,11 @@
+# The worldverbs fixture pack (#329, logic.md section 41): the entity and world verbs, as ordinary content. Five items and
+# one rule document use all nine actions (heal, damage, velocity, particle, launch, break_blocks, set_block, drop_item,
+# stack.edit), the way the benchmark's excavator (T13), dash blade (T14), lifesteal dagger (T12) and fire wand (T20) would
+# be written. Rules announce themselves with a console line (`say MATERIONE-WORLDVERBS-...`, via run_command) for the
+# headless harness (PaperWorldVerbsIT) or a chat line (`CHECK ...`) for the QA catalog's real client. The plugin's own
+# tests read the same files through WorldVerbsPipelineTest. No other fixture suite loads this pack, so their pinned
+# counts stay their own.
+id: worldverbs
+version: 1.0.0
+schema_version: 1
+depends: []

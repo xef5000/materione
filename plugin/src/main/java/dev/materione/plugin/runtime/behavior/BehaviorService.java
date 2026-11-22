@@ -60,11 +60,31 @@ public final class BehaviorService {
      */
     public void fireItemEvent(
             String eventType, String detail, Player player, ItemStack stack, Cancellable cancellable) {
-        List<dev.materione.behavior.rule.Rule> rules = rulesFor(stack);
-        if (rules.isEmpty()) {
+        fireItemEvent(eventType, detail, player, stack, cancellable, null);
+    }
+
+    /**
+     * As above for an event that happened at a place other than where the player stands: {@code at} is the
+     * event's location, which {@code location.*} and {@code at: event} read (logic.md section 41). The broken block of a
+     * {@code break} is the one caller; a null {@code at} leaves {@code location} as the player's own, as before.
+     */
+    public void fireItemEvent(String eventType, String detail, Player player, ItemStack stack,
+            Cancellable cancellable, Location at) {
+        fireItemEvent(eventType, detail, player, stack, cancellable, at, "");
+    }
+
+    /**
+     * As above, naming the face of the block the player is looking at ({@code block.face}: up, down, north, south, east or
+     * west), empty when there is none. {@code break_blocks} with {@code relative_to: facing} reads it.
+     */
+    public void fireItemEvent(String eventType, String detail, Player player, ItemStack stack,
+            Cancellable cancellable, Location at, String face) {
+        List<dev.materione.behavior.rule.Rule> rules = dev.materione.plugin.logic.world.VerbScope.allowed(rulesFor(stack));
+        if (rules.isEmpty() || dev.materione.plugin.logic.world.VerbScope.chainStopped()) {
             return;
         }
-        BehaviorEvent event = new BehaviorEvent(eventType, detail, buildContext(player, stack), cancellable, player);
+        BehaviorEvent event = new BehaviorEvent(eventType, detail, buildContext(player, stack, at, face), cancellable,
+                player);
         if (cancellable != null) {
             event.withSynchronousPreEvent();
         }
@@ -92,8 +112,9 @@ public final class BehaviorService {
         if (behaviors == null) {
             return;
         }
-        List<dev.materione.behavior.rule.Rule> rules = behaviors.forBlock(blockId).orElse(List.of());
-        if (rules.isEmpty()) {
+        List<dev.materione.behavior.rule.Rule> rules = dev.materione.plugin.logic.world.VerbScope.allowed(
+                behaviors.forBlock(blockId).orElse(List.of()));
+        if (rules.isEmpty() || dev.materione.plugin.logic.world.VerbScope.chainStopped()) {
             return;
         }
         BehaviorEvent event = new BehaviorEvent(
@@ -179,8 +200,12 @@ public final class BehaviorService {
      * {@code player/item/location/server/vars}. {@code vars} is the single
      * mutable namespace ({@code set_var} writes there).
      */
-    private MapLogicContext buildContext(Player player, ItemStack stack) {
+    private MapLogicContext buildContext(Player player, ItemStack stack, Location at, String face) {
         var root = baseRoot(player, player.getLocation());
+        if (at != null) {
+            root.put("location", blockLocationVars(at));
+            root.put("block", blockVars(at, face));
+        }
         root.put("item", itemContext(stack));
         return logicContext(root, player, stack);
     }
@@ -299,12 +324,7 @@ public final class BehaviorService {
         }
 
         World world = location.getWorld();
-        var locationVars = new LinkedHashMap<String, Object>();
-        locationVars.put("x", location.getBlockX());
-        locationVars.put("y", location.getBlockY());
-        locationVars.put("z", location.getBlockZ());
-        locationVars.put("world", world == null ? "" : world.getName());
-        root.put("location", locationVars);
+        root.put("location", blockLocationVars(location));
 
         var worldVars = new LinkedHashMap<String, Object>();
         worldVars.put("name", world == null ? "" : world.getName());
@@ -323,6 +343,28 @@ public final class BehaviorService {
 
         root.put("vars", new LinkedHashMap<String, Object>());
         return logicContext(root, player);
+    }
+
+    /** {@code block.*} for an event at a block: its material, whole coordinates and, when known, the face looked at. */
+    private static Map<String, Object> blockVars(Location location, String face) {
+        var vars = new LinkedHashMap<String, Object>();
+        vars.put("type", location.getBlock().getType().name().toLowerCase(java.util.Locale.ROOT));
+        vars.put("x", location.getBlockX());
+        vars.put("y", location.getBlockY());
+        vars.put("z", location.getBlockZ());
+        vars.put("face", face == null ? "" : face);
+        return vars;
+    }
+
+    /** {@code location.*} for an event at a block: its whole coordinates and its world. */
+    private static Map<String, Object> blockLocationVars(Location location) {
+        World world = location.getWorld();
+        var locationVars = new LinkedHashMap<String, Object>();
+        locationVars.put("x", location.getBlockX());
+        locationVars.put("y", location.getBlockY());
+        locationVars.put("z", location.getBlockZ());
+        locationVars.put("world", world == null ? "" : world.getName());
+        return locationVars;
     }
 
     private static double round(double value) {

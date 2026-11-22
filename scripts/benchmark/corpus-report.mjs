@@ -14,7 +14,7 @@ export const CORPUS_DIR = join(ROOT, 'fixtures', 'codemode', 'corpus');
 export const REPLAY_DIR = join(ROOT, 'fixtures', 'golden', 'codemode', 'replay');
 export const BENCHMARK_DOC = join(ROOT, 'docs', 'architecture', 'agent-benchmark.md');
 
-export const CLOSED_GAPS = ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER', 'TIME', 'TARGET', 'CMD'];
+export const CLOSED_GAPS = ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER', 'TIME', 'TARGET', 'CMD', 'VERB'];
 
 export const RANKING = [
   { rank: 1, gaps: ['RULE', 'TRIG-ENTITY', 'TRIG-PLAYER'] },
@@ -215,7 +215,7 @@ export function checkBenchmarkDoc(report, docText) {
   }
 
   for (const step of report.cumulative) {
-    if (step.rank <= 1) continue; // ranks 0 and 1 are historical pre-#328 baselines (10 and 13 of 29)
+    if (step.rank <= 2) continue; // ranks 0 to 2 are historical baselines (10, 13 and 16 of 29): the corpus has moved past them
     const docPasses = docRanks.get(step.rank);
     if (docPasses === undefined) {
       errors.push(`§4.2 ranking missing rank ${step.rank}`);

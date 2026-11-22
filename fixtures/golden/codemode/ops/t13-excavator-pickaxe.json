@@ -1,0 +1,73 @@
+{
+  "task": "T13",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "excavator",
+      "edits": [
+        {
+          "field": [
+            "excavator",
+            "material"
+          ],
+          "value": "DIAMOND_PICKAXE"
+        },
+        {
+          "field": [
+            "excavator",
+            "display_name"
+          ],
+          "value": "Excavator"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/excavator.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "break",
+            "do": [
+              {
+                "break_blocks": {
+                  "shape": [
+                    1,
+                    1,
+                    1
+                  ],
+                  "as_player": true,
+                  "drops": true
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 22
+    },
+    {
+      "line": 7,
+      "column": 12
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

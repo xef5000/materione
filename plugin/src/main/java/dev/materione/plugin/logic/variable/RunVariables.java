@@ -57,6 +57,11 @@ final class RunVariables implements VariableBinding {
     }
 
     @Override
+    public Optional<StackRef> stack() {
+        return Optional.ofNullable(stack);
+    }
+
+    @Override
     public Optional<VariableDeclaration> declaration(NamespacedId id) {
         return declared.apply(id);
     }

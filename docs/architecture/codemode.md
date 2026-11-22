@@ -1275,7 +1275,7 @@ const sword = rpg.items.create("bloodfang", {
   permission: "rpg.weapons",
 });
 
-// Bleed on hit, scaled by level; XP on kill.                          ★ combat triggers and entity verbs (primitives.md §4.3, §5.5, §5.7)
+// Bleed on hit, scaled by level; XP on kill.                          ★ combat triggers and entity verbs (primitives.md §4.3, §5.5, §5.7; built by #327 and #329: logic.md §37, §41)
 sword.rules.add({
   on: m.triggers.entityHit,
   do: [ m.actions.damageOverTime({ amount: m.expr`1 + ${level} * 0.5`, seconds: 5 }) ],

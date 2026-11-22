@@ -24,6 +24,14 @@ interface StackPdc {
     boolean edit(Consumer<PersistentDataContainer> edit);
 
     /**
+     * Applies {@code edit} to the stack's item meta in place (name, lore, model, damage), for the stack-editing verb.
+     * A stack double that has no item meta cannot, and says so with false.
+     */
+    default boolean editMeta(Consumer<org.bukkit.inventory.meta.ItemMeta> edit) {
+        return false;
+    }
+
+    /**
      * The stack's Materione identity as text, blank for a vanilla item. A run that resumes later compares it with
      * the identity it started with, so a handle never writes into a different item that now occupies the object.
      */
@@ -47,6 +55,14 @@ interface StackPdc {
                     return false;
                 }
                 return stack.editMeta(meta -> edit.accept(meta.getPersistentDataContainer()));
+            }
+
+            @Override
+            public boolean editMeta(Consumer<org.bukkit.inventory.meta.ItemMeta> edit) {
+                if (stack.getType().isAir() || stack.getAmount() <= 0) {
+                    return false;
+                }
+                return stack.editMeta(edit);
             }
 
             @Override

@@ -1,0 +1,15 @@
+# T20 (the wand half): right-click shoots a fireball. The projectile carries this item's id, so the item's own entity.hit
+# rule runs when it lands, even if the shooter holds something else by then. `damage` is attributed to the shooter.
+fire_wand:
+  material: BLAZE_ROD
+  display_name: "<red>Fire Wand"
+  behavior:
+    - id: shoot
+      on: click:right
+      do:
+        - launch: {projectile: small_fireball, speed: 1.5}
+    - id: scorch
+      on: entity.hit
+      do:
+        - damage: {amount: 2, cause: on_fire}
+        - run_command: "say MATERIONE-WORLDVERBS-SCORCH ${target.type}"

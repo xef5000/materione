@@ -1,0 +1,67 @@
+{
+  "task": "T12",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "lifesteal_dagger",
+      "edits": [
+        {
+          "field": [
+            "lifesteal_dagger",
+            "material"
+          ],
+          "value": "IRON_SWORD"
+        },
+        {
+          "field": [
+            "lifesteal_dagger",
+            "display_name"
+          ],
+          "value": "<dark_red>Leech"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/lifesteal_dagger.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "entity.hit",
+            "do": [
+              {
+                "heal": {
+                  "amount": "${damage.final * 0.2}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 24
+    },
+    {
+      "line": 7,
+      "column": 14
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 2,
+    "documents": 1
+  }
+}

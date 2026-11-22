@@ -1,0 +1,46 @@
+{
+  "golden": "t14-dash-blade",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "items/dash_blade.yml",
+      "kind": "created",
+      "operations": [
+        0,
+        1
+      ]
+    }
+  ]
+}

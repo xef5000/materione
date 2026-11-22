@@ -878,7 +878,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39).
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41).
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -4572,3 +4572,272 @@ permission (§23 decision 19); `min` and `max` on an argument (question 2); rule
 arguments (§23 decision 20); a command with a different flow per name, or a subcommand tree (a command is one name, its aliases, and one argument
 list: a `choice` argument and a `choose` step compose the same thing); a `custom` trigger or a command-run trigger for rule documents (primitives.md
 §5.5: the flow of a command is the command's, not a rule's `on:`).
+
+---
+
+## 41. Decisions taken in #329 (entity and world verbs)
+
+#329 is the third issue of M6.5 ([`agent-benchmark.md`](agent-benchmark.md) §4.2, rank 3; [`primitives.md`](primitives.md) §4.4, §5.7) and a
+primitive set under D12 ([`architecture.md`](../architecture.md) §3.1). Until it, the verb set stopped at players, items and messages: nothing
+healed or hurt an entity, pushed one, drew a particle, shot a projectile, changed a block, dropped an item into the world or edited the item in a
+hand. It adds **nine actions**, each one registry entry with a typed schema and a self-description, each universal (any entity the run can name, any
+block the platform can touch) and none named for a use case. A dash, a lifesteal dagger, an excavator and a fire wand are *content* over them
+(benchmark tasks T14, T12, T13, T20; the follow-ups F2 and F5); so will be the combat and farming entries of #13 (below). The code is in
+`plugin.logic.action` (nine classes, one each), `plugin.logic.world` (the platform seams and the caps), `plugin.logic.support` (`Triple`, `Quantities`,
+`Stages`), `api.logic` (`RunMeter`, `VariableBinding#stack`, `ParamReader#templates`) and the two bridges that learn the verbs exist
+(`plugin.runtime.behavior.WorldEventListener`, `ItemBehaviorListener`). The fixtures are `fixtures/packs/worldverbs/`. Each decision is reversible by
+the owner.
+
+**Traceability.**
+
+| Decision or rule | How this section applies it |
+|---|---|
+| D5 | each verb is a registry entry whose `describe()` is its schema, so the editor form, `logic.vocabulary`, `authoring.describe` and the code-mode SDK show it with no hand-written code; every numeric parameter an author would compute is marked `acceptingExpression` (below) |
+| D6, D1 | a verb is a step in the YAML of a rule, an item or a command; the pipeline parses it at load like any step and nothing applies it another way |
+| D8 | every world mutation runs on the thread that owns its location, through the gateway; the entity verbs run on the subject's region by the machinery of §39 (below) |
+| D12, master §3.1 | the universality tests are at the end; the verbs are nouns of the world (`heal`, `velocity`), never spells (`lifesteal`, `dash`) |
+| D13 | nothing runs code and nothing is new on the server: a program in the editor stages these steps like any others (codemode.md §3.5) |
+| #331, §39 | the five entity verbs are `targetable`; `at: target` composes with it; an unresolved target fails the verb and never falls back to the run's player |
+| #333, §38 | `stack.edit` acts on the run's stack, which is the one handle §38 decision 4 defined; no second notion of "the run's item" exists |
+| master §5.5, §5.6 | nothing existing changes meaning except one defect the verbs exposed (item `break`'s `location`, "What changed for existing content") |
+| plugin.md §9 | no verb costs anything until it runs; a trigger nobody answers still costs a set lookup; each cap below is checked before the work, not after |
+
+### The nine actions
+
+Every parameter below is read by the engine's one parser (`ParamReader`, `Quantity`, `Triple`, `LocationSpec`), so a literal is range-checked at
+load (`MTR-0057`, the step is skipped) and an expression is checked each time it renders; a template that does not render to a number in range fails the
+step, it never guesses (§20 decision 8). "Expr" is the marker of the registry's self-description, so the SDK types it `number | Expr`. This is the mistake
+#464 names for the money actions (a quantity read as a literal); no new verb makes it, and the money actions are #464's to fix, not this issue's.
+
+| Action | Parameters (default) | Targetable | Threading | Acts on |
+|---|---|---|---|---|
+| `heal` | `amount` (required, Expr, 0 to 1024) | player, entity | `PLAYER_REGION` (the subject's) | a living entity |
+| `damage` | `amount` (required, Expr, 0 to 10000), `cause` (a vanilla damage type) | player, entity | `PLAYER_REGION` | a damageable entity |
+| `velocity` | `forward`, `up`, `strafe` **or** `x`, `y`, `z` (each Expr, -10 to 10 blocks per tick); `mode: set` or `add` (`set`); `follow_pitch` (`false`) | player, entity | `PLAYER_REGION` | any entity |
+| `particle` | `particle` (required), `count` (1, Expr, 1 to 500), `offset` (a number, `[x,y,z]` or `{x,y,z}`, 0 to 16), `speed` (0, Expr), `at` (`target`), `color` (`#rrggbb`), `size` (1, Expr, 0.1 to 4) | player, entity | `PLAYER_REGION`, then the location's region | a location |
+| `launch` | `projectile` (required), `speed` (1.5, Expr, 0.05 to 10), `spread` (0, Expr, 0 to 45 degrees), `count` (1, Expr, 1 to 16) | player, entity | `PLAYER_REGION` | a living shooter |
+| `break_blocks` | `shape` (`0`, radius per axis 0 to 4), `relative_to: world` or `facing` (`world`), `at` (`event`), `as_player` (`true`), `drops` (`true`) | none | `PLAYER_REGION`, per block the block's region | the blocks of a box |
+| `set_block` | `block` (required: a vanilla block or a Materione block id, Expr), `at` (`event`), `as_player` (`true`), `replace: any` or `air` (`any`) | none | `PLAYER_REGION`, then the block's region | one block |
+| `drop_item` | `item` (required, as `give_item`), `amount` (1, Expr), `at` (`event`) | none | `PLAYER_REGION`, then the location's region | a location |
+| `stack.edit` | `name`, `lore` (a list), `model`, `damage` (Expr); at least one | none | `PLAYER_REGION` (the stack owner's) | the run's stack |
+
+The first parameter is the shorthand (`heal: 4`, `particle: cloud`, `launch: snowball`, `set_block: stone`, `drop_item: ruby`). The names `at`, `shape`, `as_player`
+and `drops` are the vocabulary the issue's sketch and the benchmark corpus used; the SDK spells them `asPlayer` and `followPitch`.
+
+```yaml
+behavior:
+  - on: break                              # T13: the excavator; the broken block is left to vanilla
+    do:
+      - break_blocks: {shape: [1, 1, 1]}   # 27 blocks around the broken one, as the player, each asking protection
+  - on: click:right                        # T14: the dash
+    cooldown: 5000
+    do:
+      - velocity: {forward: 1.6, up: 0.3}
+      - particle: {particle: cloud, count: 20}
+  - on: entity.hit                         # T12: heal for a fifth of the damage dealt
+    do:
+      - heal: {amount: "${damage.final * 0.2}"}
+      - heal: {amount: 4, target: event.target}        # or heal the struck entity, by section 39
+      - stack.edit: {lore: ["<gray>Last hit: ${damage.final}"]}   # F2: the stack this rule hangs on
+```
+
+### The location value
+
+`at` is one value shape for every verb that acts at a place, read once by `LocationSpec.read`. It is the issue's "small typed location value":
+
+| Form | Resolves to | Load check |
+|---|---|---|
+| `event` | where the trigger says it happened, `location.*` of the run: the broken block of a `break`, the struck entity of `entity.hit`, the clicked block of a block event | the trigger must carry a `location` root (`MTR-0060` otherwise, as `item` does for §38) |
+| `player` | the run's own player | |
+| `target` | the entity the action acts on: its `target:`, else the run's player | only on an action with a target (`particle`); `break_blocks`, `set_block` and `drop_item` say `player` |
+| `{of: <word>, x, y, z}` | the anchor `of` (default: the verb's own default) shifted by a world-axis offset in blocks, each axis an Expr within 64 | unknown keys are `MTR-0057` |
+
+A location whose coordinates are whole numbers (a block's) means the block's centre, so a particle or a drop appears *in* the block; a player's or an
+entity's location is exact. The default is per verb because the common case differs: a particle appears where the action acts (`target`), a block or a drop
+where the trigger says (`event`). Reading a location is a read of the run's own tree for `event` and of the entity for the other two, on the thread that
+owns it (`reads.on(PLAYER_REGION)`, which for a targeted step is the subject's region); an offset is a template rendered before the world is touched.
+
+### Threads (D8)
+
+| Step | Thread |
+|---|---|
+| parsing, the caps' arithmetic, rendering a template | the run's own, as for any action |
+| `heal`, `damage`, `velocity`, `launch`, `stack.edit` | the subject's region (`PLAYER_REGION` through the read executor of §39: inline when the thread owns it, else the entity scheduler, completing back on the run's own thread) |
+| `particle`, `drop_item` | the **location's** region: `Regions.at(location, task)` is inline when this thread owns the location and a hop through `SchedulingGateway.executeSync(plugin, location, ...)` otherwise, completing the step there |
+| `set_block` as the player | the thread that owns both the player and the block; a block in another region is **refused** (`MTR-0119`), because the placement event must run beside the player |
+| `set_block` and `break_blocks` with `as_player: false` | each block on its own region's thread, one after another (the step completes when the last has) |
+| `break_blocks` as the player | one pass on the player's thread over the blocks it owns; a block it does not own is skipped and counted (`MTR-0119`), never touched from the wrong thread |
+
+On Paper every location is owned and every hop is an inline call. **What is proven where:** the seam (`Regions`) and the verbs' use of it are proven by unit
+tests with a scripted ownership probe (a foreign block is hopped to when plain and refused when as the player); a real Folia server was not run for this
+issue (the `foliaProbe` source set is opt-in evidence and CI is Paper 1.21.4), so the cross-region *dispatch* of the gateway itself is the code of
+`SchedulingGatewayImpl.executeSync` that every other region-aware path already uses. The Folia boundary is decision 3.
+
+### Platform seams
+
+The verbs reach the server through four small ports in `plugin.logic.world`, so the decisions are unit-tested and only the platform call is not:
+
+- **`BlockOps`** has two voices. *As a player*, a break is `Player#breakBlock` (the `BlockBreakEvent` a mined block fires, the player's tool, enchantments, durability
+  and game mode, the block's natural drops), a break without drops is the same event with `setDropItems(false)` and the block then removed, and a placement is a
+  `BlockPlaceEvent` asked **before** the block is changed (so nothing has to be reverted when a protection plugin says no). *Plain* acts with no actor and asks
+  nobody. A Materione custom block cancels its break event to run its own teardown, so a cancelled event over an empty block is a success, not a veto.
+- **`ProjectileLauncher`** is `ProjectileSource#launchProjectile` (the server's launch path, a `ProjectileLaunchEvent`), and stamps the projectile's own persistent
+  data with `materione:launched_by` = the Materione id of the run's stack (below).
+- **`Regions`** is the ownership check and the hop of the table above.
+- **`CustomBlocks`** is what the custom-block runtime offers the verbs: place a Materione block by id and take one down through its own removal path, so the
+  placement index never keeps a block that is gone. It is bound once content is applied; before that a Materione block id is "not loaded".
+
+`WorldVerbs` bundles them with the caps and the two reporters, and is the only thing the world actions are constructed with.
+
+### Reentrancy: a verb's event answers every rule but the one that caused it
+
+Two verbs raise real server events so other plugins see them: `damage` raises an entity-damage event and `break_blocks` a block-break event per block (`set_block` a
+placement event). Those events **are answered by rules**, with one exception: **the rule that caused the event is not answered by it.** The verb opens a scope
+(`VerbScope`, per thread, because the events are delivered synchronously) that names its rule (`RunMeter#origin`, the opaque identity of the rule the run executes), and the
+bridges fire the list of rules without that one (`VerbScope.allowed`): an excavator's `break` rule is not answered by the nine blocks it breaks, so it cannot dig for ever, while a
+"blocks mined" counter on the same trigger hears all of them. The same for damage: the `entity.hit` or `player.hurt` a verb's damage raises runs every other rule (a bleed, a kill
+counter, another item's) but not the rule that dealt it. `entity.kill` is unaffected, and the attribution below makes a kill the verb causes the run's player's.
+
+**A depth cap is the backstop.** A rule that answers a verb's event may itself run a verb, and so on; the scopes nest, and an event raised at depth 4
+(`WorldLimits.MAX_CHAIN_DEPTH`) is answered by no rule, whatever the rules are. The bridges drop it and report it once per ten seconds as `MTR-0118` (a budget: the chain's), so
+two rules that answer each other end after four levels, loudly and cheaply, instead of freezing a region. Events from vanilla or other plugins start at depth 0.
+
+**The event's own block.** While the item bridge runs the rules of a break, the block being broken is still in the world; `break_blocks` leaves that block to vanilla
+(`VerbScope.breakEvent`), or the excavator would drop it twice. After the rules return vanilla finishes it. A rule that parks (`wait`, `delay`) resumes after the
+break is done and finds that block already air, which is skipped as any air is.
+
+### Caps and budgets
+
+Caps are numbers in one record (`WorldLimits`: defaults here, overridable in `settings.yml`, decision 6), enforced **before** the work, so a step over a cap does nothing. Per-step caps are in the grammar and are checked at load for
+a literal (`MTR-0057`) and at run time for an expression. Per-run caps are charged to the run's `RunMeter` (a facet of every run, `api.logic.RunMeter`): a tally of
+totals by key that the interpreter creates with the run, so a flow that repeats a verb or `call`s one is bounded as a whole, and a run that parks keeps its totals.
+
+| Budget | Per step | Per run | On overrun |
+|---|---|---|---|
+| blocks (`break_blocks` and `set_block` share one tally; a break is charged its shape's volume, a set 1) | 9 by 9 by 9 = 729 (radius at most 4 an axis) | 2,048 | the step fails, nothing is changed, `MTR-0118` |
+| particles | 500 | 2,000 | the step fails, nothing spawns, `MTR-0118` |
+| projectiles (`launch`) | 16 | 16 | the step fails, nothing launches, `MTR-0118` |
+| dropped stacks (`drop_item`) | 2,304 items (36 stacks) | 128 stacks | the step fails, nothing drops, `MTR-0118` |
+| an `at` offset | 64 blocks an axis | | `MTR-0057` at load for a literal; the step fails for an expression |
+
+`MTR-0118` is reported once per verb per ten seconds (as `MTR-0065` is for §38 decision 11), because a hot trigger would otherwise report it on every event. A context that
+is not a run (a test calling an action directly) has no meter and gets only the per-step bound. The numbers are chosen so the worst legal step is cheap (729 blocks is one
+tick on one region) and the worst legal run is bounded; they are defaults, and the server owner moves any of them in `settings.yml` (decision 6).
+
+### Failure and `require` (U5)
+
+Every verb returns the engine's outcome, so a failed verb is `FAILED` for `require`'s `else:` and the trace. What fails, and what is deliberately **not** a failure:
+
+| Verb | `FAILED` when | `OK` although nothing changed |
+|---|---|---|
+| `heal` | the subject is dead or not valid; not a living entity; a negative or non-numeric amount; a listener cancelled the regain | an amount of 0; a subject already at its maximum health |
+| `damage` | the subject is dead or not valid; not an entity that can be hurt; an unknown `cause`; a negative or non-numeric amount; **a listener cancelled the damage event** (seen at `MONITOR`, said quietly: decision 2) | an amount of 0 |
+| `velocity` | the subject is dead or not valid; a component that is not a number in range, or a result that is not finite | |
+| `particle` | an unknown particle; a particle that needs data the verb does not carry (a block, an item); a location that cannot be read; the run's budget | |
+| `launch` | the type is not a launchable projectile; the shooter is not alive; every launch was refused; the run's budget | |
+| `break_blocks` | `as_player` and the run has no player; **eligible blocks and none could be broken** (the message counts refused, in another region, could not be broken); the budget | a box with no breakable block (air, liquid, bedrock, the event's own block); a box where at least one block broke |
+| `set_block` | `as_player` and no player; a placement a listener refused; `replace: air` over an occupied block; not a block; a Materione id not loaded; another region when as the player; the budget | |
+| `drop_item` | the item is unknown or not loaded; a location that cannot be read; the budget | |
+| `stack.edit` | the run has no stack; the stack is gone or is now another item; `damage` on an item with no durability | |
+
+An excavator that mines a block with nothing around it is therefore a success: a verb that warned for every empty neighbourhood would be reported on every swing. A vetoed
+dig is a failure a pack can answer (`require: [break_blocks: ...]`, `else: [message: "You cannot dig here"]`).
+
+### `damage` and attribution
+
+`damage` is attributed to the run's player whenever there is one and the subject is someone else: with no `cause` it is `Damageable#damage(amount, player)` (a player attack, with a damager,
+so combat, claim and kill-credit plugins see a normal blow); with a `cause` it is a `DamageSource` of that vanilla type with the player as causing and direct entity. With no player,
+or when the player hurts themselves, it is unattributed (`generic`, or the `cause`). A kill it causes is the run's player's. A self-inflicted damage is not a player attack
+because a player does not attack themselves.
+
+### The projectile carries the item
+
+`launch` writes `materione:launched_by` into the projectile's persistent data: the Materione id of the run's stack (the same handle as §38, through `VariableBinding#stack`), absent for a
+vanilla item or a run with no stack. `entity.hit` already ran the shooter's main-hand rules for a projectile's hit (the shooter is the attacker, §37); it now reads the tag: for a
+projectile that carries one, the host stack is the stack with **that identity** in the shooter's inventory (the main hand first, then the storage slots), so the item's `entity.hit`
+rule answers the hit even when the shooter holds something else when it lands; when the item is gone from the inventory, no item rule answers and the rule documents still do. A projectile
+with no tag (a bow's arrow, a ghast's fireball) behaves exactly as before.
+
+### `stack.edit` and "the stack the run is about"
+
+`stack.edit` asks the run's variable binding for its stack (`VariableBinding#stack`), which `RunVariables` holds: the stack the trigger declared (§38 decision 4), a handle and not a copy,
+checked against the identity it had when the run was given it (decision 5). The verb edits **item meta in place** (`ItemStack#editMeta` on the live mirror): `name` and `lore` with the
+item-text pipeline of everywhere else (MiniMessage, italics off by default, templates allowed), `model` (the `item_model` component) and `damage` (the vanilla `damage` component, clamped
+below the maximum so an edit never breaks the item; Materione's own durability counter is untouched). It **patches components and never replaces the stack**, so identity, item variables,
+enchantments and count survive. It fails on a run with no stack, on a stack that was replaced while the run was parked, and on `damage` for an item with no durability. A rule on a trigger
+that is not about an item is told so at load (`MTR-0060`, `params.requireRoot("item", ...)`, the same check §38 decision 10 gave `set_var`). The issue limits the verb to the held stack, and it is
+limited: the run's stack is the held stack for every item trigger (and the main-hand stack for a rule document, §37 decision 6). A GUI has no stack today (§38 decision 10), so the verb
+is a load warning in a GUI until the GUI is opened about a stack (backpack P-A).
+
+### What changed for existing content
+
+Nothing, with one exception, and it is a defect the verbs exposed rather than a feature:
+
+- **Item `break`'s `location`.** (Decision 5: kept as the block; the player is `player.x/y/z`, and `block.*` names the block.) The trigger's context says `location.x/y/z` is "the event location", but the item bridge filled it with the *player's* position. The excavator needs the broken block,
+  so for an item's `break` the bridge now passes the broken block's coordinates (whole numbers, a block's). A rule that read `${location.x}` on an item `break` now reads the block; no fixture,
+  test or shipped pack did. No public release exists to keep compatible (owner, 2026-11-19). Every other trigger's `location` is unchanged. The player's own position is still `player.x/y/z`, and an item's `break` now also carries `block.type`, `block.x`, `block.y`, `block.z` and `block.face`.
+- A hit by a projectile that carries a `launched_by` tag runs that item's rules (above). No projectile carried one before.
+- The `entity.hit`, `player.hurt` and item `break` events that `damage` and `break_blocks` raise are answered by every rule but the one that caused them, and a chain stops at depth 4 (above); no rule could have caused one before.
+
+A file that never writes one of the nine verbs loads and saves byte for byte (§5.6); the nine are new names, so no existing step can collide with them.
+
+### Diagnostics
+
+Three new codes, documented in [`plugin.md`](plugin.md) §5 (taken after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve; `DiagnosticCodesTest` pins the count):
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `MTR-0118` | warning | a world verb spent its per-run budget, or a chain of verb-raised events went 4 levels deep; the step failed and did nothing past the cap, or the bridges stopped answering the chain |
+| `MTR-0119` | warning | a verb skipped a location in a region the running thread does not own and cannot hop to (as the player on Folia) |
+| `MTR-0121` | warning | a `world_verbs_*` setting is not a whole number in its range; its default is used (`MTR-0120` is #468's) |
+
+Everything else is existing codes: a bad parameter or an action that rejects a `target:` is `MTR-0057`; a verb that needs a `location` or an item the trigger does not provide is `MTR-0060`; a verb that fails
+at run time is the action's `FAILED` and the reporter's rate-limited warning when nothing guards it.
+
+### The universality tests (master §3.1)
+
+| Test | How it passes |
+|---|---|
+| U1 name | `heal`, `damage`, `velocity`, `particle`, `launch`, `break_blocks`, `set_block`, `drop_item`, `stack.edit` name what is done to the world; none says `lifesteal`, `dash`, `fireball` or `excavate`. `as_player` and `at` name capabilities of the verb, not a use |
+| U2 generality | any living entity for the entity verbs (the run's player, the struck entity, a named player, a selector: §39); any block the platform can touch, vanilla or Materione; any projectile type the server can launch; any location the value can name |
+| U3 composition | every verb composes under `require`, `chance` and `delay` like any action (the table above is the outcome contract), takes `target:` where it has a subject, and takes the one `at` and the one expression marker; the four benchmark features are YAML only (`fixtures/packs/worldverbs`) |
+| U4 registry actions | nine entries in the `actions` registry, each with full self-description (every parameter described, defaults and ranges stated, the Expr marker on every computed quantity); the editor form, `logic.vocabulary`, `authoring.describe` and the SDK are generated from it with no code |
+| U5 parse at load, fail soft at run, capped | grammar and ranges checked at load; a verb that cannot act fails its step and never throws into the server; every verb that multiplies work is capped per step and per run, the caps are settings, and an overrun is a diagnostic |
+
+### Presets, not engine behavior (#13 and #21)
+
+[#13](https://github.com/xef5000/materione/issues/13)'s combat and farming entries are **presets over these verbs** (primitives.md §6), not natives, and none is built here: *lunge* is `velocity` with `forward`; *lifeleech* is
+`heal` with an expression of `damage.final`; *knockback strike* is `velocity` on `target: event.target`; *fireball* and *wither skull* are `launch` with a `projectile`; *lightning strike* needs a
+`spawn` verb (not in this issue's nine); *3x3 big-mining* is `break_blocks`; *harvest and replant* is `break_blocks` then `set_block`; *auto-smelt* needs an item transform (a recipe lookup, not a verb here);
+*bedrock-break* is `break_blocks` with `as_player: false` and a rule that opts in. *Bleed* is §39's `potion` on `event.target`, or `damage` on a repeat once TIMER (#332) exists.
+[#21](https://github.com/xef5000/materione/issues/21) (particles) is covered for its "integration point exposed to ECA actions" bullet by `particle` and for nothing else: its **shapes** (ring, helix, sphere) and its **aura triggers**
+(on hold, ambient) are not built, because a shape is a pattern over many spawns (a loop or a repeating trigger) and the repeating trigger is #332. #21 stays open for them (decision 7).
+
+### Verification
+
+`EntityVerbsTest` and `WorldBlockVerbsTest` (each action against scripted seams: the subject and the target, the clamp, the attribution, the maths of a facing, the box, the veto, the event block, the regions, every
+cap and its one diagnostic, the load rejections), `WorldLimitsTest` (the caps, the overrides, a bad value), `StackVerbsTest` (the run's stack handle, `stack.edit` end to end through the real `BukkitStackRef`, the stale handle, the item id on a launch),
+`WorldVerbsPipelineTest` (the `worldverbs` fixture pack from files to the live shadow with no diagnostics; the load-time checks), `DiagnosticCodesTest` (106 codes), the registry, editor demo snapshot and `.d.ts` goldens
+(nine actions on the wire), the corpus (T13 and T14 pass; T12, T20, F2 and F5 keep only their other gaps; `scripts/benchmark/corpus-report.mjs --check` is in sync) and `PaperWorldVerbsIT` on Paper 1.21.4 (a 3 by 3 break where a
+protected block survives and the rest are gone; a counter rule on the same trigger hears every block that was really mined while the excavator's own rule runs once; a dash that moves the player). QA `worldverbs.*` (the particle test is `visual`; **not run and not blessed**: they need the local 26.x probe, and blessing runs happen on main).
+
+### Decisions on the questions the first draft left open
+
+The owner asked the technical questions to be settled by three principles: allow as much as possible and restrict only when needed; prefer "X and Y behind a switch" to "X or Y"; code is
+cheap and annoyances are expensive, above all for a first-time user. Each decision is reversible by the owner.
+
+| # | Question | Decision | Rationale |
+|---|---|---|---|
+| 1 | `as_player: false` asks nobody: an opt-in? | **No opt-in.** It stays allowed as written. When #466 (the protection port, filed, not built here) lands, `as_player: false` asks the port with *no actor*, so a claim plugin may still refuse an actor-less break | the author of a pack is the server's admin, and a switch on an admin's own file is an annoyance with no one to protect; the real answer is a port that can say no, which is #466's |
+| 2 | `damage` cannot report a veto | **Report it, quietly.** `DamageWatch` runs the call inside `observe`, and a listener at `MONITOR` (the last word, after every protection plugin) records whether the damage event ended cancelled; the outcome is then `FAILED` ("the damage was cancelled by a listener"), so a `require` can branch on it and the trace shows it. No chat line, no diagnostic: if Materione and another plugin both police a blow, the owner decides which to disable | a veto is information a flow can use, and spam is an annoyance; one listener with one per-thread slot costs a thread-local read on every other damage event |
+| 3 | Folia: a block as the player across a region boundary | **Keep the refusal** (`MTR-0119`, rate-limited, never on Paper); #466 revisits it | reading and breaking across regions at once needs the player's thread and the block's, which Folia does not give; the refusal is correct and cheap, and the port may change what is asked of whom |
+| 4 | Chain reactions | **Not a blanket suppression** (the first draft's): see "Reentrancy". The rule that caused an event is not answered by it; every other rule and plugin is; a depth cap of 4 with `MTR-0118` is the backstop | allow the useful thing (a counter hears every block; a bleed rides every hit) and restrict only the one case that is always a bug (a rule answering itself) |
+| 5 | `location` on an item `break` | **Keep it as the broken block.** The player's own place is `player.x/y/z` (the player facet, already in an item's context) and there is now a `block` root on an item's `break`: `block.type`, `block.x`, `block.y`, `block.z` and `block.face` (the face of the block the player looks at; empty when none) | one honest meaning of `location` (where the event happened), nothing lost, and the block is nameable without a workaround |
+| 6 | The caps | **The numbers stay as defaults, and every one is overridable in `settings.yml`** as flat optional keys, none written to a fresh file: `world_verbs_max_radius` (1 to 8, default 4), `world_verbs_max_blocks_per_run` (1 to 65,536, 2,048), `world_verbs_max_particles_per_step` (1 to 5,000, 500), `world_verbs_max_particles_per_run` (1 to 100,000, 2,000), `world_verbs_max_launches_per_step` (1 to 64, 16), `world_verbs_max_launches_per_run` (1 to 256, 16), `world_verbs_max_drop_stacks_per_run` (1 to 4,096, 128). A value that is not a whole number in its range falls back to its default with `MTR-0121` | a survival server wants smaller and a creative one larger; the range is a hard ceiling so a typo cannot make a step unbounded; the step cap of a box is derived `(2r+1)^3` |
+| 7 | #21 | **No change.** `particle` covers #21's integration bullet only; shapes and aura triggers stay #21's, and the aura needs #332. #21 stays open | |
+| 8 | Facing-relative shapes | **Both, behind a switch.** `relative_to: world` (the default) measures `shape` along the world axes; `relative_to: facing` measures it **across** (x), **up** (y) and **depth** (z) from the face the player hit (`block.face`), or, when the trigger has none, the way the player looks (the horizontal axis they face, or vertical when they look steeply up or down). `[1, 1, 0]` is the flat 3 by 3 plane in front of the player, which is what an excavator wants. A run with no player and no face fails the step rather than guessing | the world box stays the simple default and the corpus program is unchanged; the plane costs one enum |
+
+### Not built, on purpose
+
+`spawn`, `kill` and an attribute modifier (the other verbs primitives.md §5.7 lists: no benchmark task needs them); particle shapes and aura triggers (#21's remainder, #332); the protection port that `as_player: false` and the Folia
+boundary will ask (#466); particles that carry block, item or transition data; a typed `at` or `shape` in the SDK (both are `raw` in the schema, as `target` is, §39 owner question 4); the verbs in a GUI until it is opened about a stack; any Folia run.

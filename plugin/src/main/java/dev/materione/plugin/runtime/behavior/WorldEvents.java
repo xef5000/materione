@@ -6,6 +6,7 @@ import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.runtime.BehaviorEvent;
 import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.runtime.RuntimeRegistries;
+import dev.materione.plugin.logic.world.VerbScope;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -97,11 +98,14 @@ public final class WorldEvents {
         if (world == null || !world.subscribes(fire.trigger())) {
             return;
         }
+        if (VerbScope.chainStopped()) {
+            return; // a chain of events that world verbs raised has gone too deep (logic.md section 41)
+        }
         FilterFacts facts = FilterFacts.of(fire.facts());
-        List<Rule> documents = matching(world.forTrigger(fire.trigger()), fire.trigger(), facts);
+        List<Rule> documents = VerbScope.allowed(matching(world.forTrigger(fire.trigger()), fire.trigger(), facts));
         if (world.itemsAnswer(fire.trigger())) {
             for (ItemStack host : fire.itemHosts().get()) {
-                List<Rule> rules = matching(behavior.rulesFor(host), fire.trigger(), facts);
+                List<Rule> rules = VerbScope.allowed(matching(behavior.rulesFor(host), fire.trigger(), facts));
                 if (!rules.isEmpty()) {
                     run(fire, rules, host);
                 }

@@ -83,7 +83,7 @@ class VocabularySourcesTest {
         assertThat(vocabulary.actions()).filteredOn(action -> !action.targetable().isEmpty())
                 .extracting(BehaviorVocabulary.Action::id)
                 .containsExactlyInAnyOrder("message", "actionbar", "title", "sound", "potion", "give_item", "give_money",
-                        "take_money", "teleport");
+                        "take_money", "teleport", "heal", "damage", "velocity", "particle", "launch");
         assertThat(vocabulary.actions()).filteredOn(action -> action.id().equals("potion"))
                 .singleElement().satisfies(potion -> {
                     assertThat(potion.targetable()).containsExactly("player", "entity");

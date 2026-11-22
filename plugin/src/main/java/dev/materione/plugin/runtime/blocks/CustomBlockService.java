@@ -73,7 +73,7 @@ import org.bukkit.util.RayTraceResult;
  * <p>Folia discipline: handlers run where the event fired; cross-position
  * work (pistons, sweeps) hops through the scheduling gateway per region.
  */
-public final class CustomBlockService implements Listener {
+public final class CustomBlockService implements Listener, dev.materione.plugin.logic.world.CustomBlocks {
 
     private static final Set<Material> STATE_HOSTS = Set.of(
             Material.NOTE_BLOCK, Material.TRIPWIRE, Material.CHORUS_PLANT);
@@ -333,6 +333,35 @@ public final class CustomBlockService implements Listener {
 
     private record Orientation(BlockFace facing, boolean top) {
         static final Orientation DEFAULT = new Orientation(BlockFace.NORTH, false);
+    }
+
+    @Override
+    public boolean exists(NamespacedId id) {
+        RuntimeBlocks blocks = snapshot().blocks;
+        return blocks != null && blocks.byId(id).isPresent();
+    }
+
+    /** The world verbs' placement (logic.md section 41): the block {@code id}, or false when it is not loaded. */
+    @Override
+    public boolean place(Block block, NamespacedId id) {
+        RuntimeBlocks blocks = snapshot().blocks;
+        Optional<RuntimeBlock> def = blocks == null ? Optional.empty() : blocks.byId(id);
+        if (def.isEmpty()) {
+            return false;
+        }
+        place(block, def.get());
+        return true;
+    }
+
+    /** The world verbs' removal (logic.md section 41): the single removal pipeline, or false for a vanilla block. */
+    @Override
+    public boolean remove(Block block, boolean drop) {
+        Optional<RuntimeBlock> found = identify(block);
+        if (found.isEmpty()) {
+            return false;
+        }
+        remove(block, found.get(), drop);
+        return true;
     }
 
     /** Swaps the host data in and records the placement (PDC + index). */

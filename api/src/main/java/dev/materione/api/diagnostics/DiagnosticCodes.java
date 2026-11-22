@@ -614,6 +614,32 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0105", Severity.WARN, "A rule step names content no pack declares");
 
     /**
+     * A world verb has spent its per-run budget (logic.md section 41, #329): {@code break_blocks} and {@code set_block}
+     * count the blocks a run has changed, {@code particle} the particles it has spawned, {@code launch} the projectiles
+     * it has launched. The step that crossed the cap fails (a {@code require} sees it) and nothing past the cap is done;
+     * the work already done in the run stays. Reported at most once per rule per ten seconds, with the verb, the cap
+     * and the rule, because a hot trigger would otherwise report it on every event.
+     */
+    public static final DiagnosticCode VERB_BUDGET_SPENT =
+            new DiagnosticCode("MTR-0118", Severity.WARN, "A world verb spent its per-run budget; the step failed");
+
+    /**
+     * A world verb could not act on a location because it lies in a region the running thread does not own and the verb
+     * cannot hop there (logic.md section 41, #329): a block broken or placed as the player must be touched on the
+     * player's own thread, so a block across a Folia region boundary is skipped and counted. Reported at most once per
+     * verb per ten seconds. On Paper every location is owned, so it never appears there.
+     */
+    public static final DiagnosticCode VERB_REGION_REFUSED =
+            new DiagnosticCode("MTR-0119", Severity.WARN, "A world verb skipped a location in another region");
+
+    /**
+     * A {@code world_verbs_*} setting is not a whole number inside its range (logic.md section 41, #329): the default is used for
+     * that key and the rest of the settings are untouched. Reported once at load, naming the key and the range.
+     */
+    public static final DiagnosticCode VERB_SETTING_INVALID =
+            new DiagnosticCode("MTR-0121", Severity.WARN, "A world verb setting is invalid; the default is used");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -750,7 +776,10 @@ public final class DiagnosticCodes {
             ESCROW_UNSUPPORTED,
             ESCROW_RECOVERY_OWED,
             TRANSACTION_REVERT_UNAVAILABLE,
-            RULE_STEP_REFERENCE_UNRESOLVED);
+            RULE_STEP_REFERENCE_UNRESOLVED,
+            VERB_BUDGET_SPENT,
+            VERB_REGION_REFUSED,
+            VERB_SETTING_INVALID);
 
     private DiagnosticCodes() {}
 

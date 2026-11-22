@@ -77,13 +77,27 @@ public final class ItemBehaviorListener implements Listener {
                 && event.isCancelled();
     }
 
+    @SuppressWarnings("try") // the scope is entered for its lifetime; nothing reads it
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBreak(org.bukkit.event.block.BlockBreakEvent event) {
         ItemStack tool = event.getPlayer().getInventory().getItemInMainHand();
-        try {
-            behavior.fireItemEvent("break", "", event.getPlayer(), tool, event);
+        // the event's location is the broken block, and that block is still in the world while the rules run: a
+        // break_blocks step leaves it alone, because vanilla finishes breaking it
+        try (var scope = dev.materione.plugin.logic.world.VerbScope.breakEvent(event.getBlock())) {
+            behavior.fireItemEvent("break", "", event.getPlayer(), tool, event, event.getBlock().getLocation(),
+                    faceOf(event.getPlayer()));
         } catch (RuntimeException e) {
             reportBridgeFailure(event.getPlayer(), e);
+        }
+    }
+
+    /** The face of the block the player looks at, as a word ({@code up}, {@code north}, ...), or empty when they look at none. */
+    private static String faceOf(org.bukkit.entity.Player player) {
+        try {
+            var face = player.getTargetBlockFace(6);
+            return face == null ? "" : face.name().toLowerCase(java.util.Locale.ROOT);
+        } catch (RuntimeException unavailable) {
+            return "";
         }
     }
 

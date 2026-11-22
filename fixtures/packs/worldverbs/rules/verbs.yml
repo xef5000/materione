@@ -1,0 +1,19 @@
+# A rule document that uses the verbs on another subject (logic.md sections 39 and 41): `target:` moves the effect, and
+# the harness's players Dasher and Healer join to run them. The lines are read from the console by PaperWorldVerbsIT.
+verbs:
+  description: "Harness and QA: the entity and world verbs on the run's player and on a target"
+  behavior:
+    # T14 without an item: a dash on join. The velocity is read back from the server.
+    - id: dasher_dashes
+      on: player.join
+      if: "player.name == 'Dasher'"
+      do:
+        - velocity: {forward: 1.6, up: 0.3}
+        - run_command: "say MATERIONE-WORLDVERBS-DASHED ${player.name}"
+    # heal on a struck entity: hitting a zombie with anything restores the *struck* zombie's health, not the player's
+    - id: heal_the_struck
+      on: entity.hit
+      type: zombie
+      do:
+        - heal: {amount: 4, target: event.target}
+        - run_command: "say MATERIONE-WORLDVERBS-HEALED ${target.type}"

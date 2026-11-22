@@ -1,0 +1,14 @@
+# T14: right-click launches the player forward with a particle trail, 5 s cooldown. `velocity` is relative to the facing
+# and `particle` appears at the player by default; neither is named for a dash.
+dash_blade:
+  material: IRON_SWORD
+  display_name: "<aqua>Dash Blade"
+  behavior:
+    - id: dash
+      on: click:right
+      cooldown: 5000
+      do:
+        - velocity: {forward: 1.6, up: 0.3}
+        - particle: {particle: cloud, count: 20, offset: 0.3}
+        - sound: entity.ender_dragon.flap
+        - run_command: "say MATERIONE-WORLDVERBS-DASH ${player.name}"

@@ -5,15 +5,6 @@
   "area": "weapon",
   "prompt": "Create a lifesteal dagger that heals the wielder for 20% of the damage dealt.",
   "registry": "plugin-current",
-  "result": "fail",
-  "gaps": ["VERB"],
-  "diagnostics": [
-    {
-      "code": 2339,
-      "line": 8,
-      "gap": "VERB",
-      "messageContains": ["heal", "ActionCatalog"],
-      "missingPrimitive": { "member": "heal", "catalog": "ActionCatalog" }
-    }
-  ]
+  "result": "pass",
+  "gaps": []
 }
