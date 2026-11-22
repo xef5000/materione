@@ -372,6 +372,10 @@ public final class ParseStage {
                         null, new SourceLocation(file.toString(), 1, 1),
                         "use lowercase letters, digits and _ - . / in a resource key"));
             }
+            // a file that declares no resource, or mixes the two shapes, says what shape it should have (#469)
+            for (Diagnostic finding : declared.shape()) {
+                context.diagnostics().publish(finding);
+            }
         }
     }
 
@@ -380,7 +384,6 @@ public final class ParseStage {
     }
 
     private static String stripExtension(String name) {
-        int dot = name.lastIndexOf('.');
-        return dot > 0 ? name.substring(0, dot) : name;
+        return PackResources.stem(name);
     }
 }

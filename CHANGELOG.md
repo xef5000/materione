@@ -476,6 +476,15 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A currency file with its fields at the top level now defines its currency, and a file that defines nothing says so (#469,
+  logic.md section 18, plugin.md section 5).** `currencies/gems.yml` holding `integration: xp` and `display_name: Gems` is the
+  currency `shop:gems`, named by the file, which is the form a single-currency file takes; the keyed form (`gems:` then the
+  fields) is unchanged. The shipped showcase's `currencies/points.yml` was written that way and `showcase:points` was undefined
+  at run time, with nothing reported. A file that declares no resource, or mixes keyed currencies with top-level fields, is now
+  reported as `MTR-0008` with the shape it should have; a flat currency with no `integration` is refused as `MTR-0062` and the
+  message names both shapes. The same report covers every keyed directory (`items/`, `recipes/` and the rest): a file of
+  top-level fields there defines nothing and says so. A top-level key with no value (`sword:` with nothing under it) no longer
+  aborts the whole reload. The lossless round trip is unchanged: a flat file is saved as it was written.
 - **A new block or furniture no longer starts with a texture that resolves to nothing.** The scaffold wrote
   `texture: block/<id>`, which the references stage reported as `MTR-0009` before the author had uploaded anything.
   It now writes a vanilla `minecraft:block/stone` placeholder that dry-runs clean; the form replaces it. Glyph,
