@@ -26,6 +26,17 @@ public interface ContentType {
     SelfDescription describe();
 
     /**
+     * Whether a file of this type may hold one resource as its top-level fields, with the file name as its id
+     * ({@code currencies/gems.yml} with {@code integration: xp} is {@code pack:gems}), beside the keyed form every
+     * type takes (master section 7.2, logic.md section 18, #469). Self-description, so the editor and the code-mode
+     * SDK learn which directories accept the flat form from the registry and keep no list of them (#475). The
+     * pipeline's rule is {@code PackLayout.SINGLE_RESOURCE_DIRS}; a type reports it, it does not restate it.
+     */
+    default boolean flatFile() {
+        return false;
+    }
+
+    /**
      * How a resource of this type is read inside a logic expression, as a template over {@code {pack}},
      * {@code {id}} and {@code {<field>}} (a field of the resource), or {@code null} when a resource of this type
      * is not something an expression reads. A declared variable reads as {@code vars.{scope}.{pack}.{id}}

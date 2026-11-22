@@ -614,7 +614,8 @@ Rules that matter for robustness and tooling:
   small and atomic.) One exception, for a directory that names it (`currencies/`, logic.md §18, #469): a file with
   no keyed resource and with top-level fields is one resource, named by the file's name and holding those fields.
   A file that mixes the two shapes, or declares nothing, is reported (`MTR-0008`, plugin.md §5) with the shape it
-  should have; no directory takes the flat form unless it is named there.
+  should have; no directory takes the flat form unless it is named there. The editor and code mode see a flat file as the
+  one resource it holds (listing, form, edits written at the file's top level with the file otherwise untouched; #475).
 - **Content directories may have subfolders.** Every `*.yml` beneath a content directory, at any
   depth, is a content document (`items/weapons/sword.yml`); dot-directories such as
   `.materione/` are never content. A resource's identity is its key, never its path, so folders

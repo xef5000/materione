@@ -64,6 +64,12 @@ export interface TypeInfo {
   directory?: string;
   displayName: string;
   description: string;
+  /**
+   * A file of this type may hold ONE resource as its top-level fields, with the file name as its id (a flat file,
+   * issue 475). The server lists, reads and edits it like a keyed resource, so no editor code reads the shape; the
+   * flag is for what the author is told (a rename of such a file renames the resource). Absent: only the keyed form.
+   */
+  flatFile?: boolean;
   parameters: TypeParam[];
 }
 

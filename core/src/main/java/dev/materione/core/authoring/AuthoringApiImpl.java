@@ -23,6 +23,7 @@ import dev.materione.core.document.ModelTransaction;
 import dev.materione.core.document.ModelTransactionService;
 import dev.materione.core.document.Scaffolds;
 import dev.materione.core.pipeline.PackLayout;
+import dev.materione.core.pipeline.PackResources;
 import dev.materione.core.pipeline.TemplateResolver;
 import dev.materione.core.pipeline.graph.ContentGraph;
 import java.io.IOException;
@@ -667,7 +668,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
                     request.pack() + "/" + path);
             reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), path));
             return ApiResult.ok(new DocumentView(
-                    request.pack(), path, content, parsed(content),
+                    request.pack(), path, content, parsed(path, content),
                     revision, Documents.sha256(content), Map.of()));
         } catch (NoSuchFileException e) {
             return missing("no such document");
@@ -835,7 +836,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     static List<DocumentStore.FieldEdit> detachEdits(
             String pack, String path, String raw, String resourceId,
             Map<String, Map<String, Object>> templatePool) {
-        var parsedSource = LosslessYaml.parse(raw);
+        var parsedSource = PackResources.keyedView(path, LosslessYaml.parse(raw));
         if (parsedSource.parseError().isPresent()) {
             throw new IllegalArgumentException(
                     "cannot detach in a file that does not parse: " + parsedSource.parseError().get());
@@ -916,7 +917,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     static TemplateDocument templateDocument(
             String pack, String fromPath, String raw, String resourceId, String templateId, List<String> fields,
             java.util.function.Predicate<String> templateExists) {
-        var parsedSource = LosslessYaml.parse(raw);
+        var parsedSource = PackResources.keyedView(fromPath, LosslessYaml.parse(raw));
         if (parsedSource.parseError().isPresent()) {
             throw new IllegalArgumentException(
                     "cannot read a file that does not parse: " + parsedSource.parseError().get());
@@ -1065,15 +1066,21 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * unknown fields survive the copy (§5.6).
      */
     private String rekeyedCopy(String pack, String fromPath, String newId) throws java.io.IOException {
-        return rekeyedCopy(documents.read(pack, fromPath).raw(), newId);
+        return rekeyedCopyOf(fromPath, documents.read(pack, fromPath).raw(), newId);
     }
 
-    /** {@link #rekeyedCopy(String, String, String)} on text already in hand: the authoring transaction's copy. */
-    static String rekeyedCopy(String raw, String newId) {
+    /**
+     * {@link #rekeyedCopy(String, String, String)} on text already in hand: the authoring transaction's copy. A flat
+     * file (#475) has no key to change: the copy is its text unchanged, and the new file's name is the new id.
+     */
+    static String rekeyedCopyOf(String fromPath, String raw, String newId) {
         var parsedSource = LosslessYaml.parse(raw);
         if (parsedSource.parseError().isPresent()) {
             throw new IllegalArgumentException(
                     "cannot copy a file that does not parse: " + parsedSource.parseError().get());
+        }
+        if (PackResources.flatId(fromPath, parsedSource).isPresent()) {
+            return raw;
         }
         String sourceId = String.valueOf(parsedSource.data().keySet().iterator().next());
         return raw.replaceFirst(
@@ -1210,8 +1217,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
     }
 
     private static List<BulkFieldChange> changes(DocumentStore.BatchOutcome outcome, List<FieldEdit> edits) {
-        Map<String, Object> before = outcome.before() == null ? null : parsed(outcome.before());
-        Map<String, Object> after = parsed(outcome.after().raw());
+        Map<String, Object> before = outcome.before() == null ? null : parsed(outcome.path(), outcome.before());
+        Map<String, Object> after = parsed(outcome.path(), outcome.after().raw());
         List<BulkFieldChange> out = new ArrayList<>();
         for (FieldEdit edit : edits) {
             Object was = valueAt(before, edit.field());
@@ -1267,7 +1274,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
 
     /** The store's document as the API sees it, with computed metadata attached. */
     private DocumentView view(DocumentStore.Document document) {
-        Map<String, Object> tree = parsed(document.raw());
+        Map<String, Object> tree = parsed(document.path(), document.raw());
         Map<String, Object> computed = Map.of();
         if (computedMeta != null && tree != null) {
             Map<String, Object> metadata = computedMeta.compute(document.pack(), document.path(), tree);
@@ -1372,14 +1379,19 @@ public final class AuthoringApiImpl implements AuthoringApi {
     }
 
     /**
-     * The parsed tree as plain string-keyed maps, or null when the YAML does
-     * not parse. YAML-1.1 boolean keys (a bare ECA {@code on:}) are
-     * normalized at every depth so the editor sees the key the author wrote.
+     * The parsed tree as plain string-keyed maps, keyed by resource id, or null
+     * when the YAML does not parse. YAML-1.1 boolean keys (a bare ECA
+     * {@code on:}) are normalized at every depth so the editor sees the key the
+     * author wrote. A flat file (#475) reads as {@code {file name: its fields}},
+     * so the editor and the code-mode reads see the one resource it holds as
+     * they see any other.
+     *
+     * @param path the document's pack-relative path, which says whether it is flat
      */
     @SuppressWarnings("unchecked")
-    static Map<String, Object> parsed(String raw) {
+    static Map<String, Object> parsed(String path, String raw) {
         try {
-            var document = LosslessYaml.parse(raw);
+            var document = PackResources.keyedView(path, LosslessYaml.parse(raw));
             return document.parseError().isPresent()
                     ? null : (Map<String, Object>) LosslessYaml.stringKeyedDeep(document.data());
         } catch (RuntimeException e) {
@@ -1492,9 +1504,11 @@ public final class AuthoringApiImpl implements AuthoringApi {
         }
         for (Path file : PackLayout.contentDocuments(packDir, contentDir, failure -> { })) {
             try {
-                var document = LosslessYaml.parse(Files.readString(file));
+                String relative = packDir.relativize(file).toString().replace('\\', '/');
+                // a flat file (#475) declares one resource, named by the file
+                var document = PackResources.keyedView(relative, LosslessYaml.parse(Files.readString(file)));
                 if (document.parseError().isEmpty() && document.data().get(id) instanceof Map<?, ?>) {
-                    return packDir.relativize(file).toString().replace('\\', '/');
+                    return relative;
                 }
             } catch (IOException e) {
                 // unreadable: the pipeline reports it; not a duplicate this check can prove

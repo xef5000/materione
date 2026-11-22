@@ -45,6 +45,15 @@ public final class CurrencyType implements ContentType {
         return "currencies";
     }
 
+    /**
+     * Reports the pipeline's rule, never a copy of it: the directory is in the layout's list of those that take a
+     * file of top-level fields as one resource (#469), which the editor and the SDK read from the self-description (#475).
+     */
+    @Override
+    public boolean flatFile() {
+        return dev.materione.core.pipeline.PackLayout.SINGLE_RESOURCE_DIRS.contains(directory());
+    }
+
     @Override
     public SelfDescription describe() {
         return new SelfDescription(

@@ -95,6 +95,30 @@ describe('listing', () => {
     expect(rows[0]).toMatchObject({ id: 'ruby_sword', name: 'Ember Blade', summary: summaries[0] });
   });
 
+  it('lists a flat single-resource file as one resource named by the file (#475)', () => {
+    // `currencies/gems.yml` holds one currency as its top-level fields: the server lists it as the id `gems`,
+    // beside a keyed file's resources, and the browser reads both the same way
+    const currencies: ResourceRef[] = [
+      { pack: 'shop', type: 'currencies', path: 'currencies/gems.yml', id: 'gems' },
+      { pack: 'shop', type: 'currencies', path: 'currencies/bank.yml', id: 'coins' },
+      { pack: 'shop', type: 'currencies', path: 'currencies/bank.yml', id: 'bucks' },
+    ];
+    const rows = listing('currencies', '', currencies, ['currencies']);
+    expect(rows.map((row) => `${row.name}:${row.path}`)).toEqual([
+      'Bucks:currencies/bank.yml',
+      'Coins:currencies/bank.yml',
+      'Gems:currencies/gems.yml',
+    ]);
+    const gems = rows.find((row) => row.id === 'gems')!;
+    expect(gems.ids).toEqual(['gems']);
+    expect(gems.resource).toEqual(currencies[0]);
+    // the type's self-description says it takes the form; the tab list is unaffected by it
+    const types: TypeInfo[] = [
+      { name: 'currency', directory: 'currencies', displayName: 'Currency', description: '', flatFile: true, parameters: [] },
+    ];
+    expect(typeTabs(types).filter((tab) => tab.enabled).map((tab) => tab.directory)).toEqual(['currencies']);
+  });
+
   it('shows and searches formatted names without legacy color codes', () => {
     const ruby = resources[0]!;
     const summaries: ResourceSummary[] = [{

@@ -215,7 +215,10 @@ field edits that take it to the edited state; they do that through a new seam on
 `GuiAuthoringApi.stage` (§3.9, §3.12), which take the parsed tree instead of reading the store. `edit` on each surface is now
 `read, check revision, stage, setFields`, with the same refusals and the same field edits as before. `detachTemplate`,
 `saveAsTemplate`, the create scaffold and the re-keyed copy are likewise pure functions of the text and the template pool that
-`AuthoringApiImpl` shares between the single call and the transaction. The template pool a detach or a save resolves against is the
+`AuthoringApiImpl` shares between the single call and the transaction. A **flat file** (a directory that takes one resource as the
+file's top-level fields, `currencies/gems.yml`, #475) is edited by the same field edits addressed `[gems, field]`: `patched`
+makes them on the file's own top level through `PackResources.keyedView`, so the transaction needs no second path and the file
+keeps its shape; its copy is a flat file named by the new id, and a `Move` of it renames the resource. The template pool a detach or a save resolves against is the
 stored one with the list's own templates and items laid over it (and what the list deleted or moved away taken out), so a list may
 save a template, create an item that links it and detach it.
 

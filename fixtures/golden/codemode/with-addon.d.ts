@@ -180,6 +180,7 @@ interface CommandHandle extends ResourceHandle<"command", CommandFields> {}
 /**
  * A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.
  * Content type `currency`, stored under `currencies/`.
+ * A file may also hold one currency as its top-level fields, with the file name as its id; it is read, listed and edited like a keyed one, and keeps its shape when edited.
  */
 interface CurrencyFields {
   /**

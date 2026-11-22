@@ -904,6 +904,10 @@ public final class EditorContentOps {
         if (type.expressionForm() != null) {
             object.addProperty("expressionForm", type.expressionForm());
         }
+        // a file of this type may hold one resource as its top-level fields, named by the file (#475); only when true
+        if (type.flatFile()) {
+            object.addProperty("flatFile", true);
+        }
         var params = new com.google.gson.JsonArray();
         description.parameters().forEach(param -> params.add(paramJson(param)));
         object.add("parameters", params);

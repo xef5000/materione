@@ -68,15 +68,35 @@ class CurrencyFileShapeTest {
     }
 
     @Test
-    void theReadViewOfAFlatFileRefusesEditsAndKeepsTheFileText(@TempDir Path packsRoot) throws IOException {
+    void theViewOfAFlatFileTakesAnEditAddressedToItsResourceAndWritesTheFileTopLevel(@TempDir Path packsRoot)
+            throws IOException {
+        String text = "integration: xp\n# kept\ndisplay_name: Gems\n";
+        writePack(packsRoot, "shop", "currencies/gems.yml", text);
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        var view = resource("shop:gems").document();
+        // the view saves the file as written, and an untouched save is byte-identical
+        assertThat(view.save()).isEqualTo(text);
+        var edited = view.withScalar("Jewels", "gems", "display_name");
+        assertThat(edited.save()).isEqualTo("integration: xp\n# kept\ndisplay_name: Jewels\n");
+        // the result is a view again: the same resource, and it takes the next edit
+        assertThat(edited.data()).containsOnlyKeys("gems");
+        assertThat(edited.withoutNode("gems", "display_name").save()).isEqualTo("integration: xp\n# kept\n");
+    }
+
+    @Test
+    void theViewOfAFlatFileRefusesWhatWouldChangeItsShape(@TempDir Path packsRoot) throws IOException {
         String text = "integration: xp\ndisplay_name: Gems\n";
         writePack(packsRoot, "shop", "currencies/gems.yml", text);
         assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
         var view = resource("shop:gems").document();
-        assertThatThrownBy(() -> view.withScalar("Jewels", "gems", "display_name"))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> view.withoutNode("gems", "display_name"))
-                .isInstanceOf(UnsupportedOperationException.class);
+        // another resource, and the whole file, are not fields of this one
+        assertThatThrownBy(() -> view.withScalar("x", "coins", "display_name"))
+                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("no resource 'coins'");
+        assertThatThrownBy(() -> view.withoutNode("gems"))
+                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("whole file");
+        // a mapping at the top level would make the file keyed, so its fields would stop being fields
+        assertThatThrownBy(() -> view.withNode(Map.of("a", 1), "gems", "options"))
+                .isInstanceOf(UnsupportedOperationException.class).hasMessageContaining("keyed");
         assertThat(view.save()).isEqualTo(text);
     }
 

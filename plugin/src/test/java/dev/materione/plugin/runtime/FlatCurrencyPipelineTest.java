@@ -65,6 +65,20 @@ class FlatCurrencyPipelineTest {
         });
     }
 
+    /**
+     * The self-description is how the editor and the SDK learn which directories take a flat file (#475): a registered
+     * type reports it exactly where the layout takes it, so the rule is stated once and read everywhere.
+     */
+    @Test
+    void aTypeReportsTheFlatFormExactlyWhereTheLayoutTakesIt() {
+        var types = pipeline.contentTypes();
+        assertThat(types).isNotEmpty().allSatisfy(type -> assertThat(type.flatFile())
+                .as(type.directory())
+                .isEqualTo(dev.materione.core.pipeline.PackLayout.SINGLE_RESOURCE_DIRS.contains(type.directory())));
+        assertThat(types).extracting(dev.materione.api.content.ContentType::directory)
+                .containsAll(dev.materione.core.pipeline.PackLayout.SINGLE_RESOURCE_DIRS);
+    }
+
     /** The live currencies of one pack's file, built the way a reload builds them: parse, then the shadow. */
     private List<Currency> currenciesOf(String packId, Path file) throws IOException {
         var declared = PackResources.declared(packId, "currencies", file,

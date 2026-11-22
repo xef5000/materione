@@ -105,6 +105,12 @@ export interface SurfaceContentType {
    * Absent: an expression does not read one.
    */
   expressionForm?: string;
+  /**
+   * A file of this type may also hold ONE resource as its top-level fields, with the file name as its id (a flat
+   * file): the server reads, lists and edits it as it does a keyed resource, so a program addresses it the same
+   * way. Absent: only the keyed form.
+   */
+  flatFile?: true;
   parameters: SurfaceParam[];
 }
 
@@ -369,6 +375,7 @@ export function assembleSurface(describe: unknown, capabilities: readonly string
       displayName: text(raw.displayName) ?? name,
       description: text(raw.description) ?? '',
       expressionForm: text(raw.expressionForm),
+      flatFile: raw.flatFile === true ? true : undefined,
       parameters: params(raw.parameters),
     });
   });

@@ -341,7 +341,9 @@
         ? 'the entries inside move with it'
         : entry.ids.length > 1
           ? `renames the document only; all ${entry.ids.length} resources stay in it with their current ids`
-          : 'renames the document path; the resource id stays the same',
+          : workspace.types.find((type) => type.directory === entry.resource?.type)?.flatFile
+            ? 'renames the document path; the resource id stays the same, unless the file holds its fields with no id above them: then the file name is the id'
+            : 'renames the document path; the resource id stays the same',
       onOk: (value) => {
         dialog = null;
         void run('rename', async () => {

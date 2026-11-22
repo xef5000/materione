@@ -53,6 +53,41 @@ public final class PackResources {
     }
 
     /**
+     * The id a flat file declares: its file name, when the file is flat (#469, #475). A file is flat when its
+     * directory is in {@link PackLayout#SINGLE_RESOURCE_DIRS}, it parsed, and it has top-level fields and no top-level
+     * mapping (a mapping is a keyed resource). Empty for any other file, and for a flat file whose name is not a valid
+     * id (such a file declares no resource, so there is none to address).
+     *
+     * @param path the pack-relative path ({@code currencies/gems.yml}); only its directory and file name are read
+     */
+    public static java.util.Optional<String> flatId(String path, LosslessYamlDocument document) {
+        int slash = path.indexOf('/');
+        if (slash <= 0 || !PackLayout.SINGLE_RESOURCE_DIRS.contains(path.substring(0, slash))
+                || document.parseError().isPresent() || document.data().isEmpty() || document.hasTopLevelMapping()) {
+            return java.util.Optional.empty();
+        }
+        String id = stem(path.substring(path.lastIndexOf('/') + 1));
+        try {
+            NamespacedId.of("pack", id);
+        } catch (IllegalArgumentException invalid) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(id);
+    }
+
+    /**
+     * The document as every consumer of resources reads it, keyed by resource id: a flat file reads through its view
+     * ({@link LosslessYamlDocument#asSingleResource}), which also takes an edit addressed {@code [id, field...]} and
+     * writes the field at the file's top level; any other document is itself. The one place the editor, the
+     * authoring transactions and the code-mode reads learn a file's shape (D6), beside {@link #declared}.
+     *
+     * @param path the pack-relative path ({@code currencies/gems.yml})
+     */
+    public static LosslessYamlDocument keyedView(String path, LosslessYamlDocument document) {
+        return flatId(path, document).map(document::asSingleResource).orElse(document);
+    }
+
+    /**
      * The resources of {@code document}, read from {@code file} under content directory {@code directory} of
      * {@code packId}. A document that did not parse declares nothing; a key whose value is not a mapping is not a
      * resource; a key that is not a valid id is reported in {@link Declared#malformedKeys()} and skipped.
