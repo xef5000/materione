@@ -26,6 +26,15 @@ public final class PackLayout {
             "templates", "items", "recipes", "blocks", "furnitures", "glyphs", "sounds", "paintings",
             "effects", "guis", "variables", "currencies", "rules", "commands", "menus", "dialogs", "huds");
 
+    /**
+     * Content directories whose file may hold one resource as its top-level fields, with the file name as the id
+     * (#469): {@code currencies/gems.yml} with {@code integration: xp} is the currency {@code pack:gems}. A keyed file
+     * (each top-level key a resource id) is the form every directory takes; a directory listed here also accepts the
+     * flat form, and its type validates the fields. A directory is added here only when its type rejects a flat file
+     * that lacks what the type needs, with a diagnostic that names the expected shape.
+     */
+    public static final List<String> SINGLE_RESOURCE_DIRS = List.of("currencies");
+
     /** The manifest file at a pack root. */
     public static final String MANIFEST_FILE = "pack.yml";
 

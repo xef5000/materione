@@ -299,6 +299,10 @@ identically (D6).
   (forward slashes, natural string order), never in filesystem order.
 - **Identity is the top-level key.** A file holds one content type and any number of keyed
   resources; its path never names one, so moving a file between folders renames nothing.
+  The one exception is a directory in `PackLayout.SINGLE_RESOURCE_DIRS` (`currencies/`, #469): a file
+  with no keyed resource and with top-level fields is one resource, named by the file's name, and its
+  fields are that resource's (`PackResources.declared` reads the document as `{<file name>: fields}`,
+  and the read view refuses edits, so the file is saved as written). A keyed file is read as before.
   Two declarations of one id and content type in the same pack, in siblings or across folders,
   resolve identically and are never order-dependent: the **first** document in discovery order
   keeps the id; every later declaration is excluded before validation, the graph and compile (it is
@@ -439,6 +443,15 @@ editor (inline squiggles + diagnostics center), and in `/materione doctor`.
   the first fatal reason (`resource ns:id quarantined: unresolved texture '…'`) and carries that
   reason's target; the full reason list stays in the quarantine tracker.
 
+The file's shape is checked at parse (#469, §4.2). A content file declares its resources by top-level key, and a
+file that declares none, or whose top-level fields sit beside keyed resources where the directory takes the flat
+form, is reported with the shape it should have. Its keyed resources still load, and nothing is dropped without a
+diagnostic:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0008` | error | A content file declares no resource of its type: it is empty, or its top-level keys are fields with no id (`material: STICK` in `items/`, which needs `sword:` above the fields). A key with no fields beneath it (`sword:` alone) is reported and the file's other resources still load. Or, in `currencies/`, it mixes keyed currencies with top-level fields (the fields are ignored), or its flat currency is named by a file name that is not a valid id. The message names the file and the shape: key each resource by its id with its fields indented beneath it, or, in `currencies/`, write one currency's fields at the top level under a valid file name. Fix the file, then reload. |
+
 The M5 catalog has a separate read-only guard ([`api.md`](api.md) section 3.3):
 
 | Code | Severity | Meaning and recovery |
@@ -493,7 +506,7 @@ step is found at load rather than when a player first triggers it:
 | `MTR-0082` | error | A `prompt` step writes its answer to a persistent variable (`player.coins`, `server.shop.season`), or to a name that is not a run-local or `session.<name>`. The step is skipped at load; a prompt answers into the run or the open GUI only (logic.md §6.6). |
 | `MTR-0083` | warning | The GUI a prompt hid could not be shown again when the prompt ended: the server refused the window, or the GUI went away while the player answered. The player is told; a GUI that is gone ends its session (logic.md §6.6, §29). |
 | `MTR-0084` | warning | A prompt's input method could not start for the player: the method is unavailable on this build (the `sign` editor, which needs Paper's client-only `openVirtualSign`, logic.md §29), the server refused an anvil, the method threw, or a `session.<name>` answer had no open GUI. The step takes its `else:`; rate-limited per code (logic.md §6.6, §29). |
-| `MTR-0062` | warning | A currency file (`currencies/*.yml`, logic.md §18) was quarantined: it does not parse (no `integration`, a bad `decimals`), it is in the reserved `materione` namespace, or its integration rejected its keys when bound at apply. The rest of the pack loads. Fix the file, then reload. |
+| `MTR-0062` | warning | A currency file (`currencies/*.yml`, logic.md §18) was quarantined: it does not parse (no `integration`, a bad `decimals`, whether keyed by id or flat with the file name as the id), it is in the reserved `materione` namespace, or its integration rejected its keys when bound at apply. The message names both shapes a currency file may take. The rest of the pack loads. Fix the file, then reload. |
 
 The M6 flow compiler and interpreter ([`logic.md`](logic.md) §5, §16) add three codes. Every one carries
 the step path of what it is about (`behavior.2.do.0.then.1`) as its target:

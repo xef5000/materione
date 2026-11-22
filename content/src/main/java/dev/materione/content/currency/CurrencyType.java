@@ -16,8 +16,10 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The named-currency content type (logic.md §18): {@code currencies/*.yml}, each file one currency
- * under its pack's namespace ({@code shop:gems}). A currency has a display name, a symbol, a number of
+ * The named-currency content type (logic.md §18): {@code currencies/*.yml}, each currency under its pack's namespace
+ * ({@code shop:gems}). A file keys each currency by its id, or, with no id, holds one currency as its top-level fields
+ * and is named by the file (#469: {@code currencies/gems.yml} with {@code integration: xp} is {@code shop:gems}). A
+ * currency has a display name, a symbol, a number of
  * decimals, and the integration that answers for its money; the rest of the mapping belongs to that
  * integration and is kept as authored, so a currency round-trips losslessly and the integration reads
  * its own keys at bind time.

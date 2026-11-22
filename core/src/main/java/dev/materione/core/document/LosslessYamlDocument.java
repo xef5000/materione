@@ -1,6 +1,8 @@
 package dev.materione.core.document;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,11 +32,35 @@ public final class LosslessYamlDocument {
     private final String raw;
     private final Map<String, Object> data;
     private final String parseError;
+    /** True for the read view of a flat file (see {@link #asSingleResource}): the text is the file's, not the view's. */
+    private final boolean singleResourceView;
 
     LosslessYamlDocument(String raw, Map<String, Object> data, String parseError) {
+        this(raw, data, parseError, false);
+    }
+
+    private LosslessYamlDocument(String raw, Map<String, Object> data, String parseError, boolean singleResourceView) {
         this.raw = Objects.requireNonNull(raw, "raw");
-        this.data = Map.copyOf(data);
+        // a top-level key with no value (`sword:` with nothing under it) is a null value, not a reason to refuse the file
+        this.data = Collections.unmodifiableMap(new LinkedHashMap<>(data));
         this.parseError = parseError;
+        this.singleResourceView = singleResourceView;
+    }
+
+    /**
+     * The read view of a flat document (#469): the document's own top-level fields, read as the one resource {@code key}
+     * of the file, so {@code data()} is {@code {key: fields}} exactly as a keyed document of that resource reads. The
+     * text is still the file's: {@link #save()} returns it unchanged, and an edit on the view is refused, because an
+     * edit of a flat file is an edit of the file as it is written. A document that did not parse has no view.
+     *
+     * @param key the resource id the file's name gives (the file name without its {@code .yml})
+     */
+    public LosslessYamlDocument asSingleResource(String key) {
+        Objects.requireNonNull(key, "key");
+        if (parseError != null) {
+            return this;
+        }
+        return new LosslessYamlDocument(raw, Map.<String, Object>of(key, data), null, true);
     }
 
     /** Non-null when the file failed to parse (already reflected in the data view being empty). */
@@ -84,6 +110,7 @@ public final class LosslessYamlDocument {
      * {@link UnsupportedOperationException} says so instead of guessing.
      */
     public LosslessYamlDocument withScalar(Object value, String... path) {
+        refuseEditOfView();
         if (path.length == 0) {
             throw new IllegalArgumentException("empty path");
         }
@@ -157,6 +184,7 @@ public final class LosslessYamlDocument {
      * so simple fields keep producing one-line diffs.
      */
     public LosslessYamlDocument withNode(Object value, String... path) {
+        refuseEditOfView();
         if (path.length == 0) {
             throw new IllegalArgumentException("empty path");
         }
@@ -211,6 +239,7 @@ public final class LosslessYamlDocument {
      * {@link UnsupportedOperationException} rather than guessed at.
      */
     public LosslessYamlDocument withoutNode(String... path) {
+        refuseEditOfView();
         if (path.length == 0) {
             throw new IllegalArgumentException("empty path");
         }
@@ -354,6 +383,13 @@ public final class LosslessYamlDocument {
             return items.isEmpty() ? "[]" : "";
         }
         return render(value);
+    }
+
+    private void refuseEditOfView() {
+        if (singleResourceView) {
+            throw new UnsupportedOperationException(
+                    "a flat document is read as one resource; edit the file as it is written");
+        }
     }
 
     /** Re-derives the data view after an edit (formatting is already correct). */

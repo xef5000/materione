@@ -1,0 +1,6 @@
+# Deliberately mixed (logic.md section 18, #469): a keyed currency next to top-level fields. A currency file is either keyed
+# by currency id, or it is one currency as top-level fields with the file name as the id. The keyed currency still loads;
+# the top-level fields are reported with MTR-0008, naming the shape the file should have.
+gems:
+  integration: xp
+integration: xp

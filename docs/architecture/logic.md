@@ -1510,6 +1510,12 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
    keys are `integration` (required), `display_name` (defaults to the id's name), `symbol` (blank by
    default) and `decimals` (0 to 6, default 2). Every other key belongs to the integration and is kept as
    authored, so the file round-trips losslessly and the integration reads its own keys at bind time.
+   A file takes one of two shapes (#469, master §7.2). **Keyed**: each top-level key is a currency id with its fields
+   beneath it (`gems:` then `integration: xp`), and a file holds any number. **Flat**: the file's top-level keys are
+   one currency's fields and the file name is its id, so `currencies/gems.yml` with `integration: xp` is `shop:gems`.
+   A file that mixes the two, or declares no currency, is reported (`MTR-0008`, plugin.md §5), and a flat file with no
+   `integration` is refused as `MTR-0062` with both shapes named. The editor's new-currency scaffold writes the keyed
+   form; the flat form is for a file written by hand.
 2. **Money is runtime state, so nothing is emitted to the pack.** The type's `compile` is a no-op. The
    defined currencies travel as a runtime view (`RuntimeCurrencies`) built by the same apply that builds
    items and sounds, and they swap with it (D6). The catalog never stores a balance.
@@ -5028,13 +5034,17 @@ balances between two fake players. The QA catalog's `economy` suite (`qa/catalog
 the refusal a player can see on the probe, which has no economy provider and needs none for it: a bad amount is refused before any currency is
 read, the run carries on, and the server logs `MTR-0120`. A payment on the probe is not covered, because the probe does not install the stub.
 
-**Found while testing (not fixed here).** A currency file is a *document of currencies*: each top-level key is the currency's id and its
-value is the mapping (`qa_xp:` in `fixtures/packs/probe/currencies/qa_xp.yml`). A file whose keys sit at the top level (`integration: xp` with
-no id above it) defines **no** currency, and nothing reports it: `PackResources.declared` finds no resource and the file is dropped silently.
-`fixtures/packs/showcase/currencies/points.yml` is written that way, so by the same mechanism `showcase:points` is undefined at run time (inferred from
-the code path; the showcase pack was not booted to confirm it). The economy pack (`fixtures/packs/economy/currencies/coins.yml`) was written the same way first and failed for
-this reason. Two follow-ups for the owner: fix the showcase file (its `ShowcasePackTest` reads the file text, so it moves with the fix), and
-decide whether a currency-shaped file with no id should be a diagnostic (a warning, like `MTR-0021` for a command document with no usable name).
+**Found while testing, fixed in #469.** A currency file with its fields at the top level (`integration: xp` with no id above it) defined
+**no** currency, and nothing reported it: `PackResources.declared` found no resource and the file was dropped silently. So
+`fixtures/packs/showcase/currencies/points.yml` left `showcase:points` undefined at run time, and the economy fixture's `coins.yml`
+failed the same way before it was keyed. A pipeline test confirmed it on the showcase pack (`CurrencyFileShapeTest`: the live currencies
+were `economy:coins` and the probe's, never `showcase:points`). The fix accepts the flat form for `currencies/` (item 1 above), reports
+a file that declares no resource or mixes the two shapes as `MTR-0008`, and keeps the showcase file flat, so the QA showcase entries
+(`showcase.shop-buy-with-points`, `showcase.shop-buy-refused-without-points`) exercise the flat form on a live server; they are not run
+here. Two things stay open. The web editor's resource forms read keyed documents only, so a flat currency file is not offered as a
+resource there (a follow-up for the editor). A top-level key with no value (`sword:` with nothing under it) used to abort the whole reload,
+because the lossless document refused null values; it now reads as null, and a keyed file reports that key with `MTR-0008` while its
+other resources load.
 
 ### Decisions taken on review (#464)
 

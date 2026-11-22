@@ -803,8 +803,11 @@ public final class PipelineService {
         }
         if (parsed.isEmpty()
                 || !(parsed.get() instanceof dev.materione.content.currency.CurrencyDefinition definition)) {
+            // a flat file (one currency named by its file) and a keyed file reject alike; the message says both shapes (#469)
             diagnostics.publish(Diagnostic.warn(DiagnosticCodes.CURRENCY_REJECTED,
-                    "currency " + resource.id() + " is malformed; quarantined"));
+                    "currency " + resource.id() + " is malformed; quarantined: a currency file keys each currency by its "
+                            + "id with 'integration: <kind>' beneath it (integration is required, e.g. xp), or holds one "
+                            + "currency as top-level fields with 'integration: <kind>' and the file name as the id"));
             return;
         }
         var currency = definition.currency();

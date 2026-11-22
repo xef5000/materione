@@ -1,5 +1,6 @@
 # The showcase currency (logic.md §18): the built-in XP integration, so the shop runs without Vault. Points are the
-# player's total experience, so `xp add <player> 20 points` funds a purchase.
+# player's total experience, so `xp add <player> 20 points` funds a purchase. A flat file: its fields are the currency and
+# the file name is its id, `showcase:points` (#469). The keyed form (`points:` then these fields) defines the same currency.
 integration: xp
 unit: points
 display_name: Points

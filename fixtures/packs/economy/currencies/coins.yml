@@ -1,6 +1,7 @@
 # The test currency (#464): the harness's own economy provider (harness:stub, EconomyStub in the durability probe). Its balances
 # live in the probe, in memory; nothing ships with this file but the name of the integration. A currency file is a document of
-# currencies, each keyed by its id (as the probe's qa_xp.yml is): flat keys at the top level define no currency.
+# currencies, each keyed by its id (as the probe's qa_xp.yml is). A file with no id, its fields at the top level, is one
+# currency named by the file instead (logic.md section 18, #469); a file that mixes the two shapes is reported.
 coins:
   integration: harness:stub
   display_name: Coins
