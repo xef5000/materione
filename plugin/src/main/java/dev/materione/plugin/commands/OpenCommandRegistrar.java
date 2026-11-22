@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.materione.api.NamespacedId;
@@ -56,8 +56,11 @@ public final class OpenCommandRegistrar {
     /** An alias this registrar has put in the tree, with the argument shape it was built with. */
     private record Owned(List<String> shape) {}
 
-    /** What an alias runs (a GUI it opens, or a command document's flow) and the arguments its command takes. */
-    private record Claim(OpenDeclaration.Kind kind, NamespacedId owner, List<OpenArgSpec> args) {}
+    /**
+     * What an alias runs (a GUI it opens, or a command document's flow), the arguments its command takes, and who may see
+     * it ({@code gate}: its permission and whether it is always visible), which a player's synced tree depends on.
+     */
+    private record Claim(OpenDeclaration.Kind kind, NamespacedId owner, List<OpenArgSpec> args, String gate) {}
 
     private final Plugin plugin;
     private final OpenCommandHandler handler;
@@ -67,6 +70,8 @@ public final class OpenCommandRegistrar {
     private final LongSupplier clock;
     private final SchedulingGateway scheduling;
     private final Map<String, Owned> owned = new HashMap<>();
+    /** Who may see each declared alias, as of the last bind: a change re-sends the players their tree (logic.md section 40). */
+    private Map<String, String> gates = Map.of();
     /** Declared aliases the last COMMANDS event refused: no reload is asked for them until the next event. */
     private Set<String> refused = Set.of();
     /** Aliases a reload did not put in the tree, and which must not ask for another until the next event. */
@@ -155,6 +160,7 @@ public final class OpenCommandRegistrar {
         rejected.removeAll(bound.keySet());
         refused = Set.copyOf(rejected);
         handler.rebind(bound);
+        gates = gatesOf(claims, bound.keySet());
         plugin.getLogger().info("MATERIONE-OPEN-TREE declared=" + claims.size() + " registered=" + owned.size());
     }
 
@@ -184,14 +190,17 @@ public final class OpenCommandRegistrar {
             next.put(alias, new OpenCommandHandler.Binding(claim.kind(), claim.owner()));
         }
         Map<String, OpenCommandHandler.Binding> before = handler.bindings();
+        Map<String, String> nextGates = gatesOf(claims, next.keySet());
+        boolean regated = !nextGates.equals(gates);
+        gates = nextGates;
         handler.rebind(next);
         if (!stale.isEmpty()) {
             reloadTree(stale);
         } else {
             cancelReload();
         }
-        if (treeOpen && !before.equals(next)) {
-            sendTree();
+        if (treeOpen && (!before.equals(next) || regated)) {
+            sendTree(); // a permission or a visible: that changed shows or hides the command in a synced tree only now
         }
     }
 
@@ -269,6 +278,17 @@ public final class OpenCommandRegistrar {
         cancelReload();
     }
 
+    private static Map<String, String> gatesOf(Map<String, Claim> claims, Set<String> aliases) {
+        var out = new HashMap<String, String>();
+        for (String alias : aliases) {
+            Claim claim = claims.get(alias);
+            if (claim != null) {
+                out.put(alias, claim.gate());
+            }
+        }
+        return out;
+    }
+
     /** Sends each online player the command tree again, so their suggestions follow the change. */
     private void sendTree() {
         try {
@@ -303,7 +323,8 @@ public final class OpenCommandRegistrar {
         for (OpenDeclaration declaration : declarations) {
             OpenPlan plan = declaration.plan();
             for (String alias : plan.commands()) {
-                var claim = new Claim(declaration.kind(), declaration.id(), plan.args());
+                var claim = new Claim(declaration.kind(), declaration.id(), plan.args(),
+                        plan.visibleAlways() ? "always" : String.valueOf(plan.permission()));
                 if (claims.containsKey(alias)) {
                     if (report) {
                         conflict(claim, alias, "is already the " + (claims.get(alias).kind() == OpenDeclaration.Kind.GUI
@@ -337,7 +358,7 @@ public final class OpenCommandRegistrar {
         return OpenCommandTree.build(
                 alias,
                 args,
-                source -> handler.declared(alias),
+                source -> handler.visibleTo(alias, source.getSender()),
                 context -> handler.run(alias, context),
                 argument -> handler.suggestions(alias, argument));
     }

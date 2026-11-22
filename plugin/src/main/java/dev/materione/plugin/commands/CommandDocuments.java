@@ -8,7 +8,7 @@ import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.ParsedRules;
 import dev.materione.content.commands.CommandDefinition;
 import dev.materione.content.commands.CommandType;
-import dev.materione.plugin.gui.open.OpenPlan;
+import dev.materione.plugin.commands.OpenPlan;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.Optional;
@@ -39,8 +39,9 @@ public final class CommandDocuments {
     public static Optional<RuntimeCommands.Live> compile(
             CommandDefinition command, LogicLookup lookup, Consumer<Diagnostic> report) {
         // the flow first: a command whose steps do not load claims no name, so it cannot shadow another's
+        // the throttle keys (cooldown, charges, per, on_cooldown) are the rule's own, read by the one rule compiler
         ParsedRules flow = FlowCompiler.document(
-                command.id(), CommandType.TRIGGER, command.steps(), command.flows(), lookup);
+                command.id(), CommandType.TRIGGER, command.steps(), command.flows(), command.raw(), lookup);
         flow.problems().forEach(report);
         var names = new LinkedHashSet<String>();
         for (String name : command.spec().commands()) {
@@ -60,8 +61,7 @@ public final class CommandDocuments {
         OpenPlan compiled = OpenPlan.compile(
                 command.id(), command.spec(), command.flows(), CommandType.TRIGGER, "", lookup);
         compiled.problems().forEach(report);
-        var plan = new OpenPlan(new ArrayList<>(names), compiled.args(), compiled.permission(), compiled.requirement(),
-                compiled.hasRequirement(), compiled.deny(), compiled.problems());
+        var plan = compiled.withCommands(new ArrayList<>(names));
         return Optional.of(new RuntimeCommands.Live(
                 command.id(), command.description(), plan, command.console(), flow.rules().get(0)));
     }

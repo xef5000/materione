@@ -125,7 +125,9 @@ public final class GuiTriggers {
                 ContextVariable.of("server.online", ParameterType.INTEGER, "Players online"),
                 ContextVariable.of("server.max", ParameterType.INTEGER, "Player slots"),
                 ContextVariable.of("gui.id", ParameterType.STRING, "The GUI's id, pack:name"),
-                ContextVariable.of("gui.args.*", ParameterType.STRING, "An argument the GUI was opened with"),
+                ContextVariable.of("gui.args.*", ParameterType.RAW,
+                        "An argument the GUI was opened with, typed as its open: block declares it (a whole number is "
+                                + "a number, true and false a boolean, anything else text)"),
                 ContextVariable.of("gui.session.*", ParameterType.RAW, "A session variable of this open GUI"),
                 ContextVariable.of("gui.page.*", ParameterType.RAW, "The page state of a list in this GUI"),
                 ContextVariable.of("vars.*", ParameterType.RAW, "Variables written earlier in this run by set_var"));

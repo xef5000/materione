@@ -20,7 +20,7 @@ import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
 import dev.materione.plugin.gui.open.OpenRequest;
 import dev.materione.plugin.gui.open.OpenSpecGate;
-import dev.materione.plugin.gui.open.PlayerNames;
+import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.session.GuiSession;

@@ -194,7 +194,7 @@ public final class MaterioneArchRules {
             actionsAreIndependentIn("dev.materione.plugin.logic.action");
 
     /**
-     * R10 — listeners are adapters (logic.md §9 rule 1): a class in {@code dev.materione.plugin.gui..}
+     * R10 — listeners are adapters (logic.md §9 rule 1): a class in {@code dev.materione.plugin.gui..}, {@code dev.materione.plugin.commands..}
      * or {@code dev.materione.plugin.logic..} that handles Bukkit events (it has a method annotated
      * {@code @EventHandler}) converts the event and hands it to a collaborator; it may not depend on
      * the actions ({@code plugin.logic.action..}) or on the GUI renderer ({@code plugin.gui.render..})
@@ -202,7 +202,7 @@ public final class MaterioneArchRules {
      * the point.
      */
     public static final ArchRule LISTENERS_ARE_ADAPTERS = listenersAreAdaptersIn(
-            List.of("dev.materione.plugin.gui", "dev.materione.plugin.logic"),
+            List.of("dev.materione.plugin.gui", "dev.materione.plugin.commands", "dev.materione.plugin.logic"),
             List.of("dev.materione.plugin.logic.action", "dev.materione.plugin.gui.render"));
 
     /** R10 over any packages (its planted-violation test points it at fixture packages). */

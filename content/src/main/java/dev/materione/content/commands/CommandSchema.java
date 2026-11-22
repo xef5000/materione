@@ -1,4 +1,4 @@
-package dev.materione.content.logic;
+package dev.materione.content.commands;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
@@ -36,7 +36,13 @@ public final class CommandSchema {
     private static final Pattern ARG_NAME = Pattern.compile("[a-z][a-z0-9_]*");
 
     /** The keys a GUI's {@code open:} block accepts; the block is strict about them. */
-    private static final Set<String> OPEN_KEYS = Set.of("commands", "args", "permission", "requirement", "deny");
+    private static final Set<String> OPEN_KEYS =
+            Set.of("commands", "args", "permission", "requirement", "deny", "visible");
+
+    /** Who sees the command in completion: only players who may run it (the default), or everyone (#467). */
+    public static final String VISIBLE_PERMITTED = "permitted";
+    public static final String VISIBLE_ALWAYS = "always";
+    public static final Set<String> VISIBLE = new TreeSet<>(Set.of(VISIBLE_PERMITTED, VISIBLE_ALWAYS));
 
     /**
      * Where the block lives, which decides its wording and its key for the names.
@@ -134,7 +140,16 @@ public final class CommandSchema {
         } else if (block.get("deny") != null) {
             problems.add(problem(dialect, dialect.key("deny") + " must be a list of steps"));
         }
-        return new Parsed(new OpenSpec(names, args, permission, requirement, deny), problems);
+        String visible = null;
+        if (block.get("visible") != null) {
+            if (block.get("visible") instanceof String text && VISIBLE.contains(text)) {
+                visible = text;
+            } else {
+                problems.add(problem(dialect, dialect.key("visible") + " must be " + VISIBLE_PERMITTED + " or "
+                        + VISIBLE_ALWAYS + "; it reads as " + VISIBLE_PERMITTED));
+            }
+        }
+        return new Parsed(new OpenSpec(names, args, permission, requirement, deny, visible), problems);
     }
 
     /** The problems in a spec, for a write: the same checks {@link #read} makes, on the typed form. */
@@ -159,11 +174,31 @@ public final class CommandSchema {
                 problems.add(problem(dialect, "argument '" + arg.name() + "' has type '" + arg.type()
                         + "'; the types are " + String.join(", ", ARG_TYPES)));
             }
+            checkOptions(arg, dialect, problems);
+        }
+        if (spec.visible() != null && !VISIBLE.contains(spec.visible())) {
+            problems.add(problem(dialect, dialect.key("visible") + " must be " + VISIBLE_PERMITTED + " or "
+                    + VISIBLE_ALWAYS));
         }
         if (spec.permission() != null && spec.permission().isBlank()) {
             problems.add(problem(dialect, dialect.key("permission") + " must not be blank"));
         }
         return problems;
+    }
+
+    /** The bounds and the player options belong to the types that read them, and a range must not be empty. */
+    private static void checkOptions(OpenArg arg, Dialect dialect, List<Diagnostic> problems) {
+        boolean numeric = "int".equals(arg.type()) || "number".equals(arg.type());
+        if ((arg.min() != null || arg.max() != null) && !numeric) {
+            problems.add(problem(dialect, "argument '" + arg.name() + "' has min or max, which only an int or a number takes"));
+        }
+        if (arg.min() != null && arg.max() != null && arg.min().doubleValue() > arg.max().doubleValue()) {
+            problems.add(problem(dialect, "argument '" + arg.name() + "' has a min above its max, so no value fits"));
+        }
+        if ((arg.offline() || arg.selector()) && !"player".equals(arg.type())) {
+            problems.add(problem(dialect, "argument '" + arg.name()
+                    + "' has offline or selector, which only a player argument takes"));
+        }
     }
 
     /** The authored mapping of a spec, in the order the reference shows (names, args, permission, requirement, deny). */
@@ -187,12 +222,27 @@ public final class CommandSchema {
                 if (!arg.suggest().isEmpty()) {
                     authored.put("suggest", List.copyOf(arg.suggest()));
                 }
+                if (arg.min() != null) {
+                    authored.put("min", arg.min());
+                }
+                if (arg.max() != null) {
+                    authored.put("max", arg.max());
+                }
+                if (arg.offline()) {
+                    authored.put("offline", true);
+                }
+                if (arg.selector()) {
+                    authored.put("selector", true);
+                }
                 args.add(authored);
             }
             block.put("args", args);
         }
         if (spec.permission() != null) {
             block.put("permission", spec.permission());
+        }
+        if (spec.visible() != null) {
+            block.put("visible", spec.visible());
         }
         if (spec.requirement() != null) {
             block.put("requirement", spec.requirement());
@@ -220,7 +270,20 @@ public final class CommandSchema {
                 new ParameterSchema("default", ParameterType.STRING, false, null,
                         "The value used when the argument is left out; it must read as the argument's type", null, null),
                 new ParameterSchema("suggest", ParameterType.LIST, false, null,
-                        "The completions the command offers; for a choice, also the only values it accepts", null, null));
+                        "The completions the command offers; for a choice, also the only values it accepts", null, null),
+                new ParameterSchema("min", ParameterType.DECIMAL, false, null,
+                        "The smallest value an int or a number accepts; the client refuses a smaller one as it is typed",
+                        null, null),
+                new ParameterSchema("max", ParameterType.DECIMAL, false, null,
+                        "The largest value an int or a number accepts; the client refuses a larger one as it is typed",
+                        null, null),
+                new ParameterSchema("offline", ParameterType.BOOLEAN, false, "false",
+                        "For a player: also accept any player who has joined before, not only one who is online",
+                        null, null),
+                new ParameterSchema("selector", ParameterType.BOOLEAN, false, "false",
+                        "For a player: also accept a vanilla selector (@p, @a[distance=..5]) when the sender may use "
+                                + "selectors; a command runs once for each player it matches, up to 16",
+                        null, null));
     }
 
     /** The {@code args} list of a command. */
@@ -231,6 +294,12 @@ public final class CommandSchema {
     /** The {@code permission} node a command needs. */
     public static ParameterSchema permission(String description) {
         return new ParameterSchema("permission", ParameterType.STRING, false, null, description, null, null);
+    }
+
+    /** The {@code visible} switch of a command: who sees it in completion. */
+    public static ParameterSchema visible(String description) {
+        return new ParameterSchema("visible", ParameterType.ENUM, false, VISIBLE_PERMITTED, description,
+                List.of(VISIBLE_PERMITTED, VISIBLE_ALWAYS), null);
     }
 
     /** The {@code requirement} condition of a command: the one a GUI's open and a command document share. */
@@ -267,7 +336,23 @@ public final class CommandSchema {
                 suggest.add(String.valueOf(choice));
             }
         }
-        out.add(new OpenArg(name, type, Boolean.TRUE.equals(arg.get("optional")), arg.get("default"), suggest));
+        out.add(new OpenArg(name, type, Boolean.TRUE.equals(arg.get("optional")), arg.get("default"), suggest,
+                number(arg, "min", dialect, name, problems), number(arg, "max", dialect, name, problems),
+                Boolean.TRUE.equals(arg.get("offline")), Boolean.TRUE.equals(arg.get("selector"))));
+    }
+
+    /** A bound as written, or null when absent or not a number (a problem then). */
+    private static Number number(Map<String, Object> arg, String key, Dialect dialect, String name,
+            List<Diagnostic> problems) {
+        Object value = arg.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number && Double.isFinite(number.doubleValue())) {
+            return number;
+        }
+        problems.add(problem(dialect, "argument '" + name + "' " + key + " must be a number"));
+        return null;
     }
 
     private static Diagnostic problem(Dialect dialect, String message) {

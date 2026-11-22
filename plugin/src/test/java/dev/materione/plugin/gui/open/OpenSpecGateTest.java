@@ -1,5 +1,7 @@
 package dev.materione.plugin.gui.open;
 
+import dev.materione.plugin.commands.PlayerNames;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.behavior.rule.Rule;
@@ -102,6 +104,65 @@ class OpenSpecGateTest {
 
         assertThat(admission.allowed()).isTrue();
         assertThat(admission.args()).containsEntry("category", "all");
+    }
+
+    private static final String COUNTER = """
+            counter:
+              title: Counter
+              container: chest_3
+              layers: []
+              open:
+                commands: [counter]
+                args:
+                  - { name: n, type: int, min: 1, max: 100, default: "1" }
+                  - { name: ratio, type: number, optional: true }
+                  - { name: vip, type: boolean, optional: true }
+                  - { name: label, type: string, optional: true }
+                requirement: "gui.args.n > 5"
+            """;
+
+    @Test
+    void guiArgsAreTypedExactlyAsACommandsArgsAre() {
+        RuntimeGuis.Live gui = f.gui(COUNTER);
+        f.opener.gate(gate(granted()));
+
+        var opened = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("counter"),
+                Map.of("n", "10", "ratio", "2", "vip", "TRUE", "label", "x"), OpenRequest.Cause.API));
+
+        assertThat(opened.ok()).isTrue();
+        // the text is kept (a snapshot and gui.back replay it); what a rule reads is typed
+        assertThat(opened.session().args()).containsEntry("n", "10").containsEntry("ratio", "2.0");
+        assertThat(opened.session().typedArgs())
+                .containsEntry("n", 10).containsEntry("ratio", 2.0).containsEntry("vip", true)
+                .containsEntry("label", "x");
+        var context = dev.materione.plugin.gui.event.GuiContexts.build(f.viewer, opened.session(), Map.of());
+        assertThat(context.resolve(List.of("gui", "args", "n"))).isEqualTo(10);
+        assertThat(context.resolve(List.of("gui", "args", "vip"))).isEqualTo(true);
+        assertThat(gui.open()).isNotNull();
+    }
+
+    @Test
+    void aNumericRequirementOnATypedGuiArgComparesNumbersAndTheBoundsRefuseAtTheGate() {
+        RuntimeGuis.Live gui = f.gui(COUNTER);
+
+        // 10 > 5 holds as numbers; "10" > "5" as text would not
+        assertThat(admit(gate(granted()), gui, Map.of("n", "10")).allowed()).isTrue();
+        assertThat(admit(gate(granted()), gui, Map.of("n", "3")).allowed()).isFalse();
+        Admission outOfRange = admit(gate(granted()), gui, Map.of("n", "101"));
+        assertThat(outOfRange.usage()).isTrue();
+        assertThat(outOfRange.reason()).contains("n: 101 is above the maximum 100").contains("[n:int(1..100)=1]");
+    }
+
+    @Test
+    void aGuiWithNoOpenBlockKeepsItsArgsAsTextForRules() {
+        RuntimeGuis.Live gui = f.gui("plain:\n  title: Plain\n  container: chest_1\n  layers: []\n");
+        f.opener.gate(gate(granted()));
+
+        var opened = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("plain"), Map.of("n", "10"),
+                OpenRequest.Cause.API));
+
+        assertThat(opened.session().typedArgs()).containsEntry("n", "10");
+        assertThat(gui.open()).isNull();
     }
 
     @Test

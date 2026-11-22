@@ -67,6 +67,11 @@ public record Rule(
         return new Rule(owner, id, on, condition, onCooldown, options, filters, path.child(RuleOptions.ON_COOLDOWN));
     }
 
+    /** The same rule with no cooldown and no charges: the run of a throttle that was already spent (logic.md §40). */
+    public Rule unthrottled() {
+        return new Rule(owner, id, on, condition, steps, RuleOptions.none(), filters, path, onCooldown);
+    }
+
     /** The rule's stable identity ({@code <owner>#<name>}) for logs and cooldown keys. */
     public Optional<String> namedId() {
         return id == null || id.isBlank() ? Optional.empty() : Optional.of(id);

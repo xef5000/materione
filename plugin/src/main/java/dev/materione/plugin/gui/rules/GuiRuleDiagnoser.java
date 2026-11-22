@@ -19,7 +19,7 @@ import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
 import dev.materione.plugin.gui.list.ListLayerCompiler;
 import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.input.InputSlots;
-import dev.materione.plugin.gui.open.OpenPlan;
+import dev.materione.plugin.commands.OpenPlan;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

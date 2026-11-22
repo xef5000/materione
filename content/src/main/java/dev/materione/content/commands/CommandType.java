@@ -11,11 +11,11 @@ import dev.materione.api.diagnostics.DiagnosticTarget;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.gui.GuiAuthoringApi.OpenSpec;
 import dev.materione.api.logic.ContextVariable;
+import dev.materione.api.logic.RuleThrottle;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.content.Templates;
-import dev.materione.content.logic.CommandSchema;
 import dev.materione.content.logic.LogicSchemas;
 import dev.materione.core.document.LosslessYaml;
 import java.util.ArrayList;
@@ -87,6 +87,9 @@ public final class CommandType implements ContentType {
                                 .withEditor(editor("Arguments", 20)),
                         CommandSchema.permission("The permission node a sender needs; none means anyone may run it")
                                 .withEditor(editor("Permission", 30)),
+                        CommandSchema.visible("Who sees the command in completion: permitted (only players who hold "
+                                + "its permission) or always (everyone, refused with a message when they run it)")
+                                .withEditor(editor("Visible to", 35)),
                         CommandSchema.requirement("A condition the sender must meet; the deny steps run when it fails")
                                 .withEditor(editor("Requirement", 40)),
                         CommandSchema.deny("Steps that run when the requirement fails, then the command is refused")
@@ -95,6 +98,10 @@ public final class CommandType implements ContentType {
                                 "Whether a sender with no player (the console, a command block) may run it; "
                                         + "otherwise it is refused", null, null)
                                 .withEditor(editor("Console", 60)),
+                        throttle("cooldown", "Cooldown", 62),
+                        throttle("charges", "Charges", 64),
+                        throttle("per", "Counted per", 66),
+                        throttle(RuleThrottle.ON_COOLDOWN, "On cooldown", 68),
                         new ParameterSchema("do", ParameterType.RAW, true, null,
                                 "The steps the command runs: the one flow model, with ${args.*}, ${command.name}"
                                         + " and ${command.label} in context", null, null)
@@ -104,6 +111,16 @@ public final class CommandType implements ContentType {
                                         "Do", "behavior", 70, false, "advanced", "", "")),
                         LogicSchemas.flows()),
                 "1.0.0");
+    }
+
+    /** One of the throttle keys a rule also has (cooldown, charges, per, on_cooldown), from the one description. */
+    private static ParameterSchema throttle(String key, String label, int order) {
+        ParameterSchema option = RuleThrottle.options().stream().filter(entry -> entry.id().equals(key)).findFirst()
+                .orElseThrow();
+        boolean steps = ParameterSchema.KIND_STEPS.equals(option.semantics().valueKind());
+        return option.withEditor(steps
+                ? new ParameterSchema.EditorMetadata(label, "behavior", order, false, "advanced", "", "")
+                : editor(label, order));
     }
 
     private static ParameterSchema.EditorMetadata editor(String label, int order) {

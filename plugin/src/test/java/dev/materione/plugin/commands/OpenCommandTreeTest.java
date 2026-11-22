@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -105,6 +105,42 @@ class OpenCommandTreeTest {
         var suggestions = dispatcher.getCompletionSuggestions(dispatcher.parse("shop ", SOURCE)).get();
 
         assertThat(suggestions.getList()).extracting(suggestion -> suggestion.getText()).contains("tools");
+    }
+
+    private static final List<OpenArgSpec> BOUNDED = List.of(
+            new OpenArgSpec("count", ArgType.INT, false, null, List.of(), 1.0, 10.0, false, false),
+            new OpenArgSpec("ratio", ArgType.NUMBER, true, null, List.of(), 0.5, null, false, false));
+
+    @Test
+    void aBoundedNumberIsRefusedByTheTreeWhileItIsBeingTyped() throws CommandSyntaxException {
+        register(BOUNDED);
+
+        dispatcher.execute("shop 10 0.5", SOURCE);
+        assertThatThrownBy(() -> dispatcher.execute("shop 0", SOURCE)).isInstanceOf(CommandSyntaxException.class);
+        assertThatThrownBy(() -> dispatcher.execute("shop 11", SOURCE)).isInstanceOf(CommandSyntaxException.class);
+        assertThatThrownBy(() -> dispatcher.execute("shop 5 0.4", SOURCE)).isInstanceOf(CommandSyntaxException.class);
+        assertThat(ran).containsExactly("shop 10 0.5");
+    }
+
+    @Test
+    void theShapeCarriesTheBoundsSoAChangedBoundAsksForAReload() {
+        assertThat(OpenCommandTree.shape(BOUNDED)).containsExactly(
+                "count:IntegerArgumentType[1.0..10.0]", "ratio:DoubleArgumentType[0.5..null]");
+        assertThat(OpenCommandTree.shape(BOUNDED)).isNotEqualTo(OpenCommandTree.shape(List.of(
+                new OpenArgSpec("count", ArgType.INT, false, null, List.of(), 1.0, 20.0, false, false),
+                new OpenArgSpec("ratio", ArgType.NUMBER, true, null, List.of(), 0.5, null, false, false))));
+    }
+
+    @Test
+    void aSelectorPlayerIsAnotherTreeTypeThanAPlainOneAndKeepsTheClientsOwnCompletion() {
+        var plain = new OpenArgSpec("who", ArgType.PLAYER, false, null, List.of());
+        var selecting = new OpenArgSpec("who", ArgType.PLAYER, false, null, List.of(), null, null, false, true);
+        var both = new OpenArgSpec("who", ArgType.PLAYER, false, null, List.of(), null, null, true, true);
+
+        assertThat(OpenCommandTree.shape(List.of(plain))).isNotEqualTo(OpenCommandTree.shape(List.of(selecting)));
+        assertThat(OpenCommandTree.nativelyCompleted(plain)).isFalse();
+        assertThat(OpenCommandTree.nativelyCompleted(selecting)).isTrue();
+        assertThat(OpenCommandTree.nativelyCompleted(both)).isFalse(); // the server adds the offline names
     }
 
     @Test

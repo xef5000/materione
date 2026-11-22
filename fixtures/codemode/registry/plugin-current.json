@@ -7773,10 +7773,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -7873,10 +7873,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -7973,10 +7973,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -8098,10 +8098,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -8278,10 +8278,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -8407,10 +8407,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -8521,10 +8521,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -8646,10 +8646,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -8783,10 +8783,10 @@
               "type": "string"
             },
             {
-              "description": "An argument the GUI was opened with",
+              "description": "An argument the GUI was opened with, typed as its open: block declares it (a whole number is a number, true and false a boolean, anything else text)",
               "hosts": [],
               "path": "gui.args.*",
-              "type": "string"
+              "type": "raw"
             },
             {
               "description": "A session variable of this open GUI",
@@ -14271,6 +14271,52 @@
                 "section": "general",
                 "type": "list",
                 "uiHint": "list"
+              },
+              {
+                "advanced": false,
+                "description": "The smallest value an int or a number accepts; the client refuses a smaller one as it is typed",
+                "id": "min",
+                "label": "Min",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "decimal",
+                "uiHint": "number"
+              },
+              {
+                "advanced": false,
+                "description": "The largest value an int or a number accepts; the client refuses a larger one as it is typed",
+                "id": "max",
+                "label": "Max",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "decimal",
+                "uiHint": "number"
+              },
+              {
+                "advanced": false,
+                "default": "false",
+                "description": "For a player: also accept any player who has joined before, not only one who is online",
+                "id": "offline",
+                "label": "Offline",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "boolean",
+                "uiHint": "toggle"
+              },
+              {
+                "advanced": false,
+                "default": "false",
+                "description": "For a player: also accept a vanilla selector (@p, @a[distance=..5]) when the sender may use selectors; a command runs once for each player it matches, up to 16",
+                "id": "selector",
+                "label": "Selector",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "boolean",
+                "uiHint": "toggle"
               }
             ],
             "order": 20,
@@ -14288,6 +14334,22 @@
             "required": false,
             "section": "behavior",
             "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "allowedValues": [
+              "permitted",
+              "always"
+            ],
+            "default": "permitted",
+            "description": "Who sees the command in completion: permitted (only players who hold its permission) or always (everyone, refused with a message when they run it)",
+            "id": "visible",
+            "label": "Visible to",
+            "order": 35,
+            "required": false,
+            "section": "behavior",
+            "type": "enum",
             "uiHint": "text"
           },
           {
@@ -14325,6 +14387,65 @@
             "section": "behavior",
             "type": "boolean",
             "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Milliseconds before this rule can fire again",
+            "id": "cooldown",
+            "label": "Cooldown",
+            "order": 62,
+            "required": false,
+            "section": "behavior",
+            "type": "integer",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "How many times the rule can fire in total",
+            "id": "charges",
+            "label": "Charges",
+            "order": 64,
+            "required": false,
+            "section": "behavior",
+            "type": "integer",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "allowedValues": [
+              "player",
+              "global"
+            ],
+            "default": "player",
+            "description": "Whether cooldown and charges count per player or for the whole server",
+            "id": "per",
+            "label": "Counted per",
+            "order": 66,
+            "required": false,
+            "section": "behavior",
+            "type": "enum",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the whole seconds left, rounded up",
+            "id": "on_cooldown",
+            "label": "On cooldown",
+            "order": 68,
+            "required": false,
+            "scope": [
+              {
+                "description": "The whole seconds left in the cooldown window, rounded up",
+                "hosts": [],
+                "path": "cooldown.remaining",
+                "type": "integer"
+              }
+            ],
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced",
+            "valueKind": "steps"
           },
           {
             "advanced": false,

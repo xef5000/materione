@@ -10,7 +10,7 @@ import dev.materione.content.commands.CommandDefinition;
 import dev.materione.content.commands.CommandType;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.gui.GuiFixture;
-import dev.materione.plugin.gui.open.PlayerNames;
+import dev.materione.plugin.commands.PlayerNames;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -144,7 +144,7 @@ class CommandRunsTest {
             """;
 
     private void run(String alias, CommandSender sender, Map<String, String> raw) {
-        runs.run(PAY, alias, sender, raw);
+        runs.run(PAY, alias, sender, List.of(raw));
     }
 
     @Test
@@ -305,6 +305,157 @@ class CommandRunsTest {
         assertThat(f.messages).isEmpty();
         assertThat(outcomes).containsExactly("MATERIONE-COMMAND alias=pay command=shop:pay outcome=gone");
         assertThat(runs.plan(PAY)).isEmpty();
+    }
+
+    // --- rule options on a command (logic.md §40, #467) ---------------------------------------------------------
+
+    @Test
+    void aCooldownHoldsASecondRunBackAndTheSenderIsToldHowLongIsLeft() {
+        declare("""
+                daily:
+                  names: [daily]
+                  cooldown: 60000
+                  do: [ {mark: reward} ]
+                """);
+
+        runs.run(NamespacedId.of("shop", "daily"), "daily", f.player, List.of(Map.of()));
+        runs.run(NamespacedId.of("shop", "daily"), "daily", f.player, List.of(Map.of()));
+
+        assertThat(diagnostics).isEmpty();
+        assertThat(f.ran).containsExactly("mark:reward");
+        assertThat(f.messages).singleElement().asString().contains("/daily is on cooldown: ").contains(" seconds left");
+        assertThat(outcomes).containsExactly(
+                "MATERIONE-COMMAND alias=daily command=shop:daily outcome=ran",
+                "MATERIONE-COMMAND alias=daily command=shop:daily outcome=cooldown");
+    }
+
+    @Test
+    void anOnCooldownFlowIsTheMessageAndReadsTheSecondsLeft() {
+        declare("""
+                daily:
+                  names: [daily]
+                  cooldown: 60000
+                  on_cooldown:
+                    - mark: "wait ${cooldown.remaining}"
+                  do: [ {mark: reward} ]
+                """);
+        NamespacedId daily = NamespacedId.of("shop", "daily");
+
+        runs.run(daily, "daily", f.player, List.of(Map.of()));
+        runs.run(daily, "daily", f.player, List.of(Map.of()));
+
+        assertThat(diagnostics).isEmpty();
+        assertThat(f.ran).hasSize(2).first().isEqualTo("mark:reward");
+        assertThat(f.ran.get(1)).startsWith("mark:wait ");
+        assertThat(f.messages).isEmpty(); // the author's flow is the whole answer: no default line beside it
+    }
+
+    @Test
+    void perGlobalIsOneCooldownForEveryoneAndPerPlayerIsOnePerPlayer() {
+        declare("""
+                daily:
+                  names: [daily]
+                  cooldown: 60000
+                  per: global
+                  do: [ {mark: reward} ]
+                perplayer:
+                  names: [pp]
+                  cooldown: 60000
+                  do: [ {mark: pp} ]
+                """);
+
+        runs.run(NamespacedId.of("shop", "daily"), "daily", f.player, List.of(Map.of()));
+        runs.run(NamespacedId.of("shop", "daily"), "daily", f.player, List.of(Map.of()));
+        runs.run(NamespacedId.of("shop", "perplayer"), "pp", f.player, List.of(Map.of()));
+
+        assertThat(f.ran).containsExactly("mark:reward", "mark:pp");
+    }
+
+    @Test
+    void chargesAreTheNumberOfUsesAndTheSenderIsToldWhenTheyAreSpent() {
+        declare("""
+                once:
+                  names: [once]
+                  charges: 2
+                  do: [ {mark: used} ]
+                """);
+        NamespacedId once = NamespacedId.of("shop", "once");
+
+        for (int i = 0; i < 3; i++) {
+            runs.run(once, "once", f.player, List.of(Map.of()));
+        }
+
+        assertThat(f.ran).containsExactly("mark:used", "mark:used");
+        assertThat(f.messages).singleElement().asString().contains("/once has no uses left");
+        assertThat(outcomes.get(2)).endsWith("outcome=spent");
+    }
+
+    @Test
+    void aBadThrottleKeyIsReportedWithTheProblemsOfAnyRule() {
+        declare("""
+                daily:
+                  names: [daily]
+                  cooldown: 1000
+                  per: nobody
+                  do: [ {mark: reward} ]
+                """);
+
+        assertThat(diagnostics).extracting(Diagnostic::message).anySatisfy(m -> assertThat(m).contains("unknown 'per:'"));
+    }
+
+    // --- one run per player a selector matched (logic.md §40, #467) -----------------------------------------------
+
+    @Test
+    void oneTypedCommandAtSeveralPlayersRunsTheFlowOncePerPlayerAndSpendsTheThrottleOnce() {
+        declare("""
+                greet:
+                  names: [greet]
+                  cooldown: 60000
+                  args: [{name: who, type: player}]
+                  do: [ {mark: "hi ${args.who}"} ]
+                """);
+        NamespacedId greet = NamespacedId.of("shop", "greet");
+
+        runs.run(greet, "greet", f.player, List.of(Map.of("who", "Alice"), Map.of("who", "Bob")));
+        runs.run(greet, "greet", f.player, List.of(Map.of("who", "Alice")));
+
+        assertThat(f.ran).containsExactly("mark:hi Alice", "mark:hi Bob");
+        assertThat(outcomes).containsExactly(
+                "MATERIONE-COMMAND alias=greet command=shop:greet outcome=ran",
+                "MATERIONE-COMMAND alias=greet command=shop:greet outcome=cooldown");
+    }
+
+    @Test
+    void theRequirementIsCheckedForEachPlayerSoOneRefusedPlayerDoesNotStopTheOthers() {
+        declare("""
+                greet:
+                  names: [greet]
+                  args: [{name: who, type: player}]
+                  requirement: "args.who != 'Bob'"
+                  do: [ {mark: "hi ${args.who}"} ]
+                """);
+
+        runs.run(NamespacedId.of("shop", "greet"), "greet", f.player,
+                List.of(Map.of("who", "Alice"), Map.of("who", "Bob")));
+
+        assertThat(f.ran).containsExactly("mark:hi Alice");
+        assertThat(f.messages).singleElement().asString().contains("the requirement for /greet is not met");
+    }
+
+    @Test
+    void aBadValueInAnyRunRefusesTheWholeCommandBeforeAnythingRuns() {
+        declare("""
+                greet:
+                  names: [greet]
+                  args: [{name: who, type: player}]
+                  do: [ {mark: "hi ${args.who}"} ]
+                """);
+
+        runs.run(NamespacedId.of("shop", "greet"), "greet", f.player,
+                List.of(Map.of("who", "Alice"), Map.of("who", "Nobody")));
+
+        assertThat(f.ran).isEmpty();
+        assertThat(f.messages).singleElement().asString().contains("no online player named 'Nobody'");
     }
 
     @Test

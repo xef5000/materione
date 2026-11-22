@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -55,7 +55,7 @@ public final class ArgParser {
                 }
                 continue;
             }
-            ArgType.Typed typed = arg.type().parse(text, arg.suggest(), players);
+            ArgType.Typed typed = arg.type().parse(text, arg, players);
             if (!typed.ok()) {
                 return refused(arg.name() + ": " + typed.error());
             }

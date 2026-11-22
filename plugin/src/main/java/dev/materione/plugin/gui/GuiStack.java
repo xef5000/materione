@@ -24,12 +24,12 @@ import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.LoggingRenderReporter;
 import dev.materione.plugin.gui.open.GuiOpener;
-import dev.materione.plugin.gui.open.DocumentCommands;
-import dev.materione.plugin.gui.open.OpenCommandHandler;
-import dev.materione.plugin.gui.open.OpenDeclaration;
-import dev.materione.plugin.gui.open.OpenCommandRegistrar;
+import dev.materione.plugin.commands.DocumentCommands;
+import dev.materione.plugin.commands.OpenCommandHandler;
+import dev.materione.plugin.commands.OpenDeclaration;
+import dev.materione.plugin.commands.OpenCommandRegistrar;
 import dev.materione.plugin.gui.open.OpenSpecGate;
-import dev.materione.plugin.gui.open.PlayerNames;
+import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
@@ -118,7 +118,7 @@ public final class GuiStack {
         opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
-        this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
+        this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server(), diagnostics);
         this.openCommands = new OpenCommandRegistrar(plugin, openHandler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);

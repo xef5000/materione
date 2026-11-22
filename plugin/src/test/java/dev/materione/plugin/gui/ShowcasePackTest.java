@@ -11,7 +11,7 @@ import dev.materione.behavior.logic.RegistryLogicLookup;
 import dev.materione.content.gui.GuiCompiler;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.plugin.gui.open.OpenPlan;
+import dev.materione.plugin.commands.OpenPlan;
 import dev.materione.plugin.gui.prompt.PromptRuntime;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import dev.materione.plugin.logic.BuiltinLogic;

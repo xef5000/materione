@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,6 +64,65 @@ class ArgParserTest {
                 .isEqualTo("category: 'bogus' is not one of all, tools, food");
         assertThat(ArgParser.parse(PLAN, Map.of("target", "Bob"), PLAYERS).error())
                 .isEqualTo("target: no online player named 'Bob'");
+    }
+
+    private static final OpenPlan BOUNDED = new OpenPlan(
+            List.of("pay"),
+            List.of(
+                    new OpenArgSpec("amount", ArgType.NUMBER, false, null, List.of(), 1.0, 100.0, false, false),
+                    new OpenArgSpec("times", ArgType.INT, true, "1", List.of(), 1.0, null, false, false),
+                    new OpenArgSpec("who", ArgType.PLAYER, true, null, List.of(), null, null, true, false)),
+            null, null, false, null, List.of());
+
+    /** Alice is online; Zed joined before and is not. */
+    private static final PlayerNames WITH_HISTORY = new PlayerNames() {
+        @Override
+        public Optional<String> online(String name) {
+            return name.equalsIgnoreCase("Alice") ? Optional.of("Alice") : Optional.empty();
+        }
+
+        @Override
+        public Collection<String> names() {
+            return List.of("Alice");
+        }
+
+        @Override
+        public Optional<String> known(String name) {
+            return online(name).or(() -> name.equalsIgnoreCase("Zed") ? Optional.of("Zed") : Optional.empty());
+        }
+    };
+
+    @Test
+    void aValueOutsideTheBoundsIsRefusedWithTheBoundAndInsideIsAccepted() {
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "0.5"), PLAYERS).error())
+                .isEqualTo("amount: 0.5 is below the minimum 1");
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "100.5"), PLAYERS).error())
+                .isEqualTo("amount: 100.5 is above the maximum 100");
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "5", "times", "0"), PLAYERS).error())
+                .isEqualTo("times: 0 is below the minimum 1");
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "1"), PLAYERS).ok()).isTrue();
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "100", "times", "999"), PLAYERS).ok()).isTrue();
+    }
+
+    @Test
+    void theUsageLineShowsTheRange() {
+        assertThat(OpenUsage.of("/pay", BOUNDED)).isEqualTo(
+                "usage: /pay <amount:number(1..100)> [times:int(>=1)=1] [who:player]");
+        assertThat(OpenUsage.refusal("/pay", BOUNDED, "amount: 0.5 is below the minimum 1"))
+                .contains("0.5 is below the minimum 1. usage: /pay");
+    }
+
+    @Test
+    void anOfflineArgumentAcceptsAPlayerWhoJoinedBeforeInTheirOwnSpelling() {
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "5", "who", "zed"), WITH_HISTORY).values())
+                .containsEntry("who", "Zed");
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "5", "who", "alice"), WITH_HISTORY).values())
+                .containsEntry("who", "Alice");
+        assertThat(ArgParser.parse(BOUNDED, Map.of("amount", "5", "who", "Nobody"), WITH_HISTORY).error())
+                .isEqualTo("who: no player named 'Nobody' has joined this server");
+        // without the switch the same name is refused
+        assertThat(ArgParser.parse(PLAN, Map.of("target", "Zed"), WITH_HISTORY).error())
+                .isEqualTo("target: no online player named 'Zed'");
     }
 
     @Test

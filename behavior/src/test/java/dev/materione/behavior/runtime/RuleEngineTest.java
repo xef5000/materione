@@ -312,6 +312,57 @@ class RuleEngineTest {
         assertThat(ran).hasSize(2);
     }
 
+    // --- one use of the throttle for several events (a command typed at several players, logic.md section 40) ---
+
+    @Test
+    void fireOnceSpendsTheThrottleOnceAndRunsTheFlowForEachEvent() {
+        long[] now = {1_000_000L};
+        var timed = new RuleEngine(new FlowInterpreter(scheduler, RunBudget.DEFAULT, diagnostics::add),
+                new CooldownStore(), () -> now[0]);
+        Map<String, Object> throttled = rule("click:right", List.of(), List.of(action("a", "x")));
+        throttled.put("cooldown", 60_000);
+        Rule rule = rules(throttled).get(0);
+        var root = Map.<String, Object>of("player", Map.of("uuid", "u1"));
+        var events = List.of(event("click", "right", root), event("click", "right", root), event("click", "right", root));
+
+        var first = timed.fireOnce(rule, events);
+        var second = timed.fireOnce(rule, List.of(event("click", "right", root)));
+
+        assertThat(first.result()).isEqualTo(RuleEngine.Gated.RAN);
+        assertThat(ran).containsExactly("a:x", "a:x", "a:x"); // three runs, one use of the cooldown
+        assertThat(second.result()).isEqualTo(RuleEngine.Gated.COOLING);
+        assertThat(second.remainingMs()).isEqualTo(60_000);
+        assertThat(ran).hasSize(3);
+
+        now[0] += 60_000;
+        assertThat(timed.fireOnce(rule, List.of(event("click", "right", root))).result())
+                .isEqualTo(RuleEngine.Gated.RAN);
+    }
+
+    @Test
+    void fireOnceRunsTheOnCooldownFlowOnceAndChargesSpendOncePerCall() {
+        Map<String, Object> limited = rule("click:right", List.of(), List.of(action("a", "x")));
+        limited.put("charges", 1);
+        Rule charged = rules(limited).get(0);
+        Map<String, Object> cooled = rule("click:right", List.of(), List.of(action("a", "x")));
+        cooled.put("id", "cooled");
+        cooled.put("cooldown", 60_000);
+        cooled.put("on_cooldown", List.of(action("b", "blocked")));
+        Rule cooling = rules(cooled).get(0);
+        var root = Map.<String, Object>of("player", Map.of("uuid", "u1"));
+        var two = List.of(event("click", "right", root), event("click", "right", root));
+
+        assertThat(engine.fireOnce(charged, two).result()).isEqualTo(RuleEngine.Gated.RAN); // one charge, two runs
+        assertThat(engine.fireOnce(charged, two).result()).isEqualTo(RuleEngine.Gated.SPENT);
+        assertThat(ran).containsExactly("a:x", "a:x");
+
+        ran.clear();
+        engine.fireOnce(cooling, two);
+        var blocked = engine.fireOnce(cooling, two);
+        assertThat(blocked.result()).isEqualTo(RuleEngine.Gated.COOLING);
+        assertThat(ran).containsExactly("a:x", "a:x", "b:blocked"); // the branch ran once, not per event
+    }
+
     /** The on_cooldown branch: says which value cooldown.remaining had, through an if the test can read. */
     private static Map<String, Object> remainingIs(long seconds, String label) {
         return Map.of(

@@ -142,29 +142,56 @@ public interface GuiAuthoringApi {
      * requirement, and the steps that run when the requirement fails. The runtime (#215) reads it;
      * the authoring API checks its shape. {@code requirement} is the condition as authored (an
      * expression, a predicate, or a composite), and {@code deny} is a list of steps as authored.
+     * {@code visible} is {@code permitted} (the default; null) or {@code always}: whether a player who lacks
+     * {@code permission} sees the command in completion (logic.md section 40, #467).
      */
     record OpenSpec(
             List<String> commands,
             List<OpenArg> args,
             String permission,
             Object requirement,
-            List<Object> deny) {
+            List<Object> deny,
+            String visible) {
 
         public OpenSpec {
             commands = commands == null ? List.of() : List.copyOf(commands);
             args = args == null ? List.of() : List.copyOf(args);
             deny = deny == null ? List.of() : List.copyOf(deny);
         }
+
+        /** A block that keeps the default visibility. */
+        public OpenSpec(
+                List<String> commands, List<OpenArg> args, String permission, Object requirement,
+                List<Object> deny) {
+            this(commands, args, permission, requirement, deny, null);
+        }
     }
 
     /**
      * One argument of {@code open.args}. {@code type} is one of {@code string}, {@code int},
      * {@code number}, {@code player}, {@code boolean} or {@code choice}; {@code suggest} lists the
-     * tab-completions the command offers.
+     * tab-completions the command offers. {@code min} and {@code max} bound an {@code int} or a
+     * {@code number}; {@code offline} lets a {@code player} be any player who has joined before, and
+     * {@code selector} lets it be a vanilla selector (logic.md section 40, #467).
      */
-    record OpenArg(String name, String type, boolean optional, Object defaultValue, List<String> suggest) {
+    record OpenArg(
+            String name,
+            String type,
+            boolean optional,
+            Object defaultValue,
+            List<String> suggest,
+            Number min,
+            Number max,
+            boolean offline,
+            boolean selector) {
+
         public OpenArg {
             suggest = suggest == null ? List.of() : List.copyOf(suggest);
+        }
+
+        /** An argument with no bounds and no player options. */
+        public OpenArg(String name, String type, boolean optional, Object defaultValue, List<String> suggest) {
+            this(name, type, optional, defaultValue, suggest, null, null, false, false);
         }
     }
 

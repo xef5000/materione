@@ -1,6 +1,6 @@
 package dev.materione.behavior.rule;
 
-import dev.materione.api.logic.ContextVariable;
+import dev.materione.api.logic.RuleThrottle;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.behavior.flow.ActionStep;
@@ -15,24 +15,15 @@ import java.util.List;
 public final class RuleParser {
 
     /** Self-description of the rule option keys. */
-    public static final List<ParameterSchema> RULE_OPTIONS = List.of(
-            option("id", ParameterType.STRING, null,
-                    "Stable rule name used in diagnostics and cooldown keys", List.of()),
-            option("cooldown", ParameterType.INTEGER, "0",
-                    "Milliseconds before this rule can fire again", List.of()),
-            option("charges", ParameterType.INTEGER, null,
-                    "How many times the rule can fire in total", List.of()),
-            option("per", ParameterType.ENUM, RuleOptions.PER_PLAYER,
-                    "Whether cooldown and charges count per player or for the whole server",
-                    List.of(RuleOptions.PER_PLAYER, RuleOptions.PER_GLOBAL)),
-            // a list of steps, edited as JSON by the studio (raw): cooldown.remaining holds the whole seconds left
-            option(RuleOptions.ON_COOLDOWN, ParameterType.RAW, null,
-                    "Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the "
-                            + "whole seconds left, rounded up",
-                    List.of())
-                    .ofKind(ParameterSchema.KIND_STEPS)
-                    .opening(List.of(ContextVariable.of(RuleOptions.COOLDOWN_ROOT + "." + RuleOptions.REMAINING,
-                            ParameterType.INTEGER, "The whole seconds left in the cooldown window, rounded up"))));
+    public static final List<ParameterSchema> RULE_OPTIONS = withId();
+
+    private static List<ParameterSchema> withId() {
+        var options = new java.util.ArrayList<ParameterSchema>();
+        options.add(option("id", ParameterType.STRING, null,
+                "Stable rule name used in diagnostics and cooldown keys", List.of()));
+        options.addAll(RuleThrottle.options()); // cooldown, charges, per, on_cooldown: shared with the command document
+        return List.copyOf(options);
+    }
 
     /** Self-description of the flow keys of a rule: the condition that guards it and the steps it runs. */
     public static final List<ParameterSchema> RULE_BODY = List.of(

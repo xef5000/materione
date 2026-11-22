@@ -2,7 +2,7 @@ package dev.materione.content.gui.logic;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.gui.GuiAuthoringApi.OpenSpec;
-import dev.materione.content.logic.CommandSchema;
+import dev.materione.content.commands.CommandSchema;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

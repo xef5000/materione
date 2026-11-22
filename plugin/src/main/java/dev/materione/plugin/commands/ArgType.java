@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
 
 import java.util.List;
 import java.util.Locale;
@@ -57,6 +57,35 @@ public enum ArgType {
             case CHOICE -> choices.contains(raw) ? Typed.of(raw)
                     : Typed.refused("'" + raw + "' is not one of " + String.join(", ", choices));
         };
+    }
+
+    /**
+     * Reads {@code raw} as this type with the argument's own options (logic.md §40): the bounds of an {@code int} or a
+     * {@code number}, the {@code offline} switch of a {@code player}. With none set it is {@link #parse(String, List,
+     * PlayerNames)}.
+     */
+    public Typed parse(String raw, OpenArgSpec arg, PlayerNames players) {
+        Typed typed = parse(raw, arg.suggest(), players);
+        if (this == PLAYER && !typed.ok() && arg.offline()) {
+            return players.known(raw).map(Typed::of)
+                    .orElseGet(() -> Typed.refused("no player named '" + raw + "' has joined this server"));
+        }
+        if (!typed.ok() || (this != INT && this != NUMBER)) {
+            return typed;
+        }
+        double value = Double.parseDouble(typed.value());
+        if (arg.min() != null && value < arg.min()) {
+            return Typed.refused(typed.value() + " is below the minimum " + bound(arg.min()));
+        }
+        if (arg.max() != null && value > arg.max()) {
+            return Typed.refused(typed.value() + " is above the maximum " + bound(arg.max()));
+        }
+        return typed;
+    }
+
+    /** A bound as the author reads it: {@code 5} not {@code 5.0}. */
+    public static String bound(double value) {
+        return value == Math.rint(value) && Math.abs(value) < 1e15 ? Long.toString((long) value) : Double.toString(value);
     }
 
     private static Typed wholeNumber(String raw) {

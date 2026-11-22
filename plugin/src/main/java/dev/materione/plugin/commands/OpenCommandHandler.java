@@ -1,10 +1,17 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.commands;
+
+import dev.materione.plugin.gui.open.GuiOpener;
+import dev.materione.plugin.gui.open.OpenRequest;
+import dev.materione.plugin.gui.open.OpenResult;
 
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.materione.api.NamespacedId;
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
@@ -14,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -43,12 +52,22 @@ public final class OpenCommandHandler {
     private final Supplier<RuntimeGuis> live;
     private final GuiOpener opener;
     private final PlayerNames players;
+    private final Consumer<Diagnostic> diagnostics;
+    private final Map<String, Long> reportedCaps = new ConcurrentHashMap<>();
     private volatile Map<String, Binding> bindings = Map.of();
     private volatile DocumentCommands documents = DocumentCommands.NONE;
 
     public OpenCommandHandler(
             Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeGuis> live, GuiOpener opener,
             PlayerNames players) {
+        this(plugin, scheduling, live, opener, players, diagnostic -> {});
+    }
+
+    /** @param diagnostics where {@code MTR-0125} (a selector cut at the cap) goes, rate-limited per alias */
+    public OpenCommandHandler(
+            Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeGuis> live, GuiOpener opener,
+            PlayerNames players, Consumer<Diagnostic> diagnostics) {
+        this.diagnostics = diagnostics;
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.live = live;
@@ -76,6 +95,15 @@ public final class OpenCommandHandler {
         return bindings.containsKey(alias);
     }
 
+    /**
+     * Whether {@code sender} may see and reach {@code alias}: it is declared, and (unless the command is
+     * {@code visible: always}) the sender holds its permission. The Brigadier {@code requires} predicate, so a player
+     * without the permission neither sees the command in completion nor reaches it (logic.md §40, #467).
+     */
+    public boolean visibleTo(String alias, CommandSender sender) {
+        return declared(alias) && planOf(alias).map(plan -> plan.visibleTo(sender)).orElse(true);
+    }
+
     /** The GUI an alias opens, if it is declared and belongs to a GUI. */
     public Optional<NamespacedId> gui(String alias) {
         return Optional.ofNullable(bindings.get(alias))
@@ -99,9 +127,16 @@ public final class OpenCommandHandler {
         if (plan.isEmpty()) {
             return 0;
         }
-        Map<String, String> raw = rawArguments(context, plan.get());
+        ArgInvocations.Expansion expansion = ArgInvocations.of(context, plan.get());
         CommandSender sender = context.getSource().getSender();
-        Runnable task = () -> documents.run(command, alias, sender, raw);
+        if (expansion.error() != null) {
+            sender.sendMessage(Component.text(expansion.error(), NamedTextColor.RED));
+            mark(alias, "nomatch");
+            return 0;
+        }
+        capped(alias, expansion);
+        List<Map<String, String>> runs = expansion.runs();
+        Runnable task = () -> documents.run(command, alias, sender, runs);
         if (sender instanceof Player player) {
             scheduling.executeEntity(plugin, player, task);
         } else {
@@ -116,8 +151,15 @@ public final class OpenCommandHandler {
             return 0;
         }
         OpenPlan plan = gui.get().open();
-        Map<String, String> raw = rawArguments(context, plan);
+        ArgInvocations.Expansion expansion = ArgInvocations.of(context, plan);
         CommandSender sender = context.getSource().getSender();
+        if (expansion.error() != null) {
+            sender.sendMessage(Component.text(expansion.error(), NamedTextColor.RED));
+            mark(alias, "nomatch");
+            return 0;
+        }
+        // a GUI opens once: a selector that matches several players opens it for the first (logic.md §40, #467)
+        Map<String, String> raw = expansion.runs().get(0);
         ArgParser.Result parsed = ArgParser.parse(plan, raw, players);
         if (!parsed.ok()) {
             sender.sendMessage(Component.text(OpenUsage.refusal("/" + alias, plan, parsed.error()),
@@ -175,23 +217,32 @@ public final class OpenCommandHandler {
 
     private List<String> candidates(OpenArgSpec arg) {
         return switch (arg.type()) {
-            case PLAYER -> List.copyOf(players.names());
+            case PLAYER -> List.copyOf(arg.offline() ? players.knownNames() : players.names());
             case BOOLEAN -> List.of("true", "false");
             default -> arg.suggest();
         };
     }
 
-    /** The arguments the client sent, by the live block's names. An argument the tree does not carry is absent. */
-    private static Map<String, String> rawArguments(CommandContext<CommandSourceStack> context, OpenPlan plan) {
-        var raw = new LinkedHashMap<String, String>();
-        for (OpenArgSpec arg : plan.args()) {
-            boolean sent = context.getNodes().stream().anyMatch(parsed ->
-                    parsed.getNode() instanceof ArgumentCommandNode<?, ?> node && node.getName().equals(arg.name()));
-            if (sent) {
-                raw.put(arg.name(), String.valueOf(context.getArgument(arg.name(), Object.class)));
-            }
+    /** {@code MTR-0125}: a selector matched more players than a command makes runs for, at most once per alias per ten seconds. */
+    private void capped(String alias, ArgInvocations.Expansion expansion) {
+        if (!expansion.capped()) {
+            return;
         }
-        return raw;
+        long now = System.currentTimeMillis();
+        boolean[] emit = {false};
+        reportedCaps.compute(alias, (key, last) -> {
+            if (last == null || now - last >= 10_000) {
+                emit[0] = true;
+                return now;
+            }
+            return last;
+        });
+        if (emit[0]) {
+            diagnostics.accept(new Diagnostic(DiagnosticCodes.COMMAND_SELECTOR_CAPPED, Severity.WARN,
+                    "/" + alias + " matched " + expansion.wanted() + " runs; it ran " + ArgInvocations.MAX_RUNS
+                            + " and dropped the rest",
+                    null, null, "narrow the selector (a distance, a limit) or run the command for fewer players"));
+        }
     }
 
     /** The stable marker the harness and the QA runs read: what an open command did, per alias. */

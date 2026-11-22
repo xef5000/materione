@@ -235,10 +235,29 @@ public final class FlowCompiler {
      */
     public static ParsedRules document(
             NamespacedId owner, String trigger, Object steps, Object flows, LogicLookup lookup) {
+        return document(owner, trigger, steps, flows, Map.of(), lookup);
+    }
+
+    /**
+     * As {@link #document(NamespacedId, String, Object, Object, LogicLookup)}, with the throttle keys the document
+     * carries ({@code cooldown}, {@code charges}, {@code per}, {@code on_cooldown}: the rule's own, logic.md §16).
+     * The one rule compiler reads them as it does for a rule, so the same values mean the same, and a bad
+     * {@code per:} or a bad step of {@code on_cooldown} is reported with the problems of any rule.
+     *
+     * @param throttle the throttle keys as written, by key; keys outside the four are ignored
+     */
+    public static ParsedRules document(
+            NamespacedId owner, String trigger, Object steps, Object flows, Map<String, Object> throttle,
+            LogicLookup lookup) {
         var context = new CompileContext(owner, lookup, true);
         var entry = new java.util.LinkedHashMap<String, Object>();
         entry.put("id", owner.toString());
         entry.put("on", trigger);
+        for (var key : dev.materione.api.logic.RuleThrottle.options()) {
+            if (throttle.get(key.id()) != null) {
+                entry.put(key.id(), throttle.get(key.id()));
+            }
+        }
         entry.put("do", steps);
         var flowSet = new FlowSet(context, flows, flowRoots(lookup, List.of(entry)));
         var rules = new ArrayList<Rule>();

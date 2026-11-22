@@ -63,7 +63,7 @@ describe('the vocabulary the inspector reads', () => {
   it('carries the trigger context schema, the function signatures and the widget hints', () => {
     const click = vocabulary.triggers.get('gui.click')!;
     expect(click.context.map((variable) => variable.path)).toContain('click.type');
-    expect(click.context.find((variable) => variable.path === 'gui.args.*')!.type).toBe('string');
+    expect(click.context.find((variable) => variable.path === 'gui.args.*')!.type).toBe('raw'); // typed as the open: block declares (#467)
     expect(vocabulary.functions.find((fn) => fn.id === 'contains')!.parameters.length).toBeGreaterThan(0);
     expect(vocabulary.actions.get('give_item')!.parameters[0]!.uiHint).toBe('item');
     expect(vocabulary.actions.get('sound')!.parameters[0]!.uiHint).toBe('sound');

@@ -17,6 +17,7 @@ const ALIAS_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/gui/**',
   'plugin/src/main/java/dev/materione/plugin/gui/open/**',
+  'plugin/src/main/java/dev/materione/plugin/commands/**',
   'plugin/src/main/java/dev/materione/plugin/MaterionePlugin.java',
   'behavior/src/main/java/dev/materione/behavior/flow/FlowCompiler.java',
   'content/src/main/java/dev/materione/content/gui/**',

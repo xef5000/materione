@@ -1,20 +1,22 @@
 package dev.materione.behavior.rule;
 
+import dev.materione.api.logic.RuleThrottle;
+
 /** Rule throttling options: cooldown window and optional charge budget. */
 public record RuleOptions(long cooldownMs, Integer charges, String scope) {
 
     /** Charge/scope key granularity. */
-    public static final String PER_PLAYER = "player";
-    public static final String PER_GLOBAL = "global";
+    public static final String PER_PLAYER = RuleThrottle.PER_PLAYER;
+    public static final String PER_GLOBAL = RuleThrottle.PER_GLOBAL;
 
     /** The rule key of the flow that runs when the rule matched but its cooldown blocked it (logic.md §16). */
-    public static final String ON_COOLDOWN = "on_cooldown";
+    public static final String ON_COOLDOWN = RuleThrottle.ON_COOLDOWN;
 
     /** The context root an {@code on_cooldown} run reads; its only member is {@link #REMAINING}. */
-    public static final String COOLDOWN_ROOT = "cooldown";
+    public static final String COOLDOWN_ROOT = RuleThrottle.COOLDOWN_ROOT;
 
     /** {@code cooldown.remaining}: the whole seconds left in the window, rounded up. */
-    public static final String REMAINING = "remaining";
+    public static final String REMAINING = RuleThrottle.REMAINING;
 
     public static RuleOptions none() {
         return new RuleOptions(0, null, PER_PLAYER);
