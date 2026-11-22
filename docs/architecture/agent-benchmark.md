@@ -606,8 +606,20 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 |---|---|---|---|---|---|
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
-| 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 17 | T04 T05 T07 | Small: expression functions and one rule option |
-| 3 | **Entity and world verbs** (#329) | VERB | 21 | T12 T13 T14 | Medium: about eight actions, each small; protection checks |
+| 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 18 | T04 T05 T07 | Small: expression functions and one rule option |
+| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 21 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
+| 4 | **Commands as content** (#330), **shipped** | CMD | 21 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
+| 5 | **Target addressing** (#331), **shipped** | TARGET | 21 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
+| 6 | **Timers** (rides #327's rule unit) (#332) | TIMER | 22 | T26 | Small once RULE exists; budgets matter |
+| 7 | **Keyed state: holders, keys, TTL** (#333) | STATE | 23 | T01 (needs 1 and 5) | Large: the store port, stack and entity holders, migration checks |
+| 8 | **Custody holders and transfer** (#334) | CUSTODY | 24 | T18 | Large, with an open design problem (primitives.md §3) |
+| 9 | **Views over state; dialog and HUD as view kinds** (#335) | VIEW | 27 | T02 (needs 4, 5, 7, 8), T20 (needs 1, 3, 6), T28 (needs 1) | Large: #6 and #7 reshaped |
+| 10 | **A ranking read across holders** (#336) | QUERY | 28 | T17 | Medium; touches offline player data |
+| 11 | **Open provider kinds** (primitives.md §5.8, no issue) | PROVIDER | 29 | T22 | Deferred until a second kind forces the shape |
+| 12 | **Expression-valued quantities on the money actions** (found by #330, #464), **shipped** | QTY | 29 | T21 | Small: `give_money`, `take_money` and `has_money` read `amount` through `Quantity`, as `give_exp` does (as built: logic.md §42) |
+
+Rank 12 shipped (#464) before ranks 6 to 11, so its task, T21, is in the baseline the cumulative counts start from. That is
+why ranks 2 to 11 each read one higher than when this table was first written, and rank 11 now reaches all 29.
 
 **What the ranking says.**
 
