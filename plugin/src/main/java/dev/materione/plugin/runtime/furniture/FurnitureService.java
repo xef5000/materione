@@ -88,6 +88,23 @@ public final class FurnitureService implements Listener {
     /** Rate limiting for world diagnostics (MTR-0026). */
     private final Map<String, Long> lastReport = new ConcurrentHashMap<>();
 
+    /** The protection port (protection.md): asked before a cluster is placed or taken up in modes both and port. */
+    private volatile dev.materione.plugin.protection.ProtectionService protection =
+            dev.materione.plugin.protection.ProtectionService.inert();
+
+    /** Binds the protection port the plugin built from its settings (logic.md section 43). */
+    public void bindProtection(dev.materione.plugin.protection.ProtectionService protection) {
+        this.protection = protection;
+    }
+
+    /** The port's answer for {@code player} acting at {@code where}, or null when this mode does not ask it. */
+    private dev.materione.api.protection.ProtectionAnswer ask(
+            dev.materione.api.protection.ProtectionAction action, Player player, Location where) {
+        var port = protection;
+        return port.asksPort() ? port.ask(dev.materione.api.protection.ProtectionQuery.of(action,
+                dev.materione.api.protection.ProtectionActor.of(player), where)) : null;
+    }
+
     public FurnitureService(
             org.bukkit.plugin.Plugin plugin,
             DiagnosticsBus diagnostics,
@@ -156,6 +173,12 @@ public final class FurnitureService implements Listener {
         if (!spaceOk(anchor, def.get(), yaw)) {
             event.getPlayer().sendMessage(Component.text("Not enough space for ", NamedTextColor.RED)
                     .append(MaterioneText.parse(displayName(def.get()))));
+            return;
+        }
+        var verdict = ask(dev.materione.api.protection.ProtectionAction.PLACE, event.getPlayer(), anchor.getLocation());
+        if (verdict != null && verdict.denied()) {
+            event.getPlayer().sendMessage(Component.text("You cannot place that here (" + verdict.describeDenial() + ")",
+                    NamedTextColor.RED));
             return;
         }
         spawnCluster(anchor.getWorld(), anchor.getX(), anchor.getY(), anchor.getZ(), def.get(), yaw);
@@ -462,6 +485,12 @@ public final class FurnitureService implements Listener {
         Entity root = rootHit ? event.getEntity() : nearbyEntity(event.getEntity(),
                 memberRoot(event.getEntity()).orElse(null));
         if (root != null) {
+            var verdict = ask(dev.materione.api.protection.ProtectionAction.BREAK, player, root.getLocation());
+            if (verdict != null && verdict.denied()) {
+                player.sendMessage(Component.text("You cannot take that up (" + verdict.describeDenial() + ")",
+                        NamedTextColor.RED));
+                return;
+            }
             removeCluster(root, true);
         }
     }

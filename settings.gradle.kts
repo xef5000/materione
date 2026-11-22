@@ -60,6 +60,39 @@ dependencyResolutionManagement {
                 includeGroup("com.github.MilkBowl")
             }
         }
+        // The protection adapters' APIs (integrations, compileOnly; docs/architecture/protection.md section 9). Each repository
+        // is the plugin's own official one and admits only that plugin's groups, so nothing else resolves from it and an
+        // outage of one repository cannot affect any other dependency. PlotSquared is on Maven Central.
+        maven("https://maven.enginehub.org/repo/") {
+            name = "enginehub"
+            content {
+                includeGroup("com.sk89q.worldguard")
+                includeGroup("com.sk89q.worldedit")
+            }
+        }
+        maven("https://repo.codemc.org/repository/maven-public/") {
+            name = "codemc"
+            // GriefPrevention and BentoBox publish their APIs here. BentoBox's poms carry a ${revision} version Gradle cannot
+            // read, and both are used non-transitively, so the jars are fetched with no metadata at all.
+            metadataSources { artifact() }
+            content {
+                includeGroup("me.ryanhamshire")
+                includeGroup("world.bentobox")
+            }
+        }
+        maven("https://repo.glaremasters.me/repository/towny/") {
+            name = "towny"
+            content {
+                includeGroup("com.palmergames.bukkit.towny")
+            }
+        }
+        maven("https://repo.william278.net/releases") {
+            name = "william278"
+            content {
+                includeGroup("net.william278.huskclaims")
+                includeGroup("net.william278.husktowns")
+            }
+        }
         maven("https://repo.nexomc.com/releases/") {
             name = "nexomc"
             // The Nexo-maintained creative fork keeps upstream's coordinates

@@ -6,6 +6,8 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.RunMeter;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.plugin.protection.ProtectionService;
+import dev.materione.plugin.protection.ProtectionSettings;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -57,11 +59,23 @@ public final class WorldVerbs {
     private final Consumer<Diagnostic> diagnostics;
     private final LongSupplier clock;
     private final Map<String, Long> reported = new ConcurrentHashMap<>();
+    private final ProtectionService protection;
     private volatile CustomBlocks custom;
 
+    /** A platform whose protection is the event path alone (mode {@code event}, no provider): the shape before the port. */
     public WorldVerbs(Regions regions, BlockOps blocks, ProjectileLauncher projectiles, Function<String, World> worlds,
             Function<NamespacedKey, Particle> particles, Function<String, BlockData> blockData,
             DamageWatch damageWatch, WorldLimits limits, Consumer<Diagnostic> diagnostics, LongSupplier clock) {
+        this(regions, blocks, projectiles, worlds, particles, blockData, damageWatch, limits, diagnostics, clock,
+                ProtectionService.inert());
+    }
+
+    /** @param protection the protection port every verb that changes the world asks (protection.md) */
+    public WorldVerbs(Regions regions, BlockOps blocks, ProjectileLauncher projectiles, Function<String, World> worlds,
+            Function<NamespacedKey, Particle> particles, Function<String, BlockData> blockData,
+            DamageWatch damageWatch, WorldLimits limits, Consumer<Diagnostic> diagnostics, LongSupplier clock,
+            ProtectionService protection) {
+        this.protection = protection;
         this.regions = regions;
         this.blocks = blocks;
         this.projectiles = projectiles;
@@ -85,12 +99,29 @@ public final class WorldVerbs {
      */
     public static WorldVerbs server(Plugin plugin, SchedulingGateway gateway, Consumer<Diagnostic> diagnostics,
             WorldLimits limits) {
+        Regions regions = Regions.server(plugin, gateway);
+        return server(plugin, gateway, diagnostics, limits, new ProtectionService(ProtectionSettings.EVENT_ONLY, regions,
+                false, diagnostics, System::currentTimeMillis));
+    }
+
+    /** As above, with the protection service the verbs ask (built from the {@code protection_*} settings). */
+    public static WorldVerbs server(Plugin plugin, SchedulingGateway gateway, Consumer<Diagnostic> diagnostics,
+            WorldLimits limits, ProtectionService protection) {
         WorldVerbs[] self = new WorldVerbs[1];
         var verbs = new WorldVerbs(Regions.server(plugin, gateway), new PaperBlockOps(() -> self[0].custom),
                 ProjectileLauncher.server(), Bukkit::getWorld, key -> Registry.PARTICLE_TYPE.get(key),
-                Bukkit::createBlockData, new DamageWatch.Paper(), limits, diagnostics, System::currentTimeMillis);
+                Bukkit::createBlockData, new DamageWatch.Paper(), limits, diagnostics, System::currentTimeMillis,
+                protection);
         self[0] = verbs;
         return verbs;
+    }
+
+    /**
+     * The protection port the verbs ask before they change the world on someone's behalf (protection.md): the mode, the
+     * actor-less switch and the providers.
+     */
+    public ProtectionService protection() {
+        return protection;
     }
 
     /** The caps of this server. */
@@ -164,8 +195,8 @@ public final class WorldVerbs {
     public void regionRefused(String verb, int count) {
         report("region:" + verb, new Diagnostic(DiagnosticCodes.VERB_REGION_REFUSED, Severity.WARN,
                 "'" + verb + "' skipped " + count + " location(s) owned by another region", null, null,
-                "On Folia a block changed as the player must lie in the region the player is in; keep the area small "
-                        + "or use as_player: false."));
+                "On Folia a block changed as the player must lie in the region the player is in; keep the area small, "
+                        + "use as_player: false, or set protection_mode: port, where the port answers on the block's region."));
     }
 
     private void report(String key, Diagnostic diagnostic) {

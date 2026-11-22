@@ -53,6 +53,15 @@ public interface LogicApi {
     LogicProviders providers();
 
     /**
+     * The protection port (protection.md, logic.md section 43): ask the region and claim plugins whether an actor may change a
+     * place, read which providers are present, and register an addon's own. The built-in verbs and the {@code can_build},
+     * {@code can_break} and {@code can_interact} conditions ask it.
+     */
+    default dev.materione.api.protection.ProtectionApi protection() {
+        throw new IllegalStateException("LogicApi sub-api 'protection' is not wired yet");
+    }
+
+    /**
      * The {@code currency-integrations} registry: how a currency reaches its money (Vault, XP, a command
      * pair, or an addon's own) (logic.md §18). Register here to make a new integration name available to
      * currency files.

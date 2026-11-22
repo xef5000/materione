@@ -9,6 +9,25 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Protection port: ask region and claim plugins before a world change (#466, M6.5, D12, logic.md section 43,
+  docs/architecture/protection.md).** One question, "may this actor change this place?", asked by every verb that changes the world
+  on someone's behalf. `ProtectionPort` (an SPI in `api.protection`: `canBreak`, `canPlace`, `canInteract`, `canDamage`, `canUse`; an
+  actor that is a player, an offline player or no one; an answer of allow, deny or abstain with the provider's name) and
+  `ProtectionApi` (reached as `api.logic().protection()`: register a provider, ask all of them, list who is present). Deny wins and
+  abstain falls through. Adapters for **WorldGuard, GriefPrevention, Towny, PlotSquared, HuskClaims, HuskTowns and BentoBox**
+  register while their plugin runs, each written from the plugin's own public API and compiled `compileOnly` against the API
+  artifact in its official repository (a server with WorldGuard gets correct protection with no configuration); Lands, Residence and
+  FactionsUUID are not built (JitPack-only or unpublished APIs) and stay covered by the event path. Settings (optional, not written to
+  a fresh file): `protection_mode` (`event`, `port`, `both`, default `both`: the port first and a deny stops the verb, then the event
+  path for a player's action) and `protection_no_actor` (`ask` default, `allow`). `break_blocks`, `set_block`, `damage` and `launch`
+  ask the port; `as_player: false` now asks it with no actor; furniture placement and removal and the custom-block placements that have
+  no event of their own ask it. `protection_mode: port` also lifts the Folia refusal `MTR-0119` for a block as the player across a
+  region boundary (the port answers on the block's region); `both` and `event` keep it. A provider that throws is a deny for that call
+  (`MTR-0122`, rate-limited). New conditions `can_build`, `can_break` and `can_interact` (true unless a provider denies; they always
+  ask) let content ask itself. New diagnostics `MTR-0122` to `MTR-0124`. `/materione doctor` and the startup log show the mode and the
+  providers present. Harness `PaperProtectionIT` (a stand-in provider registered through the SPI: a deny stops a break before the
+  event path, `event` mode ignores the port, `can_build` reads it); fixture pack `protection`; QA `protection.*` (not run, not
+  blessed). Not built: a cache (adapters read in-memory indexes), per-provider overrides, PlotSquared's per-plot flags.
 - **Commands as content (#330, M6, logic.md section 40).** A new content type, `command` (`commands/`): `names`, typed `args`
   (`string`, `int`, `number`, `player`, `boolean`, `choice`, each with `optional`, `default` and `suggest`), `permission`,
   `requirement`, `deny`, `console` and one flow, `do:`, with `flows:` for named flows. The names, arguments and gate are the block a

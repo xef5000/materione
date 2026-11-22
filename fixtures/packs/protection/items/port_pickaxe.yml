@@ -1,0 +1,17 @@
+# Two verbs that change the world, both subject to the protection port (protection.md section 8): a flat 3 by 3 break as the player
+# (the port is asked per block, then the player's own break path), and one block of glass above the broken block placed with
+# `as_player: false`, which asks the port with no actor. The harness stand-in provider denies chosen places.
+port_pickaxe:
+  material: DIAMOND_PICKAXE
+  display_name: "<aqua>Port Pickaxe"
+  behavior:
+    - id: dig
+      on: break
+      do:
+        - break_blocks: {shape: [1, 0, 1]}
+        - run_command: "say MATERIONE-PROTECTION-DUG ${location.x} ${location.y} ${location.z}"
+    - id: cap
+      on: break
+      do:
+        - set_block: {block: minecraft:glass, at: {of: event, y: 1}, as_player: false}
+        - run_command: "say MATERIONE-PROTECTION-CAPPED ${location.x} ${location.y} ${location.z}"

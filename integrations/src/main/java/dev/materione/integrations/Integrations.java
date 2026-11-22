@@ -5,9 +5,11 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.logic.LogicApi;
+import dev.materione.api.protection.ProtectionApi;
 import dev.materione.integrations.items.OptionalItemSource;
 import dev.materione.integrations.items.OptionalItemSources;
 import dev.materione.integrations.luckperms.LuckPermsPermissionProvider;
+import dev.materione.integrations.protection.ProtectionAdapters;
 import dev.materione.integrations.proxy.BungeeCordTransfer;
 import dev.materione.integrations.vault.VaultCurrencyIntegration;
 import dev.materione.integrations.vault.VaultPermissionProvider;
@@ -36,7 +38,12 @@ import org.bukkit.plugin.Plugin;
  * Vault is enabled, else the session default (not registered here). Transfer: the BungeeCord plugin
  * channel when {@code proxyTransfer} is set; the transfer packet is the plugin's own provider.
  *
- * <p>{@link #refresh} runs at start, on reload, and whenever Vault or LuckPerms enables or disables.
+ * <p><b>Protection.</b> Each protection adapter ({@link ProtectionAdapters}: WorldGuard, GriefPrevention, Towny, PlotSquared,
+ * HuskClaims, HuskTowns, BentoBox) registers its port with the protection service while its plugin is enabled
+ * (protection.md section 9). One that cannot link is reported as {@code MTR-0124} and skipped.
+ *
+ * <p>{@link #refresh} runs at start, on reload, and whenever Vault, LuckPerms, an item catalogue or a protected-by plugin
+ * enables or disables.
  */
 public final class Integrations implements Listener, AutoCloseable {
 
@@ -48,6 +55,7 @@ public final class Integrations implements Listener, AutoCloseable {
 
     private final Plugin host;
     private final LogicApi logic;
+    private final ProtectionApi protection;
     private final DiagnosticsBus diagnostics;
     private final boolean proxyTransfer;
     private final List<AutoCloseable> installed = new ArrayList<>();
@@ -59,7 +67,16 @@ public final class Integrations implements Listener, AutoCloseable {
      * @param proxyTransfer whether {@code transfer_mode} selected the BungeeCord channel
      */
     public Integrations(Plugin host, LogicApi logic, DiagnosticsBus diagnostics, boolean proxyTransfer) {
+        this(host, logic, null, diagnostics, proxyTransfer);
+    }
+
+    /**
+     * @param protection the protection service the protection adapters register into, or null for none (a test)
+     */
+    public Integrations(Plugin host, LogicApi logic, ProtectionApi protection, DiagnosticsBus diagnostics,
+            boolean proxyTransfer) {
         this.host = Objects.requireNonNull(host, "host");
+        this.protection = protection;
         this.logic = Objects.requireNonNull(logic, "logic");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.proxyTransfer = proxyTransfer;
@@ -94,6 +111,14 @@ public final class Integrations implements Listener, AutoCloseable {
             attempt("BungeeCord transfer", () -> installed.add(
                     logic.providers().setTransfer(host, new BungeeCordTransfer(host))));
         }
+        // protection adapters (protection.md section 9): each is registered while its plugin runs
+        if (protection != null) {
+            for (ProtectionAdapters.Candidate adapter : ProtectionAdapters.all()) {
+                if (manager.isPluginEnabled(adapter.plugin())) {
+                    attemptProtection(adapter);
+                }
+            }
+        }
         // item sources of GUI item layers (logic.md §4.4): each is registered while its plugin runs
         for (OptionalItemSource source : OptionalItemSources.all(host)) {
             if (manager.isPluginEnabled(source.pluginName())) {
@@ -127,7 +152,8 @@ public final class Integrations implements Listener, AutoCloseable {
     }
 
     private static boolean isWatched(String name) {
-        return VAULT.equals(name) || LUCKPERMS.equals(name) || OptionalItemSources.PLUGINS.contains(name);
+        return VAULT.equals(name) || LUCKPERMS.equals(name) || OptionalItemSources.PLUGINS.contains(name)
+                || ProtectionAdapters.plugins().contains(name);
     }
 
     private void uninstall() {
@@ -152,6 +178,21 @@ public final class Integrations implements Listener, AutoCloseable {
             host.getLogger().warning(label + " could not be installed: " + e);
             diagnostics.publish(Diagnostic.warn(DiagnosticCodes.INTEGRATION_SKIPPED,
                     label + " could not be installed (" + e + "); the default is used"));
+        }
+    }
+
+    /**
+     * Registers one protection adapter. A link failure or a failure of the adapter's own constructor is {@code MTR-0124} and a
+     * warning, never a failed enable: the adapter is not installed and the event path still covers its plugin.
+     */
+    private void attemptProtection(ProtectionAdapters.Candidate adapter) {
+        try {
+            installed.add(protection.register(host, adapter.factory().get()));
+        } catch (LinkageError | RuntimeException e) {
+            host.getLogger().warning("protection adapter for " + adapter.plugin() + " could not be installed: " + e);
+            diagnostics.publish(Diagnostic.warn(DiagnosticCodes.PROTECTION_PROVIDER_UNUSABLE,
+                    "the protection adapter for " + adapter.plugin() + " could not be installed (" + e
+                            + "); the event path still covers that plugin"));
         }
     }
 

@@ -19,6 +19,36 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    # The protection adapters (protection.md section 9): each registers a port while its plugin runs, so the plugin loads
+    # first and its API is on the adapter's classpath. Optional, like the rest.
+    WorldGuard:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    GriefPrevention:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    Towny:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    PlotSquared:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    HuskClaims:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    HuskTowns:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    BentoBox:
+      load: BEFORE
+      required: false
+      join-classpath: true
     # Optional: loaded first when present, so the %materione_…% expansion can register.
     PlaceholderAPI:
       load: BEFORE

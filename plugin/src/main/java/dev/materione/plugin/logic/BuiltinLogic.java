@@ -305,6 +305,21 @@ public final class BuiltinLogic {
         for (ConditionType<?> condition : conditions(api.providers(), guis, items, slots, reads)) {
             api.conditions().register(owner, builtIn(condition.id()), condition);
         }
+        // the questions content can put to the protection port (logic.md section 43, #466)
+        for (ConditionType<?> condition : protectionConditions(world)) {
+            api.conditions().register(owner, builtIn(condition.id()), condition);
+        }
+    }
+
+    /**
+     * The conditions over the protection port (logic.md §43): {@code can_build}, {@code can_break} and {@code can_interact}.
+     * They read the live providers through the world platform's service, so they are built once.
+     */
+    public static List<ConditionType<?>> protectionConditions(WorldVerbs world) {
+        return List.of(
+                new dev.materione.plugin.logic.condition.CanBuildCondition(world),
+                new dev.materione.plugin.logic.condition.CanBreakCondition(world),
+                new dev.materione.plugin.logic.condition.CanInteractCondition(world));
     }
 
     /**

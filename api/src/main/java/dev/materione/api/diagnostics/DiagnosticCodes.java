@@ -648,6 +648,30 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0120", Severity.WARN, "Money amount refused at run time; nothing moved");
 
     /**
+     * A protection provider threw while it was asked (protection.md section 6, #466). The call counts as a deny, so a broken
+     * adapter can never let a change through, and the provider is asked again on the next call. Reported at most once per
+     * provider per ten seconds, naming the provider and the failure, because a hot verb would otherwise report it on every
+     * block.
+     */
+    public static final DiagnosticCode PROTECTION_PROVIDER_FAILED =
+            new DiagnosticCode("MTR-0122", Severity.WARN, "A protection provider failed; that call was denied");
+
+    /**
+     * A {@code protection_*} setting is not one of its values (protection.md section 4, #466): the default is used for that
+     * key and the rest of the settings are untouched. Reported once at load, naming the key and the values it takes.
+     */
+    public static final DiagnosticCode PROTECTION_SETTING_INVALID =
+            new DiagnosticCode("MTR-0123", Severity.WARN, "A protection setting is invalid; the default is used");
+
+    /**
+     * A protection provider was not installed because it cannot be used on this server (protection.md section 5, #466): it can
+     * only be asked on the main thread and the server is Folia, or its plugin's API did not link. Reported once when the
+     * provider would have registered.
+     */
+    public static final DiagnosticCode PROTECTION_PROVIDER_UNUSABLE =
+            new DiagnosticCode("MTR-0124", Severity.WARN, "A protection provider cannot be used on this server");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -788,7 +812,10 @@ public final class DiagnosticCodes {
             VERB_BUDGET_SPENT,
             VERB_REGION_REFUSED,
             VERB_SETTING_INVALID,
-            MONEY_AMOUNT_REFUSED);
+            MONEY_AMOUNT_REFUSED,
+            PROTECTION_PROVIDER_FAILED,
+            PROTECTION_SETTING_INVALID,
+            PROTECTION_PROVIDER_UNUSABLE);
 
     private DiagnosticCodes() {}
 

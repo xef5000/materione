@@ -111,6 +111,10 @@ final class WorldFakes {
                 case "getVelocity" -> velocity.clone();
                 case "getLocation" -> location.clone();
                 case "getEyeLocation" -> location.clone().add(0, 1.62, 0);
+                case "getInventory" -> proxy(org.bukkit.inventory.PlayerInventory.class, (m, a) -> switch (m.getName()) {
+                    case "getItemInMainHand" -> null; // an ItemStack needs a server to exist; the verb copes with none
+                    default -> throw new AssertionError("unexpected inventory call: " + m.getName());
+                });
                 case "teleport" -> true;
                 default -> throw new AssertionError("unexpected living call: " + method.getName());
             };
@@ -192,18 +196,29 @@ final class WorldFakes {
     static final class FakeRegions implements Regions {
         final Set<String> foreign = new HashSet<>();
         final List<String> hops = new ArrayList<>();
+        private int hopping;
 
         @Override
         public boolean ownedHere(Location location) {
-            return !foreign.contains(Terrain.key(location.getBlockX(), location.getBlockY(), location.getBlockZ()));
+            // inside a hop the running thread is the owner's, as it is on a real region thread
+            return hopping > 0
+                    || !foreign.contains(Terrain.key(location.getBlockX(), location.getBlockY(), location.getBlockZ()));
         }
 
         @Override
         public <T> CompletionStage<T> at(Location location, Supplier<T> task) {
-            if (!ownedHere(location)) {
+            boolean hop = !ownedHere(location);
+            if (hop) {
                 hops.add(Terrain.key(location.getBlockX(), location.getBlockY(), location.getBlockZ()));
+                hopping++;
             }
-            return CompletableFuture.completedFuture(task.get());
+            try {
+                return CompletableFuture.completedFuture(task.get());
+            } finally {
+                if (hop) {
+                    hopping--;
+                }
+            }
         }
     }
 
@@ -249,6 +264,14 @@ final class WorldFakes {
         @Override
         public Result breakPlain(Block block, boolean drops) {
             calls.add("breakPlain:" + where(block) + (drops ? "" : ":nodrops"));
+            onBreak.accept(block);
+            terrain.types.remove(where(block));
+            return Result.DONE;
+        }
+
+        @Override
+        public Result breakWith(ItemStack tool, Block block, boolean drops) {
+            calls.add("breakWith:" + where(block) + (drops ? "" : ":nodrops"));
             onBreak.accept(block);
             terrain.types.remove(where(block));
             return Result.DONE;
@@ -310,6 +333,81 @@ final class WorldFakes {
         }
     }
 
+    /**
+     * A stand-in protection provider (protection.md): denies the places and the victims a test lists, abstains for the rest, and
+     * records every question as {@code ACTION@x,y,z by <actor>} so a test sees who was asked and with what actor.
+     */
+    static final class FakePort implements dev.materione.api.protection.ProtectionPort {
+        final Set<String> denied = new HashSet<>();
+        final List<String> asked = new ArrayList<>();
+        /** Whether an allowed place answers allow (true) or abstain (false). */
+        boolean allowRest = false;
+
+        private static String who(dev.materione.api.protection.ProtectionActor actor) {
+            return actor.isNone() ? "nobody" : actor.online().isPresent() ? "player" : "offline";
+        }
+
+        private dev.materione.api.protection.ProtectionAnswer answer(String action,
+                dev.materione.api.protection.ProtectionActor actor, Location at) {
+            String where = Terrain.key(at.getBlockX(), at.getBlockY(), at.getBlockZ());
+            asked.add(action + "@" + where + " by " + who(actor));
+            if (denied.contains(where) || denied.contains(action + "@" + where)) {
+                return dev.materione.api.protection.ProtectionAnswer.deny("Stand-in", "the stand-in says no");
+            }
+            return allowRest ? dev.materione.api.protection.ProtectionAnswer.allow("Stand-in")
+                    : dev.materione.api.protection.ProtectionAnswer.abstain("Stand-in");
+        }
+
+        @Override
+        public String name() {
+            return "Stand-in";
+        }
+
+        @Override
+        public dev.materione.api.registry.SelfDescription describe() {
+            return dev.materione.api.registry.SelfDescription.of("Stand-in", "A test provider");
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canBreak(
+                dev.materione.api.protection.ProtectionActor actor, Location location) {
+            return answer("BREAK", actor, location);
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canPlace(
+                dev.materione.api.protection.ProtectionActor actor, Location location) {
+            return answer("PLACE", actor, location);
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canInteract(
+                dev.materione.api.protection.ProtectionActor actor, Location location) {
+            return answer("INTERACT", actor, location);
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canDamage(
+                dev.materione.api.protection.ProtectionActor attacker, Entity victim) {
+            return answer("DAMAGE", attacker, victim.getLocation());
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canUse(
+                dev.materione.api.protection.ProtectionActor actor, Location location) {
+            return answer("USE", actor, location);
+        }
+    }
+
+    /** A plugin stand-in that is enabled, for registering a provider. */
+    static org.bukkit.plugin.Plugin enabledPlugin() {
+        return proxy(org.bukkit.plugin.Plugin.class, (method, args) -> switch (method.getName()) {
+            case "isEnabled" -> true;
+            case "getName" -> "TestPlugin";
+            default -> throw new AssertionError("unexpected plugin call: " + method.getName());
+        });
+    }
+
     /** The platform of one test, with every seam scripted. */
     static final class Platform {
         final Terrain terrain = new Terrain();
@@ -317,18 +415,35 @@ final class WorldFakes {
         final FakeBlocks blocks = new FakeBlocks(terrain);
         final FakeLauncher launcher = new FakeLauncher();
         final List<Diagnostic> diagnostics = new ArrayList<>();
+        final dev.materione.plugin.protection.ProtectionService protection;
         long now = 1_000_000;
-        final WorldVerbs verbs = new WorldVerbs(regions, blocks, launcher,
-                name -> name.equals("world") ? terrain.world : null,
-                key -> key.getKey().equals("cloud") ? Particle.CLOUD : key.getKey().equals("dust") ? Particle.DUST : null,
-                text -> {
-                    if (text.contains("nonsense")) {
-                        throw new IllegalArgumentException(text);
-                    }
-                    return proxy(BlockData.class, (m, a) -> text);
-                },
-                dev.materione.plugin.logic.world.DamageWatch.NONE, dev.materione.plugin.logic.world.WorldLimits.DEFAULTS,
-                diagnostics::add, () -> now);
+        final WorldVerbs verbs;
+
+        /** A platform whose protection is the event path alone (the shape before the port). */
+        Platform() {
+            this(dev.materione.plugin.protection.ProtectionSettings.EVENT_ONLY);
+        }
+
+        /** A platform whose protection runs on {@code settings}; register providers on {@link #protection}. */
+        Platform(dev.materione.plugin.protection.ProtectionSettings settings) {
+            this.protection = new dev.materione.plugin.protection.ProtectionService(settings, regions, false,
+                    diagnostics::add, () -> now,
+                    id -> proxy(org.bukkit.OfflinePlayer.class, (method, args) -> switch (method.getName()) {
+                        case "getUniqueId" -> id;
+                        default -> throw new AssertionError("unexpected offline player call: " + method.getName());
+                    }));
+            this.verbs = new WorldVerbs(regions, blocks, launcher,
+                    name -> name.equals("world") ? terrain.world : null,
+                    key -> key.getKey().equals("cloud") ? Particle.CLOUD : key.getKey().equals("dust") ? Particle.DUST : null,
+                    text -> {
+                        if (text.contains("nonsense")) {
+                            throw new IllegalArgumentException(text);
+                        }
+                        return proxy(BlockData.class, (m, a) -> text);
+                    },
+                    dev.materione.plugin.logic.world.DamageWatch.NONE,
+                    dev.materione.plugin.logic.world.WorldLimits.DEFAULTS, diagnostics::add, () -> now, protection);
+        }
     }
 
     /** A run meter for a test: totals by key. */

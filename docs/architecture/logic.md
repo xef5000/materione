@@ -4828,9 +4828,9 @@ cheap and annoyances are expensive, above all for a first-time user. Each decisi
 
 | # | Question | Decision | Rationale |
 |---|---|---|---|
-| 1 | `as_player: false` asks nobody: an opt-in? | **No opt-in.** It stays allowed as written. When #466 (the protection port, filed, not built here) lands, `as_player: false` asks the port with *no actor*, so a claim plugin may still refuse an actor-less break | the author of a pack is the server's admin, and a switch on an admin's own file is an annoyance with no one to protect; the real answer is a port that can say no, which is #466's |
+| 1 | `as_player: false` asks nobody: an opt-in? | **No opt-in.** It stays allowed as written. #466 (the protection port, built: §43) made `as_player: false` ask the port with *no actor*, so a claim plugin may still refuse an actor-less break; `protection_no_actor: allow` turns that off | the author of a pack is the server's admin, and a switch on an admin's own file is an annoyance with no one to protect; the real answer is a port that can say no, which is #466's |
 | 2 | `damage` cannot report a veto | **Report it, quietly.** `DamageWatch` runs the call inside `observe`, and a listener at `MONITOR` (the last word, after every protection plugin) records whether the damage event ended cancelled; the outcome is then `FAILED` ("the damage was cancelled by a listener"), so a `require` can branch on it and the trace shows it. No chat line, no diagnostic: if Materione and another plugin both police a blow, the owner decides which to disable | a veto is information a flow can use, and spam is an annoyance; one listener with one per-thread slot costs a thread-local read on every other damage event |
-| 3 | Folia: a block as the player across a region boundary | **Keep the refusal** (`MTR-0119`, rate-limited, never on Paper); #466 revisits it | reading and breaking across regions at once needs the player's thread and the block's, which Folia does not give; the refusal is correct and cheap, and the port may change what is asked of whom |
+| 3 | Folia: a block as the player across a region boundary | **Keep the refusal** (`MTR-0119`, rate-limited, never on Paper); #466 revisited it (§43): lifted in `protection_mode: port`, kept in `event` and `both` | reading and breaking across regions at once needs the player's thread and the block's, which Folia does not give; the refusal is correct and cheap, and the port may change what is asked of whom |
 | 4 | Chain reactions | **Not a blanket suppression** (the first draft's): see "Reentrancy". The rule that caused an event is not answered by it; every other rule and plugin is; a depth cap of 4 with `MTR-0118` is the backstop | allow the useful thing (a counter hears every block; a bleed rides every hit) and restrict only the one case that is always a bug (a rule answering itself) |
 | 5 | `location` on an item `break` | **Keep it as the broken block.** The player's own place is `player.x/y/z` (the player facet, already in an item's context) and there is now a `block` root on an item's `break`: `block.type`, `block.x`, `block.y`, `block.z` and `block.face` (the face of the block the player looks at; empty when none) | one honest meaning of `location` (where the event happened), nothing lost, and the block is nameable without a workaround |
 | 6 | The caps | **The numbers stay as defaults, and every one is overridable in `settings.yml`** as flat optional keys, none written to a fresh file: `world_verbs_max_radius` (1 to 8, default 4), `world_verbs_max_blocks_per_run` (1 to 65,536, 2,048), `world_verbs_max_particles_per_step` (1 to 5,000, 500), `world_verbs_max_particles_per_run` (1 to 100,000, 2,000), `world_verbs_max_launches_per_step` (1 to 64, 16), `world_verbs_max_launches_per_run` (1 to 256, 16), `world_verbs_max_drop_stacks_per_run` (1 to 4,096, 128). A value that is not a whole number in its range falls back to its default with `MTR-0121` | a survival server wants smaller and a creative one larger; the range is a hard ceiling so a typo cannot make a step unbounded; the step cap of a box is derived `(2r+1)^3` |
@@ -4840,7 +4840,7 @@ cheap and annoyances are expensive, above all for a first-time user. Each decisi
 ### Not built, on purpose
 
 `spawn`, `kill` and an attribute modifier (the other verbs primitives.md §5.7 lists: no benchmark task needs them); particle shapes and aura triggers (#21's remainder, #332); the protection port that `as_player: false` and the Folia
-boundary will ask (#466); particles that carry block, item or transition data; a typed `at` or `shape` in the SDK (both are `raw` in the schema, as `target` is, §39 owner question 4); the verbs in a GUI until it is opened about a stack; any Folia run.
+boundary ask (built in #466, §43); particles that carry block, item or transition data; a typed `at` or `shape` in the SDK (both are `raw` in the schema, as `target` is, §39 owner question 4); the verbs in a GUI until it is opened about a stack; any Folia run.
 
 ---
 
@@ -4982,3 +4982,71 @@ The first draft of this section left two questions to the owner; the owner deleg
 A `min` and `max` on a money amount (question 2 of §40, still open: the amount is checked against the one range, `0` to `1.0E12`); a money amount
 in another unit (the expression language does the arithmetic); and a list of amounts in one step (a payment per player is a loop in the TypeScript
 program, not an engine list).
+
+## 43. Decisions taken in #466 (the protection port)
+
+The full design is [`protection.md`](protection.md); this section records what #466 decided and where, so the verbs' contracts stay in one
+place. #466 is a primitive under D12 ([`architecture.md`](../architecture.md) §3.1): one question, "may this actor change this place?",
+asked by every verb that changes the world on someone's behalf and by three conditions, answered by region and claim plugins through
+adapters. The code is `api.protection` (`ProtectionPort`, `ProtectionApi`, `ProtectionActor`, `ProtectionAnswer`, `ProtectionMode`),
+`plugin.protection` (`ProtectionService`, `ProtectionSettings`), `plugin.logic.condition` (`CanBuildCondition`, `CanBreakCondition`,
+`CanInteractCondition`) and `integrations.protection` (seven adapters). Each decision is reversible by the owner.
+
+**Traceability.**
+
+| Decision or rule | How this section applies it |
+|---|---|
+| D12, master §3.1 | the port is a primitive (protection.md §1); a preset or a feature is content over it, never an engine behavior |
+| D8 | the port is asked on the region that owns the location; providers declare their thread safety; the `MTR-0119` refusal is lifted where the port answers alone |
+| D5 | the providers describe themselves (`ProtectionApi#providers`); the conditions are registry entries with full self-description |
+| D6, D1 | nothing is stored; the YAML of every verb is unchanged and the port is a check in the one pipeline step |
+| master §5.6 | the default settings golden is unchanged (the keys are optional); no file changes meaning |
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | The combination | `protection_mode`: `event` (the event path only, the behavior before), `port` (the port only), `both` (default: the port first and a deny stops the verb, then the event path for a player's action). Deny wins, abstain falls through |
+| 2 | `as_player: false` | asks the port with no actor in `port` and `both`; asks nobody in `event`. `protection_no_actor: allow` lets an actor-less change through unasked in every mode |
+| 3 | Folia and `MTR-0119` | **lifted in `port` mode** (the port answers on the block's region with an offline actor, the block is changed there); **kept in `both` and `event`**, because the event path cannot run on the block's region and skipping it would bypass any plugin that has no adapter |
+| 4 | Caching | none: adapters read in-memory indexes and a cache would go stale on claim changes |
+| 5 | Adapter failure | fail closed for that call, `MTR-0122` once per provider per ten seconds |
+| 6 | Where each verb asks | `break_blocks` `canBreak`, `set_block` `canPlace`, `damage` `canDamage`, `launch` `canUse`, furniture placement `canPlace`, taking furniture up `canBreak`, the custom-block placements that have no event of their own `canPlace` |
+| 7 | `damage` and `launch` in `port` mode | the event is the effect, so `port` behaves as `both` |
+| 8 | The conditions | `can_build`, `can_break`, `can_interact`, true unless a provider denies; they ask whatever the mode says |
+| 9 | Adapters | built: WorldGuard, GriefPrevention, Towny, PlotSquared, HuskClaims, HuskTowns, BentoBox. Skipped: Lands and Residence (JitPack-only APIs), FactionsUUID (no published API). Their plugins stay covered by the event path |
+| 10 | `/materione dev place` and `give` | not routed: permission-gated operator tools |
+
+### Diagnostics
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `MTR-0122` | warning | a protection provider failed; that call was denied |
+| `MTR-0123` | warning | a `protection_*` setting is invalid; the default is used |
+| `MTR-0124` | warning | a protection provider cannot be used on this server |
+
+Documented in [`plugin.md`](plugin.md) §5 and pinned in `DiagnosticCodesTest` (111 codes). `MTR-0106` to `MTR-0117` stay reserved by the HUD and
+frame-cycling designs.
+
+### What changed for existing content
+
+Nothing migrates. With no protection plugin installed `both` asks an empty port and runs the event path, as before. The §41 verbs'
+messages for a vetoed block now name the provider when the port refused. `MTR-0119`'s hint names `protection_mode: port`.
+
+### The universality tests (master §3.1)
+
+See [`protection.md`](protection.md) §1: U1 to U5 pass as an actor-, location- and provider-general port, asked by every verb and three
+conditions, described by the providers present, and safe (deny on failure, a diagnostic, never a crash).
+
+### Verification
+
+[`protection.md`](protection.md) §12. `PaperProtectionIT` (Paper 1.21.4, a stand-in provider through the SPI), the unit tests, the goldens
+(`fixtures/codemode/registry/*.json`, `fixtures/golden/editor-demo-snapshot.json`, `fixtures/golden/codemode/*.d.ts`: three conditions) and
+QA `protection.*` (auto, not run, not blessed).
+
+### Owner questions
+
+None (protection.md §13).
+
+### Not built, on purpose
+
+A cache; per-verb or per-provider overrides; adapters for Lands, Residence and FactionsUUID; condition forms for `canDamage` and `canUse`;
+PlotSquared's per-plot flags; any Folia run (protection.md §14).

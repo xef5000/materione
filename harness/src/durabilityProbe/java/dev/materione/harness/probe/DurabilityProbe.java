@@ -84,6 +84,10 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe block <x> <y> <z>                    the material at that block
  *   dprobe dig <name> <x> <y> <z>               Player#breakBlock: the player mines that block (fires BlockBreakEvent)
  *   dprobe vel <name>                           the player's velocity
+ *   dprobe portdeny <x y z|all>                 the stand-in protection provider (#466) denies break, place and interact there
+ *   dprobe portclear                            the stand-in allows everything again (and forgets what it was asked)
+ *   dprobe portasked                            how many questions the stand-in was asked, and the last few
+ *   dprobe breakseen <x> <y> <z>                how many BlockBreakEvents were fired at that block
  * </pre>
  *
  * Every answer is one log line containing {@code MATERIONE-DPROBE}. The crash gate is the product's own
@@ -118,6 +122,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     public void onEnable() {
         Bukkit.getPluginManager().registerEvents(this, this);
         registerEconomy();
+        registerProtection();
         log("ready");
     }
 
@@ -139,6 +144,105 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
         } catch (ReflectiveOperationException | RuntimeException failure) {
             log("economy stub not registered: " + failure);
         }
+    }
+
+    // ---- the protection port (#466) -----------------------------------------------------------------------------------
+
+    private final java.util.Set<String> portDenied = ConcurrentHashMap.newKeySet();
+    private volatile boolean portDenyAll;
+    private final List<String> portLog = java.util.Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, Integer> breakEvents = new ConcurrentHashMap<>();
+
+    /**
+     * Registers a stand-in protection provider with the product's protection SPI (logic.md section 43, #466), through the public
+     * {@code MaterioneAPI}: it denies break, place and interact at the places {@code dprobe portdeny} lists and records every
+     * question it is asked. A failure is logged and the protection scenario then fails visibly.
+     */
+    private void registerProtection() {
+        Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
+        if (product == null) {
+            return;
+        }
+        try {
+            MaterioneAPI materione = (MaterioneAPI) product.getClass().getMethod("api").invoke(product);
+            materione.logic().protection().register(this, new StandInPort(this));
+            log("protection stand-in registered");
+        } catch (ReflectiveOperationException | RuntimeException failure) {
+            log("protection stand-in not registered: " + failure);
+        }
+    }
+
+    /** The stand-in provider: a test-only implementation of the product's own protection SPI. */
+    private static final class StandInPort implements dev.materione.api.protection.ProtectionPort {
+        private final DurabilityProbe probe;
+
+        StandInPort(DurabilityProbe probe) {
+            this.probe = probe;
+        }
+
+        @Override
+        public String name() {
+            return "HarnessStandIn";
+        }
+
+        @Override
+        public dev.materione.api.registry.SelfDescription describe() {
+            return dev.materione.api.registry.SelfDescription.of("Harness stand-in", "A test-only protection provider");
+        }
+
+        private dev.materione.api.protection.ProtectionAnswer answer(String action,
+                dev.materione.api.protection.ProtectionActor actor, org.bukkit.Location at) {
+            String where = at.getBlockX() + "," + at.getBlockY() + "," + at.getBlockZ();
+            probe.portLog.add(action + "@" + where + (actor.isNone() ? " nobody" : " player"));
+            return probe.portDenyAll || probe.portDenied.contains(where)
+                    ? dev.materione.api.protection.ProtectionAnswer.deny(name(), "the stand-in denies " + where)
+                    : dev.materione.api.protection.ProtectionAnswer.allow(name());
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canBreak(
+                dev.materione.api.protection.ProtectionActor actor, org.bukkit.Location location) {
+            return answer("BREAK", actor, location);
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canPlace(
+                dev.materione.api.protection.ProtectionActor actor, org.bukkit.Location location) {
+            return answer("PLACE", actor, location);
+        }
+
+        @Override
+        public dev.materione.api.protection.ProtectionAnswer canInteract(
+                dev.materione.api.protection.ProtectionActor actor, org.bukkit.Location location) {
+            return answer("INTERACT", actor, location);
+        }
+    }
+
+    private void portDeny(String[] a) {
+        if (a[1].equals("all")) {
+            portDenyAll = true;
+        } else {
+            portDenied.add(a[1] + "," + a[2] + "," + a[3]);
+        }
+        log("portdeny ok=true");
+    }
+
+    private void portClear() {
+        portDenyAll = false;
+        portDenied.clear();
+        portLog.clear();
+        breakEvents.clear();
+        log("portclear ok=true");
+    }
+
+    private void portAsked() {
+        List<String> last = new ArrayList<>(portLog);
+        log("portasked count=" + last.size() + " last=[" + String.join("; ", last.subList(Math.max(0, last.size() - 6),
+                last.size())) + "]");
+    }
+
+    private void breakSeen(int x, int y, int z) {
+        log("breakseen at=" + x + "," + y + "," + z + " count=" + breakEvents.getOrDefault(x + "," + y + "," + z, 0));
     }
 
     /** {@code dprobe grant <player> <amount>}: adds stub coins; answers the new balance. */
@@ -198,6 +302,11 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "dig" -> dig(player(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]),
                         Integer.parseInt(args[4]));
                 case "vel" -> velocity(player(args[1]));
+                case "portdeny" -> portDeny(args);
+                case "portclear" -> portClear();
+                case "portasked" -> portAsked();
+                case "breakseen" -> breakSeen(Integer.parseInt(args[1]), Integer.parseInt(args[2]),
+                        Integer.parseInt(args[3]));
                 default -> throw new IllegalArgumentException("unknown stage '" + stage + "'");
             }
         } catch (Throwable failure) {
@@ -558,6 +667,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     @EventHandler(priority = org.bukkit.event.EventPriority.LOW)
     public void broke(org.bukkit.event.block.BlockBreakEvent event) {
         var block = event.getBlock();
+        breakEvents.merge(block.getX() + "," + block.getY() + "," + block.getZ(), 1, Integer::sum);
         if (protectedBlocks.contains(block.getX() + "," + block.getY() + "," + block.getZ())) {
             event.setCancelled(true);
         }

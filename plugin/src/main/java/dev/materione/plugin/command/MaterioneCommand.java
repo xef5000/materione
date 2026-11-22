@@ -346,6 +346,16 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                     NamedTextColor.GRAY));
         }
 
+        var protection = plugin.protection();
+        if (protection != null) {
+            String providers = protection.providers().stream()
+                    .map(dev.materione.api.protection.ProtectionApi.ProviderInfo::name)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            sender.sendMessage(Component.text("protection: " + protection.mode().name().toLowerCase(java.util.Locale.ROOT)
+                    + ", providers " + (providers.isEmpty() ? "none (the event path covers every plugin)" : providers),
+                    NamedTextColor.GRAY));
+        }
+
         sender.sendMessage(Component.text(
                 "settings: version " + (report.settingsVersion() == null
                         ? "not loaded" : report.settingsVersion())
