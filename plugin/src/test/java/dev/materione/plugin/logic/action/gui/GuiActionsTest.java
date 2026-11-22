@@ -291,7 +291,7 @@ class GuiActionsTest {
 
         @Test
         void openingRefusedByTheGateIsAFailureWithItsReason() {
-            f.opener.gate((viewer, gui, args) -> dev.materione.plugin.gui.open.OpenGate.Admission.deny("members only"));
+            f.opener.gate((viewer, subject, args) -> dev.materione.plugin.view.open.OpenGate.Admission.deny("members only"));
             var action = new OpenGuiAction(f.bridge);
 
             assertThat(action.execute(action.parse(reader(Map.of("gui", "detail"))), context(menu)))

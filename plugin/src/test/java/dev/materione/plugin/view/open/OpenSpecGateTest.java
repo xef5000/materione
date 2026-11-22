@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.view.open;
 
 import dev.materione.plugin.commands.PlayerNames;
 
@@ -7,7 +7,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.RuntimeGuis;
-import dev.materione.plugin.gui.open.OpenGate.Admission;
+import dev.materione.plugin.gui.open.GuiOpenGates;
+import dev.materione.plugin.gui.open.OpenRequest;
+import dev.materione.plugin.gui.open.OpenResult;
+import dev.materione.plugin.view.open.OpenGate.Admission;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +50,7 @@ class OpenSpecGateTest {
     }
 
     private OpenSpecGate gate(OpenSpecGate.Permissions permissions) {
-        return new OpenSpecGate(permissions, PlayerNames.NONE, (rule, context, owner) -> {
+        return GuiOpenGates.of(permissions, PlayerNames.NONE, (rule, context, owner) -> {
             denied.add(rule);
             f.engine.interpreter().start(rule, context, owner);
         });
@@ -59,7 +62,7 @@ class OpenSpecGateTest {
     }
 
     private Admission admit(OpenSpecGate gate, RuntimeGuis.Live gui, Map<String, String> args) {
-        return gate.admit(f.viewer, gui, args);
+        return gate.admit(f.viewer, new OpenGate.Subject(GuiOpenGates.KIND, gui.id(), gui.open()), args);
     }
 
     @Test

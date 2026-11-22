@@ -17,7 +17,8 @@ import dev.materione.plugin.gui.input.GuiClick;
 import dev.materione.plugin.commands.OpenPlan;
 import dev.materione.plugin.gui.open.OpenRequest;
 import dev.materione.plugin.gui.open.OpenResult;
-import dev.materione.plugin.gui.open.OpenSpecGate;
+import dev.materione.plugin.gui.open.GuiOpenGates;
+import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
@@ -173,7 +174,7 @@ class BuiltinBrowserPackTest {
         fixture = new GuiFixture("materione", () -> Optional.of(registries));
         fixture.windows.renderer = new GuiRenderer(RenderReporter.SILENT);
         fixture.permissions.addAll(List.of("materione.browse", "materione.browse.get"));
-        fixture.opener.gate(new OpenSpecGate(
+        fixture.opener.gate(GuiOpenGates.of(
                 (viewer, node) -> viewer.player().hasPermission(node), PlayerNames.NONE, (rule, context, owner) -> { }));
         try {
             String yaml = browserYaml();

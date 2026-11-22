@@ -11,6 +11,7 @@ import dev.materione.plugin.gui.session.GuiSession;
 import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.WindowHost;
+import dev.materione.plugin.view.open.OpenGate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -75,7 +76,8 @@ public final class GuiOpener {
                     "GUI '" + request.gui() + "' is not live: it is unknown, or its last compile quarantined it");
         }
         RuntimeGuis.Live gui = found.get();
-        OpenGate.Admission admission = gate.admit(viewer, gui, request.args());
+        OpenGate.Admission admission = gate.admit(
+                viewer, new OpenGate.Subject(GuiOpenGates.KIND, gui.id(), gui.open()), request.args());
         if (!admission.allowed()) {
             return OpenResult.refused(admission.usage() ? OpenResult.Outcome.USAGE : OpenResult.Outcome.DENIED,
                     admission.reason());

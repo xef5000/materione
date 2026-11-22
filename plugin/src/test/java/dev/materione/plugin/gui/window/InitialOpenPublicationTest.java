@@ -19,7 +19,8 @@ import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
 import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.open.OpenSpecGate;
+import dev.materione.plugin.gui.open.GuiOpenGates;
+import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
@@ -176,7 +177,7 @@ class InitialOpenPublicationTest {
                 public void close() {}
             });
             var opener = new GuiOpener(guis, fixture.sessions, fixture.events, host, ticker, logger);
-            var gate = new OpenSpecGate((who, node) -> false, PlayerNames.NONE, (rule, context, owner) -> { });
+            var gate = GuiOpenGates.of((who, node) -> false, PlayerNames.NONE, (rule, context, owner) -> { });
             opener.gate((who, gui, args) -> { admissions.incrementAndGet(); return gate.admit(who, gui, args); });
             var pending = new AtomicReference<GuiSession>();
 
@@ -201,7 +202,7 @@ class InitialOpenPublicationTest {
                 };
                 published.set(latest);
                 if (scenario.equals("permission") || scenario.equals("arguments")) {
-                    assertThat(gate.admit(viewer, latest, Map.of("amount", "invalid")).allowed()).isFalse();
+                    assertThat(gate.admit(viewer, new dev.materione.plugin.view.open.OpenGate.Subject("gui", latest.id(), latest.open()), Map.of("amount", "invalid")).allowed()).isFalse();
                 }
                 try {
                     var method = GuiLiveRefresh.class.getDeclaredMethod("refreshViewer",

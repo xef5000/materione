@@ -3,7 +3,7 @@ package dev.materione.plugin.gui.open;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.plugin.gui.GuiFixture;
-import dev.materione.plugin.gui.open.OpenGate.Admission;
+import dev.materione.plugin.view.open.OpenGate.Admission;
 import dev.materione.plugin.gui.session.CloseReason;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.Map;
@@ -91,7 +91,7 @@ class GuiOpenerTest {
 
     @Test
     void theGateDecidesTheArgumentsAndCanRefuse() {
-        f.opener.gate((viewer, gui, args) -> args.containsKey("category")
+        f.opener.gate((viewer, subject, args) -> args.containsKey("category")
                 ? Admission.allow(Map.of("category", args.get("category").toUpperCase(), "typed", "yes"))
                 : Admission.deny("category is required"));
 

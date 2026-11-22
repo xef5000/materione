@@ -28,7 +28,8 @@ import dev.materione.plugin.commands.DocumentCommands;
 import dev.materione.plugin.commands.OpenCommandHandler;
 import dev.materione.plugin.commands.OpenDeclaration;
 import dev.materione.plugin.commands.OpenCommandRegistrar;
-import dev.materione.plugin.gui.open.OpenSpecGate;
+import dev.materione.plugin.gui.open.GuiOpenGates;
+import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.tick.GuiTicker;
@@ -115,7 +116,7 @@ public final class GuiStack {
                 windows);
         this.lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
-        opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
+        opener.gate(GuiOpenGates.of(OpenSpecGate.Permissions.live(), PlayerNames.server(),
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
         this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server(), diagnostics);
