@@ -13,7 +13,7 @@ import dev.materione.behavior.run.RunReadExecutor;
 import dev.materione.behavior.run.RunScheduler;
 import dev.materione.plugin.logic.action.PlayerFake;
 import dev.materione.plugin.logic.support.ItemCatalog;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import java.lang.reflect.Proxy;
 import java.util.ArrayDeque;
 import java.util.Map;

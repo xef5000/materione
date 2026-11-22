@@ -237,9 +237,9 @@ class BuiltinActionsTest {
         @Test
         void parsesTheSoundWithVolumeAndPitchDefaultsAndRejectsOutOfRangeValues() {
             var parsed = action.parse(reader(params("sound", "minecraft:block.note_block.pling")));
-            assertThat(parsed.volume()).isEqualTo(1f);
-            assertThat(parsed.pitch()).isEqualTo(1f);
-            assertThat(action.parse(reader(params("sound", "x", "volume", 0.5, "pitch", 2))).pitch()).isEqualTo(2f);
+            assertThat(parsed.volume().literal()).isEqualTo(1f);
+            assertThat(parsed.pitch().literal()).isEqualTo(1f);
+            assertThat(action.parse(reader(params("sound", "x", "volume", 0.5, "pitch", 2))).pitch().literal()).isEqualTo(2f);
 
             assertThatThrownBy(() -> action.parse(reader(params()))).hasMessage("sound is required");
             assertThatThrownBy(() -> action.parse(reader(params("sound", "x", "volume", "loud"))))
@@ -267,9 +267,9 @@ class BuiltinActionsTest {
         void parsesTheEffectWithItsDefaultsAndRejectsBadValues() {
             var parsed = action.parse(reader(params("type", "Speed")));
             assertThat(parsed.effect().getKey()).isEqualTo("speed");
-            assertThat(parsed.duration()).isEqualTo(200);
-            assertThat(parsed.amplifier()).isEqualTo(0);
-            assertThat(action.parse(reader(params("type", "speed", "duration", 40, "amplifier", 2))).amplifier())
+            assertThat(parsed.duration().literal()).isEqualTo(200);
+            assertThat(parsed.amplifier().literal()).isEqualTo(0);
+            assertThat(action.parse(reader(params("type", "speed", "duration", 40, "amplifier", 2))).amplifier().literal())
                     .isEqualTo(2);
 
             assertThatThrownBy(() -> action.parse(reader(params()))).hasMessage("type is required");

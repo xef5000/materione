@@ -22,7 +22,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.ProviderParams;
 import dev.materione.plugin.logic.currency.CurrencyReads;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalDouble;
@@ -111,7 +111,7 @@ public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params>
         }
         OptionalDouble amount = ProviderParams.runAmount(params.amount(), context);
         if (amount.isEmpty()) {
-            return ActionOutcome.refused(DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+            return ActionOutcome.refused(DiagnosticCodes.QUANTITY_REFUSED,
                     ProviderParams.refusedAmount(params.amount(), context));
         }
         CurrencyCatalog catalog = providers.currencies();

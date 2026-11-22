@@ -18,7 +18,7 @@ import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.ItemRef;
 import dev.materione.plugin.logic.support.ItemTemplates;
 import dev.materione.plugin.logic.support.Quantities;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import dev.materione.plugin.logic.support.Stages;
 import dev.materione.plugin.logic.world.LocationSpec;
 import dev.materione.plugin.logic.world.WorldVerbs;

@@ -1,6 +1,7 @@
 package dev.materione.plugin.logic.support;
 
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.ReadExecutor;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;

@@ -38,12 +38,18 @@ public final class RuleParser {
                     "Steps that run when the action fails or goes unanswered; the flow then stops", List.of())
                     .ofKind(ParameterSchema.KIND_STEPS));
 
-    /** Self-description of the universal action keys. */
+    /**
+     * Self-description of the universal action keys. Both take a template that renders to their value (logic.md section
+     * 44): the flag is what the vocabulary and the SDK read, and the compiler reads them as expressions.
+     */
     public static final List<ParameterSchema> ACTION_OPTIONS = List.of(
             option(ActionStep.CHANCE_KEY, ParameterType.DECIMAL, "1",
-                    "Probability from 0 to 1 that the action runs", List.of()),
+                    "Probability from 0 to 1 that the action runs; or a template that renders to one", List.of())
+                    .acceptingExpression(),
             option(ActionStep.DELAY_KEY, ParameterType.INTEGER, "0",
-                    "Ticks to wait before the action runs; the flow waits with it", List.of()));
+                    "Ticks to wait before the action runs, or a template that renders to them; the flow waits with it",
+                    List.of())
+                    .acceptingExpression());
 
     private static ParameterSchema option(
             String id, ParameterType type, String defaultValue, String description, List<String> allowed) {

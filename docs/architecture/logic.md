@@ -4971,7 +4971,7 @@ The code is in `plugin.logic.ProviderParams` (`amount`, `runAmount`, `refusedAmo
    renders first and reads the balance on the currency's thread. A literal has nothing to resolve, so its path is the one it was.
 4. **A refused amount is reported under `MTR-0120`.** A literal that does not load is `MTR-0057` (the step is skipped, as for any action).
    A template that renders to something other than a number above 0 and at most `1.0E12` is refused at run time under **`MTR-0120`**
-   (warning, `DiagnosticCodes.MONEY_AMOUNT_REFUSED`, plugin.md §5). The engine does three things with it, the same way for every step:
+   (warning, `DiagnosticCodes.QUANTITY_REFUSED`, plugin.md §5). The engine does three things with it, the same way for every step:
    - **the outcome carries the code.** `ActionOutcome.refused(code, reason)` is a `Failed` whose `code()` is set (an ordinary failure has
      none). The interpreter reports it through `RunReporter.refused`, rate-limited per rule and code as the other run-time codes are, and
      reports it **even inside a `require`**: a bad amount is a content error, where an insufficient balance is a business outcome and stays
@@ -4997,6 +4997,9 @@ The code is in `plugin.logic.ProviderParams` (`amount`, `runAmount`, `refusedAmo
 | `slot_has` `slot`, `amount`; `gui.slot_item` `amount`, `level`, `set_amount` | literal | a GUI's slot is a position in its own layout, fixed when the GUI is authored, and the GUI's item edits are its own |
 | `has_permission` `min` | literal | a count over the node list the same step holds, checked at load against that list |
 | rule `cooldown`, `charges`, `per`, `on_cooldown`; step `delay`, `chance`; `wait` ticks | literal | not action parameters: the rule and flow compilers read them at load into the cooldown store and the scheduler (logic.md §16, §37). An expression there is a change to the rule model, not a widening |
+
+The rows marked literal for the presentation timings, the GUI slot, the permission count and the step keys `chance`, `delay` and
+`wait` were widened by #470 (decisions below); the rule keys stayed literal there, with their reasons.
 
 ### What changed for existing content
 
@@ -5063,11 +5066,89 @@ The first draft of this section left two questions to the owner; the owner deleg
    pinned in `DiagnosticCodesTest` (the count is 105) and documented in plugin.md §5. #465 takes `MTR-0118` and `MTR-0119`, so `MTR-0120` is
    free on `main`; the merge of #465 is a trivial conflict in that test's count and comment, as the coordinator expected.
 
+### Decisions taken in #470
+
+[#470](https://github.com/xef5000/materione/issues/470) widens the quantities this section left literal, and the step keys the compilers
+read at load wherever the flow can read them per run. The owner's rule for the decisions was *allow as much as possible*; each choice below
+is reversible. It answers the question §42 left open, which is decided here, not carried.
+
+| Decision or rule | How this subsection applies it |
+|---|---|
+| D5 | each widened parameter and step key declares `acceptingExpression()`; the registry, the editor snapshot and the `.d.ts` goldens change by those flags and the `number \| Expr` types |
+| D12, master §3.1 | no new engine surface: each quantity is the `Quantity` every expression parameter already reads (U3), and the step keys read the same type |
+| D8 | a template renders on the thread its own reads need, before the effect: an action as `give_exp` does, a step key through the interpreter's own resumable evaluation |
+| D6, D1 | the file format is unchanged; a literal stays a literal in the file |
+| master §5.6 | literal files load, save and run as before, with the same load messages |
+
+1. **`Quantity` moves to `api.logic`.** The flow compiler and the interpreter read `chance`, `delay` and `wait` through it, and `behavior`
+   cannot depend on `plugin`. `api` is the lowest module and the type uses only `api` classes, so the boundaries of plugin.md §11 hold. Three
+   helpers read a literal through the `ParamReader` method its parameter always used (`Quantity.integerOr`, `requiredInteger`, `decimalOr`), so
+   a literal's load message is the text it always was (`fade_in must be an integer in 0..72000`), and the tests that pin those messages are
+   unchanged.
+
+2. **Widened: each takes a number, or a template that renders to one.** Potion `duration` and `amplifier`; title `fade_in`, `stay` and
+   `fade_out`; sound `volume` and `pitch`; prompt `timeout`; `slot_has` `slot`; `gui.slot_item` `slot`; `has_permission` `min`, whose range is 0
+   to the count of the nodes written. A literal is checked at load as before. A template is compiled with its step and checked when the step
+   runs.
+
+3. **A refused template is `MTR-0120`, generalised.** The code now means *a template value refused at run time: it renders outside the range its
+   parameter takes*. Its Java constant is `DiagnosticCodes.QUANTITY_REFUSED` (renamed from `MONEY_AMOUNT_REFUSED`; the code string is the API and
+   does not change). No new code is allocated: `MTR-0125` is taken by #473 and `MTR-0106` to `MTR-0117` are reserved, so the count stays at 111
+   and `DiagnosticCodesTest` changes only its comment. Per shape:
+   - an **action** returns `ActionOutcome.refused` before any effect: the step fails with a reason that names the parameter, its range and what it
+     rendered to (`fade_out must be a whole number in 0..72000, not "-3"`). A `prompt` whose timeout is refused never asks its question, so its
+     `else:` runs as it does for any unanswered prompt;
+   - a **condition** throws `CodedRefusal`: `slot_has` and `has_permission` are false and the engine reports the code (§42 decision 4);
+   - the value is checked **before** the context it is used in: before a GUI session is looked up and before the player's permissions are read,
+     so a bad value is reported whatever the context.
+
+4. **The step keys `chance`, `delay` and `wait` are widened.** The flow interpreter can read them per run within the budget of plugin.md §9. A
+   literal step runs the code it always ran, with one boolean test added. A template step renders once per run, as an action's own parameters
+   render on every run, before the roll or the park. The interpreter renders it through its own `await`, the resumable evaluation an action uses,
+   so a template that reads a player's state hops to that state's thread as any action does. A refused value fails its step under `MTR-0120`
+   before the roll and before the run parks; a refused `wait` fails in place and the next step runs. A guarding step (§6.6: `prompt`,
+   `custody.consume`) takes no `chance`, a template included, because a template may render below 1 and a guard must always run.
+
+5. **The rule keys stay literal: `cooldown`, `charges`, `per` and `on_cooldown`.** The rule gate reads them at dispatch, before any run exists and
+   on the event's thread, to decide whether the rule fires at all, and the cooldown store keys on their values. A template there would render
+   inside the gate, before an owner for the rule's reads is chosen, and neither the gate's budget (plugin.md §9: flow dispatch at most 0.5 ms
+   at p99) nor the strict-reads rule allows that. `per` also selects the scope of the key rather than holding a number. Widening them changes the
+   rule model, not a parameter, so they are not part of this widening.
+
+6. **Not widened.** `gui.slot_item` `amount` and `level`, and `slot_has` `amount`: the issue named the slot numbers, and no task asks for an
+   expression there. The reason is §42's own: a literal until a task needs one.
+
+**Not done here.** The older quantity readers (`give_exp`, `take_exp`, `give_item`, `take_item`, `heal`, `teleport` and the others that read a
+`Quantity` before this section) refuse a bad template with an ordinary failure and no code, as they did before. Reporting them under `MTR-0120`
+too would change the trace of ten actions outside this issue's list, so it is a follow-up, not part of #470.
+
+**Performance.** `FlowDispatchPerfTest` (the 0.5 ms p99 budget of plugin.md §9) passes unchanged. A literal step's path adds one boolean test. A
+template step costs one render per run, which the budget does not measure on its own; no p99 is quoted for that path.
+
+**What changed for existing content.** Nothing migrates. A literal in an existing file loads, saves and runs as before, with the same messages.
+A template in `chance`, `delay` or `wait`, or in a widened parameter, was a load error before this section and is accepted now, so no existing
+file changes meaning.
+
+**Verification.** `QuantityExpressionTest` (plugin) covers each widened parameter: a literal's load message, a template read when the step runs,
+and a refused template refused with its code before any effect (potion, title, sound, `slot_has`, `gui.slot_item`, `has_permission`).
+`PromptActionTest` adds the template timeout: it renders before the question, and a refused one asks nothing. `FlowInterpreterTest` (behavior)
+covers a template chance that renders before the roll (zero skips, one always runs), a template delay and wait that park for their rendered
+ticks, a refused chance that fails its step under `MTR-0120` while the chain goes on, a refused delay that parks nothing, a wait that renders
+text and is refused in place, and a refused value inside a `require` that runs its else under the code. `TemplateTimingCompileTest` (behavior)
+covers the load side: literal keys compile as before, templates compile and keep their expressions, a literal out of range still skips the
+rule (`MTR-0021`), bad syntax skips the step (`MTR-0022`), and the keys are declared as expressions. The goldens were regenerated and reviewed:
+`fixtures/codemode/registry/plugin-current.json`, `with-addon.json`, `fixtures/golden/editor-demo-snapshot.json`,
+`fixtures/golden/codemode/plugin-current.d.ts` and `with-addon.d.ts`; the diffs are the descriptions, the `expression` flags and the
+`number | Expr` types.
+
+**QA.** `qa/catalog/quantities.mjs` holds five auto entries over the commands in `fixtures/packs/commands/commands/qty.yml`: a potion duration
+applied and refused, a sound volume applied and refused, and a title fade-in refused. They pass `node qa/runner.mjs check`; they have not been
+run on the probe, and no ledger entry is recorded.
+
 ### Owner questions
 
-1. **Widen the presentation quantities now.** `potion` `duration` and `amplifier`, `title` timings, `sound` `volume` and `pitch`, and `prompt`
-   `timeout` are literal, and each widening is the same `Quantity` read. Widen them all with this section, or with the first task that needs one?
-   (Not decided on review; the owner's delegation covered the two questions above.)
+None open in this section: the question §42 left open is decided above. Retrofitting `MTR-0120` to the older quantity readers is a follow-up
+(see "Not done here").
 
 ### Not built, on purpose
 

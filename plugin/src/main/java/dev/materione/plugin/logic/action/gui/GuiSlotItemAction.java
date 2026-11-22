@@ -1,11 +1,14 @@
 package dev.materione.plugin.logic.action.gui;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Quantity;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -15,6 +18,8 @@ import dev.materione.plugin.gui.GuiRun;
 import dev.materione.plugin.gui.input.SlotOp;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalInt;
+import java.util.concurrent.CompletionStage;
 
 /**
  * {@code gui.slot_item: {slot: 13, op: take}}: applies one operation to the item in an input slot of the GUI
@@ -31,10 +36,10 @@ public final class GuiSlotItemAction implements ActionType<GuiSlotItemAction.Par
     /**
      * The parsed step.
      *
-     * @param slot the container slot
+     * @param slot the container slot: a number, or a template that renders to one (logic.md section 42, #470)
      * @param op the operation, with its own parameters
      */
-    public record Params(int slot, SlotOp op) {
+    public record Params(Quantity slot, SlotOp op) {
 
         public Params {
             Objects.requireNonNull(op, "op");
@@ -58,7 +63,8 @@ public final class GuiSlotItemAction implements ActionType<GuiSlotItemAction.Par
                 "Clears, takes, resizes, repairs or enchants the item in an input slot of this GUI",
                 List.of(
                         new ParameterSchema("slot", ParameterType.INTEGER, true, null,
-                                "The container slot, from 0 at the top-left", null, null),
+                                "The container slot, from 0 at the top-left; or a template that renders to one", null, null)
+                                .acceptingExpression(),
                         new ParameterSchema("op", ParameterType.ENUM, true, null,
                                 "clear, take, set_amount, repair or enchant",
                                 List.of("clear", "take", "set_amount", "repair", "enchant"), null),
@@ -78,7 +84,7 @@ public final class GuiSlotItemAction implements ActionType<GuiSlotItemAction.Par
 
     @Override
     public Params parse(ParamReader params) {
-        int slot = params.requiredInteger("slot", 0, 53);
+        Quantity slot = Quantity.requiredInteger(params, "slot", 0, 53);
         String word = params.text("op");
         SlotOp.Kind kind = SlotOp.Kind.of(word.trim().toLowerCase(java.util.Locale.ROOT)).orElseThrow(
                 () -> new IllegalArgumentException("op must be clear, take, set_amount, repair or enchant, not '" + word + "'"));
@@ -91,13 +97,24 @@ public final class GuiSlotItemAction implements ActionType<GuiSlotItemAction.Par
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
+        OptionalInt slot = params.slot().wholeValue(context);
+        if (slot.isEmpty()) {
+            return ActionOutcome.refused(DiagnosticCodes.QUANTITY_REFUSED, params.slot().refusal("slot", context));
+        }
         try {
             GuiRun run = GuiRun.ofOpenSession(bridge, context);
-            return run.services().inputs().apply(run.viewer().player(), run.session(), params.slot(), params.op())
+            return run.services().inputs().apply(run.viewer().player(), run.session(), slot.getAsInt(), params.op())
                     .map(ActionOutcome::failed)
                     .orElse(ActionOutcome.OK);
         } catch (GuiRun.Refused refused) {
             return ActionOutcome.failed(refused.getMessage());
         }
+    }
+
+    /** The template slot renders on the thread its own reads need, then the operation runs on the player's region. */
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        return params.slot().resolveResumable(context, reads)
+                .thenCompose(slot -> reads.on(threading(), () -> execute(new Params(slot, params.op()), context)));
     }
 }

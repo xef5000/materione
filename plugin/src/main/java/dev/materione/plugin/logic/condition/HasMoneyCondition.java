@@ -19,7 +19,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.ProviderParams;
 import dev.materione.plugin.logic.currency.CurrencyReads;
-import dev.materione.plugin.logic.support.Quantity;
+import dev.materione.api.logic.Quantity;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalDouble;
@@ -134,7 +134,7 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
 
     /** The refusal of an amount that does not render to a number above 0 (MTR-0120), with what it rendered to. */
     private static CodedRefusal refused(Params params, LogicContext context) {
-        return new CodedRefusal(DiagnosticCodes.MONEY_AMOUNT_REFUSED,
+        return new CodedRefusal(DiagnosticCodes.QUANTITY_REFUSED,
                 ProviderParams.refusedAmount(params.amount(), context));
     }
 

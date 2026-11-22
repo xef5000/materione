@@ -147,8 +147,9 @@ final class StepCompiler {
         }
         Step compiled = actions.compile(action, path);
         if (compiled instanceof ActionStep<?> step && step.type().takesElse()) {
-            if (step.chance() < 1) {
+            if (step.chance().isTemplate() || step.chance().literal() < 1) {
                 // a skipped guard would let the steps after it run without what they depend on: it is not optional
+                // (a template chance is refused too: it may render below 1, and the guard must always run)
                 throw unit.structural(path.child(ActionStep.CHANCE_KEY), "a guarding step takes no chance:",
                         "a step that guards what follows always runs; put an if around it to decide whether to run it");
             }
@@ -256,6 +257,9 @@ final class StepCompiler {
 
     private Step waitStep(Object payload, StepPath path) {
         Object ticks = payload instanceof Map<?, ?> mapping ? onlyKey(Shapes.stringMap(mapping), "ticks") : payload;
+        if (ActionCompiler.isTemplate(ticks)) {
+            return new WaitStep(path, actions.waitTicks(ticks, path));
+        }
         if (!Shapes.isWhole(ticks) || ((Number) ticks).longValue() < 0
                 || ((Number) ticks).longValue() > WaitStep.MAX_TICKS) {
             throw unit.structural(path.child("wait"),
@@ -264,6 +268,7 @@ final class StepCompiler {
         }
         return new WaitStep(path, ((Number) ticks).longValue());
     }
+
 
     private Step stopStep(Object payload, StepPath path) {
         if (payload == null || Boolean.TRUE.equals(payload)) {

@@ -1,0 +1,31 @@
+# Quantities from a command argument (#470, logic.md section 42): a potion duration, a title timing and a sound volume
+# that come from the typed argument. A value in range does the thing and announces it; a value out of range is refused
+# under MTR-0120 before anything happens, and the `else:` (or the marker that is missing) says so. The QA suite reads these
+# (qa/catalog/quantities.mjs). Harness and QA only.
+qty-potion:
+  description: "Harness and QA: a potion whose duration is an argument (MTR-0120 when out of range)"
+  names: [qty-potion]
+  args:
+    - {name: ticks, type: number}
+  do:
+    - require:
+        - potion: {type: speed, duration: "${args.ticks}", amplifier: 0}
+      else:
+        - run_command: "say MATERIONE-QTY-POTION-REFUSED ${player.name} ticks ${args.ticks}"
+    - run_command: "say MATERIONE-QTY-POTION ${player.name} ticks ${args.ticks}"
+qty-title:
+  description: "Harness and QA: a title whose fade-in is an argument (MTR-0120 when out of range)"
+  names: [qty-title]
+  args:
+    - {name: fade, type: number}
+  do:
+    - title: {title: "<gold>Quantity", fade_in: "${args.fade}", stay: 40, fade_out: 10}
+    - run_command: "say MATERIONE-QTY-TITLE ${player.name} fade ${args.fade}"
+qty-sound:
+  description: "Harness and QA: a sound whose volume is an argument (MTR-0120 when out of range)"
+  names: [qty-sound]
+  args:
+    - {name: volume, type: number}
+  do:
+    - sound: {sound: "minecraft:block.note_block.pling", volume: "${args.volume}", pitch: 1}
+    - run_command: "say MATERIONE-QTY-SOUND ${player.name} volume ${args.volume}"

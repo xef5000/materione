@@ -18,7 +18,7 @@ class HasPermissionConditionTest {
     void theShorthandIsOneNodeAndTheCheckIsAllOfOne() {
         var parsed = condition.parse(reader(params("permission", "shop.vip")));
         assertThat(parsed.nodes()).containsExactly("shop.vip");
-        assertThat(parsed.min()).isEqualTo(1);
+        assertThat(parsed.min().literal()).isEqualTo(1);
 
         var fake = new PlayerFake();
         assertThat(condition.test(parsed, fake.context())).isFalse();
@@ -30,7 +30,7 @@ class HasPermissionConditionTest {
     void aBareListIsAcceptedAsTheShorthandAndNeedsEveryNode() {
         var parsed = condition.parse(reader(params("permission", List.of("a.one", "a.two"))));
         assertThat(parsed.nodes()).containsExactly("a.one", "a.two");
-        assertThat(parsed.min()).isEqualTo(2);
+        assertThat(parsed.min().literal()).isEqualTo(2);
 
         var fake = new PlayerFake();
         fake.permissions.add("a.one");
@@ -42,7 +42,7 @@ class HasPermissionConditionTest {
     @Test
     void minCountsHowManyOfTheListMustHold() {
         var parsed = condition.parse(reader(params("permissions", List.of("a.one", "a.two", "a.three"), "min", 2)));
-        assertThat(parsed.min()).isEqualTo(2);
+        assertThat(parsed.min().literal()).isEqualTo(2);
 
         var fake = new PlayerFake();
         fake.permissions.add("a.three");

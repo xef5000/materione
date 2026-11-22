@@ -57,8 +57,8 @@ class FlowCompilerTest {
         ActionStep<?> first = (ActionStep<?>) rule.steps().get(0);
         assertThat(first.id()).isEqualTo("run_command");
         assertThat(first.params()).isEqualTo("say hi"); // the scalar landed on the shorthand parameter
-        assertThat(first.chance()).isEqualTo(0.5);
-        assertThat(first.delayTicks()).isEqualTo(10);
+        assertThat(first.chance().literal()).isEqualTo(0.5);
+        assertThat(first.delayTicks().literal()).isEqualTo(10);
         assertThat(first.threading()).isEqualTo(Threading.GLOBAL);
 
         ActionStep<?> second = (ActionStep<?>) rule.steps().get(1);
@@ -79,7 +79,7 @@ class FlowCompilerTest {
         Rule rule = parsed.rules().get(0);
         assertThat(rule.id()).contains("#"); // fallback identity <owner>#<index>
         assertThat(rule.on().detail()).isEmpty();
-        assertThat(((ActionStep<?>) rule.steps().get(0)).chance()).isEqualTo(1.0);
+        assertThat(((ActionStep<?>) rule.steps().get(0)).chance().literal()).isEqualTo(1.0);
         assertThat(rule.options()).isEqualTo(RuleOptions.none());
     }
 

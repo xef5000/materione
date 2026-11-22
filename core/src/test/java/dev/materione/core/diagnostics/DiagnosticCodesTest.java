@@ -58,7 +58,7 @@ class DiagnosticCodesTest {
         // MTR-0105 a rule step names content no pack declares: codemode.md section 10, #363;
         // MTR-0118 a world verb spent its per-run budget, MTR-0119 a world verb skipped a location in another region,
         // MTR-0121 a world verb setting is invalid: logic.md section 41, #329;
-        // MTR-0120 a money amount refused at run time, nothing moved: logic.md section 42, #464;
+        // MTR-0120 a template value refused at run time, the step did nothing: logic.md sections 42 and 44, #464, #470;
         // MTR-0122 a protection provider failed and that call was denied, MTR-0123 a protection setting is invalid,
         // MTR-0124 a protection provider cannot be used on this server: protection.md, logic.md section 43, #466;
         // MTR-0125 a command's selector matched more players than it runs for: logic.md section 40, #467)
@@ -68,7 +68,7 @@ class DiagnosticCodesTest {
         assertThat(DiagnosticCodes.PROTECTION_PROVIDER_FAILED.code()).isEqualTo("MTR-0122");
         assertThat(DiagnosticCodes.PROTECTION_SETTING_INVALID.code()).isEqualTo("MTR-0123");
         assertThat(DiagnosticCodes.PROTECTION_PROVIDER_UNUSABLE.code()).isEqualTo("MTR-0124");
-        assertThat(DiagnosticCodes.MONEY_AMOUNT_REFUSED.code()).isEqualTo("MTR-0120");
-        assertThat(DiagnosticCodes.MONEY_AMOUNT_REFUSED.defaultSeverity()).isEqualTo(Severity.WARN);
+        assertThat(DiagnosticCodes.QUANTITY_REFUSED.code()).isEqualTo("MTR-0120");
+        assertThat(DiagnosticCodes.QUANTITY_REFUSED.defaultSeverity()).isEqualTo(Severity.WARN);
     }
 }

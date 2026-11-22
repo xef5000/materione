@@ -502,6 +502,106 @@ class FlowInterpreterTest {
         assertThat(run.stepsExecuted()).isEqualTo(3);
     }
 
+    // --- templates in the universal keys (logic.md section 42, #470) ----------------------
+
+    /** {@code player.level} is 12 in this context, so {@code player.level * n} is the rendered number n times 12. */
+    @Test
+    void aTemplateChanceRendersBeforeTheRollAndZeroSkipsTheStep() {
+        run(rule("- a: never\n  chance: \"${player.level * 0}\"\n- b: always"));
+
+        assertThat(f.ran).containsExactly("b:always");
+        assertThat(paths(TraceEvent.Type.STEP_SKIPPED)).containsExactly("behavior.0.do.0");
+        assertThat(trace).filteredOn(event -> event.type() == TraceEvent.Type.STEP_SKIPPED)
+                .extracting(TraceEvent::detail).containsExactly("chance 0.0");
+    }
+
+    @Test
+    void aTemplateChanceOfOneAlwaysRuns() {
+        run(rule("- a: always\n  chance: \"${player.level / 12}\""));
+
+        assertThat(f.ran).containsExactly("a:always");
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void aTemplateDelayParksTheRunForItsRenderedTicks() {
+        run(rule("- a: first\n- b: late\n  delay: \"${player.level * 2}\"\n- c: last"));
+
+        assertThat(f.ran).containsExactly("a:first");
+        scheduler.advance(23);
+        assertThat(f.ran).containsExactly("a:first");
+        scheduler.advance(1);
+        assertThat(f.ran).containsExactly("a:first", "b:late", "c:last");
+    }
+
+    @Test
+    void aTemplateWaitParksTheRunForItsRenderedTicks() {
+        run(rule("- a: first\n- wait: \"${player.level * 2}\"\n- b: after"));
+
+        assertThat(f.ran).containsExactly("a:first");
+        scheduler.advance(23);
+        assertThat(f.ran).containsExactly("a:first");
+        scheduler.advance(1);
+        assertThat(f.ran).containsExactly("a:first", "b:after");
+    }
+
+    /** A chance that renders above 1 fails its step under MTR-0120 and runs nothing; the chain goes on. */
+    @Test
+    void aRefusedTemplateChanceFailsItsStepUnderItsCodeAndTheChainGoesOn() {
+        run(rule("- a: never\n  chance: \"${player.level * 10}\"\n- b: after"));
+
+        assertThat(f.ran).containsExactly("b:after");
+        assertThat(diagnostics).singleElement().satisfies(problem -> {
+            assertThat(problem.code().code()).isEqualTo("MTR-0120");
+            assertThat(problem.message()).contains("chance must be a number in 0.0..1.0");
+        });
+        assertThat(trace).filteredOn(event -> event.type() == TraceEvent.Type.STEP_FAILED)
+                .extracting(TraceEvent::detail).singleElement().asString().startsWith("MTR-0120 chance must be");
+    }
+
+    /** A delay past the one-day cap fails its step under MTR-0120 without parking the run. */
+    @Test
+    void aRefusedTemplateDelayFailsWithoutParking() {
+        run(rule("- a: never\n  delay: \"${player.level * 200000}\"\n- b: after"));
+
+        assertThat(f.ran).containsExactly("b:after");
+        assertThat(scheduler.history).isEmpty();
+        assertThat(diagnostics).singleElement().satisfies(problem -> {
+            assertThat(problem.code().code()).isEqualTo("MTR-0120");
+            assertThat(problem.message()).contains("delay must be a whole number in 0..1728000");
+        });
+    }
+
+    /** A wait whose template renders to text fails under MTR-0120 and does not park: the next step runs at once. */
+    @Test
+    void aWaitThatRendersTextIsRefusedWithoutParking() {
+        FlowRun run = run(rule("- wait: \"${player.uuid}\"\n- b: after"));
+
+        assertThat(run.outcome()).isEqualTo(RunOutcome.FINISHED);
+        assertThat(f.ran).containsExactly("b:after");
+        assertThat(scheduler.history).isEmpty();
+        assertThat(diagnostics).singleElement().satisfies(problem -> {
+            assertThat(problem.code().code()).isEqualTo("MTR-0120");
+            assertThat(problem.message()).contains("wait must be a whole number in 0..1728000, not \"u1\"");
+        });
+    }
+
+    /** Inside a require a refused value still runs the else, and reports its code (the money rule, generalised). */
+    @Test
+    void aRefusedTemplateInsideARequireRunsTheElseUnderItsCode() {
+        run(rule("""
+                - require:
+                    - a: never
+                      chance: "${player.level * 10}"
+                  else:
+                    - b: else
+                """));
+
+        assertThat(f.ran).containsExactly("b:else");
+        assertThat(diagnostics).singleElement().satisfies(problem ->
+                assertThat(problem.code().code()).isEqualTo("MTR-0120"));
+    }
+
     // --- threads ---------------------------------------------------------------------
 
     @Test

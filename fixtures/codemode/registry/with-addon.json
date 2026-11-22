@@ -31,7 +31,8 @@
         {
           "advanced": false,
           "default": "1",
-          "description": "Probability from 0 to 1 that the action runs",
+          "description": "Probability from 0 to 1 that the action runs; or a template that renders to one",
+          "expression": true,
           "id": "chance",
           "label": "Chance",
           "order": 0,
@@ -43,7 +44,8 @@
         {
           "advanced": false,
           "default": "0",
-          "description": "Ticks to wait before the action runs; the flow waits with it",
+          "description": "Ticks to wait before the action runs, or a template that renders to them; the flow waits with it",
+          "expression": true,
           "id": "delay",
           "label": "Delay",
           "order": 0,
@@ -750,7 +752,8 @@
           "parameters": [
             {
               "advanced": false,
-              "description": "The container slot, from 0 at the top-left",
+              "description": "The container slot, from 0 at the top-left; or a template that renders to one",
+              "expression": true,
               "id": "slot",
               "label": "Slot",
               "order": 0,
@@ -1119,7 +1122,8 @@
             {
               "advanced": false,
               "default": "200",
-              "description": "Duration in ticks",
+              "description": "Duration in ticks; or a template that renders to them",
+              "expression": true,
               "id": "duration",
               "label": "Duration",
               "order": 0,
@@ -1131,7 +1135,8 @@
             {
               "advanced": false,
               "default": "0",
-              "description": "Amplifier; 0 is level I",
+              "description": "Amplifier, 0 to 255; 0 is level I; or a template that renders to one",
+              "expression": true,
               "id": "amplifier",
               "label": "Amplifier",
               "order": 0,
@@ -1213,7 +1218,8 @@
             {
               "advanced": false,
               "default": "60",
-              "description": "Seconds the player has to answer, from 1 to 600",
+              "description": "Seconds the player has to answer, from 1 to 600; or a template that renders to them",
+              "expression": true,
               "id": "timeout",
               "label": "Timeout",
               "order": 0,
@@ -1440,7 +1446,8 @@
             {
               "advanced": false,
               "default": "1",
-              "description": "Volume",
+              "description": "Volume; or a template that renders to one",
+              "expression": true,
               "id": "volume",
               "label": "Volume",
               "order": 0,
@@ -1452,7 +1459,8 @@
             {
               "advanced": false,
               "default": "1",
-              "description": "Pitch",
+              "description": "Pitch; or a template that renders to one",
+              "expression": true,
               "id": "pitch",
               "label": "Pitch",
               "order": 0,
@@ -1919,7 +1927,8 @@
             {
               "advanced": false,
               "default": "10",
-              "description": "Fade-in in ticks",
+              "description": "Fade-in in ticks; or a template that renders to them",
+              "expression": true,
               "id": "fade_in",
               "label": "Fade In",
               "order": 0,
@@ -1931,7 +1940,8 @@
             {
               "advanced": false,
               "default": "70",
-              "description": "Time fully shown, in ticks",
+              "description": "Time fully shown, in ticks; or a template that renders to them",
+              "expression": true,
               "id": "stay",
               "label": "Stay",
               "order": 0,
@@ -1943,7 +1953,8 @@
             {
               "advanced": false,
               "default": "20",
-              "description": "Fade-out in ticks",
+              "description": "Fade-out in ticks; or a template that renders to them",
+              "expression": true,
               "id": "fade_out",
               "label": "Fade Out",
               "order": 0,
@@ -2655,7 +2666,8 @@
             },
             {
               "advanced": false,
-              "description": "How many of permissions must hold (default: all)",
+              "description": "How many of permissions must hold (default: all); or a template that renders to one",
+              "expression": true,
               "id": "min",
               "label": "Min",
               "order": 0,
@@ -2795,7 +2807,8 @@
           "parameters": [
             {
               "advanced": false,
-              "description": "The container slot, from 0 at the top-left",
+              "description": "The container slot, from 0 at the top-left; or a template that renders to one",
+              "expression": true,
               "id": "slot",
               "label": "Slot",
               "order": 0,
@@ -4801,7 +4814,8 @@
             {
               "advanced": false,
               "default": "1",
-              "description": "Probability from 0 to 1 that the action runs",
+              "description": "Probability from 0 to 1 that the action runs; or a template that renders to one",
+              "expression": true,
               "id": "chance",
               "label": "Chance",
               "order": 0,
@@ -4813,7 +4827,8 @@
             {
               "advanced": false,
               "default": "0",
-              "description": "Ticks to wait before the action runs; the flow waits with it",
+              "description": "Ticks to wait before the action runs, or a template that renders to them; the flow waits with it",
+              "expression": true,
               "id": "delay",
               "label": "Delay",
               "order": 0,
@@ -4922,6 +4937,7 @@
           "parameters": [
             {
               "advanced": false,
+              "expression": true,
               "id": "ticks",
               "label": "Ticks",
               "max": 1728000,

@@ -439,6 +439,13 @@ releases may change file formats, settings and the public API.
 
 ### Changed
 
+- **The remaining quantities are expressions, and so are the step keys `chance`, `delay` and `wait` (#470, logic.md section 42).** A
+  potion `duration` and `amplifier`, the title `fade_in`, `stay` and `fade_out`, the sound `volume` and `pitch`, a prompt `timeout`, the
+  `slot_has` and `gui.slot_item` `slot`, and the `has_permission` `min` take a number or a template that renders to one, as the money amount
+  does. A literal is checked at load as before. A template that renders out of range fails its step (or is false for a condition) and does
+  nothing, reported under `MTR-0120`, which now means any template value refused at run time (the Java constant is `QUANTITY_REFUSED`; no new
+  code). `Quantity` moves to the `api` module. The rule keys `cooldown`, `charges`, `per` and `on_cooldown` stay literal. Benchmark-neutral; no
+  file changes; QA `quantities.*` (auto, not run on the probe).
 - **The money amount is an expression (#464, logic.md section 42).** `give_money`, `take_money` and `has_money` take `amount` as a number or
   a template that renders to one, `take_money: {amount: "${args.amount}"}`, as `give_exp` does. A literal is checked at load as before; a
   template that renders to text, zero, a negative number or more than 1.0E12 fails the step (or is false for `has_money`) and moves nothing,
