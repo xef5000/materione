@@ -217,6 +217,14 @@ public final class GuiFixture {
         return NamespacedId.of(PACK, name);
     }
 
+    /** Whether a GUI re-renders when a variable it reads is written: false for a GUI that says {@code rerender: off}. */
+    public java.util.function.Predicate<NamespacedId> rerenders() {
+        return id -> {
+            CompiledGui model = compiled.get(id);
+            return model == null || model.rerender() != dev.materione.api.content.ViewFacet.RerenderPolicy.OFF;
+        };
+    }
+
     /** The currently live view, to hand to a refresh as the swap's result. */
     public RuntimeGuis view() {
         return view.get();
@@ -232,6 +240,8 @@ public final class GuiFixture {
         public final List<Runnable> deferred = new ArrayList<>();
         public boolean defer;
         public String failOpenWith;
+        /** When set, {@link #advance} is held still by the cursor rule and applies nothing. */
+        public boolean held;
 
         /**
          * When set, the window renders what the real host would paint and remembers it on the session, so a test
@@ -298,10 +308,14 @@ public final class GuiFixture {
         }
 
         @Override
-        public void advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
+        public boolean advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
+            if (held) {
+                return false;
+            }
             log.add("advance " + gui.id().value());
             GuiViewerState.of(session).displayed(gui);
             paint(viewer, session, gui, false);
+            return true;
         }
 
         @Override

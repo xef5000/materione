@@ -1,0 +1,12 @@
+# The live window's variables (views.md sections 3.4 and 5.5): a server variable the window shows, and the window's
+# own switch.
+wave:
+  scope: server
+  type: string
+  default: "calm"
+  description: "The text the live window shows; written from the console"
+shown:
+  scope: session
+  type: boolean
+  default: false
+  description: "Whether the live window shows its second item"

@@ -33,6 +33,12 @@ public sealed interface ViewDirty permits ViewerRecord, ViewCandidate {
         dirtyBit().set(false);
     }
 
+    /** The tick of the last automatic render, 0 before any: what a kind's {@code minInterval} is counted from. */
+    long lastAutomatic();
+
+    /** Records the tick of an automatic render; called only by the scheduler, on the owner thread. */
+    void lastAutomatic(long tick);
+
     /** Whether a write is waiting to be rendered. */
     default boolean isDirty() {
         return dirtyBit().get();

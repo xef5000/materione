@@ -278,13 +278,13 @@ public final class BukkitWindowHost implements WindowHost {
     }
 
     @Override
-    public void advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
-        refresh(viewer, session, gui, false);
+    public boolean advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui) {
+        return refresh(viewer, session, gui, false);
     }
 
-    private void refresh(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, boolean full) {
+    private boolean refresh(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, boolean full) {
         titleRefreshes.invalidate(session);
-        menuOf(viewer, session).ifPresent(menu -> {
+        return menuOf(viewer, session).map(menu -> {
             if (gui.visuals() != null && !titles.available()) {
                 Runnable close = () -> {
                     if (session.isOpen() && session.window() == menu && menuOf(viewer, session).isPresent()) {
@@ -294,19 +294,18 @@ public final class BukkitWindowHost implements WindowHost {
                     }
                 };
                 titleRefreshes.update(session, true, guard.dispatching(viewer.id()), close,
-                        () -> reconcile(viewer, session, menu),
-                        (task, retired) -> later(viewer, task, retired));
-                return;
+                        () -> reconcile(viewer, session, menu), (task, retired) -> later(viewer, task, retired));
+                return true;
             }
             ItemStack carried = viewer.player().getItemOnCursor();
             if (heldTitles.pending(session) && carried != null && !carried.getType().isAir()) {
-                return;
+                return false;
             }
             Rendered next = renderer.render(viewer, session, gui, full, GuiViewerState.of(session).windowTicks());
             boolean changed = !menu.title().equals(next.title());
             if (changed && carried != null && !carried.getType().isAir()) {
                 awaitEmptyCursor(viewer, session, menu);
-                return;
+                return false;
             }
             heldTitles.cancel(session);
             Set<Integer> now = slotsOf(gui, next);
@@ -335,7 +334,8 @@ public final class BukkitWindowHost implements WindowHost {
                 }
                 GuiViewerState.of(session).displayed(gui);
             }, () -> reconcile(viewer, session, menu), (task, retired) -> later(viewer, task, retired));
-        });
+            return true;
+        }).orElse(true);
     }
 
     private void awaitEmptyCursor(Viewer viewer, ViewerRecord session, GuiMenu menu) {

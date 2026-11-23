@@ -160,6 +160,11 @@ public final class MaterionePlugin extends JavaPlugin {
         return escrowLedger;
     }
 
+    /** The GUI runtime, or null before it is built. */
+    public dev.materione.plugin.gui.GuiStack guiStack() {
+        return guiStack;
+    }
+
     /**
      * The crash-safe input runtime (gui-input-durability.md, row P of #247). Present once storage is up; when the
      * ledger did not start its capability fails, so {@code durable: required} layers are refused.

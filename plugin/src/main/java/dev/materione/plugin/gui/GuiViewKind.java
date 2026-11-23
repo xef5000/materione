@@ -73,4 +73,9 @@ public final class GuiViewKind implements ViewKind {
     public boolean render(Viewer viewer, ViewerRecord record) {
         return refresh.refresh(viewer, record);
     }
+
+    @Override
+    public RenderOutcome renderAutomatic(Viewer viewer, ViewerRecord record) {
+        return refresh.automatic(viewer, record);
+    }
 }

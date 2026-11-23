@@ -44,8 +44,22 @@ public final class GuiReads {
 
     /** The reads of every live GUI of a shadow, by view: the input of the {@link ReadsIndex}. */
     public static Map<ViewRef, ViewReads> of(RuntimeGuis guis, LogicLookup lookup) {
+        return of(guis, lookup, id -> true);
+    }
+
+    /**
+     * As {@link #of(RuntimeGuis, LogicLookup)}, for the GUIs a write re-renders: a GUI that says {@code rerender: off}
+     * (views.md section 5.5) is left out of the index, so no write marks its viewers.
+     *
+     * @param rerenders whether the GUI of this id re-renders on a write
+     */
+    public static Map<ViewRef, ViewReads> of(
+            RuntimeGuis guis, LogicLookup lookup, java.util.function.Predicate<NamespacedId> rerenders) {
         var out = new LinkedHashMap<ViewRef, ViewReads>();
         for (RuntimeGuis.Live gui : guis.all()) {
+            if (!rerenders.test(gui.id())) {
+                continue;
+            }
             out.put(new ViewRef(GuiViewerState.KIND, gui.id()), of(gui, lookup).reads());
         }
         return out;

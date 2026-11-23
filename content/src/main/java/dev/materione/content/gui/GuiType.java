@@ -166,6 +166,18 @@ public final class GuiType implements ContentType {
                                         + "reloads always update it", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Refresh", "behavior", 30, true, "number", "", "")),
+                        new ParameterSchema("rerender", ParameterType.ENUM, false, "on_change",
+                                "Whether a write to a variable the window reads re-renders it: on_change (the "
+                                        + "default) updates the dynamic layers and the dynamic title on its own; off "
+                                        + "renders only on the refresh clock, an explicit refresh and a reload",
+                                List.of("on_change", "off"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Re-render", "behavior", 31, true, "select", "", "on_change")
+                                        .withOptions(List.of(
+                                                ParameterSchema.EditorOption.of("on_change", "On change",
+                                                        "A write to a variable the window shows updates it"),
+                                                ParameterSchema.EditorOption.of("off", "Off",
+                                                        "Only the clock, an explicit refresh and a reload update it")))),
                         layers,
                         dev.materione.content.logic.LogicSchemas.behavior(),
                         dev.materione.content.logic.LogicSchemas.flows(),

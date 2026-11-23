@@ -15,6 +15,17 @@ public final class ViewCandidate implements ViewDirty {
     private final UUID player;
     private final String kind;
     private final AtomicBoolean dirty = new AtomicBoolean();
+    private volatile long lastAutomatic;
+
+    @Override
+    public long lastAutomatic() {
+        return lastAutomatic;
+    }
+
+    @Override
+    public void lastAutomatic(long tick) {
+        this.lastAutomatic = tick;
+    }
 
     ViewCandidate(UUID player, String kind) {
         this.player = Objects.requireNonNull(player, "player");

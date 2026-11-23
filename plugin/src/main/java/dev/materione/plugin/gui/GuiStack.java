@@ -34,7 +34,11 @@ import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.view.ReadsIndex;
 import dev.materione.plugin.view.ViewChanges;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewRenderStats;
+import dev.materione.plugin.view.ViewScheduler;
 import dev.materione.plugin.view.ViewWake;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
@@ -59,7 +63,11 @@ public final class GuiStack {
 
     private final ViewRegistry views = new ViewRegistry();
     private final ViewKinds kinds = new ViewKinds();
+    private static final long TICK_NANOS = 50_000_000L;
+
     private final ViewChanges changes;
+    private final ViewScheduler scheduler;
+    private final ViewRenderStats renderStats;
     private final GuiOpener opener;
     private final GuiLifecycle lifecycle;
     private final GuiLiveRefresh refresh;
@@ -136,6 +144,19 @@ public final class GuiStack {
         this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server(), diagnostics);
         this.openCommands = new OpenCommandRegistrar(plugin, openHandler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, views, windows, lifecycle, ticker);
+        this.renderStats = new ViewRenderStats(System::currentTimeMillis);
+        this.scheduler = new ViewScheduler(views, kinds, () -> System.nanoTime() / TICK_NANOS,
+                (player, ticks, task, retired) -> {
+                    Player online = Bukkit.getPlayer(player);
+                    if (online != null) {
+                        scheduling.executeEntityLater(plugin, online, ticks, task, retired);
+                    }
+                },
+                id -> {
+                    Player online = Bukkit.getPlayer(id);
+                    return online == null ? null : Viewer.of(online);
+                }, renderStats);
+        changes.wake(scheduler);
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);
         this.inputClicks = new InputSlotClicks(guis, views, events, guard, journal, strict);
         kinds.register(new GuiViewKind(guis, opener, lifecycle, refresh)); // the container GUI is the first view kind
@@ -151,6 +172,16 @@ public final class GuiStack {
     /** The write observer: marks the viewers a variable write reaches and calls the wake hook ({@link ViewChanges#wake}). */
     public ViewChanges changes() {
         return changes;
+    }
+
+    /** The scheduler the write observer wakes, and the explicit refresh entry points ({@link ViewScheduler#refreshNow}). */
+    public ViewScheduler scheduler() {
+        return scheduler;
+    }
+
+    /** The automatic renders per definition, for {@code /materione doctor}. */
+    public ViewRenderStats renderStats() {
+        return renderStats;
     }
 
     public ViewKinds kinds() {

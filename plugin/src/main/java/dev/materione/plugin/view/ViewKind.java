@@ -78,4 +78,29 @@ public interface ViewKind {
      * @return false when the record is stale or its definition is gone (nothing rendered)
      */
     boolean render(Viewer viewer, ViewerRecord record);
+
+    /** What an automatic render did. */
+    enum RenderOutcome {
+        /** The frame was brought up to date. */
+        RENDERED,
+        /** The kind holds its frame still (the GUI's held cursor, views.md section 4.2 item 5); the dirty bit stays set. */
+        FROZEN,
+        /** The record is stale or its definition is gone; nothing was rendered. */
+        STALE
+    }
+
+    /**
+     * Renders in answer to a write (views.md section 5.4). The default is {@link #render}; a kind that can hold its
+     * frame still (the GUI's held cursor) reports {@link RenderOutcome#FROZEN} instead of applying.
+     */
+    default RenderOutcome renderAutomatic(Viewer viewer, ViewerRecord record) {
+        return render(viewer, record) ? RenderOutcome.RENDERED : RenderOutcome.STALE;
+    }
+
+    /**
+     * A {@code predicate} kind's re-evaluation for one player after a write to something its definitions read: attach
+     * the definitions that became visible and detach the ones that stopped (views.md section 5.3). Runs on the
+     * player's owner thread. The default does nothing, for a kind that forms its viewers by a verb.
+     */
+    default void evaluate(Viewer viewer, ViewCandidate candidate) { }
 }

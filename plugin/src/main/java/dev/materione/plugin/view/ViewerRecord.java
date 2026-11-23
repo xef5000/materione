@@ -62,6 +62,17 @@ public final class ViewerRecord implements ViewDirty {
     private volatile Object window;
     private volatile MutationGuard guard = MutationGuard.NONE;
     private final AtomicBoolean dirty = new AtomicBoolean();
+    private volatile long lastAutomatic;
+
+    @Override
+    public long lastAutomatic() {
+        return lastAutomatic;
+    }
+
+    @Override
+    public void lastAutomatic(long tick) {
+        this.lastAutomatic = tick;
+    }
 
     /**
      * A record about to open.

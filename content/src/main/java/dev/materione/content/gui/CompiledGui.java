@@ -31,11 +31,13 @@ import java.util.Objects;
  * @param refresh the {@code refresh:} clock in ticks, 0 when off (logic.md §6.3)
  * @param visuals the dynamic title and overlay plan, or null for a static GUI
  * @param lists the GUI's {@code list} layers, in layer order, resolved per viewer and page (logic.md §6.7)
+ * @param rerender whether a write to a variable the GUI reads re-renders its viewers (views.md §5.5), {@code on_change} unless the file says {@code off}
  */
 public record CompiledGui(
         NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
         ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
-        List<Placement> placements, int refresh, GuiVisualPlan visuals, List<ListPlacement> lists) {
+        List<Placement> placements, int refresh, GuiVisualPlan visuals, List<ListPlacement> lists,
+        dev.materione.api.content.ViewFacet.RerenderPolicy rerender) {
 
     public CompiledGui {
         Objects.requireNonNull(container, "container");
@@ -46,9 +48,18 @@ public record CompiledGui(
         inputs = List.copyOf(inputs);
         placements = List.copyOf(placements);
         lists = lists == null ? List.of() : List.copyOf(lists);
+        rerender = rerender == null ? dev.materione.api.content.ViewFacet.RerenderPolicy.ON_CHANGE : rerender;
         if (refresh < 0) {
             throw new IllegalArgumentException("refresh is 0 (off) or a whole number of ticks");
         }
+    }
+
+    /** A GUI that re-renders on change. */
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
+            ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
+            List<Placement> placements, int refresh, GuiVisualPlan visuals, List<ListPlacement> lists) {
+        this(id, container, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh,
+                visuals, lists, null);
     }
 
     /** A GUI with no list layers. */

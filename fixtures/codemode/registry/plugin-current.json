@@ -14098,6 +14098,35 @@
             "uiHint": "number"
           },
           {
+            "advanced": true,
+            "allowedValues": [
+              "on_change",
+              "off"
+            ],
+            "default": "on_change",
+            "description": "Whether a write to a variable the window reads re-renders it: on_change (the default) updates the dynamic layers and the dynamic title on its own; off renders only on the refresh clock, an explicit refresh and a reload",
+            "example": "on_change",
+            "id": "rerender",
+            "label": "Re-render",
+            "options": [
+              {
+                "description": "A write to a variable the window shows updates it",
+                "label": "On change",
+                "value": "on_change"
+              },
+              {
+                "description": "Only the clock, an explicit refresh and a reload update it",
+                "label": "Off",
+                "value": "off"
+              }
+            ],
+            "order": 31,
+            "required": false,
+            "section": "behavior",
+            "type": "enum",
+            "uiHint": "select"
+          },
+          {
             "advanced": false,
             "description": "Ordered layers, bottom to top; each layer is one component instance. Raster layers may animate with materione:overlay_frames: {every: ticks, layers: [component-field patches]}",
             "id": "layers",

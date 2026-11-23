@@ -8,6 +8,23 @@
 // Not run when written (needs the probe); the entries are auto assertions blessed on main.
 
 import { test } from './_lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const SERVER_LOG = path.join(ROOT, 'harness', 'build', 'probe', 'server', 'logs', 'latest.log');
+
+/** How many server-log lines match, since the server started (a marker is printed once per event). */
+function logCount(regex) {
+  return fs.readFileSync(SERVER_LOG, 'utf8').split('\n').filter((line) => regex.test(line)).length;
+}
+
+/** The name of the stack in a container slot, or 'empty'. */
+async function slotName(ctx, slot) {
+  return String(await ctx.exec(`def s = player.containerMenu.slots.get(${slot}).getItem()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString()`));
+}
 
 const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/view/**',
@@ -93,6 +110,76 @@ export default [
         await click(ctx, 11); // set_var {var: session.tab, op: toggle}
         await ctx.waitForServerLog(/MATERIONE-OVERLAY-TOGGLED/);
         ctx.expect(await containerOpen(ctx)).toBe(true); // the window survived its own session write
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'views.server-var.live-single',
+    title: 'guilogic:live has no refresh clock and no gui.refresh rule: with it open, slot 11 reads "Wave calm"; the console command `materione var set - guilogic:wave storm` changes slot 11 to "Wave storm" with no click and no reopen (the open marker prints once); resetting the variable changes it back',
+    covers: [...COVERS, 'fixtures/packs/guilogic/**'],
+    dependsOn: ['guilogic.open-and-back'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione var set - guilogic:wave calm');
+        await ctx.rcon('materione gui open guilogic:live Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-LIVE-OPEN/);
+        await ctx.sleep(600);
+        ctx.expect(await slotName(ctx, 11)).toBe('Wave calm');
+
+        const opens = logCount(/MATERIONE-GUILOGIC-LIVE-OPEN/);
+        await ctx.rcon('materione var set - guilogic:wave storm');
+        let name = await slotName(ctx, 11);
+        for (let attempt = 0; attempt < 20 && name !== 'Wave storm'; attempt++) {
+          await ctx.sleep(150);
+          name = await slotName(ctx, 11);
+        }
+        ctx.expect(name).toBe('Wave storm');
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-LIVE-OPEN/)).toBe(opens);
+        ctx.expect(await containerOpen(ctx)).toBe(true);
+      } finally {
+        await ctx.rcon('materione var set - guilogic:wave calm');
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'views.session-toggle.rerenders-window',
+    title: 'guilogic:live: slot 13 is empty at first; a click on the lever (slot 15) toggles the window\'s own session variable (the toggle marker prints once) and the diamond appears in slot 13 with no gui.refresh in the rule; a second click hides it again',
+    covers: [...COVERS, 'fixtures/packs/guilogic/**'],
+    dependsOn: ['guilogic.open-and-back'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione gui open guilogic:live Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-LIVE-OPEN/);
+        await ctx.sleep(600);
+        ctx.expect(await slotName(ctx, 13)).toBe('empty');
+
+        const toggles = logCount(/MATERIONE-GUILOGIC-LIVE-TOGGLED/);
+        await click(ctx, 15);
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-LIVE-TOGGLED/);
+        let name = await slotName(ctx, 13);
+        for (let attempt = 0; attempt < 20 && name !== 'Shown'; attempt++) {
+          await ctx.sleep(150);
+          name = await slotName(ctx, 13);
+        }
+        ctx.expect(name).toBe('Shown');
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-LIVE-TOGGLED/)).toBe(toggles + 1);
+
+        await click(ctx, 15);
+        name = await slotName(ctx, 13);
+        for (let attempt = 0; attempt < 20 && name !== 'empty'; attempt++) {
+          await ctx.sleep(150);
+          name = await slotName(ctx, 13);
+        }
+        ctx.expect(name).toBe('empty');
       } finally {
         await closeWindow(ctx);
       }

@@ -678,7 +678,10 @@ public final class PipelineService {
         builder.view(RuntimeGuis.KEY, liveGuis);
         // what the views read, for the write observer (views.md section 5.2); one entry per view kind
         builder.view(dev.materione.plugin.view.ReadsIndex.KEY, dev.materione.plugin.view.ReadsIndex.of(
-                dev.materione.plugin.gui.GuiReads.of(liveGuis, logicLookup())));
+                dev.materione.plugin.gui.GuiReads.of(liveGuis, logicLookup(), id -> {
+                    var model = guiModels.get(id);
+                    return model == null || model.rerender() != dev.materione.api.content.ViewFacet.RerenderPolicy.OFF;
+                })));
         return builder.build();
     }
 

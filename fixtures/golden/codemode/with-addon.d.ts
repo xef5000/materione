@@ -460,6 +460,12 @@ interface GuiFields {
   player_inventory?: "free" | "locked";
   /** Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it. */
   refresh?: number;
+  /**
+   * Whether a write to a variable the window reads re-renders it: on_change (the default) updates the dynamic layers and the dynamic title on its own; off renders only on the refresh clock, an explicit refresh and a reload.
+   * @defaultValue on_change
+   * @example on_change
+   */
+  rerender?: "on_change" | "off";
   /** Ordered layers, bottom to top; each layer is one component instance. Raster layers may animate with materione:overlay_frames: {every: ticks, layers: [component-field patches]}. */
   layers?: GuiLayerEntry[];
   /** Named flows (id to steps), run from this resource's rules with call: <id>. */
