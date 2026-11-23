@@ -924,7 +924,7 @@ replace, back, close, quit), `SessionVariablesGuiTest` (a rule writes, reads and
 runtime; `MTR-0063` for an undeclared write and read; values die with the window), `SetVarActionTest.Session`, `VarConditionTest`,
 `PromptActionTest`, `VariableRefTest`, `MapLogicContextVariablesTest.SessionScope`, `VariablesTypeTest`, the owner-thread ban test (the
 store's mutators are marked), and webui `logic-session-variables.spec.ts` (the declaration reader, the spellings, the scope, the lint and its
-declare action). QA catalog: `views.session.declared-and-held-by-one-window` (`qa/catalog/views.mjs`, not yet run: it needs the probe).
+declare action). QA catalog: `views.session.declared-and-held-by-one-window` (`qa/catalog/views.mjs`; passed on the probe, run `run-2026-11-23T06-45-36`).
 
 ### 17.5 The reads index and the write observer (slice 2)
 
@@ -998,7 +998,7 @@ nothing, a frozen frame leaves the bit set and renders after release, a server w
 write means no evaluation), `ViewFootprintTest`, `ViewRenderStatsTest`, `RerenderOnChangeTest` (a GUI showing a server variable
 updates after a write with no clock and no refresh, `rerender: off` does not until an explicit refresh, a session toggle
 re-renders its window, the held cursor, and the `guilogic:live` fixture), `GuiInputSlotsTest` (the compile of `rerender:`) and
-`GuiTypeTest` (the schema). QA catalog (`qa/catalog/views.mjs`, not yet run: it needs the probe): `views.server-var.live-single`
+`GuiTypeTest` (the schema). QA catalog (`qa/catalog/views.mjs`; passed on the probe, run `run-2026-11-23T06-01-06`): `views.server-var.live-single`
 and `views.session-toggle.rerenders-window`.
 
 | Acceptance case | Status after V1 |
