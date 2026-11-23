@@ -150,7 +150,7 @@ Content types registered by `content/` (D5), 12 in total (the audit counted 11; 
 | `block` (`blocks/`), `furniture` (`furnitures/`) | World-placed appearance plus behavior hosts | P | None. Depth work (#14, #15) is appearance primitives. |
 | `glyph`, `sound`, `painting`, `effect` | Appearance-only pack resources | P | None. |
 | `recipe` (`recipes/`) | A vanilla crafting recipe (runtime-systems §5) | P | None. The name collides with the logic `Recipe` SPI (§4.10). |
-| `gui` (`guis/`) | One file holding the view (layers), the opening command (`open:`), the rules, and the input and custody policy (`input:`, `durable:`) | **P+** | Split the concerns, not the format: view / command / state / custody (§5.1 to §5.4). `open:` keeps working as sugar for a command whose flow is `gui.open`. |
+| `gui` (`guis/`) | One file holding the view (layers), the opening command (`open:`), the rules, and the input and custody policy (`input:`, `durable:`) | **P+** | Split the concerns, not the format: view / command / state / custody (§5.1 to §5.4). `open:` keeps working as sugar for a command whose flow is `view.open`. |
 | `currency` (`currencies/`) | A named binding to a money provider (logic.md §18) | P | Watch: providers are a fixed set (§4.11). |
 | `variable` (`variables/`) | Declared typed state | **P+** | Keyed scope and TTL (§5.2). Existing declarations keep their meaning. |
 | templates (pack layout, not a type; plugin.md §3.1) | Inheritance bases, including items as templates (#203, PR #285) | P | A precedent for referencing a base by id (master §14.7); presets resolve at runtime and are not copied. |

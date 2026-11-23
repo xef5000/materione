@@ -844,6 +844,9 @@ export function makeExpect(actual) {
       toEqual(expected) {
         if (isDeepStrictEqual(actual, expected)) fail('not.toEqual', expected, `expected a structure other than ${trim(expected)}, got ${trim(actual)}`);
       },
+      toContain(sub) {
+        if (String(actual).includes(sub)) fail('not.toContain', sub, `expected output not to contain ${trim(sub)}, got ${trim(actual)}`);
+      },
     },
     toBe(expected) {
       if (actual !== expected) fail('toBe', expected, `expected ${trim(expected)}, got ${trim(actual)}`);

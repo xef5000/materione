@@ -51,6 +51,13 @@ test('negative structured equality uses the same mapping semantics', () => {
   });
 });
 
+test('negative containment passes when the text lacks the substring and fails when it has it', () => {
+  makeExpect('[]').not.toContain('gui:');
+  assert.throws(() => makeExpect('[gui:a:b]').not.toContain('gui:'), {
+    constructor: QaAssertionError, operator: 'not.toContain', expected: 'gui:',
+  });
+});
+
 test('default environment keeps the pin-only key and excludes the rebuilt Materione jar', (t) => {
   const dir = scratch(t);
   const expected = crypto.createHash('sha256').update(JSON.stringify(pins)).digest('hex').slice(0, 12);
