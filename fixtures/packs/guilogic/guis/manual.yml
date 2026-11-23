@@ -1,0 +1,51 @@
+# The manual GUI of the guilogic fixture (views.md sections 3.6 and 5.4): it says `rerender: off`, so no write to what it
+# reads re-renders it, and it has no refresh clock. Slot 12 shows an emerald while the server variable `guilogic:wave`
+# is `storm` (a notified read); slot 13 shows a diamond while the viewer has 5 levels or more (a polled fact no write
+# announces). Only `view.refresh` brings the window up to date, and the three levers choose which selector asks for it:
+# slot 15 refreshes this run's own window, slot 16 names the view, slot 17 names the variable (which selects nobody
+# here, because a view that says `rerender: off` is not in the reads index).
+manual:
+  title: Manual
+  container: chest_3
+  rerender: "off"
+  layers:
+    - id: storm
+      type: item
+      slot: 12
+      item: minecraft:emerald
+      name: "<green>Storm"
+      visible_if: "vars.server.guilogic.wave == 'storm'"
+    - id: levels
+      type: item
+      slot: 13
+      item: minecraft:diamond
+      name: "<aqua>Experienced"
+      visible_if: "player.level >= 5"
+    - id: own
+      type: item
+      slot: 15
+      item: minecraft:lever
+      name: "<green>Refresh this window"
+    - id: byview
+      type: item
+      slot: 16
+      item: minecraft:repeater
+      name: "<green>Refresh the view"
+    - id: byvar
+      type: item
+      slot: 17
+      item: minecraft:comparator
+      name: "<green>Refresh by variable"
+  behavior:
+    - on: gui.click
+      layer: own
+      do:
+        - view.refresh
+    - on: gui.click
+      layer: byview
+      do:
+        - view.refresh: {view: guilogic:manual}
+    - on: gui.click
+      layer: byvar
+      do:
+        - view.refresh: {var: server.guilogic.wave}

@@ -9,6 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Views V2, `view.refresh` replaces `gui.refresh`, `in_view` replaces `in_gui` (#457, #335, docs/architecture/views.md section 18).**
+  `view.refresh` re-renders viewers by selector: none (this flow's own view, in full; it fails `"no open view"` when that window
+  is gone), `view: <definition>` (every viewer of it) or `var: <declared variable>` with an optional `holder:` (the viewers whose
+  view reads that variable; a `rerender: off` view is not selected). It is not limited by the kind's `minInterval`, renders at
+  once on the viewer's own thread and otherwise as an immediate wake, and a wake already queued for the viewer then does nothing.
+  `in_view` takes `view:` and `kind:` and holds when the player has such a view open. **Breaking, by design (no public release
+  has GUIs; views.md section 7.1, row V2): `gui.refresh` and `in_gui` are gone with no alias** (`in_gui`'s `id:` is `in_view`'s
+  `view:`, and a bare name is that name in the condition's own pack); the built-in browser, the recipes, the fixture packs and the
+  code-mode corpus (`viewRefresh()`, `inView()`) are updated. The kind contract gains an `UNCHANGED` render outcome and a
+  documented explicit-versus-automatic split, so the dialog kind (#6) can re-send on an explicit refresh and keep its token when an
+  automatic wake finds nothing new. QA entries `views.server-var.live` and `views.refresh.polled`; `PaperViewIT`. (Earlier entries
+  below keep the spellings of their time.)
+
 - **Views V1, a window shows what the state says: the reads index, the write observer and the scheduler (#456, #335, docs/architecture/views.md sections 5 and 17).**
   A container GUI that shows a declared variable now updates on a write with no `refresh:` clock and no `gui.refresh`: a write
   to a `player`, `server` or `session` variable the window reads marks its viewers, and one render at the next tick (never inline in

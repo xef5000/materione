@@ -61,7 +61,7 @@ class GuiRulesCompileTest {
                         - view.close
                     - on: gui.open
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """)).isEmpty();
     }
 
@@ -76,21 +76,21 @@ class GuiRulesCompileTest {
                       layer: [buy, ghost]
                       click: left
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.click
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.open
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.tick
                       every: 40
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.tick
                       every: 60
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """);
         GuiRuleSet rules = f.guis.find(GuiFixture.id("shop")).orElseThrow().logic();
 
@@ -193,13 +193,13 @@ class GuiRulesCompileTest {
         assertThat(check(HEAD + """
                     - on: gui.tick
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """)).anySatisfy(problem -> assertThat(problem.message()).contains("needs 'every:'"));
         assertThat(check(HEAD + """
                     - on: gui.tick
                       every: 0
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """)).anySatisfy(problem -> assertThat(problem.message()).contains("at least 1"));
     }
 
@@ -233,7 +233,7 @@ class GuiRulesCompileTest {
                         - call: missing
                   flows:
                     greet:
-                      - gui.refresh
+                      - view.refresh
                 """);
 
         assertThat(problems).hasSize(1);

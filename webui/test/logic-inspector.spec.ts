@@ -221,7 +221,7 @@ describe('the condition stack edits the authored value', () => {
 
   it('a new predicate starts with its entry\'s starting payload (the shorthand parameter)', () => {
     expect(freshCondition('predicate', vocabulary, 'has_money')).toEqual({ has_money: 1 });
-    expect(freshCondition('predicate', vocabulary, 'in_gui')).toEqual({ in_gui: '' });
+    expect(freshCondition('predicate', vocabulary, 'in_view')).toEqual({ in_view: '' });
     expect(setAt({ all: ['a'] }, ['all', 0], { has_money: 5 })).toEqual({ all: [{ has_money: 5 }] });
   });
 });

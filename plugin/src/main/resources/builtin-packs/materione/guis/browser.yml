@@ -110,7 +110,7 @@ browser:
         - if: "${view.args.search != null && view.args.search != ''}"
           then:
             - set_var: { var: session.search, value: "${view.args.search}" }
-            - gui.refresh
+            - view.refresh
     - on: gui.click
       layer: entries
       click: left
@@ -148,13 +148,13 @@ browser:
           else:
             - message: "<gray>Search cancelled."
         - gui.page: { list: entries, to: first }
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: clear
       do:
         - set_var: { var: session.search, value: "" }
         - gui.page: { list: entries, to: first }
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: close
       do:

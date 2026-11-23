@@ -23,7 +23,7 @@ shop:
           else:
             - message: "<red>You need $250."
             - sound: { sound: block.note_block.bass, pitch: 0.5 }
-        - gui.refresh
+        - view.refresh
     - on: gui.open
       if: "${player.level >= 10}"
       node: { x: 40, y: 400 }

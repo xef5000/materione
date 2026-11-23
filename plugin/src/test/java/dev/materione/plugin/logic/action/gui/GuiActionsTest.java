@@ -15,6 +15,7 @@ import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.logic.action.view.BackViewAction;
 import dev.materione.plugin.logic.action.view.CloseViewAction;
 import dev.materione.plugin.logic.action.view.OpenViewAction;
+import dev.materione.plugin.logic.action.view.RefreshViewAction;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.event.GuiContexts;
 import dev.materione.plugin.gui.input.ClickKind;
@@ -78,7 +79,7 @@ class GuiActionsTest {
                 - on: gui.click
                   layer: refresh
                   do:
-                    - gui.refresh
+                    - view.refresh
                     - mark: refreshed
                 - on: gui.click
                   layer: close
@@ -221,9 +222,8 @@ class GuiActionsTest {
             ctx.with(Facets.PLAYER, f.player);
 
             for (ActionType<?> action : List.of(new CloseViewAction(f.bridge.view()), new BackViewAction(f.bridge.view()),
-                    new RefreshGuiAction(f.bridge))) {
-                assertThat(run(action, ctx)).as(action.id()).isEqualTo(ActionOutcome.failed(
-                        action.id().startsWith("view.") ? "no open view" : "no open gui"));
+                    new RefreshViewAction(f.bridge.view()))) {
+                assertThat(run(action, ctx)).as(action.id()).isEqualTo(ActionOutcome.failed("no open view"));
             }
         }
 
@@ -239,7 +239,7 @@ class GuiActionsTest {
             MapLogicContext ctx = new MapLogicContext(Map.of());
 
             for (ActionType<?> action : List.of(new OpenViewAction(f.bridge.view()), new CloseViewAction(f.bridge.view()),
-                    new BackViewAction(f.bridge.view()), new RefreshGuiAction(f.bridge))) {
+                    new BackViewAction(f.bridge.view()), new RefreshViewAction(f.bridge.view()))) {
                 ActionOutcome outcome = run(action, ctx);
                 assertThat(outcome).as(action.id()).isInstanceOf(ActionOutcome.Failed.class);
                 assertThat(((ActionOutcome.Failed) outcome).reason()).isEqualTo("event has no player");
@@ -313,15 +313,16 @@ class GuiActionsTest {
     class Description {
 
         @Test
-        void eachActionDescribesItselfAsAGuiActionOnThePlayersThread() {
+        void eachActionDescribesItselfAsAGuiActionAndDeclaresItsThread() {
             List<ActionType<?>> actions = List.of(new OpenViewAction(f.bridge.view()), new CloseViewAction(f.bridge.view()),
-                    new BackViewAction(f.bridge.view()), new RefreshGuiAction(f.bridge));
+                    new BackViewAction(f.bridge.view()), new RefreshViewAction(f.bridge.view()));
 
             assertThat(actions).extracting(ActionType::id)
-                    .containsExactly("view.open", "view.close", "view.back", "gui.refresh");
+                    .containsExactly("view.open", "view.close", "view.back", "view.refresh");
             assertThat(actions).allSatisfy(action -> {
                 assertThat(action.describe().category()).isEqualTo(LogicCategory.GUI);
-                assertThat(action.threading()).isEqualTo(Threading.PLAYER_REGION);
+                assertThat(action.threading()).isEqualTo(
+                        action.id().equals("view.refresh") ? Threading.ANY : Threading.PLAYER_REGION);
                 assertThat(action.describe().self().displayName()).isNotBlank();
             });
             assertThat(new OpenViewAction(f.bridge.view()).describe().shorthand()).isEqualTo("view");
@@ -356,7 +357,7 @@ class GuiActionsTest {
             // their bare-name form (`- view.close`) is an empty mapping
             assertThat(new CloseViewAction(f.bridge.view()).parse(reader(Map.of()))).isNotNull();
             assertThat(new BackViewAction(f.bridge.view()).parse(reader(Map.of()))).isNotNull();
-            assertThat(new RefreshGuiAction(f.bridge).parse(reader(Map.of()))).isNotNull();
+            assertThat(new RefreshViewAction(f.bridge.view()).parse(reader(Map.of()))).isNotNull();
         }
     }
 

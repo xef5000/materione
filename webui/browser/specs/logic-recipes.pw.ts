@@ -95,7 +95,7 @@ test('Pay to receive: the form is the inspector\'s typed fields, the insert is o
           require: [{ take_money: { amount: 250 } }, { give_item: { item: 'minecraft:diamond', amount: 2 } }],
           else: [{ message: '<red>You cannot afford that.' }],
         },
-        'gui.refresh',
+        'view.refresh',
       ],
     },
   ]);

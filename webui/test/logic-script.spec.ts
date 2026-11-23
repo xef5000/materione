@@ -20,7 +20,7 @@ import { applyEdits, applyWithInverse, isRecord } from '../src/lib/logic/tree';
 const SECTIONS: ScriptSections = {
   open: { commands: ['shop'], args: [{ name: 'target', type: 'player', optional: true }] },
   behavior: [
-    { on: 'gui.click', layer: 'buy', mystery: { deep: [1, 2] }, do: [{ sound: { sound: 'block.chest.open', volume: 1, shiny: true } }, 'gui.refresh'] },
+    { on: 'gui.click', layer: 'buy', mystery: { deep: [1, 2] }, do: [{ sound: { sound: 'block.chest.open', volume: 1, shiny: true } }, 'view.refresh'] },
     { on: 'gui.open', if: '${player.level > 3}', do: [{ if: '${true}', then: [{ message: 'a' }], else: [{ message: 'b' }] }] },
   ],
   flows: { bonus: [{ message: 'thanks' }, 'stop'], other: [] },

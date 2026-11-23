@@ -34,6 +34,7 @@ import dev.materione.plugin.commands.PlayerNames;
 import dev.materione.plugin.view.ReadsIndex;
 import dev.materione.plugin.view.ViewChanges;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewRefresher;
 import dev.materione.plugin.view.ViewRenderStats;
 import dev.materione.plugin.view.ViewScheduler;
 import dev.materione.plugin.view.ViewWake;
@@ -109,10 +110,11 @@ public final class GuiStack {
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables,
             EscrowRuntime escrow) {
-        this.changes = new ViewChanges(() -> {
+        Supplier<ReadsIndex> readsIndex = () -> {
             RuntimeRegistries current = live.get();
             return current == null ? null : current.view(ReadsIndex.KEY);
-        }, views, kinds, ViewWake.NONE);
+        };
+        this.changes = new ViewChanges(readsIndex, views, kinds, ViewWake.NONE);
         if (variables != null) {
             variables.sessionStore(views.sessions()); // session variables: one more scope behind the store port
             variables.writeObserver(changes); // every write to a variable a view reads marks that view's viewers
@@ -157,11 +159,15 @@ public final class GuiStack {
                     return online == null ? null : Viewer.of(online);
                 }, renderStats);
         changes.wake(scheduler);
+        ViewRefresher refresher = new ViewRefresher(views, readsIndex, scheduler, id -> {
+            Player online = Bukkit.getPlayer(id);
+            return online != null && Bukkit.isOwnedByCurrentRegion(online);
+        });
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);
         this.inputClicks = new InputSlotClicks(guis, views, events, guard, journal, strict);
         kinds.register(new GuiViewKind(guis, opener, lifecycle, refresh)); // the container GUI is the first view kind
         this.services = new GuiBridge.Services(guis, views, kinds, opener, lifecycle, refresh,
-                new InputSlotOps(guis, journal, strict), new GuiPages(events, refresh));
+                new InputSlotOps(guis, journal, strict), new GuiPages(events, refresh), refresher);
     }
 
     /** The input-slot rules the click router consults (logic.md §25). */

@@ -92,7 +92,7 @@ final class StepCompiler {
 
     private Map<String, Object> shapeOf(Object raw, StepPath path) {
         if (raw instanceof String text && !text.isBlank()) {
-            // a bare name: an action with no parameters (gui.refresh), or stop
+            // a bare name: an action with no parameters (view.refresh), or stop
             var shape = new LinkedHashMap<String, Object>();
             shape.put(text.trim(), null);
             return shape;

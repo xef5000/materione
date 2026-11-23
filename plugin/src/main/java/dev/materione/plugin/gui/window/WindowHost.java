@@ -63,7 +63,7 @@ public interface WindowHost {
 
     /**
      * Rewrites the contents of the viewer's window in place, when it is this session's window. Every layer
-     * is read again: this is what {@code gui.refresh} and a reload need.
+     * is read again: this is what {@code view.refresh} and a reload need.
      */
     void rewrite(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui);
 

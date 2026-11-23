@@ -159,7 +159,7 @@ class SlotRendererListTest {
         assertThat(shownName(page, 9)).isEqualTo("Dee");
 
         renderer.render(gui, window(Map.of()), 0, null);
-        assertThat(reads.get()).as("a full render (open, gui.refresh) reads the source again").isEqualTo(2);
+        assertThat(reads.get()).as("a full render (open, view.refresh) reads the source again").isEqualTo(2);
     }
 
     @Test

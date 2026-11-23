@@ -7,16 +7,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.Facets;
+import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.variable.CompileEnvironment;
+import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.action.PlayerFake;
-import dev.materione.plugin.logic.support.OpenGuis;
+import dev.materione.plugin.logic.support.OpenViews;
+import dev.materione.plugin.view.ViewRef;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The place and GUI conditions (logic.md §22): {@code is_near}, {@code in_world} and {@code in_gui}. The fake
+ * The place and GUI conditions (logic.md §22): {@code is_near}, {@code in_world} and {@code in_view}. The fake
  * player stands at (1, 2, 3) in a world named {@code world}, with the facing fixed by {@link PlayerFake}.
  */
 class PlaceAndGuiConditionsTest {
@@ -110,51 +114,77 @@ class PlaceAndGuiConditionsTest {
         assertThat(inWorld.test(parsed, PlayerFake.noPlayer())).isFalse();
     }
 
-    // --- in_gui ----------------------------------------------------------------
+    // --- in_view ---------------------------------------------------------------
 
     private static final NamespacedId SHOP = NamespacedId.of("shop", "menu");
+    private static final NamespacedId ASK = NamespacedId.of("shop", "ask");
 
-    /** A port that reports {@code SHOP} open for every player, or nothing. */
-    private static OpenGuis showing(Optional<NamespacedId> open) {
-        return player -> open;
+    private static InViewCondition condition(ViewRef... open) {
+        return new InViewCondition(player -> List.of(open));
     }
 
     @Test
-    void inGuiWithoutAnIdHoldsWhenAnyGuiIsOpen() {
+    void inViewWithoutAnIdHoldsWhenAnyViewIsOpen() {
         var fake = new PlayerFake();
-        var parsed = new InGuiCondition(showing(Optional.of(SHOP))).parse(reader(params()));
-        assertThat(parsed.id()).isEmpty();
-        assertThat(new InGuiCondition(showing(Optional.of(SHOP))).test(parsed, fake.context())).isTrue();
-        assertThat(new InGuiCondition(showing(Optional.empty())).test(parsed, fake.context())).isFalse();
+        var parsed = condition().parse(reader(params()));
+        assertThat(parsed.view()).isNull();
+        assertThat(parsed.kind()).isNull();
+        assertThat(condition(new ViewRef("gui", SHOP)).test(parsed, fake.context())).isTrue();
+        assertThat(condition(new ViewRef("dialog", SHOP)).test(parsed, fake.context())).isTrue();
+        assertThat(condition().test(parsed, fake.context())).isFalse();
     }
 
     @Test
-    void inGuiWithAnIdHoldsOnlyForThatGui() {
+    void inViewWithAnIdHoldsOnlyForThatView() {
         var fake = new PlayerFake();
-        var mine = new InGuiCondition(showing(Optional.of(SHOP))).parse(reader(params("id", "shop:menu")));
-        var other = new InGuiCondition(showing(Optional.of(SHOP))).parse(reader(params("id", "shop:settings")));
-        assertThat(new InGuiCondition(showing(Optional.of(SHOP))).test(mine, fake.context())).isTrue();
-        assertThat(new InGuiCondition(showing(Optional.of(SHOP))).test(other, fake.context())).isFalse();
+        var gui = condition(new ViewRef("gui", SHOP));
+        var mine = gui.parse(reader(params("view", "shop:menu")));
+        var other = gui.parse(reader(params("view", "shop:settings")));
+        assertThat(gui.test(mine, fake.context())).isTrue();
+        assertThat(gui.test(other, fake.context())).isFalse();
     }
 
     @Test
-    void inGuiIsFalseWhenNothingIsOpenOrNoPortIsWired() {
+    void inViewWithAKindHoldsOnlyForAViewOfThatKind() {
         var fake = new PlayerFake();
-        var parsed = new InGuiCondition(OpenGuis.none()).parse(reader(params("id", "shop:menu")));
-        assertThat(new InGuiCondition(OpenGuis.none()).test(parsed, fake.context())).isFalse();
-        var any = new InGuiCondition(OpenGuis.none()).parse(reader(params()));
-        assertThat(new InGuiCondition(OpenGuis.none()).test(any, fake.context())).isFalse();
+        var dialogOnly = condition().parse(reader(params("kind", "dialog")));
+        var shopDialog = condition().parse(reader(params("view", "shop:menu", "kind", "dialog")));
+
+        assertThat(condition(new ViewRef("gui", SHOP)).test(dialogOnly, fake.context())).isFalse();
+        assertThat(condition(new ViewRef("gui", SHOP), new ViewRef("dialog", ASK)).test(dialogOnly, fake.context()))
+                .as("a dialog over the GUI").isTrue();
+        assertThat(condition(new ViewRef("gui", SHOP), new ViewRef("dialog", ASK)).test(shopDialog, fake.context()))
+                .as("the id is the GUI's, the kind is the dialog's").isFalse();
+        assertThat(condition(new ViewRef("dialog", SHOP)).test(shopDialog, fake.context())).isTrue();
     }
 
     @Test
-    void inGuiRejectsAnIdThatIsNotAnId() {
-        assertThatThrownBy(() -> new InGuiCondition(OpenGuis.none()).parse(reader(params("id", "not an id!"))))
-                .hasMessage("id must name a GUI, such as shop:menu");
+    void aBareNameMeansThatNameInTheConditionsOwnPack() {
+        var env = CompileEnvironment.of("shop", id -> Optional.empty());
+        var reader = ParamReader.of(params("view", "menu"), EngineExpressions.INSTANCE, env);
+
+        assertThat(condition().parse(reader).view()).isEqualTo(SHOP);
+        assertThat(condition().parse(reader(params("view", "menu"))).view())
+                .as("a condition with no pack of its own").isEqualTo(NamespacedId.of("materione", "menu"));
     }
 
     @Test
-    void theInGuiContextIsReadOnlyThroughTheFacetAndNeedsAPlayer() {
-        var parsed = new InGuiCondition(showing(Optional.of(SHOP))).parse(reader(params()));
-        assertThat(new InGuiCondition(showing(Optional.of(SHOP))).test(parsed, PlayerFake.noPlayer())).isFalse();
+    void inViewIsFalseWhenNothingIsOpenOrNoPortIsWired() {
+        var fake = new PlayerFake();
+        var none = new InViewCondition(OpenViews.none());
+        assertThat(none.test(none.parse(reader(params("view", "shop:menu"))), fake.context())).isFalse();
+        assertThat(none.test(none.parse(reader(params())), fake.context())).isFalse();
+    }
+
+    @Test
+    void inViewRejectsAnIdThatIsNotAnId() {
+        assertThatThrownBy(() -> new InViewCondition(OpenViews.none()).parse(reader(params("view", "not an id!"))))
+                .hasMessage("view must name a view, such as shop:menu");
+    }
+
+    @Test
+    void theInViewContextIsReadOnlyThroughTheFacetAndNeedsAPlayer() {
+        var open = condition(new ViewRef("gui", SHOP));
+        assertThat(open.test(open.parse(reader(params())), PlayerFake.noPlayer())).isFalse();
     }
 }

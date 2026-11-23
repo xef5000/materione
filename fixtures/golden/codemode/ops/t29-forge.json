@@ -152,7 +152,7 @@
                   "amount": 1
                 }
               },
-              "gui.refresh"
+              "view.refresh"
             ]
           }
         }

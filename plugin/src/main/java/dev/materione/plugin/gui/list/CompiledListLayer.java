@@ -17,7 +17,7 @@ import java.util.List;
  * @param order the layer's index among the GUI's layers: a higher order is a higher layer
  * @param slots the slots the entries fill, in entry order
  * @param source the source binding
- * @param cached whether the source is read when the window opens and on {@code gui.refresh} only
+ * @param cached whether the source is read when the window opens and on {@code view.refresh} only
  * @param filter the compiled filter over {@code entry.*}, or null when every entry shows
  * @param sort the order of the entries, or null for the source's own
  * @param search which fields a session search keeps, or null when the list is not searchable (logic.md §28.21)

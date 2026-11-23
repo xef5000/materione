@@ -1,6 +1,6 @@
 # The search recipe (logic.md §6.6, §28.21, #220): prompt -> session variable -> list search. The search button asks
 # for an item name in chat (the window hides for the question and comes back with the answer, for the same session);
-# the list keeps the entries whose name contains the answer, ignoring case, and gui.refresh shows the result. A
+# the list keeps the entries whose name contains the answer, ignoring case, and view.refresh shows the result. A
 # cancelled or empty question runs its else (a message) and ends that run; the window comes back either way. The
 # clear button empties the search. The QA catalog (qa/catalog/guilogic.mjs) asks through it.
 search:
@@ -52,9 +52,9 @@ search:
         - prompt: { text: "Type an item name to search, or cancel", var: session.search, timeout: 60 }
           else:
             - message: "<gray>Search cancelled."
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: clear
       do:
         - set_var: { var: session.search, value: "" }
-        - gui.refresh
+        - view.refresh

@@ -26,13 +26,13 @@ ownership:
       layer: toggle
       do:
         - set_var: {var: session.cover, op: toggle}
-        - gui.refresh
+        - view.refresh
     - on: gui.slot_change
       layer: gems
       if: "${slot.previous == 'corpus:gem_red' && slot.amount == 0}"
       do:
         - set_var: {var: session.cover, value: true}
-        - gui.refresh
+        - view.refresh
         - run_command:
             command: "say MATERIONE-OVERLAY-OWNERSHIP-SHIFT"
             as: console

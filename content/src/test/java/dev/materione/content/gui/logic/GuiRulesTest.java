@@ -42,14 +42,14 @@ class GuiRulesTest {
     void behaviorAndFlowsAreReadAsAuthored() {
         var raw = definition(1, layer("b", "button", "x", 0, "y", 0, "width", 8, "height", 8));
         raw.put("behavior", List.of(rule("gui.click", "view.close"), "not a mapping"));
-        raw.put("flows", Map.of("greet", List.of("gui.refresh")));
+        raw.put("flows", Map.of("greet", List.of("view.refresh")));
 
         GuiRules rules = GuiTestSupport.parse(GuiTestSupport.type(), raw).rules();
 
         assertThat(rules.behavior()).hasSize(2);
         assertThat(rules.behavior().get(0)).isEqualTo(rule("gui.click", "view.close"));
         assertThat(rules.behavior().get(1)).as("an entry that is not a mapping keeps its index").isEqualTo("not a mapping");
-        assertThat(rules.flows()).isEqualTo(Map.of("greet", List.of("gui.refresh")));
+        assertThat(rules.flows()).isEqualTo(Map.of("greet", List.of("view.refresh")));
         assertThat(rules.problems()).isEmpty();
     }
 
