@@ -2,10 +2,9 @@
 
 One Minecraft plugin + web editor that replaces the content-creation plugin stack
 (ItemsAdder / Oraxen / Nexo / BetterHUD / DeluxeMenus-class tools) with a single unified,
-free, open-source system. **Current repo state: M0–M5 shipped** (spine + harness, content
-pipeline & items, blocks/furniture/ECA, the web editor with embedded Blockbench,
-glyphs/sounds/paintings/text-effects, the cloud relay editor at editor.materione.com — see
-[`docs/roadmap.md`](docs/roadmap.md)); next milestone: **M6, menus, dialogs & HUDs**.
+free, open-source system. What has shipped and what is next lives in
+[`docs/roadmap.md`](docs/roadmap.md) and the GitHub milestones; this file does not
+repeat it, so it cannot go stale.
 
 ## Required reading (in order)
 
@@ -27,13 +26,14 @@ glyphs/sounds/paintings/text-effects, the cloud relay editor at editor.materione
 Live work tracking lives on GitHub, not in docs:
 
 - **[Issues](https://github.com/xef5000/materione/issues)** are the unit of work. Each
-  carries context, a scope checklist, exit criteria, a **milestone** (M6–M8), and
+  carries context, a scope checklist, exit criteria, a **milestone**, and
   `kind:*` (feature/decision/research/docs/chore) + `area:*` (module) labels.
 - **[Project board](https://github.com/users/xef5000/projects/1)** ("Materione Roadmap")
   is the live view over all issues — pick work from it and keep its Status column
   (Todo/In Progress/Done) current.
-- **Milestones** M6–M8 mirror the roadmap. Shipped milestones (M0–M5) are recorded only
-  in [`docs/roadmap.md`](docs/roadmap.md) as-built notes — do not file issues for them.
+- **Milestones** mirror the roadmap. Milestones shipped before GitHub tracking (M0–M5)
+  are recorded only in [`docs/roadmap.md`](docs/roadmap.md) as-built notes — do not file
+  issues for them.
 - **Decision/research issues** track architecture §14 open questions (`kind:decision`,
   `kind:research`); resolve them by recording the outcome in the architecture doc, then
   closing.
@@ -78,6 +78,32 @@ updates ride the same PR; close the issue via the PR.
 - **Cloudflare cost guardrails bind** (§ below) — deploys and account mutations are
   the user's actions, never the agent's.
 
+### What enforces each rule
+
+A rule nothing enforces is skipped by the first agent in a hurry (pstack's *encode lessons in
+structure*). When a mistake recurs, fix it at the highest level that works: architecture (make
+it impossible) → types → a check in `scripts/checks/`, a test, or the agent guard → this file.
+Rows marked **review** are judgment calls no check can make; they are where review time goes.
+
+| Rule | Enforced by |
+|---|---|
+| D1–D13 bind; subsystem docs don't contradict the master | **review**. The CI `rules` job lists every spec file a PR changes in its summary. |
+| Naming is "Materione" | `scripts/checks/` (naming) |
+| Oraxen is reference only | **review** |
+| Blockbench stays unmodified | `scripts/checks/` (vendored build pinned by blob id) |
+| Files are the source of truth (D1); one pipeline (D6) | ArchUnit module rules (partial: module direction) and **review** |
+| Fail-soft on content | headless Paper boot (`:harness:integrationTest`, partial) and **review** |
+| Lossless round-trip | `LosslessYamlTest` and golden fixtures (partial: not every content type) |
+| Primitives, not features (D12) | **review** against architecture §3.1 |
+| Code mode (D13) | `webui/test/codemode-*-bans.spec.ts` (in-page side); "no new endpoint, no Cloudflare compute" is **review** |
+| Module boundaries | `ArchitectureTest` per module and `AllModulesArchitectureTest` |
+| Performance budgets | `ContentPerfBudgetTest` and the `*PerfTest` suites |
+| Cloudflare cost guardrails; owner-only merges, pushes to `main`, releases | agent guard (`scripts/agent-guard/`, PR #484) |
+| Diagnostic codes are stable and documented | `DiagnosticCodesTest` (format, uniqueness, count); `scripts/checks/` (every code named in docs is defined or reserved) |
+| Doc links and anchors resolve | `scripts/checks/` (docs links) |
+| Code comments don't track milestones | `scripts/checks/` (ratchet; the baseline only shrinks) |
+| User-visible features ship QA catalog entries | `qa/runner.mjs check` (catalog integrity only); that a PR added an entry is **review** |
+
 ## Cloudflare cost guardrails (binding from M5 — cloud work)
 
 The Cloudflare account behind this project (relay, payload store, website) is
@@ -101,8 +127,8 @@ session with account access:
   `docs/architecture/codemode.md` §12.1.
 - **Deploy-class commands are the user's to run, not the agent's**: `wrangler`
   `deploy`/`versions`/`delete`/`secret`/`kv`/`r2`/`d1`/`queues`/`pages`-class
-  subcommands and `cloudflare-api` MCP `execute` calls are denied to agents by
-  the cost-guard hook (below). Local development (`wrangler dev`, `wrangler
+  subcommands and Cloudflare MCP `execute` calls are denied to agents by
+  the agent guard (below). Local development (`wrangler dev`, `wrangler
   tail`) and reads stay allowed. When deploy work is needed, hand the user the
   exact command; do not attempt to run or bypass the guard.
 - **No public endpoint without rate limits** (in-Worker or WAF) — traffic bills
@@ -115,15 +141,17 @@ plus an unthrottled public endpoint, or a per-unit product. The guard denies the
 agent the first step of every such path; the user's own dashboard actions are
 outside its scope by design.
 
-Mechanics: the guard is `PreToolUse` hook `.zcode/hooks/cf-cost-guard.mjs`
-registered in `.zcode/config.json` (`hooks.events.PreToolUse`, ZCode workspace
-scope). It denies positively-identified deploy-class invocations and
-`mcp__cloudflare-api__execute`, and fails open on anything unrecognized (a
-broken guard must never break the session — the approval prompt is the
-backstop). `.zcode/` is gitignored, so a fresh clone must re-create the hook and
-config before cloud work; lifting the guard is a deliberate owner action
-(`hooks.enabled: false` or delete the entry — restore it after). The OAuth grant
-backing the `cloudflare-api` MCP server can be audited and revoked in the
+Mechanics: the agent guard, [`scripts/agent-guard/`](scripts/agent-guard/README.md),
+is a `PreToolUse` hook loaded by every harness: Claude Code through the committed
+`.claude/settings.json` (agent worktrees included), ZCode through
+`.zcode/config.json` (per machine; re-create on a fresh clone, see AGENTS.md).
+Besides the deploy-class denials above it holds the owner's other boundaries:
+merging code or spec PRs, pushing to `main` (QA blessing output excepted),
+releases, repository settings, discarding work in the main checkout, and editing
+the guard itself. It fails open on anything it cannot read, except merges and
+pushes to `main` it cannot classify, which it denies. Lifting it is a deliberate
+owner action (`MATERIONE_AGENT_GUARD=off` in the session environment). The OAuth
+grant backing the Cloudflare MCP server can be audited and revoked in the
 Cloudflare dashboard (My Profile → Authorized OAuth Apps).
 
 ## Toolchain floor (decided; details beyond this belong to M0)
@@ -136,9 +164,12 @@ Cloudflare dashboard (My Profile → Authorized OAuth Apps).
 
 ## Do not silently decide these (open questions — master §14)
 
-Project license (GPL vs permissive — affects Oraxen-derived insight and publishing);
-cross-server state adapters; Geyser timing; web UI bundling; relay quotas; community hub.
+Cross-server state adapters; Geyser timing; web UI bundling; relay quotas; community hub.
 If your work forces a choice on one, surface it in the PR/doc discussion instead.
+
+The project license is decided: Apache-2.0 (`LICENSE`, `NOTICE`, `CLA.md`, committed by the
+owner 2026-10-27). Oraxen stays reference-only for the same reason as before: GPL code cannot
+enter an Apache codebase.
 
 ## Documentation conventions
 
@@ -146,6 +177,11 @@ If your work forces a choice on one, surface it in the PR/doc discussion instead
   [README](docs/architecture/README.md) index, including the "still to be written" tracking.
 - Roadmap rule 1: a milestone isn't done until the docs reflect what shipped.
 - Diagnostics codes are stable and documented (`MTR-####`, plugin.md §5) — treat them as API.
+  Take the next code from `node scripts/checks/run.mjs --next-mtr` and reserve blocks in
+  `scripts/checks/mtr-reserved.json`; don't track allocation in prose.
+- Code comments say what the code does now. Milestone state lives in the roadmap, so a
+  comment never names a milestone ("inert until M7" goes stale the day M7 moves).
+- Run `node scripts/checks/run.mjs` before pushing; CI runs the same command.
 
 ## Working on this repo
 

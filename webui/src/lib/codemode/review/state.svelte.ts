@@ -7,6 +7,8 @@
  * (host/actions.ts); this module only holds what they show and the store they act on.
  */
 import { ops, unwrap, type RpcChannel } from '../../api';
+import { syncDraftsWithServer } from '../../drafts.svelte';
+import { expectReloadRefresh, noteDocumentsChanged } from '../../state.svelte';
 import { createProposalStore, createRpcTransport, ReviewActions, CODEMODE_CAPABILITY, type AgentPort, type ProposalStore, type Snapshot } from '../host';
 
 /** One recent transaction as the audit lists it (`admin.audit.recent`). Who, when, from where, and the program text kept. */
@@ -77,6 +79,17 @@ export function connectReview(channel: RpcChannel | null): void {
     readDocument: async (pack, path) => {
       const data = unwrap(await ops.get(channel, pack, path));
       return typeof data.raw === 'string' && typeof data.rev === 'number' ? { text: data.raw, revision: data.rev } : null;
+    },
+    // An applied transaction or revert changed files behind the open editors' backs: the report's list of changed documents
+    // drives every surface (state.svelte.ts `noteDocumentsChanged`), so none keeps the old bytes.
+    onWritten: ({ pack, documents }) => {
+      if (pack === null) {
+        // a revert the audit named without a pack: any cached document may be one of them, so every loaded one is probed
+        void syncDraftsWithServer(channel);
+        expectReloadRefresh();
+        return;
+      }
+      noteDocumentsChanged(documents.map((document) => ({ pack, path: document.path, rev: document.rev, deleted: document.deleted })));
     },
   });
   const off = store.subscribe(() => onChange(store));

@@ -22,6 +22,7 @@
   import ModulesArea from './ModulesArea.svelte';
   import BasedOn from './BasedOn.svelte';
   import SaveAsTemplateDialog from '../components/SaveAsTemplateDialog.svelte';
+  import DraftConflict from '../components/DraftConflict.svelte';
   import { ops, unwrap } from '../api';
   import type { InheritanceView, ResourceRef, TypeInfo, TypeParam } from '../api';
   import { diagnosticNames } from '../diagnostics';
@@ -606,6 +607,7 @@
     </button>
   </header>
 
+  <DraftConflict draft={documentDraft} />
   {#if error}
     <p class="error">{error}</p>
   {/if}

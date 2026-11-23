@@ -40,4 +40,4 @@ downloads a pinned, sha256-verified Paper jar (~50 MB).
 - In-game QA suite: [`qa/README.md`](qa/README.md)
 - Contributing / working in this repo: [`CLAUDE.md`](CLAUDE.md)
 
-License: TBD (tracked as an open question — see `docs/architecture.md` §14).
+License: [Apache-2.0](LICENSE). Contributions are accepted under [`CLA.md`](CLA.md).

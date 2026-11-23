@@ -12,7 +12,8 @@ import { documentChangedEffect } from './external';
 import { invalidateThumbnails, resetThumbnailCache } from './thumbnails';
 import {
   discardDocumentDraft, draftDirty, draftStore, getDocumentDraft,
-  markDraftsDisconnected, resetDrafts,
+  markDraftsDisconnected, resetDrafts, syncDraftsWithServer,
+  type ServerChange,
 } from './drafts.svelte';
 
 /** One open document in the center area — keyed per FILE, not per resource. */
@@ -87,8 +88,6 @@ export const workspace = $state({
   activeKey: null as string | null,
   /** Directory paths the explorer has collapsed (default is expanded). */
   collapsed: {} as Record<string, boolean>,
-  /** Documents changed on disk (push.document.changed) — keyed like doc tabs. */
-  staleDocs: {} as Record<string, boolean>,
 });
 
 /**
@@ -313,7 +312,9 @@ export function handlePush(frame: PushFrame): void {
       invalidateThumbnails();
       workspace.visualVersion++;
     }
-    scheduleRefresh({ pack: true, delivery: true });
+    // A reload no write of this tab explains (another editor session, a hand edit, a manual run) may have moved a
+    // document an open surface still holds: the burst's one refresh also probes every cached document by revision.
+    scheduleRefresh({ pack: true, delivery: true, drafts: true });
   } else if (frame.op === 'push.diagnostic') {
     if (typeof payload.code === 'string' && typeof payload.severity === 'string' &&
         typeof payload.message === 'string') {
@@ -336,10 +337,22 @@ export function handlePush(frame: PushFrame): void {
     // The watcher reports documents only (never assets), so thumbnails stay.
     // A different pack's document can be referenced by the active pack.
     if (workspace.activePack) scheduleRefresh({ pack: true });
-    for (const _key of effect.staleKeys) markDocStale(change.pack, change.path);
+    if (session.channel) void syncDraftsWithServer(session.channel, [change]);
     logActivity('info', effect.log);
   }
   bus.push.emit(frame);
+}
+
+/**
+ * The documents a write of this tab changed behind the open editors' backs (an approved code-mode transaction or its
+ * revert: the server's report lists them). The one entry point beside the watcher's push: the catalog refreshes once
+ * (through the write's reload push, or alone when none comes) and every cached copy of a listed document is
+ * invalidated or reconciled through the draft store (`syncDraftsWithServer`), so no surface keeps the old bytes.
+ */
+export function noteDocumentsChanged(changes: readonly ServerChange[]): void {
+  if (changes.length === 0) return;
+  expectReloadRefresh();
+  if (session.channel) void syncDraftsWithServer(session.channel, changes);
 }
 
 /** Quiet period that lets one burst of pushes (a git pull, a reload) share one refresh. */
@@ -350,6 +363,7 @@ export const RELOAD_PUSH_FALLBACK_MS = 10_000;
 const pushRefresh = {
   pack: false,
   delivery: false,
+  drafts: false,
   timer: null as ReturnType<typeof setTimeout> | null,
   fallback: null as ReturnType<typeof setTimeout> | null,
   running: false,
@@ -373,24 +387,30 @@ export function expectReloadRefresh(): void {
  * `refreshPack` and one `refreshDelivery`. A request that lands while one is
  * running is folded into a single trailing refresh, never a parallel one.
  */
-function scheduleRefresh(what: { pack?: boolean; delivery?: boolean }): void {
+function scheduleRefresh(what: { pack?: boolean; delivery?: boolean; drafts?: boolean }): void {
   pushRefresh.pack ||= what.pack === true;
   pushRefresh.delivery ||= what.delivery === true;
+  pushRefresh.drafts ||= what.drafts === true;
   if (pushRefresh.timer || pushRefresh.running) return;
   pushRefresh.timer = setTimeout(() => void runScheduledRefresh(), PUSH_REFRESH_DELAY_MS);
 }
 
 async function runScheduledRefresh(): Promise<void> {
   pushRefresh.timer = null;
-  const { pack, delivery } = pushRefresh;
+  const { pack, delivery, drafts } = pushRefresh;
   pushRefresh.pack = false;
   pushRefresh.delivery = false;
+  pushRefresh.drafts = false;
   pushRefresh.running = true;
   try {
-    await Promise.all([pack ? refreshPack() : undefined, delivery ? refreshDelivery() : undefined]);
+    await Promise.all([
+      pack ? refreshPack() : undefined,
+      delivery ? refreshDelivery() : undefined,
+      drafts && session.channel ? syncDraftsWithServer(session.channel) : undefined,
+    ]);
   } finally {
     pushRefresh.running = false;
-    if (pushRefresh.pack || pushRefresh.delivery) scheduleRefresh({});
+    if (pushRefresh.pack || pushRefresh.delivery || pushRefresh.drafts) scheduleRefresh({});
   }
 }
 
@@ -401,6 +421,7 @@ function cancelScheduledRefresh(): void {
   pushRefresh.fallback = null;
   pushRefresh.pack = false;
   pushRefresh.delivery = false;
+  pushRefresh.drafts = false;
 }
 
 function sortedInsert<T>(list: T[], value: T, key: (entry: T) => string): T[] {
@@ -659,20 +680,6 @@ export function setTabDirty(key: string, dirty: boolean): void {
   }
 }
 
-/** Flags one open document as changed on disk (never auto-clobbers edits). */
-export function markDocStale(pack: string, path: string): void {
-  workspace.staleDocs[`${pack}/${path}`] = true;
-  const draft = draftStore.documents.find((item) => item.pack === pack && item.path === path);
-  if (draft) draft.stale = true;
-}
-
-/** Clears the on-disk flag once the tab reloaded the authoritative bytes. */
-export function clearDocStale(key: string): void {
-  delete workspace.staleDocs[key];
-  const draft = draftStore.documents.find((item) => `${item.pack}/${item.path}` === key);
-  if (draft) draft.stale = false;
-}
-
 export function closeTab(key: string): void {
   const index = workspace.tabs.findIndex((t) => t.key === key);
   if (index < 0) return;
@@ -721,7 +728,6 @@ export function resetWorkspace(): void {
   workspace.tabs = [];
   workspace.activeKey = null;
   workspace.collapsed = {};
-  workspace.staleDocs = {};
   content.type = 'items';
   content.folder = '';
   content.selected = null;

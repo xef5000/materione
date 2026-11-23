@@ -485,6 +485,27 @@ async function withReviewHarness(ctx, run, query = '?codemode') {
   });
 }
 
+/**
+ * `preparePage` for the live review flow: the real editor served by the harness server, with its entry replaced by
+ * `browser/live-review.ts` (the agent port harness over the real channel).
+ */
+function liveReviewPreparer(origin) {
+  return async (browserPage, editorOrigin) => {
+    await browserPage.route('**/*', (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (url.origin !== editorOrigin) return route.continue();
+      if (request.resourceType() === 'script' && /^\/assets\/index-[^/]+\.js$/.test(url.pathname)) {
+        return route.fulfill({ status: 200, contentType: 'text/javascript', body: 'import "/browser/live-review.ts";' });
+      }
+      if (/^\/(?:browser|src|static|node_modules|@vite|@id|@fs|fixtures|fonts)\//.test(url.pathname)) {
+        return route.fetch({ url: `${origin}${url.pathname}${url.search}` }).then((response) => route.fulfill({ response }));
+      }
+      return route.continue();
+    });
+  };
+}
+
 /** Feeds a recorded corpus program to the harness's review store through the agent port; resolves with the proposal id. */
 function feedProposal(page, name, options = {}) {
   return page.evaluate(([program, opts]) => window.__materioneCodemode.propose(program, opts), [name, options]);
@@ -1973,6 +1994,99 @@ export default [
         await preview.getByRole('button', { name: 'Confirm revert' }).click();
         await entry.getByText('Reverted', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
         ctx.expect(fs.readFileSync(file, 'utf8')).toBe(before);
+      });
+    },
+  }),
+
+  // Issue 461: after the approved transaction and after its revert, a document the editor already had open shows the server's
+  // bytes with no reload (the Content tab's thumbnail used to update while the detail view and the Files tab kept the old copy).
+  test({
+    id: 'editor.browser-codemode-open-views-follow-transaction',
+    title: 'a real-server transaction and its revert change the open Files tab and detail view of the document, with no reload; a draft typed over it is kept and offered Use server version / Keep my draft',
+    covers: [
+      ...REVIEW_COVERS,
+      'webui/src/App.svelte',
+      'webui/src/lib/drafts.svelte.ts',
+      'webui/src/lib/state.svelte.ts',
+      'webui/src/lib/components/DraftConflict.svelte',
+      'webui/src/lib/components/DocEditor.svelte',
+      'webui/src/lib/studio/Studio.svelte',
+      'webui/browser/specs/codemode-stale.pw.ts',
+      'core/src/main/java/dev/materione/core/authoring/**',
+      'fixtures/packs/sample/items/ruby.yml',
+    ],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      await withBrowserHarnessServer(async (origin) => {
+        const page = await ctx.browser.openEditor({ preparePage: liveReviewPreparer(origin) });
+        await page.getByLabel('project').selectOption('sample');
+        const file = path.join(SERVER_SAMPLE, 'items', 'ruby.yml');
+        const before = fs.readFileSync(file, 'utf8');
+        const LORE = 'Kept for the harvest festival';
+        ctx.expect(before.includes(LORE)).toBe(false);
+
+        // the document is open in the Files tab (YAML view) and as the detail view before anything is proposed
+        await page.getByRole('button', { name: 'Files', exact: true }).click();
+        await page.getByRole('button', { name: /^ruby\.yml/i }).click();
+        await page.getByRole('tab', { name: 'yaml' }).click();
+        const yaml = page.getByLabel('raw YAML');
+        await yaml.waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(await yaml.inputValue()).not.toContain(LORE);
+
+        const id = await feedProposal(page, 'c01-bulk-lore', { slice: [0, 1] });
+        const panel = page.getByRole('region', { name: 'Review', exact: true });
+        const proposal = panel.getByRole('article', { name: id, exact: true });
+        await proposal.getByText('Needs your approval').waitFor({ state: 'visible', timeout: 30_000 });
+        await proposal.getByRole('button', { name: 'Approve and apply' }).click();
+        await proposal.getByText('Applied', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(fs.readFileSync(file, 'utf8')).toContain(LORE);
+
+        // no reload and no click on the Files tab: the open YAML view already holds the new bytes
+        await page.waitForFunction(
+          (text) => document.querySelector('textarea[aria-label="raw YAML"]')?.value.includes(text),
+          LORE,
+          { timeout: 30_000 },
+        );
+        // and the detail view of the same item opened afterwards reads the new lore, not a cached copy
+        await page.getByRole('button', { name: 'Content', exact: true }).click();
+        await page.getByRole('option', { name: /^Ruby\b(?! )/ }).first().dblclick();
+        await page.locator('[data-field="lore"]').waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(await page.locator('[data-field="lore"]').innerText()).toContain(LORE);
+
+        // the revert goes the same way
+        await panel.getByRole('tab', { name: /^Change log/ }).click();
+        const entry = panel.getByRole('article', { name: /^Applied tx-/ }).first();
+        await entry.getByRole('button', { name: /^Revert/ }).click();
+        await entry.getByRole('group', { name: 'Revert preview' }).getByRole('button', { name: 'Confirm revert' }).click();
+        await entry.getByText('Reverted', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(fs.readFileSync(file, 'utf8')).toBe(before);
+        await page.waitForFunction(
+          (text) => !document.querySelector('[data-field="lore"]')?.textContent?.includes(text),
+          LORE,
+          { timeout: 30_000 },
+        );
+        await page.getByRole('button', { name: 'Files', exact: true }).click();
+        await page.waitForFunction(
+          (text) => !document.querySelector('textarea[aria-label="raw YAML"]')?.value.includes(text),
+          LORE,
+          { timeout: 30_000 },
+        );
+
+        // a draft typed over the document is never overwritten by a second transaction
+        const draft = (await yaml.inputValue()).replace('Ruby', 'My own ruby');
+        await yaml.fill(draft);
+        const second = await feedProposal(page, 'c01-bulk-lore', { slice: [0, 1] });
+        const waiting = panel.getByRole('article', { name: second, exact: true });
+        await waiting.getByText('Needs your approval').waitFor({ state: 'visible', timeout: 30_000 });
+        await waiting.getByRole('button', { name: 'Approve and apply' }).click();
+        await waiting.getByText('Applied', { exact: true }).first().waitFor({ state: 'visible', timeout: 30_000 });
+        const conflict = page.getByTestId('draft-conflict');
+        await conflict.waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(await yaml.inputValue()).toBe(draft);
+        ctx.expect(fs.readFileSync(file, 'utf8')).toContain(LORE);
+        await conflict.getByRole('button', { name: 'Use server version' }).click();
+        await conflict.waitFor({ state: 'hidden', timeout: 30_000 });
+        ctx.expect(await yaml.inputValue()).toContain(LORE);
       });
     },
   }),

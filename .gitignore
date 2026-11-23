@@ -37,8 +37,11 @@ webui/node_modules/
 # Local reference material (not part of the product)
 example-build/
 
-# Claude Code local state (CLAUDE.md at root IS committed; this dir is not)
-.claude/
+# Claude Code local state. CLAUDE.md at root is committed, and so is
+# .claude/settings.json: hooks only, it loads the agent guard (scripts/agent-guard/).
+# Personal env, keys and permissions go in .claude/settings.local.json (ignored).
+.claude/*
+!.claude/settings.json
 
 # ZCode workspace
 .zcode/
