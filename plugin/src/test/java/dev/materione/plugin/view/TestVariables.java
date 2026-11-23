@@ -39,9 +39,14 @@ public final class TestVariables {
 
     /** Declares {@code pack:key} as a session variable typed and defaulted like {@code sample}. */
     public VariableDeclaration declare(String pack, String key, Object sample) {
+        return declare(pack, key, VariableScope.SESSION, sample);
+    }
+
+    /** Declares {@code pack:key} in {@code scope}, typed and defaulted like {@code sample}. */
+    public VariableDeclaration declare(String pack, String key, VariableScope scope, Object sample) {
         VariableType type = sample instanceof Boolean ? VariableType.BOOLEAN
                 : sample instanceof Number ? VariableType.NUMBER : VariableType.STRING;
-        var declaration = new VariableDeclaration(NamespacedId.of(pack, key), VariableScope.SESSION, type,
+        var declaration = new VariableDeclaration(NamespacedId.of(pack, key), scope, type,
                 sample, "");
         declared.put(declaration.id(), declaration);
         return declaration;

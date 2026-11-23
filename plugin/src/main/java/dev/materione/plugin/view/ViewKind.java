@@ -6,7 +6,6 @@ import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.view.open.OpenRequest;
 import dev.materione.plugin.view.open.OpenResult;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * The internal view-kind contract (views.md §3.2, decision D-13): what the container GUI, the dialog (#6) and the
@@ -21,9 +20,8 @@ import java.util.Set;
  *   <tr><td>{@link #contentType()}</td><td>the registered type it renders</td></tr>
  *   <tr><td>{@link #facet()}</td><td>{@code viewerRule}, {@code rerenderDefault}, {@code supportsTarget},
  *       {@code supportsKey}: the same facet the type's self-description publishes</td></tr>
- *   <tr><td>{@link #reads}</td><td>the compile-time read set (row V1; empty until then)</td></tr>
  *   <tr><td>{@link #render}</td><td>render the viewer's current frame and deliver what changed (the kind splits
- *       it into {@code render} and {@code deliver} when row V1 needs the split)</td></tr>
+ *       it into {@code render} and {@code deliver} when partial rendering needs the split)</td></tr>
  *   <tr><td>{@link #minInterval()}</td><td>fewest ticks between two automatic renders of one viewer</td></tr>
  *   <tr><td>{@link #open}, {@link #close}</td><td>attach and detach a viewer of an {@code opened} kind</td></tr>
  * </table>
@@ -42,11 +40,11 @@ public interface ViewKind {
     int minInterval();
 
     /**
-     * The state keys the definition reads, extracted at compile time (views.md §5.2). Row V1 builds the extraction;
-     * until then a kind answers empty, which means "nothing is indexed" and changes no behaviour.
+     * Whether this kind forms its viewers by a condition (a HUD) rather than by a verb. A write that matches one of its
+     * reads marks the player's {@link ViewCandidate} of the kind, not only an attached record (views.md section 5.3).
      */
-    default Set<String> reads(NamespacedId definition) {
-        return Set.of();
+    default boolean predicate() {
+        return facet().viewerRule() == ViewFacet.ViewerRule.PREDICATE;
     }
 
     /**

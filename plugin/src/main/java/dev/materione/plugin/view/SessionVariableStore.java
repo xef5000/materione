@@ -114,6 +114,12 @@ public final class SessionVariableStore implements VariableStore {
         }
     }
 
+    /** The record that holds {@code instance}, or null when it is not open: the observer marks it from any thread. */
+    ViewerRecord record(UUID instance) {
+        Instance found = find(instance);
+        return found == null ? null : found.record();
+    }
+
     /** How many instances are open. */
     public int openInstances() {
         return instances.size();

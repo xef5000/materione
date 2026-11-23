@@ -453,6 +453,7 @@ public final class PipelineService {
             builder.view(dev.materione.core.runtime.RuntimeGlyphs.KEY,
                     new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
             builder.view(RuntimeGuis.KEY, RuntimeGuis.empty());
+            builder.view(dev.materione.plugin.view.ReadsIndex.KEY, dev.materione.plugin.view.ReadsIndex.empty());
             builder.view(RuntimeVariables.KEY, RuntimeVariables.empty());
             builder.view(dev.materione.core.runtime.RuntimeContentIndex.KEY,
                     dev.materione.core.runtime.RuntimeContentIndex.empty());
@@ -671,9 +672,13 @@ public final class PipelineService {
                 }
             }
         }
-        builder.view(RuntimeGuis.KEY, RuntimeGuis.build(
+        var liveGuis = RuntimeGuis.build(
                 guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish, logicLookup(),
-                declaredItems::contains));
+                declaredItems::contains);
+        builder.view(RuntimeGuis.KEY, liveGuis);
+        // what the views read, for the write observer (views.md section 5.2); one entry per view kind
+        builder.view(dev.materione.plugin.view.ReadsIndex.KEY, dev.materione.plugin.view.ReadsIndex.of(
+                dev.materione.plugin.gui.GuiReads.of(liveGuis, logicLookup())));
         return builder.build();
     }
 

@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -36,10 +37,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>Threading (views.md §5.6, D8): a record is created, read and mutated on its player's owner thread (the region
  * thread on Folia). The maps are concurrent so a read from the quit or live-refresh path can never corrupt them,
  * and every mutation of viewer-local state reports itself through {@link #mutating(String)}, which a
- * {@link MutationGuard} turns into a check that it happened on the owner thread. The write observer of row V1
- * touches only the dirty bit, never this state.
+ * {@link MutationGuard} turns into a check that it happened on the owner thread. The write observer
+ * touches only the dirty bit ({@link ViewDirty}), never this state.
  */
-public final class ViewerRecord {
+public final class ViewerRecord implements ViewDirty {
 
     /** The facet that carries the record into the runs it starts. Declared here, next to the type it holds. */
     public static final ContextFacet<ViewerRecord> FACET = ContextFacet.of("materione:viewer", ViewerRecord.class);
@@ -60,6 +61,7 @@ public final class ViewerRecord {
     private volatile boolean prompting;
     private volatile Object window;
     private volatile MutationGuard guard = MutationGuard.NONE;
+    private final AtomicBoolean dirty = new AtomicBoolean();
 
     /**
      * A record about to open.
@@ -81,11 +83,17 @@ public final class ViewerRecord {
         payload.boundTo(this);
     }
 
+    @Override
+    public AtomicBoolean dirtyBit() {
+        return dirty;
+    }
+
     /** A process-unique number, for logs. */
     public long serial() {
         return serial;
     }
 
+    @Override
     public UUID player() {
         return player;
     }
@@ -95,6 +103,7 @@ public final class ViewerRecord {
     }
 
     /** The view kind: the content type name of the definition ({@code gui}). */
+    @Override
     public String kind() {
         return kind;
     }

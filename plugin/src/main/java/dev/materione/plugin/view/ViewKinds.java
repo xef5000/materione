@@ -45,6 +45,12 @@ public final class ViewKinds {
         return Optional.ofNullable(kinds.get(contentType));
     }
 
+    /** Whether {@code contentType} names a registered {@code predicate} kind ({@link ViewKind#predicate()}). */
+    public boolean predicate(String contentType) {
+        ViewKind kind = kinds.get(contentType);
+        return kind != null && kind.predicate();
+    }
+
     /** Every registered kind. */
     public List<ViewKind> all() {
         return List.copyOf(kinds.values());

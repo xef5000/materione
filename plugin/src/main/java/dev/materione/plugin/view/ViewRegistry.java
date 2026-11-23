@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 /**
  * Every live viewer record, for every view kind (views.md §3.1, §3.8). The registry is the only place that says "this
@@ -15,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * player's current one is stale and ignored.
  *
  * <p>Indexed by <b>player</b> (the record a player has per kind, the history, the view they had before) and by
- * <b>definition</b> (the records showing a definition, for a live reload and, in row V1, for a write that a view
+ * <b>definition</b> (the records showing a definition, for a live reload and for a write that a view
  * reads). The index by <b>key</b> is reserved for row V5 ({@link #showingKey}): a key binding does not exist until
  * keyed state does (views.md §6.2).
  *
@@ -25,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Region-safe by construction: the state is concurrent maps keyed by player and definition, each player's entry
  * is only ever driven from that player's thread, and the cross-thread reads (the live refresh walking every record,
- * a placeholder, the write observer of row V1) take snapshots. A record is added by {@link #begin} and removed by
+ * a placeholder, the write observer) take snapshots. A record is added by {@link #begin} and removed by
  * {@link #end}, which are idempotent and race-free against each other.
  */
 public final class ViewRegistry {
@@ -33,6 +34,7 @@ public final class ViewRegistry {
     private final ConcurrentHashMap<UUID, PlayerViews> players = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<ViewRef, Set<ViewerRecord>> byDefinition = new ConcurrentHashMap<>();
     private final SessionVariableStore sessions = new SessionVariableStore();
+    private final ConcurrentHashMap<String, ConcurrentHashMap<UUID, ViewCandidate>> candidates = new ConcurrentHashMap<>();
     private volatile MutationGuard guard = MutationGuard.NONE;
 
     /**
@@ -133,6 +135,7 @@ public final class ViewRegistry {
 
     /** Drops everything remembered about a player who left. */
     public void forget(UUID player) {
+        candidates.values().forEach(byPlayer -> byPlayer.remove(player));
         PlayerViews entry = players.remove(player);
         if (entry != null) {
             synchronized (entry) {
@@ -151,6 +154,40 @@ public final class ViewRegistry {
     public List<ViewerRecord> showing(String kind, NamespacedId definition) {
         Set<ViewerRecord> showing = byDefinition.get(new ViewRef(kind, definition));
         return showing == null ? List.of() : List.copyOf(showing);
+    }
+
+    /**
+     * Runs {@code action} for each open record showing {@code view}, walking the live set: no copy, so the write
+     * observer pays nothing per viewer beyond the call. A record that ends or begins meanwhile may or may not be seen.
+     */
+    public void forEachShowing(ViewRef view, Consumer<ViewerRecord> action) {
+        Set<ViewerRecord> showing = byDefinition.get(view);
+        if (showing != null) {
+            showing.forEach(action);
+        }
+    }
+
+    /**
+     * The player's candidate record of a {@code predicate} kind, created on first use (views.md section 5.3). The kind
+     * creates it when the player joins and the registry drops it in {@link #forget} when they quit.
+     */
+    public ViewCandidate candidate(String kind, UUID player) {
+        return candidates.computeIfAbsent(kind, ignored -> new ConcurrentHashMap<>())
+                .computeIfAbsent(player, ignored -> new ViewCandidate(player, kind));
+    }
+
+    /** The player's candidate record of {@code kind}, or null when they have none. */
+    public ViewCandidate candidateOrNull(String kind, UUID player) {
+        var byPlayer = candidates.get(kind);
+        return byPlayer == null ? null : byPlayer.get(player);
+    }
+
+    /** Runs {@code action} for every candidate record of {@code kind} (every online player the kind admitted). */
+    public void forEachCandidate(String kind, Consumer<ViewCandidate> action) {
+        var byPlayer = candidates.get(kind);
+        if (byPlayer != null) {
+            byPlayer.values().forEach(action);
+        }
     }
 
     /**

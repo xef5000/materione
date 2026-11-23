@@ -31,7 +31,10 @@ import dev.materione.plugin.commands.OpenCommandRegistrar;
 import dev.materione.plugin.gui.open.GuiOpenGates;
 import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
+import dev.materione.plugin.view.ReadsIndex;
+import dev.materione.plugin.view.ViewChanges;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewWake;
 import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
@@ -56,6 +59,7 @@ public final class GuiStack {
 
     private final ViewRegistry views = new ViewRegistry();
     private final ViewKinds kinds = new ViewKinds();
+    private final ViewChanges changes;
     private final GuiOpener opener;
     private final GuiLifecycle lifecycle;
     private final GuiLiveRefresh refresh;
@@ -97,8 +101,13 @@ public final class GuiStack {
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables,
             EscrowRuntime escrow) {
+        this.changes = new ViewChanges(() -> {
+            RuntimeRegistries current = live.get();
+            return current == null ? null : current.view(ReadsIndex.KEY);
+        }, views, kinds, ViewWake.NONE);
         if (variables != null) {
             variables.sessionStore(views.sessions()); // session variables: one more scope behind the store port
+            variables.writeObserver(changes); // every write to a variable a view reads marks that view's viewers
         }
         StrictInputs strict = escrow == null ? StrictInputs.NONE : new StrictInputs(escrow);
         if (escrow != null) {
@@ -137,6 +146,11 @@ public final class GuiStack {
     /** The input-slot rules the click router consults (logic.md §25). */
     public InputSlotClicks inputClicks() {
         return inputClicks;
+    }
+
+    /** The write observer: marks the viewers a variable write reaches and calls the wake hook ({@link ViewChanges#wake}). */
+    public ViewChanges changes() {
+        return changes;
     }
 
     public ViewKinds kinds() {
