@@ -127,8 +127,8 @@ session with account access:
   `docs/architecture/codemode.md` §12.1.
 - **Deploy-class commands are the user's to run, not the agent's**: `wrangler`
   `deploy`/`versions`/`delete`/`secret`/`kv`/`r2`/`d1`/`queues`/`pages`-class
-  subcommands and `cloudflare-api` MCP `execute` calls are denied to agents by
-  the cost-guard hook (below). Local development (`wrangler dev`, `wrangler
+  subcommands and Cloudflare MCP `execute` calls are denied to agents by
+  the agent guard (below). Local development (`wrangler dev`, `wrangler
   tail`) and reads stay allowed. When deploy work is needed, hand the user the
   exact command; do not attempt to run or bypass the guard.
 - **No public endpoint without rate limits** (in-Worker or WAF) — traffic bills
@@ -141,15 +141,17 @@ plus an unthrottled public endpoint, or a per-unit product. The guard denies the
 agent the first step of every such path; the user's own dashboard actions are
 outside its scope by design.
 
-Mechanics: the guard is `PreToolUse` hook `.zcode/hooks/cf-cost-guard.mjs`
-registered in `.zcode/config.json` (`hooks.events.PreToolUse`, ZCode workspace
-scope). It denies positively-identified deploy-class invocations and
-`mcp__cloudflare-api__execute`, and fails open on anything unrecognized (a
-broken guard must never break the session — the approval prompt is the
-backstop). `.zcode/` is gitignored, so a fresh clone must re-create the hook and
-config before cloud work; lifting the guard is a deliberate owner action
-(`hooks.enabled: false` or delete the entry — restore it after). The OAuth grant
-backing the `cloudflare-api` MCP server can be audited and revoked in the
+Mechanics: the agent guard, [`scripts/agent-guard/`](scripts/agent-guard/README.md),
+is a `PreToolUse` hook loaded by every harness: Claude Code through the committed
+`.claude/settings.json` (agent worktrees included), ZCode through
+`.zcode/config.json` (per machine; re-create on a fresh clone, see AGENTS.md).
+Besides the deploy-class denials above it holds the owner's other boundaries:
+merging code or spec PRs, pushing to `main` (QA blessing output excepted),
+releases, repository settings, discarding work in the main checkout, and editing
+the guard itself. It fails open on anything it cannot read, except merges and
+pushes to `main` it cannot classify, which it denies. Lifting it is a deliberate
+owner action (`MATERIONE_AGENT_GUARD=off` in the session environment). The OAuth
+grant backing the Cloudflare MCP server can be audited and revoked in the
 Cloudflare dashboard (My Profile → Authorized OAuth Apps).
 
 ## Toolchain floor (decided; details beyond this belong to M0)
