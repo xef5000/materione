@@ -158,7 +158,7 @@ public final class VarCommand {
     }
 
     /** A session variable lives in one open view, so no command names a holder for it: refuses and says so. */
-    private static boolean sessionRefused(CommandSender sender, VariableDeclaration declared) {
+    static boolean sessionRefused(CommandSender sender, VariableDeclaration declared) {
         if (declared.scope() != VariableScope.SESSION) {
             return false;
         }
@@ -188,8 +188,9 @@ public final class VarCommand {
      * The holder a command names: a server variable ignores it; a player variable needs an online
      * player. Prints the refusal and returns null when there is none.
      */
-    private Target target(CommandSender sender, String name, VariableDeclaration declared) {
-        if (declared != null && declared.scope() == VariableScope.SERVER) {
+    Target target(CommandSender sender, String name, VariableDeclaration declared) {
+        // a session variable has no holder to name: get/set refuse it with the session message whatever is given
+        if (declared != null && (declared.scope() == VariableScope.SERVER || declared.scope() == VariableScope.SESSION)) {
             return new Target(null, null);
         }
         if (name.equals("-")) {
@@ -251,5 +252,5 @@ public final class VarCommand {
     }
 
     /** The named holder of one command: its id and name, both null for a server variable or no player. */
-    private record Target(UUID uuid, String name) {}
+    record Target(UUID uuid, String name) {}
 }
