@@ -30,6 +30,7 @@ import type {
   SurfaceSource,
   SurfaceStepKind,
   SurfaceTrigger,
+  SurfaceViewFacet,
 } from './surface';
 import {
   guiLayerCommonParams,
@@ -56,6 +57,8 @@ const HINT_RULES = 'behavior-rules';
 const HINT_INPUT_METHOD = 'input-method';
 /** The reference kinds that name a polymorphic registry rather than a resource or an asset. */
 const KIND_MECHANIC = 'mechanic';
+/** A reference to a view of any kind (`view.open`'s `view`): the types that declare the view facet, not one content type. */
+const KIND_VIEW = 'view';
 const KIND_ITEM_SOURCE = 'item-source';
 const KIND_LIST_SOURCE = 'list-source';
 
@@ -231,6 +234,11 @@ function baseTypeOfParam(param: SurfaceParam, owner: string, level: number, ctx:
     case 'boolean':
       return scalarType(param.type);
     case 'reference':
+      if (param.referenceKind === KIND_VIEW && !ctx.typeNames.has(KIND_VIEW)) {
+        // the registry's view facet says which types are views, so a new view kind joins this with no change here
+        const views = ctx.surface.contentTypes.filter((type) => type.view !== undefined).map((type) => type.name).sort(compare);
+        return views.length === 0 ? 'Ref' : views.map((name) => `Ref<${literal(name)}>`).join(' | ');
+      }
       if (param.referenceKind !== undefined && !ctx.typeNames.has(param.referenceKind) && param.uiHint !== undefined && ctx.typeNames.has(param.uiHint)) {
         return `Ref<${literal(param.uiHint)}>`;
       }
@@ -365,7 +373,8 @@ function idUnions(ctx: Context): string[] {
   const b = surface.behavior;
   const kinds = new Set<string>(surface.contentTypes.map((type) => type.name));
   walkParams(allParams(surface), (param) => {
-    if (param.referenceKind !== undefined) kinds.add(param.referenceKind);
+    // `view` names the union of the view kinds, not a kind of its own, unless a content type is called that
+    if (param.referenceKind !== undefined && (param.referenceKind !== KIND_VIEW || kinds.has(KIND_VIEW))) kinds.add(param.referenceKind);
   });
   const ids = (entries: readonly { id: string }[]): string[] => sortedBy(entries, (entry) => entry.id).map((entry) => entry.id);
   const lines: string[] = [];
@@ -396,6 +405,21 @@ function hasRules(type: SurfaceDocument['contentTypes'][number]): boolean {
   return type.parameters.some((param) => param.uiHint === HINT_RULES);
 }
 
+/** What the view facet says of a type (views.md section 9): how its viewers form and when it re-renders. */
+function viewSentence(name: string, view: SurfaceViewFacet): string {
+  const viewers =
+    view.viewerRule === 'opened'
+      ? 'opened by `view.open` and closed by `view.close`'
+      : view.viewerRule === 'predicate'
+        ? 'shown to every player for whom its condition holds, and no verb opens it'
+        : `formed by its ${view.viewerRule} rule`;
+  const rerender =
+    view.rerenderDefault === 'on_change'
+      ? 're-renders on its own when what it reads changes (`rerender: off` turns that off)'
+      : 're-renders only when a flow asks';
+  return `A view kind: a ${name} is ${viewers}, and it ${rerender}.`;
+}
+
 function contentTypes(ctx: Context): string[] {
   const types = sortedBy(ctx.surface.contentTypes, (type) => type.name);
   const lines: string[] = [];
@@ -416,6 +440,7 @@ function contentTypes(ctx: Context): string[] {
       ...doc([
         sentence(type.description) ?? sentence(type.displayName),
         `Content type \`${type.name}\`${type.directory ? `, stored under \`${type.directory}/\`` : ''}.`,
+        type.view ? viewSentence(type.name, type.view) : undefined,
         type.flatFile ? `A file may also hold one ${type.name} as its top-level fields, with the file name as its id; it is read, listed and edited like a keyed one, and keeps its shape when edited.` : undefined,
       ], 0),
       `interface ${fields} {`,

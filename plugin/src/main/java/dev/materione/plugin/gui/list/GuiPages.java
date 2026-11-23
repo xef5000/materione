@@ -4,8 +4,9 @@ import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Optional;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * Moves a list of an open window to another page (logic.md §6.7): the one service behind {@code gui.page}. It stores
@@ -55,15 +56,15 @@ public final class GuiPages {
      *
      * @return the reason the page did not move, or empty when it did
      */
-    public Optional<String> page(Viewer viewer, GuiSession session, String list, Target target) {
-        RuntimeGuis.Live live = session.displayed().orElse(null);
+    public Optional<String> page(Viewer viewer, ViewerRecord session, String list, Target target) {
+        RuntimeGuis.Live live = GuiViewerState.of(session).displayed().orElse(null);
         if (live == null) {
             return Optional.of("the window is not showing this GUI yet");
         }
         if (live.lists().stream().noneMatch(layer -> layer.layerId().equals(list))) {
             return Optional.of("no list named '" + list + "' in this GUI");
         }
-        ListPage before = ListPage.of(session.pages().get(list));
+        ListPage before = ListPage.of(GuiViewerState.of(session).pages().get(list));
         int wanted = switch (target.move()) {
             case NEXT -> before.number() + 1;
             case PREVIOUS -> before.number() - 1;
@@ -75,22 +76,18 @@ public final class GuiPages {
         if (number == before.number()) {
             return Optional.empty(); // already on that page (a step past the last one): nothing moved, nothing fires
         }
-        Object stored = session.pages().get(list);
-        session.pages().put(list, new ListPage(number, before.count(), before.size()).toMap());
+        Object stored = GuiViewerState.of(session).pages().get(list);
+        GuiViewerState.of(session).putPage(list, new ListPage(number, before.count(), before.size()).toMap());
         if (!refresh.repaint(viewer, session)) {
             restore(session, list, stored);
             return Optional.of("the window is not showing this GUI");
         }
-        ListPage shown = ListPage.of(session.pages().get(list));
-        events.paged(viewer, session, session.displayed().orElse(live), list, shown.number(), shown.count());
+        ListPage shown = ListPage.of(GuiViewerState.of(session).pages().get(list));
+        events.paged(viewer, session, GuiViewerState.of(session).displayed().orElse(live), list, shown.number(), shown.count());
         return Optional.empty();
     }
 
-    private static void restore(GuiSession session, String list, Object stored) {
-        if (stored == null) {
-            session.pages().remove(list);
-        } else {
-            session.pages().put(list, stored);
-        }
+    private static void restore(ViewerRecord session, String list, Object stored) {
+        GuiViewerState.of(session).putPage(list, stored);
     }
 }

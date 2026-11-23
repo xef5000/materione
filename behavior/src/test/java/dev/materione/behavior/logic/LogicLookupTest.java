@@ -36,9 +36,9 @@ class LogicLookupTest {
 
     @Test
     void idsDisplayBareForMaterioneAndQualifiedForEveryoneElse() {
-        assertThat(LogicIds.display(NamespacedId.of("materione", "gui.open"))).isEqualTo("gui.open");
+        assertThat(LogicIds.display(NamespacedId.of("materione", "view.open"))).isEqualTo("view.open");
         assertThat(LogicIds.display(NamespacedId.of("example", "greet"))).isEqualTo("example:greet");
-        assertThat(LogicIds.parse("gui.open")).contains(NamespacedId.of("materione", "gui.open"));
+        assertThat(LogicIds.parse("view.open")).contains(NamespacedId.of("materione", "view.open"));
         assertThat(LogicIds.parse("a:b:c")).isEmpty();
     }
 

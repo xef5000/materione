@@ -12,8 +12,8 @@ import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.event.GuiContexts;
 import dev.materione.plugin.gui.input.ClickKind;
 import dev.materione.plugin.gui.input.GuiClick;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -83,14 +83,14 @@ class ConsumeCustodyActionTest {
             """;
 
     private GuiFixture f;
-    private GuiSession vault;
+    private ViewerRecord vault;
     private final ConsumeCustodyAction action = new ConsumeCustodyAction(new dev.materione.plugin.gui.GuiBridge());
 
     @BeforeEach
     void open() {
         f = new GuiFixture();
         f.gui(VAULT);
-        vault = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("vault"), Map.of(), OpenRequest.Cause.API)).session();
+        vault = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("vault"), Map.of(), OpenRequest.Cause.API)).record();
         f.ran.clear();
     }
 
@@ -203,7 +203,7 @@ class ConsumeCustodyActionTest {
 
     @Test
     void aSlotThatIsNotANumberFailsTheStepNotTheServer() {
-        ActionOutcome outcome = failsWith(Map.of("slot", "${gui.id}"));
+        ActionOutcome outcome = failsWith(Map.of("slot", "${view.id}"));
 
         assertThat(((ActionOutcome.Failed) outcome).reason()).contains("whole number");
     }

@@ -2,8 +2,8 @@ package dev.materione.plugin.gui.input;
 
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.gui.GuiMenu;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +13,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * The Bukkit side of the recovery journal (logic.md §25, decision 12): stores {@link InputJournal} in the player's
@@ -30,10 +31,10 @@ public final class GuiJournal {
 
     private final Plugin plugin;
     private final SchedulingGateway scheduling;
-    private final GuiSessions sessions;
+    private final ViewRegistry sessions;
     private final InputJournal<Player, ItemStack> journal;
 
-    public GuiJournal(Plugin plugin, SchedulingGateway scheduling, GuiSessions sessions) {
+    public GuiJournal(Plugin plugin, SchedulingGateway scheduling, ViewRegistry sessions) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.sessions = sessions;
@@ -83,7 +84,7 @@ public final class GuiJournal {
 
     /** The items in the input slots of the player's current, open window (none when no window is current). */
     private List<ItemStack> held(Player player) {
-        Optional<GuiSession> current = sessions.current(player.getUniqueId());
+        Optional<ViewerRecord> current = sessions.current(player.getUniqueId(), GuiViewerState.KIND);
         if (current.isEmpty() || !current.get().isOpen() || !(current.get().window() instanceof GuiMenu menu)) {
             return List.of();
         }

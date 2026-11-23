@@ -2,7 +2,7 @@ package dev.materione.plugin.gui.window;
 
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -26,7 +26,7 @@ public interface WindowHost {
     }
 
     /** Binds the live resolver used after a guarded inventory transaction. */
-    default void bindReconciler(BiConsumer<Viewer, GuiSession> reconcile) {}
+    default void bindReconciler(BiConsumer<Viewer, ViewerRecord> reconcile) {}
 
     /**
      * Resolves the still-current session's live GUI on the viewer thread immediately before rendering
@@ -34,7 +34,7 @@ public interface WindowHost {
      * with {@link #OPEN_DEFINITION_CHANGED}.
      * Either callback may run a tick later when the viewer is mid-click.
      */
-    void open(Viewer viewer, GuiSession session, Supplier<Optional<RuntimeGuis.Live>> resolve,
+    void open(Viewer viewer, ViewerRecord session, Supplier<Optional<RuntimeGuis.Live>> resolve,
             Consumer<RuntimeGuis.Live> opened, Consumer<String> failed);
 
     /**
@@ -42,14 +42,14 @@ public interface WindowHost {
      * travels with the viewer). A deferred request re-evaluates the current live GUI through the bound
      * reconciler; a superseding request may cancel it.
      */
-    void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
+    void reopen(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui, Runnable opened,
             Consumer<String> failed);
 
     /** Closes the viewer's window (a tick later when they are mid-click). */
     void close(Viewer viewer);
 
     /** Close only if this session still owns the viewer's visible window. */
-    default void closeOwned(Viewer viewer, GuiSession session) {
+    default void closeOwned(Viewer viewer, ViewerRecord session) {
         if (shape(viewer, session).isPresent()) {
             close(viewer);
         }
@@ -59,26 +59,26 @@ public interface WindowHost {
      * Gives the items in the session's input slots back to the viewer, and empties them (logic.md §25). Called
      * when the session ends, so a window that is closing (or stays open for a tick) holds no item of theirs.
      */
-    void releaseInputs(Viewer viewer, GuiSession session);
+    void releaseInputs(Viewer viewer, ViewerRecord session);
 
     /**
      * Rewrites the contents of the viewer's window in place, when it is this session's window. Every layer
      * is read again: this is what {@code gui.refresh} and a reload need.
      */
-    void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui);
+    void rewrite(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui);
 
     /**
      * Repaints the dynamic layers of the viewer's window, when it is this session's window: the refresh
      * clock's tick. Layers that do not change keep what they show, and the window's clock advances first.
      */
-    void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui);
+    void advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui);
 
     /**
      * The title and size of the window the viewer has open for this session, or empty when their
      * open window is not this session's. A window's title and size are fixed when it is created, so
      * the refresh compares them with the GUI's now to choose between a rewrite and a re-open.
      */
-    java.util.Optional<Shape> shape(Viewer viewer, GuiSession session);
+    java.util.Optional<Shape> shape(Viewer viewer, ViewerRecord session);
 
     /** A window's creation-time title (MiniMessage) and rows. */
     record Shape(String title, String container) {}

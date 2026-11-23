@@ -49,7 +49,7 @@
 | Content types | `item`, `block`, `furniture`, `glyph`, `sound`, `painting`, `effect`, `recipe`, `gui`, `currency`, `variable`, `rule` (since #327) |
 | Mechanics | `commands`, `food`, `durability`, `soulbound`, `backpack` |
 | Triggers (live) | `click`, `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage` (durability), `death` (the carrier dies); since #327 `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`, `player.death`; `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`, `gui.page` |
-| Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `gui.open`, `gui.close`, `gui.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
+| Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `view.open`, `view.close`, `view.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
 | Conditions | `has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has` |
 | Flow steps | action, `if`, `require`, `wait`, `stop`, `call` (same resource), `choose`; rule options `id`, `cooldown`, `charges`, `per`; action options `chance`, `delay` (there is no rule-level `chance`) |
 | Variables | scopes `local`, `session`, `player`, `server`; types `number`, `string`, `boolean` |
@@ -285,7 +285,7 @@ const warps = [ { name: "Spawn", at: [0, 64, 0], icon: "compass" }, { name: "Min
                 { name: "Arena", at: [-300, 70, 220], icon: "diamond_sword" } ];
 const menu = p.guis.create("warps", { container: "chest_3", title: "Warps", open: { commands: ["warps", "warp"] } });
 warps.forEach((w, i) => menu.layers.addButton({ slot: 10 + i * 2, item: `minecraft:${w.icon}`, name: w.name,
-  rules: [{ on: m.triggers.guiClick, do: [ m.actions.guiClose(), m.actions.teleport({ x: w.at[0], y: w.at[1], z: w.at[2], world: "world" }) ] }] }));
+  rules: [{ on: m.triggers.guiClick, do: [ m.actions.viewClose(), m.actions.teleport({ x: w.at[0], y: w.at[1], z: w.at[2], world: "world" }) ] }] }));
 menu.layers.addButton({ slot: 16, item: "minecraft:ender_pearl", name: "Survival server",
   rules: [{ on: m.triggers.guiClick, do: [ m.actions.connect({ server: "survival" }) ] }] });
 ```
@@ -414,10 +414,10 @@ included.
 ### T18 Player vaults — Fail (CUSTODY)
 
 ```ts
-const vault = p.guis.create("vault", { container: "chest_6", title: m.expr`"Vault #" + gui.args.n`,
+const vault = p.guis.create("vault", { container: "chest_6", title: m.expr`"Vault #" + view.args.n`,
   open: { commands: ["pv"], args: { n: { type: "integer", min: 1, max: 3 } }, permission: "vaults.use" } });
 vault.layers.addSlots({ slots: m.range(0, 53), input: true, durable: "required",
-  keep: { holder: m.holder.key(m.expr`"vault:" + player.uuid + ":" + gui.args.n`) } });
+  keep: { holder: m.holder.key(m.expr`"vault:" + player.uuid + ":" + view.args.n`) } });
 //^^^^ ✗ TS2353 'keep' does not exist in type 'SlotsLayer': a required input layer returns its items on close;
 //                the only exit that keeps them from the player is custody.consume                              [CUSTODY]
 ```
@@ -430,7 +430,7 @@ The command, its typed argument and the durable slots exist. What is missing is 
 ```ts
 const shop = m.ref.gui("bench:shop");                                     // T08's GUI; resolved at run time
 const machine = p.furnitures.create("vending_machine", { model: m.ref.asset("models/vending_machine.json") });
-machine.rules.add({ on: m.triggers.click({ detail: "right" }), do: [ m.actions.guiOpen(shop), m.actions.sound("block.note_block.chime") ] });
+machine.rules.add({ on: m.triggers.click({ detail: "right" }), do: [ m.actions.viewOpen(shop), m.actions.sound("block.note_block.chime") ] });
 ```
 
 ### T20 Mana and a fire wand — Fail (TIMER, VIEW)
@@ -494,7 +494,7 @@ menu.layers.addButton({ slot: 13, item: "minecraft:emerald", name: "Rank up", ru
     if: m.conditions.all([ m.conditions.hasPermission(`rank.${r.id}`), m.conditions.not(m.conditions.hasPermission(`rank.${r.next}`)) ]),
     then: [ m.steps.require([ m.actions.takeMoney({ amount: r.cost }) ], { else: [ m.actions.message(`<red>You need ${r.cost} coins.`) ] }),
             m.actions.givePermission(`rank.${r.next}`),
-            m.actions.broadcast(m.expr`"<gold>" + player.name + ${" is now a " + r.next + "!"}`), m.actions.guiClose() ],
+            m.actions.broadcast(m.expr`"<gold>" + player.name + ${" is now a " + r.next + "!"}`), m.actions.viewClose() ],
   })), { else: [ m.actions.message("<gray>You are at the highest rank.") ] }) ] }] });
 ```
 

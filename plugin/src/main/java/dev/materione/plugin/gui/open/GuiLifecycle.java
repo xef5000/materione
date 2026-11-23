@@ -4,10 +4,11 @@ import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.window.WindowHost;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * How a session ends (logic.md §6.2). Every end goes through here, so {@code gui.close} fires once,
@@ -22,11 +23,11 @@ import dev.materione.plugin.gui.window.WindowHost;
 public final class GuiLifecycle {
 
     private final GuiLookup guis;
-    private final GuiSessions sessions;
+    private final ViewRegistry sessions;
     private final GuiEvents events;
     private final WindowHost windows;
 
-    public GuiLifecycle(GuiLookup guis, GuiSessions sessions, GuiEvents events, WindowHost windows) {
+    public GuiLifecycle(GuiLookup guis, ViewRegistry sessions, GuiEvents events, WindowHost windows) {
         this.guis = guis;
         this.sessions = sessions;
         this.events = events;
@@ -39,7 +40,7 @@ public final class GuiLifecycle {
      *
      * @return false when the session had already ended (nothing to close)
      */
-    public boolean closeByAction(Viewer viewer, GuiSession session) {
+    public boolean closeByAction(Viewer viewer, ViewerRecord session) {
         if (!end(viewer, session, CloseReason.ACTION)) {
             return false;
         }
@@ -53,7 +54,7 @@ public final class GuiLifecycle {
      *
      * @param reason {@code player}, or {@code quit} when the cause was the disconnect
      */
-    public void windowClosed(Viewer viewer, GuiSession session, CloseReason reason) {
+    public void windowClosed(Viewer viewer, ViewerRecord session, CloseReason reason) {
         if (session.prompting()) {
             return; // the window closed for a prompt (logic.md §6.6): the player has not left the menu
         }
@@ -65,7 +66,7 @@ public final class GuiLifecycle {
      * held, and its input items go back to the player; the window closes on the viewer's next tick (or at once when
      * they are not mid-click). Nothing fires: the GUI did not close as far as its session is concerned.
      */
-    public void hideForPrompt(Viewer viewer, GuiSession session) {
+    public void hideForPrompt(Viewer viewer, ViewerRecord session) {
         session.prompting(true);
         windows.releaseInputs(viewer, session);
         windows.closeOwned(viewer, session);
@@ -78,21 +79,21 @@ public final class GuiLifecycle {
      * @param failed told the reason when the window could not be shown
      * @return whether a window is coming back (false when the session is no longer the player's, or ended)
      */
-    public boolean showAfterPrompt(Viewer viewer, GuiSession session, java.util.function.Consumer<String> failed) {
+    public boolean showAfterPrompt(Viewer viewer, ViewerRecord session, java.util.function.Consumer<String> failed) {
         session.prompting(false);
-        if (!session.isOpen() || sessions.current(viewer.id()).filter(current -> current == session).isEmpty()) {
+        if (!session.isOpen() || sessions.current(viewer.id(), GuiViewerState.KIND).filter(current -> current == session).isEmpty()) {
             return false;
         }
-        java.util.Optional<RuntimeGuis.Live> gui = guis.find(session.gui());
+        java.util.Optional<RuntimeGuis.Live> gui = guis.find(session.definition());
         if (gui.isEmpty()) {
             removed(viewer, session);
             failed.accept("the menu is no longer available");
             return false;
         }
         windows.open(viewer, session,
-                () -> sessions.current(viewer.id())
+                () -> sessions.current(viewer.id(), GuiViewerState.KIND)
                         .filter(current -> current == session && session.isOpen())
-                        .flatMap(current -> guis.find(current.gui())),
+                        .flatMap(current -> guis.find(current.definition())),
                 ignored -> { }, reason -> {
                     removed(viewer, session);
                     failed.accept(reason);
@@ -102,22 +103,22 @@ public final class GuiLifecycle {
 
     /** The player left: ends their session (if the window close did not already) and forgets their back stack. */
     public void playerQuit(Viewer viewer) {
-        sessions.current(viewer.id()).ifPresent(session -> end(viewer, session, CloseReason.QUIT));
+        sessions.current(viewer.id(), GuiViewerState.KIND).ifPresent(session -> end(viewer, session, CloseReason.QUIT));
         sessions.forget(viewer.id());
     }
 
     /** The session's GUI stopped being live: ends it quietly (its rules are gone with it). */
-    public void removed(Viewer viewer, GuiSession session) {
+    public void removed(Viewer viewer, ViewerRecord session) {
         if (sessions.end(session, CloseReason.REMOVED)) {
             windows.releaseInputs(viewer, session);
         }
     }
 
-    private boolean end(Viewer viewer, GuiSession session, CloseReason reason) {
+    private boolean end(Viewer viewer, ViewerRecord session, CloseReason reason) {
         if (!sessions.end(session, reason)) {
             return false;
         }
-        guis.find(session.gui()).ifPresent(gui -> events.closed(viewer, session, gui, reason));
+        guis.find(session.definition()).ifPresent(gui -> events.closed(viewer, session, gui, reason));
         // the player's items in the window's input slots go back to them, whatever ended the session
         // (logic.md §6.5); after the close rules, which may still read them
         windows.releaseInputs(viewer, session);

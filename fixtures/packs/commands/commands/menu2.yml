@@ -7,4 +7,4 @@ menu2:
   args:
     - {name: page, type: int, default: "1"}
   do:
-    - gui.open: {gui: "commands:menu", args: {page: "${args.page}"}}
+    - view.open: {view: "commands:menu", args: {page: "${args.page}"}}

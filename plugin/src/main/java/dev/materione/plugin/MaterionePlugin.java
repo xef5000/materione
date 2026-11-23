@@ -47,6 +47,7 @@ import java.util.Set;
 import org.bstats.bukkit.Metrics;
 import org.bstats.charts.SimplePie;
 import org.bukkit.plugin.java.JavaPlugin;
+import dev.materione.plugin.view.ViewRegistryPort;
 
 /**
  * The assembly point (master §10): runs the bootstrap phase sequence
@@ -532,11 +533,11 @@ public final class MaterionePlugin extends JavaPlugin {
         // the v1 recipes (logic.md §7.5, §30): YAML in the jar, registered through the same logic API as addons
         dev.materione.plugin.logic.recipe.BuiltinRecipes.register(logic, this, diagnostics::publish);
         registerProviders();
-        // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
+        // %materione_var_…% and %materione_view_…% for PlaceholderAPI, when it is enabled (soft-depend)
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             dev.materione.plugin.logic.variable.MaterionePlaceholders.installIfPresent(
                     new dev.materione.integrations.variables.VariablePlaceholders(
-                            variables.api(), variables::guiSessions,
+                            variables.api(), variables::views,
                             new dev.materione.plugin.logic.variable.CurrencyPlaceholderReads(
                                     logic.providers(), logic.currencyIntegrations(), currencyReads, threadProbe,
                                     org.bukkit.Bukkit::getPlayer, folia),
@@ -774,7 +775,8 @@ public final class MaterionePlugin extends JavaPlugin {
         authoringApi.builtinPackIds(builtinPacks.ids());
         // ... and finds the static references of rules the way the pipeline does (#363)
         authoringApi.staticReferences(new dev.materione.core.pipeline.validate.StaticReferenceWalker(
-                new dev.materione.behavior.logic.RegistryLogicVocabulary(logicLookup)));
+                new dev.materione.behavior.logic.RegistryLogicVocabulary(logicLookup),
+                () -> dev.materione.api.content.ViewFacet.byType(pipeline.contentTypes())));
         // a transaction's dry run compiles each resource on the allocation table's non-persisting preview
         authoringApi.previewAllocations(() -> pipeline.allocation().preview());
         // ... and resolves references over the staged pack against the last parse of every other pack
@@ -790,8 +792,8 @@ public final class MaterionePlugin extends JavaPlugin {
                 dev.materione.plugin.gui.input.LayerVisibility.RENDERED, diagnostics::publish,
                 () -> pipeline.builtRegistries(), descriptorOrNull(), variables, escrowRuntime());
         guiBridge.bind(guiStack.services());
-        // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)
-        variables.guiSessions(new dev.materione.plugin.gui.session.GuiSessionsPort(guiStack.sessions()));
+        // %materione_view_open% and %materione_view_last% read the live view registry (logic.md §3.3)
+        variables.views(new dev.materione.plugin.view.ViewRegistryPort(guiStack.views()));
         // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
         guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
                 this, scheduling, () -> pipeline.runtime().registries(), guiStack);

@@ -19,7 +19,7 @@ const BLOCK: LogicBlock = {
   behavior: [
     { on: 'gui.click', layer: 'buy', do: [{ message: 'hi' }] },
     { on: 'gui.open', do: ['gui.refresh'] },
-    { on: 'gui.click', layer: ['apple', 'coin'], do: ['gui.close'] },
+    { on: 'gui.click', layer: ['apple', 'coin'], do: ['view.close'] },
     { on: 'gui.click', layer: 'buy', do: [] },
     { on: 'gui.click', layer: ' sword ', do: [] },
   ],
@@ -34,7 +34,7 @@ describe('which layers a rule names', () => {
     expect(layersOfRule({ layer: '' })).toEqual([]);
     expect(layersOfRule({ layer: 3 })).toEqual([]);
     expect(layersOfRule({ layer: ['a', 3, '', 'c'] })).toEqual(['a', 'c']);
-    expect(layersOfRule('gui.close')).toEqual([]);
+    expect(layersOfRule('view.close')).toEqual([]);
     expect(layersOfRule(null)).toEqual([]);
   });
 
@@ -125,7 +125,7 @@ describe('deleting layers that have rules', () => {
     const after = applyEdits(BLOCK, edits).behavior!;
     expect(after).toEqual([
       { on: 'gui.open', do: ['gui.refresh'] },
-      { on: 'gui.click', layer: ['coin'], do: ['gui.close'] },
+      { on: 'gui.click', layer: ['coin'], do: ['view.close'] },
       { on: 'gui.click', layer: ' sword ', do: [] },
     ]);
   });
@@ -136,7 +136,7 @@ describe('deleting layers that have rules', () => {
     expect(after).toEqual([
       { on: 'gui.click', do: [{ message: 'hi' }] },
       { on: 'gui.open', do: ['gui.refresh'] },
-      { on: 'gui.click', layer: ['coin'], do: ['gui.close'] },
+      { on: 'gui.click', layer: ['coin'], do: ['view.close'] },
       { on: 'gui.click', do: [] },
       { on: 'gui.click', layer: ' sword ', do: [] },
     ]);

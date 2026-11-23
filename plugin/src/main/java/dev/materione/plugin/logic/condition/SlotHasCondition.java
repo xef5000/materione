@@ -14,7 +14,7 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.gui.input.StackView;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.logic.support.SlotPeek;
 import java.util.List;
 import java.util.Locale;
@@ -90,7 +90,7 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
         if (slot.isEmpty()) {
             throw new CodedRefusal(DiagnosticCodes.QUANTITY_REFUSED, params.slot().refusal("slot", context));
         }
-        GuiSession session = context.facet(GuiSession.FACET).orElse(null);
+        ViewerRecord session = context.facet(ViewerRecord.FACET).orElse(null);
         if (session == null) {
             return false;
         }

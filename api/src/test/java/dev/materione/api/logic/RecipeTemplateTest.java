@@ -23,7 +23,7 @@ class RecipeTemplateTest {
         definition.put("rules", List.of(Map.of(
                 "on", "gui.click",
                 "layer", "{{layer}}",
-                "do", List.of("gui.close"))));
+                "do", List.of("view.close"))));
         return definition;
     }
 
@@ -35,7 +35,7 @@ class RecipeTemplateTest {
         assertThat(recipe.describe().name()).isEqualTo("Close button");
         assertThat(recipe.describe().param("layer").type()).isEqualTo(RecipeParamType.STRING);
         assertThat(recipe.expand(Map.of("layer", "close"))).containsExactly(Map.of(
-                "on", "gui.click", "layer", "close", "do", List.of("gui.close")));
+                "on", "gui.click", "layer", "close", "do", List.of("view.close")));
     }
 
     @Test
@@ -121,7 +121,7 @@ class RecipeTemplateTest {
         assertRejected(withTop("colour", "x"), "unknown key 'colour'");
         assertRejected(without("name"), "non-blank name");
         assertRejected(withRules(List.of()), "non-empty list of rules");
-        assertRejected(withRules(List.of("gui.close")), "rule 1 is not a mapping");
+        assertRejected(withRules(List.of("view.close")), "rule 1 is not a mapping");
         assertRejected(withRules(List.of(Map.of("layer", "{{nosuch}}"))), "'{{nosuch}}' names no declared parameter");
         assertRejected(withRules(List.of(Map.of("layer", "{{layer"))), "malformed placeholder");
         assertRejected(withParam("layer", Map.of("type", "colour")), "needs a type");
@@ -135,17 +135,17 @@ class RecipeTemplateTest {
     void theTemplateIsCopiedSoALaterEditOfTheDefinitionCannotChangeIt() {
         var rule = new HashMap<String, Object>();
         rule.put("layer", "{{layer}}");
-        var steps = new ArrayList<Object>(List.of("gui.close"));
+        var steps = new ArrayList<Object>(List.of("view.close"));
         rule.put("do", steps);
         var definition = closeButton();
         definition.put("rules", new ArrayList<Object>(List.of(rule)));
         RecipeTemplate recipe = RecipeTemplate.parse("close_button", definition);
 
         rule.put("layer", "tampered");
-        steps.add("gui.open");
+        steps.add("view.open");
 
         assertThat(recipe.expand(Map.of("layer", "a"))).containsExactly(Map.of(
-                "layer", "a", "do", List.of("gui.close")));
+                "layer", "a", "do", List.of("view.close")));
     }
 
     // --- helpers ------------------------------------------------------------------------------

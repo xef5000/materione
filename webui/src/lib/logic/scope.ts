@@ -14,7 +14,7 @@ import { readPath } from './variables';
 import type { ContextVar, FunctionEntry, PlaceholderEntry, Vocabulary } from './vocabulary';
 
 export interface ScopeEntry {
-  /** The dotted path an expression writes (`player.name`, `gui.args.*`). A trailing `.*` stands for a family. */
+  /** The dotted path an expression writes (`player.name`, `view.args.*`). A trailing `.*` stands for a family. */
   path: string;
   type: string;
   description: string;
@@ -31,8 +31,8 @@ export interface TemplateScope {
 
 /** The expansions Materione's own PlaceholderAPI expansion defines (logic.md section 3.3). */
 const OWN_PLACEHOLDERS: PlaceholderEntry[] = [
-  { token: 'materione_gui_open', description: 'The id of the GUI the player has open' },
-  { token: 'materione_gui_last', description: 'The id of the GUI the player had open last' },
+  { token: 'materione_view_open', description: 'The view the player has open, as kind:id' },
+  { token: 'materione_view_last', description: 'The view the player had open last, as kind:id' },
 ];
 
 export const EMPTY_SCOPE: TemplateScope = { paths: [], functions: [], placeholders: [], roots: new Set() };

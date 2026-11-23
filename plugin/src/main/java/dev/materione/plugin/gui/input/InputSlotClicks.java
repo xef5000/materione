@@ -6,8 +6,8 @@ import dev.materione.plugin.gui.PluginGui;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.ItemStack;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * The input-slot side of the click policy (logic.md §6.5, §25): what a click on a window's input slots,
@@ -36,7 +37,7 @@ import org.bukkit.inventory.ItemStack;
  */
 public final class InputSlotClicks {
 
-    private final GuiSessions sessions;
+    private final ViewRegistry sessions;
     private final GuiEvents events;
     private final InputGuard guard;
     private final GuiJournal journal;
@@ -44,13 +45,13 @@ public final class InputSlotClicks {
     private final ManualClicks manual;
     private final SlotMoves moves;
 
-    public InputSlotClicks(GuiLookup guis, GuiSessions sessions, GuiEvents events, InputGuard guard,
+    public InputSlotClicks(GuiLookup guis, ViewRegistry sessions, GuiEvents events, InputGuard guard,
             GuiJournal journal) {
         this(guis, sessions, events, guard, journal, StrictInputs.NONE);
     }
 
     /** @param strict the escrow path of {@code durable: required} slots (gui-input-durability.md, row P of #247) */
-    public InputSlotClicks(GuiLookup guis, GuiSessions sessions, GuiEvents events, InputGuard guard,
+    public InputSlotClicks(GuiLookup guis, ViewRegistry sessions, GuiEvents events, InputGuard guard,
             GuiJournal journal, StrictInputs strict) {
         this.sessions = sessions;
         this.events = events;
@@ -95,7 +96,7 @@ public final class InputSlotClicks {
         }
         Viewer viewer = Viewer.of(player);
         String item = BukkitStacks.view(event.getCurrentItem()).id();
-        return during(player.getUniqueId(), () -> events.clickInventory(viewer, menu.session(), live.get(),
+        return during(player.getUniqueId(), () -> events.clickInventory(viewer, menu.record(), live.get(),
                 click.get().kind(), event.getSlot(), click.get().key(), item));
     }
 
@@ -130,7 +131,7 @@ public final class InputSlotClicks {
         }
         Viewer viewer = Viewer.of(player);
         boolean allowed = during(player.getUniqueId(), () ->
-                allows(viewer, menu.session(), live.get(), input.get(), slot, before, change));
+                allows(viewer, menu.record(), live.get(), input.get(), slot, before, change));
         if (!allowed) {
             return Verdict.DENY;
         }
@@ -221,10 +222,10 @@ public final class InputSlotClicks {
                     continue;
                 }
                 StackView entering = BukkitStacks.view(cursor).withAmount(added);
-                if (!events.accepts(viewer, menu.session(), input.get(), raw, entering, before)) {
+                if (!events.accepts(viewer, menu.record(), input.get(), raw, entering, before)) {
                     return false;
                 }
-                if (events.slotChange(viewer, menu.session(), live.get(), input.get().layer(), raw, before, after)) {
+                if (events.slotChange(viewer, menu.record(), live.get(), input.get().layer(), raw, before, after)) {
                     return false;
                 }
             }
@@ -256,7 +257,7 @@ public final class InputSlotClicks {
         return gui.inputs().only(menu.inputSlots());
     }
 
-    private boolean allows(Viewer viewer, GuiSession session, RuntimeGuis.Live live, InputSlots.Input input,
+    private boolean allows(Viewer viewer, ViewerRecord session, RuntimeGuis.Live live, InputSlots.Input input,
             int slot, StackView before, SlotPolicy.Change change) {
         if (change.entering() != null && !events.accepts(viewer, session, input, slot, change.entering(), before)) {
             return false;
@@ -270,12 +271,12 @@ public final class InputSlotClicks {
     }
 
     private Optional<RuntimeGuis.Live> liveOf(GuiMenu menu, HumanEntity who) {
-        GuiSession session = menu.session();
+        ViewerRecord session = menu.record();
         if (!(who instanceof Player player) || !session.isOpen() || session.window() != menu
-                || sessions.current(player.getUniqueId()).filter(current -> current == session).isEmpty()) {
+                || sessions.current(player.getUniqueId(), GuiViewerState.KIND).filter(current -> current == session).isEmpty()) {
             return Optional.empty();
         }
-        return session.displayed();
+        return GuiViewerState.of(session).displayed();
     }
 
     /** Runs {@code work} with the player marked as mid-click, and returns what it returned. */

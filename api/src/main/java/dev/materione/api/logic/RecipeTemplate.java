@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  *   - on: gui.click
  *     layer: "{{layer}}"
  *     do:
- *       - gui.close
+ *       - view.close
  * }</pre>
  *
  * <p>Placeholder rules. A string that is exactly {@code {{name}}} takes the parameter's typed value, so a number

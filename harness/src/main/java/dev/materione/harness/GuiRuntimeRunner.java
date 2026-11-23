@@ -182,7 +182,7 @@ public final class GuiRuntimeRunner {
             String menu = Files.readString(
                     workspace.root.resolve("plugins/Materione/content/packs/guilogic").resolve(MENU_PATH));
             problems.addAll(saveAndExpect(browser, log, options, "guilogic", MENU_PATH,
-                    menu.replace("- gui.close", "- gui.teleport_cow"), "MTR-0057"));
+                    menu.replace("- view.close", "- view.teleport_cow"), "MTR-0057"));
             problems.addAll(expect(console, log, options,
                     "materione gui open guilogic:menu Nobody",
                     "MATERIONE-GUI-FAILED reason=no-such-player"));
@@ -279,11 +279,11 @@ public final class GuiRuntimeRunner {
                     - on: gui.click
                       layer: nope
                       do:
-                        - gui.close
+                        - view.close
                     - on: gui.click
                       layer: b
                       do:
-                        - gui.close
+                        - view.close
                         - gui.teleport_cow: now
                 """;
         JsonObject payload = new JsonObject();

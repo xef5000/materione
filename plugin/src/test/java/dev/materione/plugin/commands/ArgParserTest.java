@@ -158,7 +158,7 @@ class ArgParserTest {
                 .isEqualTo("missing item. usage: /give <item:string>");
     }
 
-    /** A command document's {@code args.*} are typed for the expression engine; a GUI's {@code gui.args} stay text. */
+    /** A command document's {@code args.*} are typed for the expression engine; a GUI's {@code view.args} stay text. */
     @Test
     void typedValuesAreNumbersAndBooleansForTheExpressionEngineAndTextOtherwise() {
         ArgParser.Result result = ArgParser.parse(PLAN,

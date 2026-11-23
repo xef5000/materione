@@ -685,6 +685,16 @@ needs the generator to read a document's declared inputs (as it would need for `
 R, C, M and G can start in parallel, and so can views row V0 (#455); S is the critical path and starts when G and V0 have
 merged; I follows R's answer to V5.
 
+**Row G, as built (folded into views row V0's PR, #455; views.md §13 allows the fold).** The gate is one class, not a copy per
+kind: `plugin.view.open.OpenSpecGate` implements `OpenGate`, which now takes a kind-neutral `OpenGate.Subject(kind, id, plan)`
+instead of a `RuntimeGuis.Live`. The kind supplies two things and nothing else: its name (the usage line
+`/materione <kind> open <id>` and the bypass node `materione.<kind>.bypass.<pack>.<id>`, `OpenPlan.bypassNode(kind, id)`) and an
+`OpenContexts` that builds the context its requirement and deny steps run against (the GUI's is `GuiContexts::open`, wired by
+`GuiOpenGates.of`). `GuiOpener` asks the gate through a `Subject` and is otherwise unchanged, so GUI behavior is identical.
+`OpenGateParityTest` runs one table of permission, argument, requirement, deny, bypass and default cases against a `gui` and a
+`dialog` subject. `DialogOpener` (row S) builds its gate with `new OpenSpecGate(permissions, players, denies, variables,
+<dialog contexts>)` and attaches its viewer records to `ViewRegistry` through the `ViewKind` SPI (views.md §16).
+
 ---
 
 ## 14. Competitive bar: mcgui

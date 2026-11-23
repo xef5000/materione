@@ -26,7 +26,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "rankup_btn" }), (ctx) => ({
           }),
           m.actions.givePermission(`rank.${r.next}`),
           m.actions.broadcast(m.expr`"<gold>" + ${ctx.player.name} + ${" is now a " + r.next + "!"}`),
-          m.actions.guiClose(),
+          m.actions.viewClose(),
         ],
       })),
       { else: [m.actions.message("<gray>You are at the highest rank.")] },

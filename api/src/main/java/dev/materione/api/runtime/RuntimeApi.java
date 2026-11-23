@@ -88,7 +88,7 @@ public interface RuntimeApi {
         /**
          * {@link #open(ActorContext, NamespacedId, UUID)} with the arguments the GUI opens with
          * (logic.md §6.1): a plain name-to-value map, read by the GUI's rules as
-         * {@code gui.args.<name>}. Typed parsing and validation of the values belong to the GUI's
+         * {@code view.args.<name>}. Typed parsing and validation of the values belong to the GUI's
          * open specification, not to this call. An implementation that predates arguments ignores
          * them, which is what the default does.
          */

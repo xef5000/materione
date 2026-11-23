@@ -1,8 +1,8 @@
 package dev.materione.plugin.commands;
 
 import dev.materione.plugin.gui.open.GuiOpener;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.open.OpenResult;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenResult;
 
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.ArgumentCommandNode;

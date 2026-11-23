@@ -9,6 +9,32 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Views V0: one view model, one verb set, one root (#455, #335, docs/architecture/views.md section 16; also dialogs row G, #6).**
+  The container GUI is the first **view kind**. A generic `ViewerRecord` (binding, session values, window, a kind payload) replaces
+  `GuiSession`; `GuiViewerState` is the GUI's payload (list pages, last render, clocks). `ViewRegistry` replaces `GuiSessions`,
+  indexed by player (one record per kind) and by definition, with the key index reserved for V5; `ViewHistory` replaces
+  `SessionHistory` and spans kinds. An internal `ViewKind` SPI and a `ViewKinds` directory let `view.open` reach a kind it does not
+  name; `GuiViewKind` implements it. **Breaking, by design (no public release has GUIs; views.md section 7.1, row V0): the
+  actions `gui.open`, `gui.close` and `gui.back` are now `view.open`, `view.close` and `view.back`, with no alias; the context
+  root `gui` is now `view` (`view.id`, `view.kind`, `view.args.*`, `view.page.*`; `view.item` and `view.key` are empty until
+  subject stacks and keys exist), and `gui.session.*` is gone: a window-local value is `vars.session.*` only; the placeholders
+  `%materione_gui_open%` and `%materione_gui_last%` are `%materione_view_open%` and `%materione_view_last%`, written
+  `<kind>:<id>`.** The triggers (`gui.opening`, `gui.open`, `gui.close`, `gui.click`, ...), `gui.refresh`, `in_gui` (row V2),
+  `gui.page` and `gui.slot_item` are unchanged. `view.close` takes an optional `view:` (close that view if it is the one the player
+  has open, from any rule) and both `view.open` and `view.close` take an optional `kind:` for an id two kinds share. A static
+  `view.open` that names a kind no verb opens (a HUD) is the new `MTR-0126` (the step is kept and fails when it runs). The **view facet** (`viewerRule`, `rerenderDefault`,
+  `supportsTarget`, `supportsKey`) is now part of a content type's self-description: `gui` declares it, `authoring.describe` reports it
+  as a `view` block, the generated SDK gets `viewOpen`, `viewClose` and `viewBack`, types a `view` reference as the union of the
+  view kinds and says on a view kind's doc comment what it is, and the editor's reference field offers every view kind's
+  resources. A new action node whose shorthand is optional is born as the bare step. The built-in browser, the logic recipes,
+  the fixture and showcase packs, the code-mode corpus and the Logic tab specs use the new spellings. Dialogs row G: the open gate
+  is one kind-neutral `OpenGate` (`Subject(kind, id, plan)`, `OpenContexts`) that a GUI and a dialog share, with an
+  `OpenGateParityTest`. A mutation of a viewer record off its owner thread fails the build (`ViewerOwnerThreadTest`, a recording
+  gateway). Tests: plugin `ViewRegistryTest`, `ViewVerbsTest`, `ViewerOwnerThreadTest`, `ViewFacetSelfDescriptionTest`,
+  `OpenGateParityTest`; core `ViewReferenceValidationTest`; webui `codemode-generate` and Logic tab specs; QA
+  `views.verbs.open-replace-back-close` and `views.placeholders.open-and-last` (not run, not blessed). Goldens (all views.md
+  section 7.1 row V0): recipes, the registry and demo snapshots, the SDK declarations, the T09, T19 and T23 operation lists. No new
+  diagnostic code. The cloud editor's bundle changes (the facet, the SDK, the reference field): the owner deploys.
 - **The editor and code mode work on a currency file written as one currency's top-level fields (#475, logic.md section 18,
   web.md section 4.2, codemode.md).** `currencies/gems.yml` holding `integration: xp` and `display_name: Gems` (the flat form #469
   made load) is now **one resource named by the file** in the editor: the Content tab lists it as `Gems` (not each field as a

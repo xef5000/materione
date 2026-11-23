@@ -193,10 +193,10 @@ test('% completes from the placeholder expansions Materione defines, and functio
   await buildPayToReceive(page);
   const text = inspector(page).getByRole('combobox', { name: 'Text' });
   await text.click();
-  await page.keyboard.type('Balance %materione_g');
-  await expect(inspector(page).getByRole('option', { name: '%materione_gui_open%' })).toBeVisible();
+  await page.keyboard.type('Balance %materione_vi');
+  await expect(inspector(page).getByRole('option', { name: '%materione_view_open%' })).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(text).toHaveValue('Balance %materione_gui_open%');
+  await expect(text).toHaveValue('Balance %materione_view_open%');
   await text.fill('');
   await page.keyboard.type('${con');
   const contains = inspector(page).getByRole('option', { name: /^contains\(/ });

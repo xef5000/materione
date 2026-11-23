@@ -12,7 +12,7 @@ odd:
         - if: true
           then:
             - if: ${a}
-              then: [gui.close]
+              then: [view.close]
               else: [stop]
           else:
             - require: []

@@ -13,6 +13,16 @@
 > - **Code and work.** It fixes the code layout, and the order in which the work is cut into
 >   issues (§13).
 >
+> **Spelling since views V0 (#455; [`views.md`](views.md) §16).** This document records how the GUI runtime was built, and most
+> of it was written before the view model. Read these old spellings as the new ones: the actions `gui.open`, `gui.close` and
+> `gui.back` are **`view.open`, `view.close` and `view.back`**; the context root `gui` (`gui.id`, `gui.args.*`, `gui.page.*`) is
+> **`view`** (`view.id`, `view.kind`, `view.args.*`, `view.page.*`); `gui.session.*` is gone and a window-local value is
+> **`vars.session.*`**; `GuiSession`, `GuiSessions` and `SessionHistory` are **`ViewerRecord` (with `GuiViewerState`),
+> `ViewRegistry` and `ViewHistory`** in `plugin.view`; `GuiSessionPort` is `ViewPort`; `%materione_gui_open%` and
+> `%materione_gui_last%` are `%materione_view_open%` and `%materione_view_last%`. The triggers (`gui.opening`, `gui.open`,
+> `gui.close`, `gui.click`, ...), `gui.refresh`, `in_gui`, `gui.page` and `gui.slot_item` keep their names. A decision below that
+> says "session" means the viewer record's binding, session values and GUI payload.
+>
 > **Traceability.**
 >
 > | Decision or rule | How this doc applies it |
@@ -879,7 +889,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41); #467 took `MTR-0125` (§40).
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41); #467 took `MTR-0125` (§40); #455 took `MTR-0126` (views.md §16, V0-3).
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -1966,6 +1976,15 @@ reads or a per-run cache of the values a run reads. Left open here; the decision
 builds on its seams, so the seams are named here. Where the design left a choice open, these are the choices.
 Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.action.gui` and
 `content.gui.logic` (§9).
+
+> **As rebuilt by views V0 (#455, [`views.md`](views.md) §16).** The session of this section is now one **viewer record** per
+> viewer, for every view kind: `GuiSession` became `ViewerRecord` (binding, session values, window, prompt hold) with a
+> `GuiViewerState` payload (pages, last render, clocks, ticker claims); `GuiSessions` became `ViewRegistry` (one record per kind per
+> player, indexed by player and by definition); `SessionHistory` became `ViewHistory` (per player, spanning kinds). The
+> actions that open, close and go back are `view.open`, `view.close` and `view.back`, resolved across kinds through the internal
+> `ViewKind` SPI; the placeholders are `%materione_view_open%` and `%materione_view_last%`; the context root is `view`. Decisions
+> 1, 2, 3, 8, 14 to 17 below keep their meaning under those names: a live reload keeps the record (17), a window is never changed
+> in the middle of the player's own click (8), and the click router follows the last render (24 decision 14).
 
 **Sessions and the back stack**
 

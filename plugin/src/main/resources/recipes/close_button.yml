@@ -9,4 +9,4 @@ rules:
   - on: gui.click
     layer: "{{layer}}"
     do:
-      - gui.close
+      - view.close

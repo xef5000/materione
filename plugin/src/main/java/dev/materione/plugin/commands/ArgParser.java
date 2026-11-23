@@ -11,7 +11,7 @@ import java.util.Map;
  * does not declare is an error too, so a misspelt name is reported rather than ignored.
  *
  * <p>The first problem stops the parse and is the message the usage line follows. The result's values are
- * in the block's order, which is the order {@code gui.args.*} lists them in.
+ * in the block's order, which is the order {@code view.args.*} lists them in.
  */
 public final class ArgParser {
 
@@ -67,7 +67,7 @@ public final class ArgParser {
     /**
      * The parsed values as the expression engine reads them (logic.md §40): a whole number as an integer, a number as
      * a double, {@code true} and {@code false} as booleans, everything else as the text it is. A GUI's
-     * {@code gui.args} stay text, as they always were; a command document's {@code args.*} are these, so
+     * {@code view.args} stay text, as they always were; a command document's {@code args.*} are these, so
      * {@code ${args.amount} > 0} compares numbers and {@code ${args.amount} * 2} does arithmetic.
      *
      * @param values the canonical text {@link #parse} returned

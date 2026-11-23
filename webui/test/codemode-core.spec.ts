@@ -240,10 +240,10 @@ describe('every kind of operation, and what it stages', () => {
 
   it('a context value interpolates as its path, and a wildcard family answers any name', async () => {
     const { result } = await go(`const g = m.pack("bench").guis.create("ctx", { container: "chest_1", title: "t" });
-      g.rules.add(m.triggers.guiClick(), (ctx) => ({ if: m.expr\`\${ctx.player.name} == \${ctx.gui.args.category}\`, do: [m.actions.cancel()] }));`);
+      g.rules.add(m.triggers.guiClick(), (ctx) => ({ if: m.expr\`\${ctx.player.name} == \${ctx.view.args.category}\`, do: [m.actions.cancel()] }));`);
     expect(errorsOf(result)).toEqual([]);
     const rule = (result.operations[1] as unknown as { edits: { rule: { if: string } }[] }).edits[0]?.rule;
-    expect(rule?.if).toBe('${player.name == gui.args.category}');
+    expect(rule?.if).toBe('${player.name == view.args.category}');
   });
 
   it('m.docs answers from the registry\'s own text, in the program', async () => {

@@ -6,11 +6,12 @@ import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.WindowHost;
+import dev.materione.plugin.view.open.OpenGate;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,6 +19,9 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenResult;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * The one way a GUI opens (logic.md §6.1). The command, the runtime API (and with it the editor's
@@ -44,14 +48,14 @@ import net.kyori.adventure.text.format.NamedTextColor;
 public final class GuiOpener {
 
     private final GuiLookup guis;
-    private final GuiSessions sessions;
+    private final ViewRegistry sessions;
     private final GuiEvents events;
     private final WindowHost windows;
     private final GuiTicker ticker;
     private final Logger log;
     private volatile OpenGate gate = OpenGate.ALLOW;
 
-    public GuiOpener(GuiLookup guis, GuiSessions sessions, GuiEvents events, WindowHost windows, GuiTicker ticker,
+    public GuiOpener(GuiLookup guis, ViewRegistry sessions, GuiEvents events, WindowHost windows, GuiTicker ticker,
             Logger log) {
         this.log = Objects.requireNonNull(log, "log");
         this.guis = Objects.requireNonNull(guis, "guis");
@@ -69,13 +73,14 @@ public final class GuiOpener {
     /** Runs the stages for one request. */
     public OpenResult open(OpenRequest request) {
         Viewer viewer = request.viewer();
-        Optional<RuntimeGuis.Live> found = guis.find(request.gui());
+        Optional<RuntimeGuis.Live> found = guis.find(request.view());
         if (found.isEmpty()) {
             return OpenResult.refused(OpenResult.Outcome.NOT_LIVE,
-                    "GUI '" + request.gui() + "' is not live: it is unknown, or its last compile quarantined it");
+                    "GUI '" + request.view() + "' is not live: it is unknown, or its last compile quarantined it");
         }
         RuntimeGuis.Live gui = found.get();
-        OpenGate.Admission admission = gate.admit(viewer, gui, request.args());
+        OpenGate.Admission admission = gate.admit(
+                viewer, new OpenGate.Subject(GuiOpenGates.KIND, gui.id(), gui.open()), request.args());
         if (!admission.allowed()) {
             return OpenResult.refused(admission.usage() ? OpenResult.Outcome.USAGE : OpenResult.Outcome.DENIED,
                     admission.reason());
@@ -85,7 +90,7 @@ public final class GuiOpener {
             return OpenResult.refused(OpenResult.Outcome.FAILED, unavailable.get());
         }
 
-        var session = new GuiSession(viewer.id(), viewer.name(), gui.id(), admission.args());
+        var session = GuiViewerState.record(viewer.id(), viewer.name(), gui.id(), admission.args());
         if (gui.open() != null) {
             session.typedArgs(ArgParser.typed(gui.open(), admission.args())); // one schema, one result (logic.md §40)
         }
@@ -96,11 +101,11 @@ public final class GuiOpener {
             return OpenResult.refused(OpenResult.Outcome.CANCELLED, "a gui.opening rule cancelled the open");
         }
 
-        GuiSession previous = sessions.begin(session).orElse(null);
+        ViewerRecord previous = sessions.begin(session).orElse(null);
         if (previous != null) {
             replace(viewer, previous, request.cause());
         }
-        if (sessions.current(viewer.id()).filter(current -> current == session).isEmpty()) {
+        if (sessions.current(viewer.id(), GuiViewerState.KIND).filter(current -> current == session).isEmpty()) {
             // a gui.close rule of the replaced GUI opened something else: that open won, this one is stale
             session.end(CloseReason.REMOVED);
             return OpenResult.refused(OpenResult.Outcome.CANCELLED, "another GUI opened while this one was opening");
@@ -109,7 +114,7 @@ public final class GuiOpener {
         var synchronousFailure = new AtomicReference<String>();
         Consumer<String> failed = reason -> {
             synchronousFailure.set(reason);
-            if (sessions.current(viewer.id()).filter(current -> current == session).isEmpty()) {
+            if (sessions.current(viewer.id(), GuiViewerState.KIND).filter(current -> current == session).isEmpty()) {
                 session.end(CloseReason.REMOVED);
                 return;
             }
@@ -123,9 +128,9 @@ public final class GuiOpener {
             log.warning("MATERIONE-GUI-FAILED reason=window gui=" + gui.id() + " player=" + viewer.name()
                     + " detail=" + reason);
         };
-        windows.open(viewer, session, () -> sessions.current(viewer.id())
+        windows.open(viewer, session, () -> sessions.current(viewer.id(), GuiViewerState.KIND)
                 .filter(current -> current == session && session.isOpen())
-                .flatMap(current -> guis.find(current.gui()))
+                .flatMap(current -> guis.find(current.definition()))
                 .filter(current -> current == gui), resolved -> {
             events.opened(viewer, session, resolved);
             ticker.ensure(viewer, session);
@@ -135,12 +140,12 @@ public final class GuiOpener {
     }
 
     /** The viewer's previous GUI is replaced: remember it for {@code gui.back}, end it, fire its close. */
-    private void replace(Viewer viewer, GuiSession previous, OpenRequest.Cause cause) {
+    private void replace(Viewer viewer, ViewerRecord previous, OpenRequest.Cause cause) {
         if (cause != OpenRequest.Cause.BACK) {
             sessions.history(viewer.id()).push(previous.snapshot());
         }
         if (sessions.end(previous, CloseReason.REPLACED)) {
-            guis.find(previous.gui()).ifPresent(gui -> events.closed(viewer, previous, gui, CloseReason.REPLACED));
+            guis.find(previous.definition()).ifPresent(gui -> events.closed(viewer, previous, gui, CloseReason.REPLACED));
             windows.releaseInputs(viewer, previous); // the player's input items leave with the window they were in
         }
     }

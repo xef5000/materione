@@ -3,8 +3,8 @@ package dev.materione.plugin.gui.input;
 import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.open.GuiLifecycle;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -51,7 +51,7 @@ public final class GuiWindowListener implements Listener {
         InputReturns.release(player, menu);
         strict.release(player, menu); // the required slots' stacks: the account's, returned in the same step
         journal.mirror(player); // the journal follows the player's current window, which may be another one
-        GuiSession session = menu.session();
+        ViewerRecord session = menu.record();
         if (session.window() != menu) {
             return;
         }

@@ -19,7 +19,8 @@ import dev.materione.plugin.logic.function.BalanceFunction;
 import dev.materione.plugin.logic.function.FormatCurrencyFunction;
 import dev.materione.behavior.logic.LogicIds;
 import dev.materione.plugin.gui.GuiBridge;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.gui.trigger.GuiTriggers;
 import dev.materione.plugin.logic.trigger.WorldTriggers;
 import dev.materione.plugin.logic.action.ActionbarAction;
@@ -45,9 +46,6 @@ import dev.materione.plugin.logic.action.TakeExpAction;
 import dev.materione.plugin.logic.action.TakeItemAction;
 import dev.materione.plugin.logic.action.TeleportAction;
 import dev.materione.plugin.logic.action.TitleAction;
-import dev.materione.plugin.logic.action.gui.BackGuiAction;
-import dev.materione.plugin.logic.action.gui.CloseGuiAction;
-import dev.materione.plugin.logic.action.gui.OpenGuiAction;
 import dev.materione.plugin.logic.action.gui.GuiSlotItemAction;
 import dev.materione.plugin.logic.action.gui.PageGuiAction;
 import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
@@ -196,9 +194,9 @@ public final class BuiltinLogic {
      */
     public static List<ActionType<?>> guiActions(GuiBridge bridge) {
         return List.of(
-                new OpenGuiAction(bridge),
-                new CloseGuiAction(bridge),
-                new BackGuiAction(bridge),
+                new dev.materione.plugin.logic.action.view.OpenViewAction(bridge.view()),
+                new dev.materione.plugin.logic.action.view.CloseViewAction(bridge.view()),
+                new dev.materione.plugin.logic.action.view.BackViewAction(bridge.view()),
                 new RefreshGuiAction(bridge),
                 new GuiSlotItemAction(bridge),
                 new ConsumeCustodyAction(bridge),
@@ -247,9 +245,9 @@ public final class BuiltinLogic {
     public static void register(LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge, CurrencyReads reads,
             List<String> entityTypes, WorldVerbs world) {
         OpenGuis guis = player -> bridge.services()
-                .flatMap(services -> services.sessions().current(player.getUniqueId()))
-                .filter(GuiSession::isOpen)
-                .map(GuiSession::gui);
+                .flatMap(services -> services.views().current(player.getUniqueId(), GuiViewerState.KIND))
+                .filter(ViewerRecord::isOpen)
+                .map(ViewerRecord::definition);
         // slot_has reads an input slot of the run's own GUI through the runtime's port (logic.md §25); empty until it binds
         SlotPeek slots = (session, slot) -> bridge.services()
                 .map(services -> services.inputs().peek(session, slot))

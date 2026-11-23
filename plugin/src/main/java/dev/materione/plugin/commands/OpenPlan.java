@@ -174,8 +174,17 @@ public record OpenPlan(
 
     /** The node that skips a GUI's requirement: {@code materione.gui.bypass.<pack>.<id>} (logic.md §6.1). */
     public static String bypassNode(NamespacedId gui) {
-        Objects.requireNonNull(gui, "gui");
-        return "materione.gui.bypass." + gui.namespace() + "." + gui.value();
+        return bypassNode("gui", gui);
+    }
+
+    /**
+     * The node that skips an opened view's requirement: {@code materione.<kind>.bypass.<pack>.<id>}, for the kind
+     * that is opened ({@code gui}, {@code dialog}; views.md section 3.5, dialogs.md section 7.1).
+     */
+    public static String bypassNode(String kind, NamespacedId view) {
+        Objects.requireNonNull(kind, "kind");
+        Objects.requireNonNull(view, "view");
+        return "materione." + kind + ".bypass." + view.namespace() + "." + view.value();
     }
 
     /** Types the arguments; an argument that cannot be typed is reported and kept as the string it was written as. */

@@ -10,11 +10,12 @@ import dev.materione.plugin.gui.input.GuiClick;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.render.SlotSource;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * A paged, filtered list end to end below the Bukkit event (logic.md §6.7): an authored GUI is compiled by the real
@@ -60,7 +61,7 @@ class ListPagingFlowTest {
             """;
 
     private GuiFixture f;
-    private GuiSession session;
+    private ViewerRecord session;
 
     @BeforeEach
     void open() {
@@ -68,7 +69,7 @@ class ListPagingFlowTest {
         f.windows.renderer = new GuiRenderer(RenderReporter.SILENT);
         f.gui(ROSTER);
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("roster"), Map.of(),
-                OpenRequest.Cause.API)).session();
+                OpenRequest.Cause.API)).record();
     }
 
     /**
@@ -77,7 +78,7 @@ class ListPagingFlowTest {
      * slot shows no entry.
      */
     private String shown(int slot) {
-        return session.rendered().lists().shownAt(slot).map(shown -> String.valueOf(shown.entry().get("name")))
+        return GuiViewerState.of(session).rendered().lists().shownAt(slot).map(shown -> String.valueOf(shown.entry().get("name")))
                 .orElse(null);
     }
 
@@ -90,9 +91,9 @@ class ListPagingFlowTest {
         assertThat(shown(9)).contains("Ada");
         assertThat(shown(10)).contains("Cy");
         assertThat(shown(11)).contains("Dee");
-        assertThat(session.rendered().slots().keySet()).containsExactlyInAnyOrder(9, 10, 11);
-        assertThat(session.pages()).containsEntry("players", Map.of("number", 1, "count", 2, "size", 4));
-        assertThat(session.rendered().lists().shownAt(10).orElseThrow().entry()).containsEntry("name", "Cy");
+        assertThat(GuiViewerState.of(session).rendered().slots().keySet()).containsExactlyInAnyOrder(9, 10, 11);
+        assertThat(GuiViewerState.of(session).pages()).containsEntry("players", Map.of("number", 1, "count", 2, "size", 4));
+        assertThat(GuiViewerState.of(session).rendered().lists().shownAt(10).orElseThrow().entry()).containsEntry("name", "Cy");
     }
 
     @Test
@@ -107,9 +108,9 @@ class ListPagingFlowTest {
     void guiPageMovesTheListToTheNextPageAndFiresItsTriggerAfterTheWindowShowsIt() {
         assertThat(click(22).handled()).isTrue();
 
-        assertThat(session.pages()).containsEntry("players", Map.of("number", 2, "count", 2, "size", 4));
+        assertThat(GuiViewerState.of(session).pages()).containsEntry("players", Map.of("number", 2, "count", 2, "size", 4));
         assertThat(shown(9)).contains("Eve");
-        assertThat(session.rendered().slots().keySet()).containsExactlyInAnyOrder(9);
+        assertThat(GuiViewerState.of(session).rendered().slots().keySet()).containsExactlyInAnyOrder(9);
         assertThat(f.windows.log).contains("advance roster");
         assertThat(f.ran).containsExactly("mark:page 2 of 2");
     }
@@ -140,7 +141,7 @@ class ListPagingFlowTest {
 
         click(22);
 
-        assertThat(session.pages()).containsEntry("players", Map.of("number", 2, "count", 2, "size", 4));
+        assertThat(GuiViewerState.of(session).pages()).containsEntry("players", Map.of("number", 2, "count", 2, "size", 4));
         assertThat(f.ran).hasSize(before);
     }
 

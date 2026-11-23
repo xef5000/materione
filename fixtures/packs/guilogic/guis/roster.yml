@@ -39,7 +39,7 @@ roster:
       type: item
       slot: 4
       item: minecraft:paper
-      name: "<white>Page ${gui.page.players.number} of ${gui.page.players.count}"
+      name: "<white>Page ${view.page.players.number} of ${view.page.players.count}"
     - id: previous
       type: item
       slot: 20

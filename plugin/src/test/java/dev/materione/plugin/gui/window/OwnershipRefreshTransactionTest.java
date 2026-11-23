@@ -25,11 +25,11 @@ import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.open.GuiOpener;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.open.OpenResult;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
-import dev.materione.plugin.gui.session.CloseReason;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenResult;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
+import dev.materione.plugin.view.CloseReason;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -57,6 +57,7 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /** Exercises the actual pre-change event and shift-out path without starting a server. */
 @Isolated
@@ -172,7 +173,7 @@ class OwnershipRefreshTransactionTest {
                           type: item
                           slot: 0
                           item: {player_slot: main_hand}
-                          visible_if: "gui.session.cover == true"
+                          visible_if: "vars.session.cover == true"
                       behavior:
                         - on: gui.slot_change
                           do: [gui.refresh]
@@ -180,7 +181,7 @@ class OwnershipRefreshTransactionTest {
             if (dynamic) {
                 yaml = yaml.replace("  behavior:", "    - id: label\n"
                         + "      type: text\n      x: 8\n      y: 6\n      text: DYNAMIC\n"
-                        + "      visible_if: \"gui.session.cover == true\"\n  behavior:");
+                        + "      visible_if: \"vars.session.cover == true\"\n  behavior:");
             }
             if (publication) {
                 yaml = yaml.replace("  behavior:", "  behavior:\n"
@@ -195,9 +196,9 @@ class OwnershipRefreshTransactionTest {
             assertThat(live.items()).hasSize(1);
             assertThat(live.logic().rules("gui.slot_change")).hasSize(1);
             var playerId = UUID.randomUUID();
-            var session = new GuiSession(playerId, "Probe", compiled.id(), Map.of());
-            session.vars().put("cover", false);
-            var sessions = new GuiSessions();
+            var session = GuiViewerState.record(playerId, "Probe", compiled.id(), Map.of());
+            session.sessionValue("cover", false);
+            var sessions = new ViewRegistry();
             sessions.begin(session);
             var pdc = proxy(PersistentDataContainer.class, (name, args) -> {
                 if (name.equals("remove") || name.equals("set")) journalWrites.incrementAndGet();
@@ -287,8 +288,8 @@ class OwnershipRefreshTransactionTest {
                 }
             });
             session.attach(menu);
-            session.remember(initial);
-            session.displayed(live);
+            GuiViewerState.of(session).remember(initial);
+            GuiViewerState.of(session).displayed(live);
             menu.inputSlots(SetOf.inputs(live, session));
             if (publication) {
                 String changedYaml = yaml.replace("input: true", "input: false")
@@ -318,28 +319,28 @@ class OwnershipRefreshTransactionTest {
                 var clicks = new InputSlotClicks(lookup, sessions, eventRecorder, guard, journal);
                 var operations = new InputSlotOps(lookup, journal);
                 topItems[0] = FakeStack.of(5);
-                session.vars().put("cover", true);
+                session.sessionValue("cover", true);
                 host.rewrite(viewer, session, newer);
-                assertThat(session.displayed()).containsSame(live);
+                assertThat(GuiViewerState.of(session).displayed()).containsSame(live);
                 assertThat(clicks.policyOf(menu, player).slots().isInput(0)).isTrue();
                 assertThat(operations.peek(session, 0).amount()).isEqualTo(5);
                 assertThat(router.route(new GuiClick(viewer, session, 0, ClickKind.LEFT, 0)).layer()).isEmpty();
                 assertThat(dispatched).containsExactly(live.logic().unboundClickRules());
                 int readsAfterCandidate = sourceReads.get();
                 for (int tick = 0; tick < 100; tick++) {
-                    session.advanceWindowTicks(1);
+                    GuiViewerState.of(session).advanceWindowTicks(1);
                     host.advance(viewer, session, newer);
                     tasks.remove(0).run();
                     assertThat(tasks).hasSize(1);
                 }
                 assertThat(sourceReads.get()).isEqualTo(readsAfterCandidate);
-                assertThat(session.windowTicks()).isEqualTo(100);
+                assertThat(GuiViewerState.of(session).windowTicks()).isEqualTo(100);
                 assertThat(amount(topItems[0])).isEqualTo(5);
                 assertThat(amount(cursor.get())).isEqualTo(2);
                 cursor.set(null);
                 tasks.remove(0).run();
                 assertThat(sourceReads.get()).isEqualTo(readsAfterCandidate + 1);
-                assertThat(session.displayed()).containsSame(newer);
+                assertThat(GuiViewerState.of(session).displayed()).containsSame(newer);
                 assertThat(clicks.policyOf(menu, player).slots().isInput(0)).isFalse();
                 assertThat(operations.peek(session, 0).empty()).isTrue();
                 assertThat(router.route(new GuiClick(viewer, session, 0, ClickKind.LEFT, 0)).layer()).isEqualTo("newer");
@@ -396,7 +397,7 @@ class OwnershipRefreshTransactionTest {
             }
             topItems[0] = FakeStack.of(5);
             var events = new GuiEvents((rules, event) -> {
-                session.vars().put("cover", true);
+                session.sessionValue("cover", true);
                 host.rewrite(viewer, session, live);
                 assertThat(menu.inputSlots()).contains(0);
                 assertThat(topItems[0].getAmount()).isEqualTo(5);
@@ -404,7 +405,7 @@ class OwnershipRefreshTransactionTest {
                 assertThat(journalWrites.get()).isZero();
                 assertThat(sends.get()).isZero();
                 if (revert) {
-                    session.vars().put("cover", false);
+                    session.sessionValue("cover", false);
                     host.rewrite(viewer, session, live);
                     assertThat(menu.inputSlots()).contains(0);
                     assertThat(returns.get()).isZero();
@@ -428,13 +429,13 @@ class OwnershipRefreshTransactionTest {
             assertThat(amount(topItems[0])).isEqualTo(cancel ? 5 : 0);
             if (replace) {
                 sessions.end(session, CloseReason.REPLACED);
-                sessions.begin(new GuiSession(playerId, "Probe", compiled.id(), Map.of()));
+                sessions.begin(GuiViewerState.record(playerId, "Probe", compiled.id(), Map.of()));
             }
             if (dynamic) {
-                var displayed = session.rendered();
+                var displayed = GuiViewerState.of(session).rendered();
                 if (revert || replace) {
                     tasks.remove(0).run();
-                    assertThat(session.rendered()).isSameAs(displayed);
+                    assertThat(GuiViewerState.of(session).rendered()).isSameAs(displayed);
                     assertThat(menu.title()).isEqualTo(initial.title());
                     assertThat(menu.inputSlots()).contains(0);
                     assertThat(sends.get()).isZero();
@@ -442,19 +443,19 @@ class OwnershipRefreshTransactionTest {
                     assertThat(cursor.get().getAmount()).isEqualTo(2);
                     return;
                 }
-                session.advanceWindowTicks(13);
+                GuiViewerState.of(session).advanceWindowTicks(13);
                 tasks.remove(0).run();
-                assertThat(session.rendered()).isSameAs(displayed);
+                assertThat(GuiViewerState.of(session).rendered()).isSameAs(displayed);
                 assertThat(menu.title()).isEqualTo(initial.title());
-                assertThat(session.windowTicks()).isEqualTo(13);
+                assertThat(GuiViewerState.of(session).windowTicks()).isEqualTo(13);
                 assertThat(menu.inputSlots()).contains(0);
                 assertThat(amount(topItems[0])).isEqualTo(5);
                 assertThat(returns.get()).isZero();
                 assertThat(sends.get()).isZero();
                 assertThat(cursor.get().getAmount()).isEqualTo(2);
                 assertThat(tasks).hasSize(1);
-                session.vars().put("cover", false);
-                session.vars().put("cover", true);
+                session.sessionValue("cover", false);
+                session.sessionValue("cover", true);
                 if (!fail) {
                     var newestGlyph = new AtomicInteger(0xE201);
                     var newest = GuiCompiler.compile(fixture.definition(yaml.replace("DYNAMIC", "LATEST")),
@@ -553,8 +554,8 @@ class OwnershipRefreshTransactionTest {
     }
 
     private static final class SetOf {
-        static java.util.Set<Integer> inputs(RuntimeGuis.Live live, GuiSession session) {
-            return live.inputs().effective(live.clicks(), session.rendered()).all().stream()
+        static java.util.Set<Integer> inputs(RuntimeGuis.Live live, ViewerRecord session) {
+            return live.inputs().effective(live.clicks(), GuiViewerState.of(session).rendered()).all().stream()
                     .map(dev.materione.plugin.gui.input.InputSlots.Input::slot)
                     .collect(java.util.stream.Collectors.toUnmodifiableSet());
         }

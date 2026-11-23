@@ -8,11 +8,12 @@ import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
 import dev.materione.plugin.gui.list.CompiledListLayer;
 import dev.materione.plugin.gui.render.Rendered;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * Decides which rules a click on a GUI runs (logic.md §6.2): the topmost showing layer that has a
@@ -55,25 +56,25 @@ public final class ClickRouter {
 
     /** Routes a click on a slot of the container and runs the rules it reaches. */
     public Routed route(GuiClick click) {
-        GuiSession session = click.session();
+        ViewerRecord session = click.record();
         if (!session.isOpen()) {
             return Routed.NONE;
         }
-        Optional<RuntimeGuis.Live> found = session.displayed();
+        Optional<RuntimeGuis.Live> found = GuiViewerState.of(session).displayed();
         if (found.isEmpty()) {
             return Routed.NONE;
         }
         RuntimeGuis.Live gui = found.get();
         for (String layer : gui.clicks().layersAt(click.slot())) {
             if (!visibility.visible(session, layer)
-                    || (session.rendered().coverage().containsKey(layer)
-                        && !session.rendered().coverage().get(layer).contains(click.slot()))) {
+                    || (GuiViewerState.of(session).rendered().coverage().containsKey(layer)
+                        && !GuiViewerState.of(session).rendered().coverage().get(layer).contains(click.slot()))) {
                 continue;
             }
             // a list answers only the slots it shows an entry in: an empty slot runs none of its rules (logic.md §6.7)
             Map<String, Object> entry = null;
             if (isList(gui, layer)) {
-                Optional<Rendered.ListRender.Shown> shown = session.rendered().lists().shownAt(click.slot())
+                Optional<Rendered.ListRender.Shown> shown = GuiViewerState.of(session).rendered().lists().shownAt(click.slot())
                         .filter(showing -> showing.layer().equals(layer));
                 if (shown.isEmpty()) {
                     continue;
@@ -104,17 +105,17 @@ public final class ClickRouter {
     }
 
     /** Runs the {@code gui.click_outside} rules for a click outside the window. */
-    public void outside(Viewer viewer, GuiSession session, ClickKind kind) {
+    public void outside(Viewer viewer, ViewerRecord session, ClickKind kind) {
         if (!session.isOpen()) {
             return;
         }
-        session.displayed().ifPresent(gui ->
+        GuiViewerState.of(session).displayed().ifPresent(gui ->
                 guard.during(viewer.id(), () -> events.outside(viewer, session, gui, kind)));
     }
 
     private void dispatch(GuiClick click, String layer, List<Rule> rules, Map<String, Object> entry) {
         guard.during(click.viewer().id(), () -> events.click(
-                click.viewer(), click.session(), rules, layer, click.slot(), click.kind(), click.key(), entry));
+                click.viewer(), click.record(), rules, layer, click.slot(), click.kind(), click.key(), entry));
     }
 
     private static List<Rule> matching(List<Rule> candidates, FilterFacts facts) {

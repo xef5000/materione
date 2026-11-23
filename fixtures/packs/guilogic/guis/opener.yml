@@ -25,6 +25,6 @@ opener:
     commands: [opentest]
     args:
       - { name: category, type: choice, default: all, suggest: [all, tools, food] }
-    requirement: "gui.args.category != 'food'"
+    requirement: "view.args.category != 'food'"
     deny:
       - message: "<red>No food here, pick another category."

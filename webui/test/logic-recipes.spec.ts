@@ -93,7 +93,7 @@ describe('inserting the expanded rules', () => {
   const block = { behavior: [{ on: 'gui.open', do: [] }] };
 
   it('appends every rule at the end as one plan, selects the first, and is one undo step', () => {
-    const rules = [{ on: 'gui.click', layer: 'a', do: ['gui.back'] }, { on: 'gui.click', layer: 'b', do: [] }];
+    const rules = [{ on: 'gui.click', layer: 'a', do: ['view.back'] }, { on: 'gui.click', layer: 'b', do: [] }];
     const plan = planInsertRecipe(block, rules, 'Paged player list');
     expect(plan.ok).toBe(true);
     if (!plan.ok) return;

@@ -4,13 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.RuntimeGuis;
-import dev.materione.plugin.gui.open.OpenRequest;
-import dev.materione.plugin.gui.session.CloseReason;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.CloseReason;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * Live refresh keeps the session (gui.md §5, logic.md §6): when a reload changes a GUI, its viewers get
@@ -35,16 +36,16 @@ class GuiLiveRefreshTest {
     }
 
     private GuiFixture f;
-    private GuiSession session;
+    private ViewerRecord session;
 
     @BeforeEach
     void setUp() {
         f = new GuiFixture();
         f.gui(shop("Shop", 3));
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of("category", "tools"),
-                OpenRequest.Cause.API)).session();
-        session.vars().put("tab", "weapons");
-        session.pages().put("list", 4);
+                OpenRequest.Cause.API)).record();
+        session.sessionValue("tab", "weapons");
+        GuiViewerState.of(session).putPage("list", 4);
         f.windows.log.clear();
     }
 
@@ -60,8 +61,8 @@ class GuiLiveRefreshTest {
         assertThat(session.isOpen()).isTrue();
         assertThat(f.sessions.current(f.viewer.id())).containsSame(session);
         assertThat(session.args()).containsEntry("category", "tools");
-        assertThat(session.vars()).containsEntry("tab", "weapons");
-        assertThat(session.pages()).containsEntry("list", 4);
+        assertThat(session.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(GuiViewerState.of(session).pages()).containsEntry("list", 4);
     }
 
     @Test
@@ -110,7 +111,7 @@ class GuiLiveRefreshTest {
         f.windows.failOpenWith = "server refused";
         f.refresh.refreshViewer(f.viewer, session, now());
         f.sessions.end(session, CloseReason.REPLACED);
-        var replacement = new GuiSession(f.viewer.id(), f.viewer.name(), GuiFixture.id("shop"), Map.of());
+        var replacement = GuiViewerState.record(f.viewer.id(), f.viewer.name(), GuiFixture.id("shop"), Map.of());
         f.sessions.begin(replacement);
 
         f.windows.deferred.forEach(Runnable::run);
@@ -189,7 +190,7 @@ class GuiLiveRefreshTest {
                     - on: gui.click
                       layer: pad
                       do:
-                        - mark: "v1 ${gui.args.category} ${gui.session.tab}"
+                        - mark: "v1 ${view.args.category} ${vars.session.tab}"
                 """);
         f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,
@@ -211,7 +212,7 @@ class GuiLiveRefreshTest {
                     - on: gui.click
                       layer: pad
                       do:
-                        - mark: "v2 ${gui.args.category} ${gui.session.tab}"
+                        - mark: "v2 ${view.args.category} ${vars.session.tab}"
                 """);
         f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,

@@ -124,13 +124,13 @@ public final class ContentTreeSource implements ListSource<ContentTreeSource.Par
     public List<Map<String, Object>> entries(Params parameters, LogicContext context) {
         RuntimeContentIndex index = index();
         var out = new ArrayList<Map<String, Object>>();
-        if (parameters.search() != null && hasText(context.resolve(List.of("gui", "session", parameters.search())))) {
+        if (parameters.search() != null && hasText(context.resolve(List.of("vars", "session", parameters.search())))) {
             for (RuntimeContentIndex.Entry entry : index.entries()) {
                 out.add(row(new RuntimeContentIndex.Node(RuntimeContentIndex.Kind.ENTRY, entry.name(), "", 1, entry)));
             }
             return out;
         }
-        Object location = context.resolve(List.of("gui", "args", parameters.arg()));
+        Object location = context.resolve(List.of("view", "args", parameters.arg()));
         for (RuntimeContentIndex.Node node : index.children(location == null ? "" : String.valueOf(location))) {
             out.add(row(node));
         }

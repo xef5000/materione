@@ -63,7 +63,7 @@ describe('the vocabulary the inspector reads', () => {
   it('carries the trigger context schema, the function signatures and the widget hints', () => {
     const click = vocabulary.triggers.get('gui.click')!;
     expect(click.context.map((variable) => variable.path)).toContain('click.type');
-    expect(click.context.find((variable) => variable.path === 'gui.args.*')!.type).toBe('raw'); // typed as the open: block declares (#467)
+    expect(click.context.find((variable) => variable.path === 'view.args.*')!.type).toBe('raw'); // typed as the open: block declares (#467)
     expect(vocabulary.functions.find((fn) => fn.id === 'contains')!.parameters.length).toBeGreaterThan(0);
     expect(vocabulary.actions.get('give_item')!.parameters[0]!.uiHint).toBe('item');
     expect(vocabulary.actions.get('sound')!.parameters[0]!.uiHint).toBe('sound');
@@ -283,7 +283,7 @@ describe('template completion', () => {
     const result = complete('Balance %materione_var')!;
     expect(result.items.map((item) => item.insert)).toEqual(['materione_var_shop_coins']);
     expect(result.items[0]!.tail).toBe('%');
-    expect(complete('%materione_g')!.items.map((item) => item.insert)).toEqual(['materione_gui_open', 'materione_gui_last']);
+    expect(complete('%materione_vi')!.items.map((item) => item.insert)).toEqual(['materione_view_open', 'materione_view_last']);
     expect(complete('100% sure')).toBeNull();
     expect(complete('%vault_eco_balance% and %')!.items.length).toBeGreaterThan(0); // a closed pair, then a new one
   });
@@ -400,7 +400,7 @@ describe('inspector edits become the same edits the canvas makes', () => {
       layer: buy
       do:
         - sound: block.chest.open
-        - gui.close
+        - view.close
         - choose:
             - if: "\${a}"
               then:
@@ -424,14 +424,14 @@ describe('inspector edits become the same edits the canvas makes', () => {
   });
 
   it('a bare step gets a mapping by replacement, in the same place', () => {
-    const plan = ok(planStepValue(graph, 'behavior.0.do.1', { gui: 'x' }, name));
+    const plan = ok(planStepValue(graph, 'behavior.0.do.1', { view: 'x' }, name));
     expect(plan.edits).toEqual([
       { op: 'removeStep', path: 'behavior.0.do.1' },
-      { op: 'insertStep', path: 'behavior.0.do.1', step: { 'gui.close': { gui: 'x' } } },
+      { op: 'insertStep', path: 'behavior.0.do.1', step: { 'view.close': { view: 'x' } } },
     ]);
     const chance = ok(planStepKey(graph, 'behavior.0.do.1', 'chance', 0.5, name));
     expect(applyEdits(block, chance.edits).behavior).toBeDefined();
-    expect((applyEdits(block, chance.edits).behavior![0] as any).do[1]).toEqual({ 'gui.close': {}, chance: 0.5 });
+    expect((applyEdits(block, chance.edits).behavior![0] as any).do[1]).toEqual({ 'view.close': {}, chance: 0.5 });
   });
 
   it('an option is set or removed on the step; a rule\'s keys go through patchRule', () => {

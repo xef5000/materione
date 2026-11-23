@@ -18,7 +18,7 @@ class OverlayLogicContextTest {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", player);
         root.put("vars", new LinkedHashMap<String, Object>());
-        root.put("gui", Map.of("page", Map.of("players", Map.of("number", 2, "count", 4))));
+        root.put("view", Map.of("page", Map.of("players", Map.of("number", 2, "count", 4))));
         return new MapLogicContext(root);
     }
 
@@ -39,7 +39,7 @@ class OverlayLogicContextTest {
         assertThat(overlay.value("entry.missing")).isNull();
         assertThat(overlay.value("entry.absent.deeper")).isNull();
         assertThat(overlay.value("player.name")).isEqualTo("Probe");
-        assertThat(overlay.value("gui.page.players.count")).isEqualTo(4);
+        assertThat(overlay.value("view.page.players.count")).isEqualTo(4);
     }
 
     @Test

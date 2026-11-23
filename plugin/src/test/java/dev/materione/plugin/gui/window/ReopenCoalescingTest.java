@@ -19,7 +19,7 @@ import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -43,6 +43,7 @@ import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /** Real refresh and host scheduling with server-free inventory doubles. */
 @Isolated
@@ -97,7 +98,7 @@ class ReopenCoalescingTest {
             var published = new AtomicReference<RuntimeGuis.Live>(initial);
             GuiLookup guis = key -> java.util.Optional.ofNullable(published.get()).filter(live -> live.id().equals(key));
             UUID id = UUID.randomUUID();
-            var session = new GuiSession(id, "Probe", initial.id(), Map.of());
+            var session = GuiViewerState.record(id, "Probe", initial.id(), Map.of());
             fixture.sessions.begin(session);
             var pdc = proxy(PersistentDataContainer.class, (name, args) -> null);
             PlayerInventory bag = proxy(PlayerInventory.class, (name, args) -> switch (name) {
@@ -155,7 +156,7 @@ class ReopenCoalescingTest {
             top.set(oldMenu.getInventory());
             session.attach(oldMenu);
             var oldRendered = renderer.render(viewer, session, initial, true, 0);
-            session.remember(oldRendered);
+            GuiViewerState.of(session).remember(oldRendered);
             oldMenu.inputSlots(initial.inputs().effective(initial.clicks(), oldRendered).all().stream()
                     .map(dev.materione.plugin.gui.input.InputSlots.Input::slot)
                     .collect(java.util.stream.Collectors.toUnmodifiableSet()));
@@ -185,9 +186,9 @@ class ReopenCoalescingTest {
                 assertThat(opens.get()).isZero();
             });
             assertThat(tasks).hasSize(delayedRefresh ? 1 : 2);
-            GuiSession replacement = null;
+            ViewerRecord replacement = null;
             if (replaced) {
-                replacement = new GuiSession(id, "Probe", initial.id(), Map.of());
+                replacement = GuiViewerState.record(id, "Probe", initial.id(), Map.of());
                 fixture.sessions.begin(replacement);
             }
             if (retired) {
@@ -269,7 +270,7 @@ class ReopenCoalescingTest {
                       x: 8
                       y: 6
                       text: Dynamic
-                      visible_if: "gui.session.show == true"
+                      visible_if: "vars.session.show == true"
                 """);
         var compiled = GuiCompiler.compile(definition, 0xE200, ref -> java.util.Optional.empty(),
                 (layer, frame) -> 0xE201).model();

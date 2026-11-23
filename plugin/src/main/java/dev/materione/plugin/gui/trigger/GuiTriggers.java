@@ -8,7 +8,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.gui.input.ClickKind;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
-import dev.materione.plugin.gui.session.CloseReason;
+import dev.materione.plugin.view.CloseReason;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +16,7 @@ import java.util.List;
  * The triggers the GUI runtime fires (logic.md §6.2), as descriptions: their filters, the variables
  * they guarantee, and whether a rule may cancel them. Registered through the public logic API like an
  * addon's, so the compiler checks {@code ${root}} paths against these schemas and the studio
- * autocompletes from them (one declaration for both, D5). {@code gui.page} arrives with the list work.
+ * autocompletes from them (one declaration for both, D5). {@code view.page} is the list work's.
  */
 public final class GuiTriggers {
 
@@ -124,12 +124,18 @@ public final class GuiTriggers {
                 ContextVariable.of("player.level", ParameterType.INTEGER, "The player's experience level"),
                 ContextVariable.of("server.online", ParameterType.INTEGER, "Players online"),
                 ContextVariable.of("server.max", ParameterType.INTEGER, "Player slots"),
-                ContextVariable.of("gui.id", ParameterType.STRING, "The GUI's id, pack:name"),
-                ContextVariable.of("gui.args.*", ParameterType.RAW,
-                        "An argument the GUI was opened with, typed as its open: block declares it (a whole number is "
+                ContextVariable.of("view.id", ParameterType.STRING, "The view's id, pack:name"),
+                ContextVariable.of("view.kind", ParameterType.STRING, "The view's kind: gui"),
+                ContextVariable.of("view.args.*", ParameterType.RAW,
+                        "An argument the view was opened with, typed as its open: block declares it (a whole number is "
                                 + "a number, true and false a boolean, anything else text)"),
-                ContextVariable.of("gui.session.*", ParameterType.RAW, "A session variable of this open GUI"),
-                ContextVariable.of("gui.page.*", ParameterType.RAW, "The page state of a list in this GUI"),
+                ContextVariable.of("view.item", ParameterType.RAW,
+                        "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)"),
+                ContextVariable.of("view.key", ParameterType.STRING,
+                        "The key the view is bound to; empty until keyed state exists (views.md section 3.7)"),
+                ContextVariable.of("view.page.*", ParameterType.RAW, "The page state of a list in this GUI"),
+                ContextVariable.of("vars.session.*", ParameterType.RAW,
+                        "A session value of this open view: per window, kept by view.back (views.md section 3.4)"),
                 ContextVariable.of("vars.*", ParameterType.RAW, "Variables written earlier in this run by set_var"));
     }
 

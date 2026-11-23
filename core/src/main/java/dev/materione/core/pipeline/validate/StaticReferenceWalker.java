@@ -22,9 +22,25 @@ public final class StaticReferenceWalker implements StaticReferences {
     private static final int MAX_DEPTH = 64;
 
     private final LogicVocabulary vocabulary;
+    private final java.util.function.Supplier<Map<String, dev.materione.api.content.ViewFacet>> viewKinds;
 
     public StaticReferenceWalker(LogicVocabulary vocabulary) {
+        this(vocabulary, Map::of);
+    }
+
+    /**
+     * @param viewKinds the content types that are view kinds with their facets, read when a reference is checked (the
+     *     content-type registry, which can gain an addon's kind after this walker is built)
+     */
+    public StaticReferenceWalker(
+            LogicVocabulary vocabulary, java.util.function.Supplier<Map<String, dev.materione.api.content.ViewFacet>> viewKinds) {
         this.vocabulary = vocabulary;
+        this.viewKinds = viewKinds;
+    }
+
+    @Override
+    public Map<String, dev.materione.api.content.ViewFacet> viewKinds() {
+        return viewKinds.get();
     }
 
     @Override
@@ -77,16 +93,24 @@ public final class StaticReferenceWalker implements StaticReferences {
                 if (params.get(parameter.getKey()) instanceof String scalar) {
                     List<String> at = new ArrayList<>(path);
                     at.add(parameter.getKey());
-                    reference(origin, parameter.getValue(), scalar, at, out);
+                    String restrict = StaticReferences.VIEW.equals(parameter.getValue())
+                            && params.get("kind") instanceof String named
+                            && !named.isBlank() && !named.contains("${") && !named.contains("%") ? named.trim() : null;
+                    reference(origin, parameter.getValue(), scalar, at, restrict, out);
                 }
             }
         }
     }
 
     private static void reference(String origin, String kind, String written, List<String> path, List<Ref> out) {
+        reference(origin, kind, written, path, null, out);
+    }
+
+    private static void reference(
+            String origin, String kind, String written, List<String> path, String viewKind, List<Ref> out) {
         if (kind == null || written.isBlank() || written.contains("${") || written.contains("%")) {
             return;
         }
-        out.add(new Ref(kind, written.trim(), List.copyOf(path), origin));
+        out.add(new Ref(kind, written.trim(), List.copyOf(path), origin, viewKind));
     }
 }

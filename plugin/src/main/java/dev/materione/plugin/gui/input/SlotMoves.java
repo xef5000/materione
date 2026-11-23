@@ -5,8 +5,8 @@ import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -19,6 +19,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * The three moves that span several slots (logic.md §25): a shift-click into the input slots, a shift-click out of
@@ -28,13 +29,13 @@ import org.bukkit.inventory.PlayerInventory;
  */
 final class SlotMoves {
 
-    private final GuiSessions sessions;
+    private final ViewRegistry sessions;
     private final GuiEvents events;
     private final InputGuard guard;
     private final GuiJournal journal;
     private final StrictInputs strict;
 
-    SlotMoves(GuiSessions sessions, GuiEvents events, InputGuard guard, GuiJournal journal, StrictInputs strict) {
+    SlotMoves(ViewRegistry sessions, GuiEvents events, InputGuard guard, GuiJournal journal, StrictInputs strict) {
         this.sessions = sessions;
         this.events = events;
         this.guard = guard;
@@ -61,7 +62,7 @@ final class SlotMoves {
             return;
         }
         Viewer viewer = Viewer.of(player);
-        GuiSession session = menu.session();
+        ViewerRecord session = menu.record();
         during(player.getUniqueId(), () -> {
             Inventory top = menu.getInventory();
             var cells = new ArrayList<Transfers.Cell>();
@@ -126,7 +127,7 @@ final class SlotMoves {
             return;
         }
         Viewer viewer = Viewer.of(player);
-        GuiSession session = menu.session();
+        ViewerRecord session = menu.record();
         during(player.getUniqueId(), () -> {
             PlayerInventory storage = player.getInventory();
             Transfers.Plan plan = Transfers.put(before.amount(), before.maxStack(), storageCells(storage, item));
@@ -165,7 +166,7 @@ final class SlotMoves {
             return;
         }
         Viewer viewer = Viewer.of(player);
-        GuiSession session = menu.session();
+        ViewerRecord session = menu.record();
         during(player.getUniqueId(), () -> {
             Inventory top = menu.getInventory();
             var topCells = new ArrayList<Transfers.Cell>();
@@ -236,12 +237,12 @@ final class SlotMoves {
     }
 
     private Optional<RuntimeGuis.Live> liveOf(GuiMenu menu, HumanEntity who) {
-        GuiSession session = menu.session();
+        ViewerRecord session = menu.record();
         if (!(who instanceof Player player) || !session.isOpen() || session.window() != menu
-                || sessions.current(player.getUniqueId()).filter(current -> current == session).isEmpty()) {
+                || sessions.current(player.getUniqueId(), GuiViewerState.KIND).filter(current -> current == session).isEmpty()) {
             return Optional.empty();
         }
-        return session.displayed();
+        return GuiViewerState.of(session).displayed();
     }
 
     /** Runs {@code work} with the player marked as mid-click, and returns what it returned. */

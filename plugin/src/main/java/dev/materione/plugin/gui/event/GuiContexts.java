@@ -5,8 +5,8 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.gui.Viewer;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessionVariables;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewerSessionVariables;
 import dev.materione.plugin.runtime.behavior.PlaceholderResolver;
 import dev.materione.plugin.logic.variable.VariableService;
 import java.util.LinkedHashMap;
@@ -14,17 +14,18 @@ import java.util.Locale;
 import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * Builds the context a GUI rule runs against (logic.md §2.6, §6.2): the variable tree the trigger
- * descriptions declare ({@code player.*}, {@code server.*}, {@code gui.*}, {@code click.*},
+ * descriptions declare ({@code player.*}, {@code server.*}, {@code view.*}, {@code click.*},
  * {@code layer.id}, mutable {@code vars}) and the facets an action reaches for (the player, the
- * session, and the session's variables as {@code vars.session.*}). One place builds it, so every GUI
- * trigger offers the same {@code gui.*} and the schema in
+ * viewer record, and its session values as {@code vars.session.*}). One place builds it, so every GUI
+ * trigger offers the same {@code view.*} and the schema in
  * {@link dev.materione.plugin.gui.trigger.GuiTriggers} stays true.
  *
- * <p>{@code gui.args} and {@code gui.session} are the session's own maps, not copies: a rule that
- * writes a session variable sees it on the next read, and a restored session shows what it had.
+ * <p>{@code view.args} and {@code view.page} are the record's own maps, not copies: a rule that
+ * writes a session value sees it on the next read, and a restored record shows what it had.
  */
 public final class GuiContexts {
 
@@ -33,33 +34,28 @@ public final class GuiContexts {
     /**
      * @param extra further top-level variables of the trigger ({@code click}, {@code layer}); may be empty
      */
-    public static MapLogicContext build(Viewer viewer, GuiSession session, Map<String, Object> extra) {
+    public static MapLogicContext build(Viewer viewer, ViewerRecord session, Map<String, Object> extra) {
         return build(viewer, session, extra, null);
     }
 
     public static MapLogicContext build(
-            Viewer viewer, GuiSession session, Map<String, Object> extra, VariableService variables) {
+            Viewer viewer, ViewerRecord session, Map<String, Object> extra, VariableService variables) {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", playerVars(viewer));
         root.put("server", serverVars());
-        var gui = new LinkedHashMap<String, Object>();
-        gui.put("id", session.gui().toString());
-        gui.put("args", session.typedArgs());
-        gui.put("session", session.vars());
-        gui.put("page", session.pages());
-        root.put("gui", gui);
+        root.put("view", viewVars(session.definition(), session.typedArgs(), GuiViewerState.of(session).pages()));
         root.put("vars", new LinkedHashMap<String, Object>());
         root.putAll(extra);
         return withPlayer(new MapLogicContext(root)
-                .with(GuiSession.FACET, session)
-                .with(VariableFacets.SESSION, new GuiSessionVariables(session)), viewer, variables);
+                .with(ViewerRecord.FACET, session)
+                .with(VariableFacets.SESSION, new ViewerSessionVariables(session)), viewer, variables);
     }
 
     /**
      * The context a GUI's open requirement and its deny steps run against (logic.md §6.1). There is no
-     * session yet, so the session variables and pages are empty, and {@code gui.args} is the argument values the open
+     * viewer record yet, so the session values and pages are empty, and {@code view.args} is the argument values the open
      * was given: typed (an {@code int} an integer, a {@code number} a double) when the gate passes them so, as the
-     * session's own {@code gui.args} are. The player and the server are as for any GUI run.
+     * record's own {@code view.args} are. The player and the server are as for any GUI run.
      */
     public static MapLogicContext open(Viewer viewer, NamespacedId gui, Map<String, ?> args) {
         return open(viewer, gui, args, null);
@@ -70,14 +66,25 @@ public final class GuiContexts {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", playerVars(viewer));
         root.put("server", serverVars());
-        var guiVars = new LinkedHashMap<String, Object>();
-        guiVars.put("id", gui.toString());
-        guiVars.put("args", args);
-        guiVars.put("session", new LinkedHashMap<String, Object>());
-        guiVars.put("page", new LinkedHashMap<String, Object>());
-        root.put("gui", guiVars);
+        root.put("view", viewVars(gui, args, new LinkedHashMap<String, Object>()));
         root.put("vars", new LinkedHashMap<String, Object>());
         return withPlayer(new MapLogicContext(root), viewer, variables);
+    }
+
+    /**
+     * The one root for view facts (views.md section 3.7): {@code view.id}, {@code view.kind}, {@code view.args.*} and, for
+     * a GUI, {@code view.page.*}. {@code view.item} and {@code view.key} are absent until a subject stack and a key bind
+     * (rows V3, V5); an absent path reads as nothing. {@code args} and {@code pages} are the record's own maps, not
+     * copies: a rule that pages a list sees the page on the next read. A session value is {@code vars.session.*}, the
+     * one spelling (views.md section 3.4).
+     */
+    private static Map<String, Object> viewVars(NamespacedId id, Map<String, ?> args, Map<String, Object> pages) {
+        var view = new LinkedHashMap<String, Object>();
+        view.put("id", id.toString());
+        view.put("kind", GuiViewerState.KIND);
+        view.put("args", args);
+        view.put("page", pages);
+        return view;
     }
 
     /** Attaches the player facet and placeholder resolver, when there is a player. */

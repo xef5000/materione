@@ -1,7 +1,7 @@
 package dev.materione.plugin.logic.support;
 
 import dev.materione.plugin.gui.input.StackView;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 
 /**
  * The port {@code slot_has} reads (logic.md §25): the item an input slot of a GUI session's window holds. It is
@@ -18,7 +18,7 @@ public interface SlotPeek {
      * @return the view of the item in {@code slot}, {@link StackView#EMPTY} when the slot is empty, is not an input
      *     slot of the session's GUI, or the window is gone
      */
-    StackView peek(GuiSession session, int slot);
+    StackView peek(ViewerRecord session, int slot);
 
     /** The port with no GUI runtime behind it: every slot is empty. */
     static SlotPeek none() {

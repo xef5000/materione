@@ -612,7 +612,7 @@ public final class ReferenceValidator implements ValidateStage.Validator {
 
     /**
      * The content a resource's rules name by a static id ({@link StaticReferences}): an item of {@code give_item}, a
-     * GUI of {@code gui.open}. A reference no pack declares is a warning on the resource that names it; the step
+     * view of {@code view.open}. A reference no pack declares is a warning on the resource that names it; the step
      * stays and fails when it runs. An id in the {@code minecraft:} namespace is the platform's. A bare item name is
      * any pack's, as the runtime resolves it; a bare GUI name is a sibling in the naming resource's pack, or any
      * GUI of that name.
@@ -620,6 +620,10 @@ public final class ReferenceValidator implements ValidateStage.Validator {
     private static void validateLogicReferences(
             ContentResource resource, ValidationEnvironment environment, List<Diagnostic> problems) {
         for (StaticReferences.Ref ref : environment.staticReferences().of(resource)) {
+            if (StaticReferences.VIEW.equals(ref.kind())) {
+                validateViewReference(resource, ref, environment, problems);
+                continue;
+            }
             boolean found = switch (ref.kind()) {
                 case "item" -> itemNamed(environment, ref.written());
                 case "gui" -> guiNamed(environment, resource, ref.written());
@@ -635,6 +639,75 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                         dev.materione.api.diagnostics.DiagnosticTarget.field(ref.target().toArray(String[]::new))));
             }
         }
+    }
+
+    /**
+     * A {@code view.open} that names a view by a static id (views.md section 3.6, 9): the id must be a definition of
+     * some view kind, which the host's content types say (their view facet), and that kind must be one a verb opens. A
+     * kind whose viewers are formed by a condition (a HUD) shows itself and cannot be opened: that is {@code MTR-0126},
+     * the step is kept, and it fails the same way when it runs. Only {@code view.open} is judged so. A host that names no view kinds does not
+     * judge the reference.
+     */
+    private static final String OPEN_VIEW = "view.open";
+
+    private static void validateViewReference(
+            ContentResource resource, StaticReferences.Ref ref, ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        var kinds = environment.staticReferences().viewKinds();
+        if (kinds.isEmpty()) {
+            return;
+        }
+        // the step's own kind: narrows the kinds the id may name, as the run-time resolver does; a kind that is
+        // none of the view kinds names no view, so it is the unresolved reference
+        java.util.Set<String> searched = ref.viewKind() == null ? kinds.keySet()
+                : kinds.containsKey(ref.viewKind()) ? java.util.Set.of(ref.viewKind()) : java.util.Set.of();
+        List<ContentResource> named = viewsNamed(environment, ref.written(), searched);
+        var target = dev.materione.api.diagnostics.DiagnosticTarget.field(ref.target().toArray(String[]::new));
+        if (named.isEmpty()) {
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED, Severity.WARN,
+                    resource.id() + " step '" + ref.origin() + "' at " + String.join(".", ref.target())
+                            + " names view '" + ref.written() + "', which no pack declares",
+                    resource.id(), null, "check the id, or declare the view in a pack", target));
+            return;
+        }
+        // only an open is judged: view.close's view: names what to close, and a predicate kind has nothing to close
+        if (OPEN_VIEW.equals(ref.origin())
+                && named.stream().noneMatch(found -> kinds.get(found.contentType()).openable())) {
+            ContentResource shown = named.get(0);
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.VIEW_NOT_OPENABLE, Severity.WARN,
+                    resource.id() + " step '" + ref.origin() + "' at " + String.join(".", ref.target())
+                            + " names " + shown.contentType() + " '" + ref.written()
+                            + "', which shows itself to the players for whom its condition holds; no verb opens it",
+                    resource.id(), null,
+                    "remove the step: a " + shown.contentType() + " is shown by its own visibility condition", target));
+        }
+    }
+
+    /** The resources a written view id names: the definition of that id in a view kind's directory, qualified or bare. */
+    private static List<ContentResource> viewsNamed(
+            ValidationEnvironment environment, String written, java.util.Set<String> viewTypes) {
+        var out = new ArrayList<ContentResource>();
+        NamespacedId qualified = null;
+        if (written.contains(":")) {
+            try {
+                qualified = NamespacedId.parse(written);
+            } catch (IllegalArgumentException malformed) {
+                return List.of(); // not an id: the step's own parse reports it
+            }
+        }
+        for (ContentPack pack : environment.packs()) {
+            for (ContentResource other : pack.resources()) {
+                if (!viewTypes.contains(other.contentType())) {
+                    continue;
+                }
+                if (qualified != null ? other.id().equals(qualified) : other.id().value().equalsIgnoreCase(written)) {
+                    out.add(other);
+                }
+            }
+        }
+        return out;
     }
 
     private static boolean itemNamed(ValidationEnvironment environment, String written) {

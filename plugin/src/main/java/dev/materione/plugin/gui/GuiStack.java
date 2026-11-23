@@ -28,9 +28,11 @@ import dev.materione.plugin.commands.DocumentCommands;
 import dev.materione.plugin.commands.OpenCommandHandler;
 import dev.materione.plugin.commands.OpenDeclaration;
 import dev.materione.plugin.commands.OpenCommandRegistrar;
-import dev.materione.plugin.gui.open.OpenSpecGate;
+import dev.materione.plugin.gui.open.GuiOpenGates;
+import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
 import dev.materione.plugin.gui.window.WindowHost;
@@ -52,7 +54,8 @@ import org.bukkit.plugin.Plugin;
  */
 public final class GuiStack {
 
-    private final GuiSessions sessions = new GuiSessions();
+    private final ViewRegistry views = new ViewRegistry();
+    private final ViewKinds kinds = new ViewKinds();
     private final GuiOpener opener;
     private final GuiLifecycle lifecycle;
     private final GuiLiveRefresh refresh;
@@ -103,27 +106,28 @@ public final class GuiStack {
         RuleDispatcher dispatcher = engine::fire;
         GuiEvents events = new GuiEvents(dispatcher, variables);
         this.router = new ClickRouter(guis, events, visibility, guard);
-        GuiJournal journal = new GuiJournal(plugin, scheduling, sessions);
+        GuiJournal journal = new GuiJournal(plugin, scheduling, views);
         var reporter = new LoggingRenderReporter(plugin.getLogger());
         GuiRenderer renderer = new GuiRenderer(reporter, variables);
         WindowHost windows = new BukkitWindowHost(
-                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, strict, renderer,
+                plugin, scheduling, new InventoryInput(views, router), guard, journal, strict, renderer,
                 PaperRichTitles.create(platform), reporter);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
                         plugin, viewer.player(), ticks, task, retired),
                 windows);
-        this.lifecycle = new GuiLifecycle(guis, sessions, events, windows);
-        this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
-        opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
+        this.lifecycle = new GuiLifecycle(guis, views, events, windows);
+        this.opener = new GuiOpener(guis, views, events, windows, ticker, plugin.getLogger());
+        opener.gate(GuiOpenGates.of(OpenSpecGate.Permissions.live(), PlayerNames.server(),
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
         this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server(), diagnostics);
         this.openCommands = new OpenCommandRegistrar(plugin, openHandler, view, guisOf(built), diagnostics, scheduling);
-        this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
+        this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, views, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);
-        this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal, strict);
-        this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh,
+        this.inputClicks = new InputSlotClicks(guis, views, events, guard, journal, strict);
+        kinds.register(new GuiViewKind(guis, opener, lifecycle, refresh)); // the container GUI is the first view kind
+        this.services = new GuiBridge.Services(guis, views, kinds, opener, lifecycle, refresh,
                 new InputSlotOps(guis, journal, strict), new GuiPages(events, refresh));
     }
 
@@ -132,8 +136,13 @@ public final class GuiStack {
         return inputClicks;
     }
 
-    public GuiSessions sessions() {
-        return sessions;
+    public ViewKinds kinds() {
+        return kinds;
+    }
+
+    /** Every live viewer record, of every view kind. */
+    public ViewRegistry views() {
+        return views;
     }
 
     /** The one open path (logic.md §6.1). */

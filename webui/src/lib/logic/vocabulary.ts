@@ -374,13 +374,15 @@ function shorthandParam(entry: { shorthand?: string; parameters: ParamInfo[] }):
 }
 
 /**
- * The step a new action node is born as. An action with a shorthand starts with that parameter's
- * starting value (`sound: ''`); one with no required parameter is a bare name (`- gui.close`); one with
- * required parameters but no shorthand starts as an empty mapping.
+ * The step a new action node is born as. An action with no required parameter is a bare name (`- view.close`,
+ * whose optional shorthand `view` is left out); any other action with a shorthand starts with that parameter's
+ * starting value (`sound: ''`), so the inspector opens on it; one with required parameters but no shorthand starts
+ * as an empty mapping.
  */
 export function defaultActionStep(entry: ActionEntry): unknown {
-  if (entry.shorthand) return { [entry.id]: starting(shorthandParam(entry)) };
+  // the bare name is the common step when nothing is required; an action that needs something keeps its shorthand
   if (!entry.parameters.some((param) => param.required)) return entry.id;
+  if (entry.shorthand) return { [entry.id]: starting(shorthandParam(entry)) };
   return { [entry.id]: {} };
 }
 

@@ -145,7 +145,7 @@ test('the layer selected in Design is offered as the recipe\'s layer, and severa
 
   await save(page);
   expect(await behavior(page)).toEqual([
-    { on: 'gui.click', layer: 'coin', do: ['gui.close'] },
+    { on: 'gui.click', layer: 'coin', do: ['view.close'] },
     { on: 'gui.open', do: [{ message: '<gold>Welcome!' }] },
   ]);
 });

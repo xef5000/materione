@@ -115,7 +115,7 @@ public final class PageGuiAction implements ActionType<PageGuiAction.Params> {
         } catch (IllegalArgumentException notAPage) {
             return ActionOutcome.failed(notAPage.getMessage());
         }
-        Optional<String> failure = run.services().pages().page(run.viewer(), run.session(), params.list(), target);
+        Optional<String> failure = run.services().pages().page(run.viewer(), run.record(), params.list(), target);
         return failure.map(ActionOutcome::failed).orElse(ActionOutcome.OK);
     }
 

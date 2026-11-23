@@ -10,12 +10,13 @@ import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableStore;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.event.GuiContexts;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 class GuiVariableBindingTest {
     @Test
@@ -43,7 +44,7 @@ class GuiVariableBindingTest {
         };
         var variables = new VariableService(player, server, VariableTestSupport::declarations, ignored -> {});
         var id = NamespacedId.of("demo", "shop");
-        var session = new GuiSession(viewer, fixture.viewer.name(), id, Map.of());
+        var session = GuiViewerState.record(viewer, fixture.viewer.name(), id, Map.of());
         var open = GuiContexts.open(fixture.viewer, id, Map.of(), variables);
         var bound = GuiContexts.build(fixture.viewer, session, Map.of(), variables);
         var path = List.of("vars", "player", VariableTestSupport.COINS.namespace(),

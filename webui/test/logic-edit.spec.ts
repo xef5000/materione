@@ -32,7 +32,7 @@ r:
             - message: yes
           else:
             - message: no
-        - gui.close
+        - view.close
     - on: gui.click
       do: []
   flows:
@@ -70,9 +70,9 @@ describe('applyEdits mirrors the server editor', () => {
     expect((removed.behavior![0] as any).do).toHaveLength(2);
     // moving the first step to index 1 leaves it second: `to` is read against the list without it
     const moved = applyEdits(block, [{ op: 'moveStep', from: 'behavior.0.do.0', to: 'behavior.0.do.1' }]);
-    expect((moved.behavior![0] as any).do.map((s: any) => (typeof s === 'string' ? s : Object.keys(s)[0]))).toEqual(['if', 'sound', 'gui.close']);
+    expect((moved.behavior![0] as any).do.map((s: any) => (typeof s === 'string' ? s : Object.keys(s)[0]))).toEqual(['if', 'sound', 'view.close']);
     const across = applyEdits(block, [{ op: 'moveStep', from: 'behavior.0.do.2', to: 'behavior.1.do.0' }]);
-    expect((across.behavior![1] as any).do).toEqual(['gui.close']);
+    expect((across.behavior![1] as any).do).toEqual(['view.close']);
   });
 
   it('refuses what the server refuses, with the path', () => {
@@ -169,15 +169,15 @@ describe('planning gestures against the graph', () => {
   it('writing to a branch the file does not have yet replaces the step with itself plus the list', () => {
     const noElse = yaml(`r:\n  behavior:\n    - on: gui.open\n      do:\n        - if: x\n          then: [stop]\n          node: {x: 4, y: 8}\n`);
     const g = project(noElse);
-    const plan = ok(planInsert(g, noElse, slotOf(g, 'behavior.0.do.0', 'else')!, 'gui.close', 'Add Close'));
+    const plan = ok(planInsert(g, noElse, slotOf(g, 'behavior.0.do.0', 'else')!, 'view.close', 'Add Close'));
     expect(plan.edits).toEqual([
       { op: 'removeStep', path: 'behavior.0.do.0' },
       { op: 'insertStep', path: 'behavior.0.do.0', step: { if: 'x', then: ['stop'], node: { x: 4, y: 8 }, else: [] } },
-      { op: 'insertStep', path: 'behavior.0.do.0.else.0', step: 'gui.close' },
+      { op: 'insertStep', path: 'behavior.0.do.0.else.0', step: 'view.close' },
     ]);
     const after = applyEdits(noElse, plan.edits);
-    expect((after.behavior![0] as any).do[0].else).toEqual(['gui.close']);
-    expect(project(after).byId.get('behavior.0.do.0.else.0')!.op).toBe('gui.close');
+    expect((after.behavior![0] as any).do[0].else).toEqual(['view.close']);
+    expect(project(after).byId.get('behavior.0.do.0.else.0')!.op).toBe('view.close');
   });
 
   it('adds a rule at the end and a flow with a free name', () => {
@@ -230,7 +230,7 @@ describe('planning gestures against the graph', () => {
     });
 
     it('into a branch the file does not have yet', () => {
-      const lonely = yaml('r:\n  behavior:\n    - on: gui.open\n      do:\n        - if: x\n          then: [stop]\n        - gui.close\n');
+      const lonely = yaml('r:\n  behavior:\n    - on: gui.open\n      do:\n        - if: x\n          then: [stop]\n        - view.close\n');
       const g = project(lonely);
       const plan = ok(planMoveChain(g, lonely, 'behavior.0.do.1', slotOf(g, 'behavior.0.do.0', 'else')!, name));
       expect(plan.edits).toEqual([
@@ -239,7 +239,7 @@ describe('planning gestures against the graph', () => {
         { op: 'moveStep', from: 'behavior.0.do.1', to: 'behavior.0.do.0.else.0' },
       ]);
       const after = applyEdits(lonely, plan.edits);
-      expect((after.behavior![0] as any).do).toEqual([{ if: 'x', then: ['stop'], else: ['gui.close'] }]);
+      expect((after.behavior![0] as any).do).toEqual([{ if: 'x', then: ['stop'], else: ['view.close'] }]);
     });
 
     it('dropping a chain where it already is changes nothing', () => {
@@ -258,7 +258,7 @@ describe('planning gestures against the graph', () => {
   describe('connecting a wire from an output port to a node', () => {
     it('refuses a join: a node has one input', () => {
       expect(reason(planConnect(graph, block, { node: 'behavior.1', port: 'out' }, 'behavior.0.do.2', name)))
-        .toBe('gui.close is already fed by if; a node has one input (drag from its input to move it).');
+        .toBe('view.close is already fed by if; a node has one input (drag from its input to move it).');
     });
 
     it('refuses fan-out: a port feeds one node', () => {
@@ -300,11 +300,11 @@ describe('the history command', () => {
   const doc = () => parseGui(parse(sampleGuiRaw()), 'main')!.doc;
 
   it('applies and reverts the document exactly, key order included', () => {
-    const base = withBlock(doc(), { behavior: [{ on: 'gui.open', do: ['gui.close'] }] });
+    const base = withBlock(doc(), { behavior: [{ on: 'gui.open', do: ['view.close'] }] });
     const built = buildCommand(base, ok(planInsert(project(blockOf(base.rest)), blockOf(base.rest), slotOf(project(blockOf(base.rest)), 'behavior.0', 'out')!, { sound: 'x' }, 'Add Sound')));
     if (!built.ok || !built.command) throw new Error('not built');
     const after = built.command.apply(base);
-    expect((after.rest.behavior as any)[0].do).toEqual([{ sound: 'x' }, 'gui.close']);
+    expect((after.rest.behavior as any)[0].do).toEqual([{ sound: 'x' }, 'view.close']);
     expect(JSON.stringify(built.command.revert(after))).toBe(JSON.stringify(base));
     expect(isLogicCommand(built.command)).toBe(true);
     expect(built.command.logic.inverse).toEqual([{ op: 'removeStep', path: 'behavior.0.do.0' }]);

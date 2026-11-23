@@ -527,7 +527,7 @@ class GuiOpenCanvasTest {
     @Test
     void anyLayerAGuiClickRuleNamesIsJudgedToo() {
         var far = GuiTestSupport.layer("far", "image", "image", "gui/x", "x", -100, "y", 20, "width", 40, "height", 20);
-        var rule = Map.of("on", "gui.click", "layer", "far", "do", List.of(Map.of("gui.close", Map.of())));
+        var rule = Map.of("on", "gui.click", "layer", "far", "do", List.of(Map.of("view.close", Map.of())));
         assertThat(diagnose(clickableGui(far, rule))).singleElement().satisfies(diagnostic ->
                 assertThat(diagnostic.code()).isEqualTo(DiagnosticCodes.GUI_CLICK_OUTSIDE_CONTAINER));
         assertThat(diagnose(clickableGui(far))).as("with no rule it is plain art").isEmpty();

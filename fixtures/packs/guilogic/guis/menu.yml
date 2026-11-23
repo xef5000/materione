@@ -45,7 +45,7 @@ menu:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUILOGIC-OPEN ${gui.id} page=${gui.args.page}"
+            command: "say MATERIONE-GUILOGIC-OPEN ${view.id} page=${view.args.page}"
             as: console
     - on: gui.click
       layer: ping
@@ -64,8 +64,8 @@ menu:
     - on: gui.click
       layer: open
       do:
-        - gui.open:
-            gui: detail
+        - view.open:
+            view: detail
             args:
               item: sword
               from: "${player.name}"
@@ -73,9 +73,9 @@ menu:
       layer: close
       do:
         - message: "<red>Closing"
-        - gui.close
+        - view.close
     - on: gui.close
       do:
         - run_command:
-            command: "say MATERIONE-GUILOGIC-CLOSE ${gui.id} reason=${close.reason}"
+            command: "say MATERIONE-GUILOGIC-CLOSE ${view.id} reason=${close.reason}"
             as: console

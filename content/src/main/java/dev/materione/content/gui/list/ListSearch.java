@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  * entry, so the list is unfiltered until a search is made.
  *
  * <pre>{@code
- * search: { fields: [name] }                 # reads gui.session.search
+ * search: { fields: [name] }                 # reads vars.session.search
  * search: { var: query, fields: [name, lore] }
  * }</pre>
  *

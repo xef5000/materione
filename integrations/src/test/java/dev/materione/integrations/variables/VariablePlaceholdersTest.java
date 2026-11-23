@@ -8,7 +8,7 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.provider.EconomyResult;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableType;
@@ -70,7 +70,7 @@ class VariablePlaceholdersTest {
 
     private final FakeApi api = new FakeApi(List.of(COINS, SEASON, CLAIMED, COINS_LONG));
     private final Map<String, UUID> players = Map.of("Steve", STEVE, "Alex", ALEX);
-    private final VariablePlaceholders placeholders = new VariablePlaceholders(api, () -> GuiSessionPort.NONE);
+    private final VariablePlaceholders placeholders = new VariablePlaceholders(api, () -> ViewPort.NONE);
 
     private String resolve(String identifier, UUID viewer) {
         return placeholders.resolve(identifier, viewer, name -> Optional.ofNullable(players.get(name)));
@@ -127,23 +127,23 @@ class VariablePlaceholdersTest {
     }
 
     @Test
-    void theGuiPlaceholdersReadThePortAndAreEmptyWithoutIt() {
-        assertThat(resolve("gui_open", STEVE)).isEmpty();
-        assertThat(resolve("gui_last", STEVE)).isEmpty();
+    void theViewPlaceholdersReadThePortAndAreEmptyWithoutIt() {
+        assertThat(resolve("view_open", STEVE)).isEmpty();
+        assertThat(resolve("view_last", STEVE)).isEmpty();
 
-        var withPort = new VariablePlaceholders(api, () -> new GuiSessionPort() {
+        var withPort = new VariablePlaceholders(api, () -> new ViewPort() {
             @Override
-            public Optional<String> openGui(UUID player) {
-                return Optional.of("shop_menu");
+            public Optional<String> openView(UUID player) {
+                return Optional.of("gui:shop_menu");
             }
 
             @Override
-            public Optional<String> lastGui(UUID player) {
-                return Optional.of("home");
+            public Optional<String> lastView(UUID player) {
+                return Optional.of("gui:home");
             }
         });
-        assertThat(withPort.resolve("gui_open", STEVE, name -> Optional.empty())).isEqualTo("shop_menu");
-        assertThat(withPort.resolve("gui_last", STEVE, name -> Optional.empty())).isEqualTo("home");
+        assertThat(withPort.resolve("view_open", STEVE, name -> Optional.empty())).isEqualTo("gui:shop_menu");
+        assertThat(withPort.resolve("view_last", STEVE, name -> Optional.empty())).isEqualTo("gui:home");
     }
 
     @Test
@@ -195,7 +195,7 @@ class VariablePlaceholdersTest {
         var bridge = new BalanceBridge();
         NamespacedId id = NamespacedId.of("shop_pack", "gold_coins");
         bridge.ids.add(id);
-        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, d -> { });
+        var resolver = new VariablePlaceholders(api, () -> ViewPort.NONE, bridge, d -> { });
         assertThat(resolver.resolve("balance_shop_pack_gold_coins", STEVE, n -> Optional.empty())).isEqualTo("0");
         assertThat(bridge.readId).isEqualTo(id);
         assertThat(bridge.readViewer).isEqualTo(STEVE);
@@ -216,7 +216,7 @@ class VariablePlaceholdersTest {
     void rawBalancesUsePlainFiniteDecimalAndTheBridgeIsQueriedEveryTime() {
         var bridge = new BalanceBridge();
         bridge.ids.add(NamespacedId.of("shop", "gold"));
-        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, d -> { });
+        var resolver = new VariablePlaceholders(api, () -> ViewPort.NONE, bridge, d -> { });
         double[] values = {0, -12.5, 1e-12, 1e20, Double.MIN_VALUE};
         String[] expected = {"0", "-12.5", "0.000000000001", "100000000000000000000",
                 java.math.BigDecimal.valueOf(Double.MIN_VALUE).toPlainString()};
@@ -238,7 +238,7 @@ class VariablePlaceholdersTest {
         bridge.ids.add(NamespacedId.of("shop", "silver"));
         var diagnostics = new ArrayList<Diagnostic>();
         var clock = new AtomicLong(1000);
-        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, diagnostics::add, clock::get);
+        var resolver = new VariablePlaceholders(api, () -> ViewPort.NONE, bridge, diagnostics::add, clock::get);
         assertThat(resolver.resolve("balance_shop_gold", null, n -> Optional.empty())).isEmpty();
         assertThat(bridge.reads).isZero();
         bridge.result = new EconomyResult.Failed("not installed");
@@ -302,7 +302,7 @@ class VariablePlaceholdersTest {
                 return new Balance(new EconomyResult.Succeeded(amount), formatted ? readBinding + amount : null);
             }
         };
-        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, diagnostics::add);
+        var resolver = new VariablePlaceholders(api, () -> ViewPort.NONE, bridge, diagnostics::add);
         assertThat(resolver.resolve("balance_shop_gold_formatted", STEVE, n -> Optional.empty())).isEmpty();
         assertThat(diagnostics).singleElement().extracting(Diagnostic::message).asString()
                 .contains("currency binding replaced");

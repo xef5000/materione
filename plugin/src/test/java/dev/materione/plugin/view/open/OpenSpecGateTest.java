@@ -1,4 +1,4 @@
-package dev.materione.plugin.gui.open;
+package dev.materione.plugin.view.open;
 
 import dev.materione.plugin.commands.PlayerNames;
 
@@ -7,7 +7,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.RuntimeGuis;
-import dev.materione.plugin.gui.open.OpenGate.Admission;
+import dev.materione.plugin.gui.open.GuiOpenGates;
+import dev.materione.plugin.view.open.OpenRequest;
+import dev.materione.plugin.view.open.OpenResult;
+import dev.materione.plugin.view.open.OpenGate.Admission;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +35,7 @@ class OpenSpecGateTest {
                 permission: shop.use
                 args:
                   - { name: category, type: choice, default: all, suggest: [all, tools, food] }
-                requirement: "gui.args.category == 'tools'"
+                requirement: "view.args.category == 'tools'"
                 deny:
                   - mark: "refused"
             """;
@@ -47,7 +50,7 @@ class OpenSpecGateTest {
     }
 
     private OpenSpecGate gate(OpenSpecGate.Permissions permissions) {
-        return new OpenSpecGate(permissions, PlayerNames.NONE, (rule, context, owner) -> {
+        return GuiOpenGates.of(permissions, PlayerNames.NONE, (rule, context, owner) -> {
             denied.add(rule);
             f.engine.interpreter().start(rule, context, owner);
         });
@@ -59,7 +62,7 @@ class OpenSpecGateTest {
     }
 
     private Admission admit(OpenSpecGate gate, RuntimeGuis.Live gui, Map<String, String> args) {
-        return gate.admit(f.viewer, gui, args);
+        return gate.admit(f.viewer, new OpenGate.Subject(GuiOpenGates.KIND, gui.id(), gui.open()), args);
     }
 
     @Test
@@ -118,7 +121,7 @@ class OpenSpecGateTest {
                   - { name: ratio, type: number, optional: true }
                   - { name: vip, type: boolean, optional: true }
                   - { name: label, type: string, optional: true }
-                requirement: "gui.args.n > 5"
+                requirement: "view.args.n > 5"
             """;
 
     @Test
@@ -130,14 +133,14 @@ class OpenSpecGateTest {
                 Map.of("n", "10", "ratio", "2", "vip", "TRUE", "label", "x"), OpenRequest.Cause.API));
 
         assertThat(opened.ok()).isTrue();
-        // the text is kept (a snapshot and gui.back replay it); what a rule reads is typed
-        assertThat(opened.session().args()).containsEntry("n", "10").containsEntry("ratio", "2.0");
-        assertThat(opened.session().typedArgs())
+        // the text is kept (a snapshot and view.back replay it); what a rule reads is typed
+        assertThat(opened.record().args()).containsEntry("n", "10").containsEntry("ratio", "2.0");
+        assertThat(opened.record().typedArgs())
                 .containsEntry("n", 10).containsEntry("ratio", 2.0).containsEntry("vip", true)
                 .containsEntry("label", "x");
-        var context = dev.materione.plugin.gui.event.GuiContexts.build(f.viewer, opened.session(), Map.of());
-        assertThat(context.resolve(List.of("gui", "args", "n"))).isEqualTo(10);
-        assertThat(context.resolve(List.of("gui", "args", "vip"))).isEqualTo(true);
+        var context = dev.materione.plugin.gui.event.GuiContexts.build(f.viewer, opened.record(), Map.of());
+        assertThat(context.resolve(List.of("view", "args", "n"))).isEqualTo(10);
+        assertThat(context.resolve(List.of("view", "args", "vip"))).isEqualTo(true);
         assertThat(gui.open()).isNotNull();
     }
 
@@ -161,7 +164,7 @@ class OpenSpecGateTest {
         var opened = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("plain"), Map.of("n", "10"),
                 OpenRequest.Cause.API));
 
-        assertThat(opened.session().typedArgs()).containsEntry("n", "10");
+        assertThat(opened.record().typedArgs()).containsEntry("n", "10");
         assertThat(gui.open()).isNull();
     }
 

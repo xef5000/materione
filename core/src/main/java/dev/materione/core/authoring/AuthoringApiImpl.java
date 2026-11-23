@@ -265,7 +265,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     }
 
     /**
-     * The static references of rules (an item a {@code give_item} names, a GUI a {@code gui.open} names), found from
+     * The static references of rules (an item a {@code give_item} names, a view a {@code view.open} names), found from
      * the logic vocabulary the host registers: the reference stage of a transaction checks them with the pipeline's
      * own validator. Without it only the references the validator reads from the documents themselves are checked.
      */

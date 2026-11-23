@@ -51,14 +51,14 @@ class StagedReferencesDifferentialTest {
             "other:stew", "minecraft:stone", "ghost", "gem", "rock", "shield_block", "chair", "twin", "g1", "s1",
             "demo:shield_block", "demo:chair", "painting/p1", "demo:gem", "hub", "menu", "demo:hub", "other:board");
 
-    /** The logic vocabulary of the fixture: give_item and has_item name items, gui.open names a GUI (#363). */
+    /** The logic vocabulary of the fixture: give_item and has_item name items, open_menu names a GUI (#363). */
     private static final dev.materione.core.pipeline.validate.StaticReferences STATIC =
             new dev.materione.core.pipeline.validate.StaticReferenceWalker(key -> switch (key) {
                 case "give_item" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
                         true, Map.of("item", "item"), "item"));
                 case "has_item" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
                         false, Map.of("item", "item"), "item"));
-                case "gui.open" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
+                case "open_menu" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
                         true, Map.of("gui", "gui"), "gui"));
                 case "all", "not" -> java.util.Optional.of(new dev.materione.core.pipeline.validate.LogicVocabulary.Entry(
                         false, Map.of(), null));
@@ -114,13 +114,13 @@ class StagedReferencesDifferentialTest {
                 + "    - type: materione:item\n      slot: 1\n      item: '%s'\n"
                 + "  behavior:\n    - on: gui.click\n      if:\n        all:\n          - has_item: %s\n"
                 + "          - not:\n              has_item:\n                item: %s\n"
-                + "      do:\n        - give_item: %s\n        - gui.open:\n            gui: %s\n"
+                + "      do:\n        - give_item: %s\n        - open_menu:\n            gui: %s\n"
                 + "        - if: ${true}\n          then:\n            - give_item:\n                item: %s\n"
                 + "  flows:\n    pay:\n      - give_item: %s\n")
                 .formatted(key(r, s, "hub"), pick(r, s, "demo:alpha"), pick(r, s, "demo:beta"), pick(r, s, "alpha"),
                         pick(r, s, "demo:alpha"), pick(r, s, "alpha"), pick(r, s, "menu"), pick(r, s, "demo:shield_block"),
                         pick(r, s, "demo:beta")));
-        fixture.put("guis/menu.yml", (r, s) -> "%s:\n  container: chest_3\n  behavior:\n    - on: gui.open\n      do:\n        - gui.open: %s\n"
+        fixture.put("guis/menu.yml", (r, s) -> "%s:\n  container: chest_3\n  behavior:\n    - on: gui.open\n      do:\n        - open_menu: %s\n"
                 .formatted(key(r, s, "menu"), pick(r, s, "hub")));
         fixture.put("paintings/p1.yml", (r, s) -> "%s:\n  texture: %s\n  width: 1\n  height: 1\n"
                 .formatted(key(r, s, "p1"), pick(r, s, "painting/p1")));
@@ -150,7 +150,7 @@ class StagedReferencesDifferentialTest {
         other.add(resource("other", "chain", "item", "items/chain.yml", "chain:\n  material: STICK\n  template: thing\n"));
         other.add(resource("other", "board", "gui", "guis/board.yml",
                 "board:\n  container: chest_3\n  layers:\n    - type: materione:item\n      slot: 2\n      item: demo:alpha\n"
-                        + "  behavior:\n    - on: gui.click\n      do:\n        - give_item: demo:beta\n        - gui.open: demo:hub\n"));
+                        + "  behavior:\n    - on: gui.click\n      do:\n        - give_item: demo:beta\n        - open_menu: demo:hub\n"));
         other.add(resource("other", "pouch", "item", "items/pouch.yml",
                 "pouch:\n  material: STICK\n  behavior:\n    - on: click\n      do:\n        - give_item:\n            item: demo:alpha\n"));
         others = new ParsedContent(List.of(new ContentPack("other", temp, null, other)), Set.of(), Map.of());

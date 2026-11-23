@@ -10,4 +10,4 @@ menu:
   behavior:
     - on: gui.open
       do:
-        - run_command: "say MATERIONE-COMMANDS-MENU-OPEN ${player.name} page ${gui.args.page}"
+        - run_command: "say MATERIONE-COMMANDS-MENU-OPEN ${player.name} page ${view.args.page}"

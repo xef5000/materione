@@ -62,7 +62,8 @@ class ContentTreeSourceTest {
         if (search != null) {
             session.put("search", search);
         }
-        return new MapLogicContext(Map.of("gui", Map.of("args", args, "session", session)));
+        return dev.materione.plugin.view.TestSessionValues.in(
+                new MapLogicContext(Map.of("view", Map.of("args", args))), session);
     }
 
     private List<Map<String, Object>> read(Object path, Object search) {
@@ -164,7 +165,7 @@ class ContentTreeSourceTest {
 
     @Test
     void anArgumentOrVariableNameThatIsNotAPlainNameIsRefusedAtLoad() {
-        assertThatThrownBy(() -> source.parse(ParamReader.of(Map.of("arg", "gui.args"))))
+        assertThatThrownBy(() -> source.parse(ParamReader.of(Map.of("arg", "view.args"))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("arg");
         assertThatThrownBy(() -> source.parse(ParamReader.of(Map.of("search", "Not Plain"))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("search");

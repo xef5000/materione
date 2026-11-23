@@ -48,6 +48,16 @@ public interface ContentType {
     }
 
     /**
+     * The view facet (views.md section 9): present when this type is a <em>view kind</em>, a type whose resources
+     * render state for viewers (the container GUI; later the dialog and the HUD). Self-description, so the SDK
+     * generator, the editor and the {@code view.open} reference check learn which types are views from the registry
+     * and keep no list of them. Empty for every type that is not a view kind.
+     */
+    default java.util.Optional<ViewFacet> view() {
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Parses one resource keyed in a file of this type into a typed
      * definition, resolving {@code template:} inheritance against the
      * passed template pool. Diamond inheritance is a parse failure (empty

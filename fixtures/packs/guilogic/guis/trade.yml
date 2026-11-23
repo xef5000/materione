@@ -29,7 +29,7 @@ trade:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUILOGIC-OPEN ${gui.id}"
+            command: "say MATERIONE-GUILOGIC-OPEN ${view.id}"
             as: console
     - on: gui.slot_change
       layer: gems

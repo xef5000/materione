@@ -19,7 +19,7 @@ import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.logic.provider.PermissionProvider;
 import dev.materione.api.logic.provider.ServerTransfer;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.registry.RegistryEntry;
 import dev.materione.api.registry.SelfDescription;
@@ -166,7 +166,7 @@ class CurrencyPlaceholderReadsTest {
                         throw new AssertionError("unexpected variable access");
                     });
             return new MaterionePlaceholders(
-                    new VariablePlaceholders(variables, () -> GuiSessionPort.NONE, bridge, diagnostics::add), "1");
+                    new VariablePlaceholders(variables, () -> ViewPort.NONE, bridge, diagnostics::add), "1");
         }
     }
 

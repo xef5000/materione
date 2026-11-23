@@ -80,9 +80,9 @@ class SlotRendererListTest {
         root.put("player", new LinkedHashMap<>(Map.of("name", "Probe", "level", 3)));
         root.put("vars", new LinkedHashMap<String, Object>());
         root.put("server", new LinkedHashMap<String, Object>());
-        var gui = new LinkedHashMap<String, Object>();
-        gui.put("page", new LinkedHashMap<>(pages));
-        root.put("gui", gui);
+        var view = new LinkedHashMap<String, Object>();
+        view.put("page", new LinkedHashMap<>(pages));
+        root.put("view", view);
         return new MapLogicContext(root);
     }
 

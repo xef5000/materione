@@ -10,7 +10,8 @@ import dev.materione.api.scheduling.ScheduledHandle;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.Viewer;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -85,7 +86,7 @@ public final class PromptService {
         final Request request;
         final CompletableFuture<ActionOutcome> outcome = new CompletableFuture<>();
         final Viewer viewer;
-        GuiSession hidden;
+        ViewerRecord hidden;
         ScheduledHandle timeout;
         boolean settled;
 
@@ -267,12 +268,14 @@ public final class PromptService {
     }
 
     /** Hides the player's current window for the question, if one is open. Returns its session, or null. */
-    private GuiSession hide(Viewer viewer) {
+    private ViewerRecord hide(Viewer viewer) {
         GuiBridge.Services services = bridge.services().orElse(null);
         if (services == null) {
             return null;
         }
-        GuiSession current = services.sessions().current(viewer.id()).filter(GuiSession::isOpen).orElse(null);
+        // the container window only: a prompt hides a GUI, and a record of another kind has no GUI lifecycle
+        ViewerRecord current = services.views().current(viewer.id(), GuiViewerState.KIND)
+                .filter(ViewerRecord::isOpen).orElse(null);
         if (current == null) {
             return null;
         }
@@ -288,7 +291,7 @@ public final class PromptService {
             return;
         }
         services.lifecycle().showAfterPrompt(prompt.viewer, prompt.hidden, reason -> {
-            report(DiagnosticCodes.PROMPT_WINDOW_LOST, "GUI " + prompt.hidden.gui()
+            report(DiagnosticCodes.PROMPT_WINDOW_LOST, "GUI " + prompt.hidden.definition()
                     + " could not be shown after a prompt: " + reason);
             tell(player, "The menu could not be shown again: " + reason, NamedTextColor.RED);
         });

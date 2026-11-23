@@ -4,7 +4,7 @@ import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.NamespacedId;
 import dev.materione.platform.text.MaterioneText;
 import dev.materione.plugin.gui.input.GuiInput;
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import java.util.Set;
 import org.bukkit.event.inventory.InventoryClickEvent;
 
@@ -18,7 +18,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
  */
 public final class GuiMenu extends PluginGui {
 
-    private final GuiSession session;
+    private final ViewerRecord session;
     private final GuiContainer container;
     private String title;
     private final String baseTitle;
@@ -28,11 +28,11 @@ public final class GuiMenu extends PluginGui {
     /** The subset of {@link #inputSlots} that belong to {@code durable: required} layers (the escrow path). */
     private volatile Set<Integer> durableSlots = Set.of();
 
-    public GuiMenu(GuiSession session, GuiContainer container, String title, GuiInput input) {
+    public GuiMenu(ViewerRecord session, GuiContainer container, String title, GuiInput input) {
         this(session, container, title, title, input);
     }
 
-    public GuiMenu(GuiSession session, GuiContainer container, String title, String baseTitle, GuiInput input) {
+    public GuiMenu(ViewerRecord session, GuiContainer container, String title, String baseTitle, GuiInput input) {
         super(container.open(), MaterioneText.parseData(title));
         this.session = session;
         this.container = container;
@@ -75,13 +75,13 @@ public final class GuiMenu extends PluginGui {
         return out;
     }
 
-    /** The session this window shows. It outlives a re-open of the window (a title or size change). */
-    public GuiSession session() {
+    /** The viewer record this window shows. It outlives a re-open of the window (a title or size change). */
+    public ViewerRecord record() {
         return session;
     }
 
     public NamespacedId guiId() {
-        return session.gui();
+        return session.definition();
     }
 
     public GuiContainer container() {

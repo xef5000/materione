@@ -111,7 +111,21 @@ export interface SurfaceContentType {
    * way. Absent: only the keyed form.
    */
   flatFile?: true;
+  /**
+   * The view facet (views.md section 9): present when the type is a view kind. `viewerRule` is `opened` (a verb
+   * attaches the viewer), `predicate` (every player for whom a condition holds) or `spatial`; `rerenderDefault` is
+   * `on_change` or `off`. Absent: not a view kind.
+   */
+  view?: SurfaceViewFacet;
   parameters: SurfaceParam[];
+}
+
+/** The view facet of a content type, as the server reports it. */
+export interface SurfaceViewFacet {
+  viewerRule: string;
+  rerenderDefault: string;
+  supportsTarget: boolean;
+  supportsKey: boolean;
 }
 
 export interface SurfaceAction extends SurfaceEntry, SurfaceAvailability {
@@ -284,6 +298,19 @@ function flag(value: unknown): boolean {
   return value === true;
 }
 
+/** The view facet of a type, or undefined for a type that is not a view kind (or a facet too malformed to read). */
+function viewFacet(value: unknown): SurfaceViewFacet | undefined {
+  if (!isDict(value)) return undefined;
+  const viewerRule = text(value.viewerRule);
+  if (viewerRule === undefined) return undefined;
+  return {
+    viewerRule,
+    rerenderDefault: text(value.rerenderDefault) ?? 'off',
+    supportsTarget: flag(value.supportsTarget),
+    supportsKey: flag(value.supportsKey),
+  };
+}
+
 /** A defined-only object, so a missing optional never becomes an own `undefined` property. */
 function clean<T extends object>(value: T): T {
   for (const key of Object.keys(value) as (keyof T)[]) {
@@ -376,6 +403,7 @@ export function assembleSurface(describe: unknown, capabilities: readonly string
       description: text(raw.description) ?? '',
       expressionForm: text(raw.expressionForm),
       flatFile: raw.flatFile === true ? true : undefined,
+      view: viewFacet(raw.view),
       parameters: params(raw.parameters),
     });
   });

@@ -154,9 +154,9 @@ public final class SlotRenderer {
         return resolve(new Pass(pass.gui(), overlay, pass.ticks()), layer.entry());
     }
 
-    /** The page a list showed last, as the session stores it under {@code gui.page.<list>.number}; first when none. */
+    /** The page a list showed last, as the session stores it under {@code view.page.<list>.number}; first when none. */
     private static int pageNumber(LogicContext context, String list) {
-        Object stored = context.resolve(List.of("gui", "page", list, "number"));
+        Object stored = context.resolve(List.of("view", "page", list, "number"));
         return stored instanceof Number number ? number.intValue() : 1;
     }
 

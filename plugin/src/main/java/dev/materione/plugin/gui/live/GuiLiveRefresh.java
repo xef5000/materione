@@ -8,11 +8,10 @@ import dev.materione.plugin.gui.GuiRefreshPlan;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.open.GuiLifecycle;
-import dev.materione.plugin.gui.session.GuiSession;
-import dev.materione.plugin.gui.session.GuiSessions;
+import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.WindowHost;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -21,6 +20,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import dev.materione.plugin.gui.session.GuiViewerState;
 
 /**
  * The live loop for open GUIs (gui.md §5), now session-aware: after every successful swap the viewers
@@ -38,12 +38,12 @@ public final class GuiLiveRefresh {
     private final Plugin plugin;
     private final SchedulingGateway scheduling;
     private final GuiLookup guis;
-    private final GuiSessions sessions;
+    private final ViewRegistry sessions;
     private final WindowHost windows;
     private final GuiLifecycle lifecycle;
     private final GuiTicker ticker;
 
-    public GuiLiveRefresh(Plugin plugin, SchedulingGateway scheduling, GuiLookup guis, GuiSessions sessions,
+    public GuiLiveRefresh(Plugin plugin, SchedulingGateway scheduling, GuiLookup guis, ViewRegistry sessions,
             WindowHost windows, GuiLifecycle lifecycle, GuiTicker ticker) {
         this.plugin = plugin;
         this.scheduling = scheduling;
@@ -52,7 +52,7 @@ public final class GuiLiveRefresh {
         this.windows = windows;
         this.lifecycle = lifecycle;
         this.ticker = ticker;
-        windows.bindReconciler((viewer, session) -> refreshViewer(viewer, session, guis.find(session.gui())));
+        windows.bindReconciler((viewer, session) -> refreshViewer(viewer, session, guis.find(session.definition())));
     }
 
     /**
@@ -71,9 +71,9 @@ public final class GuiLiveRefresh {
                     + " removed=" + removed + " players=" + Bukkit.getOnlinePlayers().size());
         }
         Set<NamespacedId> affected = Set.copyOf(changes.keySet());
-        for (GuiSession session : List.copyOf(sessions.all())) {
-            Optional<RuntimeGuis.Live> now = after.gui(session.gui());
-            boolean refresh = affected.contains(session.gui());
+        for (ViewerRecord session : sessions.all(GuiViewerState.KIND)) {
+            Optional<RuntimeGuis.Live> now = after.gui(session.definition());
+            boolean refresh = affected.contains(session.definition());
             if (!refresh && now.filter(live -> live.logic().ticks() || live.clockPeriod() > 0).isEmpty()) {
                 continue;
             }
@@ -84,7 +84,7 @@ public final class GuiLiveRefresh {
             scheduling.executeEntity(plugin, player, () -> {
                 Viewer viewer = Viewer.of(player);
                 if (refresh) {
-                    refreshViewer(viewer, session, guis.find(session.gui()));
+                    refreshViewer(viewer, session, guis.find(session.definition()));
                 } else {
                     ticker.ensure(viewer, session);
                 }
@@ -97,8 +97,8 @@ public final class GuiLiveRefresh {
      *
      * @return false when the GUI is no longer live or the viewer's window is not this session's
      */
-    public boolean refresh(Viewer viewer, GuiSession session) {
-        Optional<RuntimeGuis.Live> now = guis.find(session.gui());
+    public boolean refresh(Viewer viewer, ViewerRecord session) {
+        Optional<RuntimeGuis.Live> now = guis.find(session.definition());
         if (now.isEmpty() || windows.shape(viewer, session).isEmpty()) {
             return false;
         }
@@ -113,8 +113,8 @@ public final class GuiLiveRefresh {
      *
      * @return false when the GUI is no longer live or the viewer's window is not this session's
      */
-    public boolean repaint(Viewer viewer, GuiSession session) {
-        Optional<RuntimeGuis.Live> now = guis.find(session.gui());
+    public boolean repaint(Viewer viewer, ViewerRecord session) {
+        Optional<RuntimeGuis.Live> now = guis.find(session.definition());
         if (now.isEmpty() || windows.shape(viewer, session).isEmpty()) {
             return false;
         }
@@ -123,7 +123,7 @@ public final class GuiLiveRefresh {
     }
 
     /** One viewer's window brought up to date, every layer read again. Runs on the viewer's own thread. */
-    void refreshViewer(Viewer viewer, GuiSession session, Optional<RuntimeGuis.Live> now) {
+    void refreshViewer(Viewer viewer, ViewerRecord session, Optional<RuntimeGuis.Live> now) {
         refreshViewer(viewer, session, now, true);
     }
 
@@ -133,10 +133,10 @@ public final class GuiLiveRefresh {
      * @param full true to read every layer again (a reload, {@code gui.refresh}); false to read the dynamic layers
      *     and keep the cached entries of the lists (a page change)
      */
-    void refreshViewer(Viewer viewer, GuiSession session, Optional<RuntimeGuis.Live> now, boolean full) {
+    void refreshViewer(Viewer viewer, ViewerRecord session, Optional<RuntimeGuis.Live> now, boolean full) {
         Player player = viewer.player();
         if (player == null || !player.isOnline() || !session.isOpen()
-                || sessions.current(session.player()).filter(current -> current == session).isEmpty()) {
+                || sessions.current(session.player(), GuiViewerState.KIND).filter(current -> current == session).isEmpty()) {
             return;
         }
         Optional<WindowHost.Shape> shape = windows.shape(viewer, session);
@@ -148,9 +148,9 @@ public final class GuiLiveRefresh {
                 lifecycle.removed(viewer, session);
                 windows.close(viewer);
                 player.sendMessage(Component.text(
-                        "The GUI " + session.gui() + " is no longer available; the window was closed.",
+                        "The GUI " + session.definition() + " is no longer available; the window was closed.",
                         NamedTextColor.YELLOW));
-                plugin.getLogger().info("MATERIONE-GUI-REFRESH-CLOSED id=" + session.gui()
+                plugin.getLogger().info("MATERIONE-GUI-REFRESH-CLOSED id=" + session.definition()
                         + " player=" + viewer.name());
             }
             case REOPEN -> {

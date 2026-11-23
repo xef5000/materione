@@ -150,7 +150,7 @@ Content types registered by `content/` (D5), 12 in total (the audit counted 11; 
 | `block` (`blocks/`), `furniture` (`furnitures/`) | World-placed appearance plus behavior hosts | P | None. Depth work (#14, #15) is appearance primitives. |
 | `glyph`, `sound`, `painting`, `effect` | Appearance-only pack resources | P | None. |
 | `recipe` (`recipes/`) | A vanilla crafting recipe (runtime-systems §5) | P | None. The name collides with the logic `Recipe` SPI (§4.10). |
-| `gui` (`guis/`) | One file holding the view (layers), the opening command (`open:`), the rules, and the input and custody policy (`input:`, `durable:`) | **P+** | Split the concerns, not the format: view / command / state / custody (§5.1 to §5.4). `open:` keeps working as sugar for a command whose flow is `gui.open`. |
+| `gui` (`guis/`) | One file holding the view (layers), the opening command (`open:`), the rules, and the input and custody policy (`input:`, `durable:`) | **P+** | Split the concerns, not the format: view / command / state / custody (§5.1 to §5.4). `open:` keeps working as sugar for a command whose flow is `view.open`. |
 | `currency` (`currencies/`) | A named binding to a money provider (logic.md §18) | P | Watch: providers are a fixed set (§4.11). |
 | `variable` (`variables/`) | Declared typed state | **P+** | Keyed scope and TTL (§5.2). Existing declarations keep their meaning. |
 | templates (pack layout, not a type; plugin.md §3.1) | Inheritance bases, including items as templates (#203, PR #285) | P | A precedent for referencing a base by id (master §14.7); presets resolve at runtime and are not copied. |
@@ -215,7 +215,7 @@ rules too (logic.md §37).
 | Input | `prompt` (with the input-method registry) | P |
 | Custody | `custody.consume` (#248; logic.md §36): consume what custody holds at a slot, atomically, optionally until a saved snapshot proves it | P (passes U1 to U5, logic.md §36). The trash slot is the recipe `trash_slot` over it |
 | Providers | `give_money`, `take_money`, `give_permission`, `take_permission`, `connect` | P (each reaches a provider SPI, §4.11) |
-| View | `gui.open`, `gui.close`, `gui.back`, `gui.refresh`, `gui.page`, `gui.slot_item` | **P+**: they act on "the run's own GUI session" implicitly |
+| View | `view.open`, `view.close`, `view.back` (views.md row V0, #455: one verb set for every opened kind); `gui.refresh` (to `view.refresh`, row V2), `gui.page`, `gui.slot_item` (component verbs, they stay) | **P** for the first three (they act on a view, whatever its kind); **P+** for `gui.refresh`, `gui.page` and `gui.slot_item`, which act on "the run's own GUI" implicitly |
 
 | Finding | Class | Direction |
 |---|---|---|
@@ -256,7 +256,7 @@ changing any file that exists (§5.2). The cross-server adapters of master §14.
 | Item sources: `materione:item`, `head`, `player_slot`, plus `hdb`, `itemsadder`, `nexo`, `mmoitems` when present (`integrations/items`) | P | #251 hardens the optional ones. |
 | List sources: `online_players`, `pack_items`, `content`, `variable`, `static` | P, `content` is borderline | `content` is the content-graph read model the browser needs; it is a primitive only if exposed as a general graph query. |
 | Input methods: `chat`, `anvil`, `sign` (sign unavailable on 1.21.4) | P | Dialogs (#6) register the next. |
-| **`GuiSession`** (per player and GUI: args, session variables, list pages, run identity) | **F** | The trade example (§3 need 3) cannot be built on it: one player, one window. Its variables become keyed state; its page and render state become *viewer-local view state*; the session stops being the unit of sharing. |
+| **`GuiSession`** (per player and GUI: args, session variables, list pages, run identity) | **F**; **replaced by `ViewerRecord` + `GuiViewerState` in views row V0 (#455), class P** | The trade example (§3 need 3) cannot be built on it: one player, one window. Its variables become keyed state; its page and render state become *viewer-local view state*; the session stops being the unit of sharing. |
 | **`slots` with `input: true`, `accept:`, `durable:`, `player_inventory: locked\|free`** | **F** | A custody holder placed inside a view, named for the use case. The mechanism is §5.1. |
 | `gui.slot_change` and `gui.slot_item` | **P+** | The change event and the edit verb of a custody-backed region. |
 | `GuiOpener` and its eight stages (logic.md §6.1) | P+ | Correct, and generalizes as the opening path of a command (§5.4). |
@@ -284,7 +284,7 @@ changes: the name, the set of holders, and the entry points, in that order, and 
 
 `plugin/src/main/resources/builtin-packs/materione/` holds one resource: `guis/browser.yml` (master §7.3). The rule of §7.3 is
 the right home for D12's "a feature is content": the browser is a GUI built from the `content` list source, `prompt`,
-`gui.open` and `gui.back`, with no code that names it except a command alias.
+`view.open` and `view.back`, with no code that names it except a command alias.
 
 | Finding | Direction |
 |---|---|
@@ -362,12 +362,14 @@ persistence table) live: in keyed state.
 
 **Designed in [`views.md`](views.md) (#335):** the view-kind contract, the split of `GuiSession` into binding, viewer-local
 state and state, the reads index and `view.refresh`, and the dialog and HUD as kinds; written before #6 and #7 are built.
+**Row V0 is built (#455):** `ViewerRecord` with a kind payload replaces `GuiSession`, `ViewRegistry` replaces `GuiSessions`, and
+`view.open`, `view.close` and `view.back` replace the `gui.*` verbs of the same names (views.md section 16).
 
 ### 5.4 Commands as content
 
 *A command with typed arguments, a gate and a flow.* Today: `open:` on a GUI (logic.md §6.1, §23), including the argument types,
 `suggest:`, permission, requirement, deny, bypass and the Brigadier sync. Direction: lift the block into a `command` content
-type whose flow may `gui.open`; `open:` remains valid and means exactly what it does. `claim` and `browse` become content.
+type whose flow may `view.open`; `open:` remains valid and means exactly what it does. `claim` and `browse` become content.
 
 **As built (#330, logic.md §40):** the `command` content type (`commands/`) has `names`, typed `args`, `permission`, `requirement`, `deny`, `console`
 and one flow, `do:`, with `flows:`. The names, arguments and gate are the block `open:` declares, read from one schema (`CommandSchema`), and

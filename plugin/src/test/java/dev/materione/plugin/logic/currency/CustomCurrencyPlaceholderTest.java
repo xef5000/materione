@@ -8,7 +8,7 @@ import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.provider.Currency;
 import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.LogicProviders;
-import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.ViewPort;
 import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.registry.RegistryEntry;
 import dev.materione.integrations.variables.VariablePlaceholders;
@@ -112,7 +112,7 @@ class CustomCurrencyPlaceholderTest {
                     });
             var bridge = new CurrencyPlaceholderReads(providers, registry, new CurrencyReads(false, probe),
                     probe, id -> player, false);
-            var resolver = new VariablePlaceholders(variables, () -> GuiSessionPort.NONE, bridge, diagnostics::add);
+            var resolver = new VariablePlaceholders(variables, () -> ViewPort.NONE, bridge, diagnostics::add);
             var constructor = MaterionePlaceholders.class.getDeclaredConstructor(VariablePlaceholders.class, String.class);
             constructor.setAccessible(true);
             expansion = constructor.newInstance(resolver, "1");

@@ -1,6 +1,6 @@
 package dev.materione.plugin.gui.input;
 
-import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.view.ViewerRecord;
 import org.bukkit.entity.Player;
 
 /**
@@ -17,7 +17,7 @@ public interface InputSlotPort {
      *
      * @return the view, {@link StackView#EMPTY} when the slot is empty, not an input slot, or the window is gone
      */
-    StackView peek(GuiSession session, int slot);
+    StackView peek(ViewerRecord session, int slot);
 
     /**
      * Applies an operation to the item in an input slot.
@@ -25,7 +25,7 @@ public interface InputSlotPort {
      * @param player the viewer, who receives what {@link SlotOp.Kind#TAKE} takes out
      * @return empty when the operation was applied, or the reason it was not
      */
-    java.util.Optional<String> apply(Player player, GuiSession session, int slot, SlotOp op);
+    java.util.Optional<String> apply(Player player, ViewerRecord session, int slot, SlotOp op);
 
     /**
      * The custody consume primitive (#248; gui-input-durability.md §5.4): consumes the stack a {@code durable: required}
@@ -36,6 +36,6 @@ public interface InputSlotPort {
      * @return a stage that completes empty when the consume reached {@code reach}, or with the reason it did not
      */
     java.util.concurrent.CompletionStage<java.util.Optional<String>> consume(
-            Player player, GuiSession session, int slot,
+            Player player, ViewerRecord session, int slot,
             dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach);
 }

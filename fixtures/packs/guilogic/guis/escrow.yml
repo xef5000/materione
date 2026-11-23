@@ -29,7 +29,7 @@ escrow:
     - on: gui.open
       do:
         - run_command:
-            command: "say MATERIONE-GUIESCROW-OPEN ${gui.id}"
+            command: "say MATERIONE-GUIESCROW-OPEN ${view.id}"
             as: console
     - on: gui.close
       do:

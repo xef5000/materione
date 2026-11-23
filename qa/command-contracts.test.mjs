@@ -59,6 +59,6 @@ test('typed chat stops waiting when a refreshed alias never reaches the client',
 
 test('detail fixture declares the close marker that the back contract observes', () => {
   const detail = fs.readFileSync(new URL('../fixtures/packs/guilogic/guis/detail.yml', import.meta.url), 'utf8');
-  assert.match(detail, /    - on: gui\.close\r?\n      do:\r?\n        - run_command:\r?\n            command: "say MATERIONE-GUILOGIC-CLOSE \$\{gui\.id\} reason=\$\{close\.reason\}"\r?\n            as: console/);
-  assert.match(detail, /    - on: gui\.click\r?\n      layer: up\r?\n      do:\r?\n        - gui\.back/);
+  assert.match(detail, /    - on: gui\.close\r?\n      do:\r?\n        - run_command:\r?\n            command: "say MATERIONE-GUILOGIC-CLOSE \$\{view\.id\} reason=\$\{close\.reason\}"\r?\n            as: console/);
+  assert.match(detail, /    - on: gui\.click\r?\n      layer: up\r?\n      do:\r?\n        - view\.back/);
 });

@@ -88,7 +88,10 @@ describe('the palette', () => {
 describe('what a new node is born as', () => {
   it('an action with a shorthand starts with that parameter, one without parameters is a bare name', () => {
     expect(defaultActionStep(vocabulary.actions.get('sound')!)).toEqual({ sound: '' });
-    expect(defaultActionStep(vocabulary.actions.get('gui.close')!)).toBe('gui.close');
+    expect(defaultActionStep(vocabulary.actions.get('view.back')!)).toBe('view.back');
+    // an optional shorthand is left out: a new Close view node is the bare step, not view.close: ''
+    expect(defaultActionStep(vocabulary.actions.get('view.close')!)).toBe('view.close');
+    expect(defaultActionStep(vocabulary.actions.get('view.open')!)).toEqual({ 'view.open': '' });
     expect(defaultActionStep(vocabulary.actions.get('give_exp')!)).toEqual({ give_exp: 1 });
   });
 
@@ -130,5 +133,27 @@ describe('the camera', () => {
     const view = { zoom: 1, panX: 0, panY: 0 };
     expect(revealRect(view, { w: 800, h: 600 }, { x: 100, y: 100, w: 100, h: 50 })).toBe(view);
     expect(revealRect(view, { w: 800, h: 600 }, { x: 900, y: 100, w: 100, h: 50 }).panX).toBeLessThan(0);
+  });
+});
+
+describe('the step a new action node is born as', () => {
+  const param = (id: string, required: boolean) => ({ id, type: 'string', required });
+  const action = (shorthand: string | undefined, ...parameters: ReturnType<typeof param>[]) => ({
+    id: 'act', displayName: 'Act', description: '', category: 'gui', shorthand, parameters,
+    takesElse: false, targetable: [], available: true,
+  });
+
+  it('is the bare name when nothing is required, even with an optional shorthand', () => {
+    expect(defaultActionStep(action('view', param('view', false)))).toBe('act');
+    expect(defaultActionStep(action(undefined, param('x', false)))).toBe('act');
+  });
+
+  it('starts on the shorthand when the action requires something, optional shorthand or not', () => {
+    expect(defaultActionStep(action('sound', param('sound', true)))).toEqual({ act: '' });
+    expect(defaultActionStep(action('view', param('view', false), param('slot', true)))).toEqual({ act: '' });
+  });
+
+  it('is an empty mapping when something is required and there is no shorthand', () => {
+    expect(defaultActionStep(action(undefined, param('slot', true)))).toEqual({ act: {} });
   });
 });
