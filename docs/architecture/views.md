@@ -1047,6 +1047,7 @@ gains what a dialog kind needs for explicit and automatic renders. This section 
 | V2-7 | **The action is `ANY`, and the ownership test is the one place that decides now versus soon.** | §5.6: each viewer renders on its own owner thread; a flow running on that thread (a GUI click) renders inline, which is what `gui.refresh` did. |
 | V2-8 | **The QA ids are `views.server-var.live` and `views.refresh.polled`** (the issue spells them `view.…`): the catalog's suite is `views` and V1's entries are `views.…`. | The runner requires the id to match the suite. |
 | V2-9 | **The runner has one real client, so `views.server-var.live` shows the click-written variable in that client's window; the two-window half is `PaperViewIT`,** with two fake-connection players (`ViewRefreshRunner`). | A second real client is not something the probe agent can launch. The harness proves what the observer and scheduler do for two viewers on a real Paper server; the QA entry proves what a client shows. |
+| V2-10 | **`holder:` is declared `acceptingExpression()`; `refreshSoon` clears the dirty bit when it queues.** | `parse` binds `holder` as a template, which the flow compiler requires the description to declare; a cross-thread refresh must absorb a wake queued earlier, as �5.4 says, so a dialog's token is sent once (a write after the call marks the bit again and wakes again). |
 
 ### 18.3 Breaking changes made, by §7.1 row
 

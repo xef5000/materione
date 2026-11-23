@@ -80,7 +80,7 @@ public final class RefreshViewAction implements ActionType<RefreshViewAction.Par
                                         + "server.<pack>.<key> or session.<key>", null, null).withWidget("variable", ""),
                         new ParameterSchema("holder", ParameterType.STRING, false, null,
                                 "With a player variable: whose viewers, a player name or UUID; the flow's own player "
-                                        + "when omitted", null, null)),
+                                        + "when omitted", null, null).acceptingExpression()),
                 "1.0.0"), LogicCategory.GUI, "view");
     }
 
