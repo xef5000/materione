@@ -42,6 +42,8 @@ example-build/
 # Personal env, keys and permissions go in .claude/settings.local.json (ignored).
 .claude/*
 !.claude/settings.json
+# Project skills every agent loads (verify, interrogate, blast-radius, ...)
+!.claude/skills/
 
 # ZCode workspace
 .zcode/

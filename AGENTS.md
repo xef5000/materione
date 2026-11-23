@@ -12,3 +12,6 @@ per machine). On a fresh clone, register it under `hooks.events.PreToolUse`:
 matcher `Bash|Edit|Write|MultiEdit|mcp__.*`, a `process` hook running `node` with
 args `["${ZCODE_PROJECT_DIR}/scripts/agent-guard/guard.mjs"]`. The same file holds
 the Cloudflare MCP servers.
+
+Project skills live in `.claude/skills/<name>/SKILL.md` (committed). ZCode sessions read
+and follow them by path; CLAUDE.md § Done means evidence lists when to use each.
