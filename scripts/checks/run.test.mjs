@@ -95,3 +95,26 @@ test('blockbench: a vendored byte change, addition or removal fails; PIN.md may 
   assert.equal(blockbenchDrift([...files, 'webui/public/blockbench/js/hook.js'], (f) => hashes[f] ?? 'x', manifest).length, 1);
   assert.equal(blockbenchDrift(files.filter((f) => !f.endsWith('index.html')), (f) => hashes[f], manifest).length, 1);
 });
+
+// Findings from the interrogate run on PR #485 (two adversaries), each replayed.
+test('interrogate #485: block comments opening mid-line, and their continuation lines, are scanned', () => {
+  const src = 'int x = 1; /* inert until M7 */\n/** a */ int y; /* M2 ships */\nx(); /* start\n * M3 here */\nval s = "a"; // ok\nconst re = /\\/\\*M4/; const u = "http://M5"; // M6';
+  assert.deepEqual(milestoneCommentLines(src).map((h) => [h.line, h.count]), [[1, 1], [2, 1], [4, 1], [6, 1]]);
+  assert.deepEqual(milestoneCommentLines('String t = """\n  M2 in a text block // not a comment\n  """; // M3').map((h) => h.line), [3]);
+});
+
+test('interrogate #485: link forms the first regex missed are checked', () => {
+  assert.deepEqual(markdownLinks("[e](gone.md 't') <a href=\"gone2.md\">h</a> [p](dir/f(1).md) [s](<my file.md>) [q](a.md (t))"),
+    ['gone.md', 'dir/f(1).md', 'my file.md', 'a.md', 'gone2.md']);
+});
+
+test('interrogate #485: setext headings get anchors', () => {
+  const s = githubSlugs('Setext\n======\n\nSub head\n--------\n\n- list item\n---\n');
+  assert.ok(s.has('setext') && s.has('sub-head'));
+  assert.ok(!s.has('-list-item') && !s.has('list-item'));
+});
+
+test('interrogate #485: the naming check passes on its own files', () => {
+  const files = { 'scripts/checks/run.mjs': '"MaterYard"', 'scripts/checks/README.md': 'MaterYard', 'docs/x.md': 'MaterYard' };
+  assert.deepEqual(checkNaming(Object.keys(files), (f) => files[f]), ['docs/x.md:1: the old name "MaterYard" (CLAUDE.md: naming is "Materione" everywhere)']);
+});

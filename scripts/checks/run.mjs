@@ -31,10 +31,12 @@ export const SPEC_FILES = ['CLAUDE.md', 'AGENTS.md', 'docs/architecture.md', 'do
 export function githubSlugs(markdown) {
   const seen = new Map();
   const slugs = new Set();
-  for (const line of stripCode(markdown).split('\n')) {
-    const m = /^ {0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(line);
-    if (!m) continue;
-    const text = m[1]
+  const lines = stripCode(markdown).split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const atx = /^ {0,3}#{1,6}\s+(.*?)(?:\s+#+)?\s*$/.exec(lines[i]);
+    const setext = !atx && lines[i].trim() && /^ {0,3}(=+|-+)\s*$/.test(lines[i + 1] ?? '') && !/^\s*([-*+]|\d+\.)\s/.test(lines[i]) ? lines[i].trim() : null;
+    if (!atx && setext === null) continue;
+    const text = (atx ? atx[1] : setext)
       .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
       .replace(/<[^>]+>/g, '')
       .replace(/`/g, '');
@@ -54,7 +56,8 @@ function stripCode(markdown) {
 export function markdownLinks(markdown) {
   const links = [];
   const text = stripCode(markdown);
-  for (const m of text.matchAll(/!?\[(?:[^\]\[]|\[[^\]]*\])*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g)) links.push(m[1]);
+  for (const m of text.matchAll(/!?\[(?:[^\]\[]|\[[^\]]*\])*\]\(\s*(?:<([^>\n]+)>|((?:[^()\s]|\([^()\s]*\))+))(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g)) links.push(m[1] ?? m[2]);
+  for (const m of text.matchAll(/<(?:a|img)\s[^>]*?\b(?:href|src)=["']([^"']+)["']/gi)) links.push(m[1]);
   for (const m of text.matchAll(/^\s*\[[^\]]+\]:\s*(\S+)/gm)) links.push(m[1]);
   return links;
 }
@@ -90,7 +93,8 @@ export function checkLinks(files, read, exists) {
 // ---------------------------------------------------------------- naming
 
 export function checkNaming(files, read) {
-  const allowed = new Set(['CLAUDE.md']); // states the rule itself
+  // The files that state the rule, implement it, or test it.
+  const allowed = new Set(['CLAUDE.md', 'scripts/checks/README.md', 'scripts/checks/run.mjs', 'scripts/checks/run.test.mjs']);
   const problems = [];
   for (const file of files) {
     if (allowed.has(file)) continue;
@@ -155,39 +159,66 @@ export function isRatchetedSource(file) {
   return file.includes('/src/main/') || /^(webui|cloud\/[^/]+)\/src\//.test(file);
 }
 
-export function milestoneCommentLines(source) {
-  const hits = [];
-  let inBlock = false;
-  source.split('\n').forEach((line, i) => {
-    let comment = '';
-    const t = line.trim();
-    if (inBlock) {
-      comment = line;
-      if (line.includes('*/')) inBlock = false;
-    } else if (t.startsWith('/*')) {
-      comment = line;
-      inBlock = !line.includes('*/');
+// Lexes Java/Kotlin/TS/JS just enough to know which characters are comment:
+// strings (incl. Java text blocks and template literals), regex literals,
+// line and block comments wherever they start.
+export function commentText(source) {
+  const out = source.split('').map((c) => (c === '\n' ? '\n' : ' '));
+  let i = 0;
+  let prev = '';
+  const n = source.length;
+  const regexAllowedAfter = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '~', '^']);
+  while (i < n) {
+    const c = source[i];
+    const d = source[i + 1];
+    if (c === '/' && d === '/') {
+      while (i < n && source[i] !== '\n') out[i] = source[i++];
+    } else if (c === '/' && d === '*') {
+      const close = source.indexOf('*/', i + 2);
+      const stop = close === -1 ? n : close + 2;
+      for (; i < stop; i++) out[i] = source[i];
+      prev = ' ';
+    } else if (c === '"' && source.startsWith('"""', i)) {
+      const close = source.indexOf('"""', i + 3);
+      i = close === -1 ? n : close + 3;
+      prev = 'x';
+    } else if (c === '"' || c === "'" || c === '`') {
+      i++;
+      while (i < n && source[i] !== c) {
+        if (source[i] === '\\') i++;
+        else if (c !== '`' && source[i] === '\n') break;
+        i++;
+      }
+      i++;
+      prev = 'x';
+    } else if (c === '/' && regexAllowedAfter.has(prev)) {
+      i++;
+      let inClass = false;
+      while (i < n && source[i] !== '\n') {
+        if (source[i] === '\\') i++;
+        else if (source[i] === '[') inClass = true;
+        else if (source[i] === ']') inClass = false;
+        else if (source[i] === '/' && !inClass) break;
+        i++;
+      }
+      i++;
+      prev = 'x';
     } else {
-      const idx = lineCommentIndex(line);
-      if (idx >= 0) comment = line.slice(idx);
+      if (!/\s/.test(c)) prev = /[A-Za-z0-9_$)\].]/.test(c) ? 'x' : c;
+      i++;
     }
-    const n = (comment.match(MILESTONE) ?? []).length;
-    if (n) hits.push({ line: i + 1, count: n, text: t });
-  });
-  return hits;
+  }
+  return out.join('');
 }
 
-function lineCommentIndex(line) {
-  let quote = null;
-  for (let i = 0; i < line.length - 1; i++) {
-    const c = line[i];
-    if (quote) {
-      if (c === '\\') i++;
-      else if (c === quote) quote = null;
-    } else if (c === '"' || c === "'" || c === '`') quote = c;
-    else if (c === '/' && line[i + 1] === '/' && line[i - 1] !== ':') return i;
-  }
-  return -1;
+export function milestoneCommentLines(source) {
+  const sourceLines = source.split('\n');
+  const hits = [];
+  commentText(source).split('\n').forEach((comment, i) => {
+    const n = (comment.match(MILESTONE) ?? []).length;
+    if (n) hits.push({ line: i + 1, count: n, text: sourceLines[i].trim() });
+  });
+  return hits;
 }
 
 export function checkRatchet(files, read, baseline) {
