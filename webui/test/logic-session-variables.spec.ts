@@ -8,7 +8,7 @@ import { parse } from 'yaml';
 import snapshot from '../../fixtures/golden/editor-demo-snapshot.json';
 import { scopeFor } from '../src/lib/logic/scope';
 import { project } from '../src/lib/logic/project';
-import { lintTemplate } from '../src/lib/logic/template';
+import { lintTemplate, rewriteDeclaredRead } from '../src/lib/logic/template';
 import { blockOf, type LogicBlock } from '../src/lib/logic/tree';
 import {
   declarationEdits, declarationsOf, keyProblem, readPath, sessionDeclared, sessionId, sessionNameOf, sessionReadOf,
@@ -98,7 +98,7 @@ describe('the scope and the lint of a session read', () => {
   it('flags a bare key, and says how the declared variable is then read', () => {
     const text = 'Page ${vars.session.page}';
     const [problem] = lintTemplate(text, scopeOf(true));
-    expect(problem!.declare).toEqual({ key: 'page', replace: 'vars.session.shop.page' });
+    expect(problem!.declare).toEqual({ key: 'page', name: 'vars.session.page', replace: 'vars.session.shop.page' });
     expect(problem!.message).toContain('vars.session.shop.page');
     expect(text.slice(problem!.from, problem!.to)).toBe('vars.session.page');
   });
@@ -114,5 +114,46 @@ describe('the scope and the lint of a session read', () => {
     const g = project(written);
     const paths = scopeFor(g, written, g.byId.get('behavior.0.do.2')!, vocabulary, declared, 'gui', [], 'shop').paths;
     expect(paths.filter((entry) => entry.origin === 'local').map((entry) => entry.path)).toEqual(['vars.count']);
+  });
+});
+
+describe('the read a declaration rewrites', () => {
+  const made = (scope: 'session' | 'player', key: string) => declarationsOf('shop', 'variables/shop.yml', { [key]: { scope, type: 'number' } })[0]!;
+  const block = yaml(`r:
+  behavior:
+    - on: gui.click
+      do:
+        - message: ""
+`);
+  const graph = project(block);
+  const scope = scopeFor(graph, block, graph.byId.get('behavior.0.do.0')!, vocabulary, declared, 'gui', [], 'shop');
+  const problemIn = (text: string) => lintTemplate(text, scope)[0]!;
+
+  it('spells the read as the declaration the form made, not the key that was offered', () => {
+    const text = 'Page ${vars.session.page}';
+    expect(rewriteDeclaredRead(text, problemIn(text), made('session', 'page'))).toBe('Page ${vars.session.shop.page}');
+    expect(rewriteDeclaredRead(text, problemIn(text), made('session', 'pager'))).toBe('Page ${vars.session.shop.pager}');
+  });
+
+  it('spells the read in the scope the declaration ended in', () => {
+    const text = 'Page ${vars.session.page}';
+    expect(rewriteDeclaredRead(text, problemIn(text), made('player', 'page'))).toBe('Page ${vars.player.shop.page}');
+  });
+
+  it('finds the read again when the text changed under the stale offsets', () => {
+    const text = 'Page ${vars.session.page}';
+    const problem = problemIn(text);
+    expect(rewriteDeclaredRead('>> ' + text, problem, made('session', 'page'))).toBe('>> Page ${vars.session.shop.page}');
+  });
+
+  it('takes the read nearest to where it was and never the middle of a longer path', () => {
+    const text = '${vars.session.page} ${vars.session.page2} ${vars.session.page}';
+    const problem = { ...problemIn('${vars.session.page}'), from: 44, to: 61 };
+    expect(rewriteDeclaredRead(text, problem, made('session', 'page')))
+      .toBe('${vars.session.page} ${vars.session.page2} ${vars.session.shop.page}');
+  });
+
+  it('leaves the text alone when the read is gone', () => {
+    expect(rewriteDeclaredRead('nothing here', problemIn('${vars.session.page}'), made('session', 'page'))).toBeNull();
   });
 });

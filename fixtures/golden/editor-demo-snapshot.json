@@ -4013,6 +4013,7 @@
       ],
       "listSources": [
         {
+          "announced": true,
           "cached": false,
           "description": "The live content as packs, folders and entries, one location at a time",
           "displayName": "Content tree",
@@ -4098,16 +4099,18 @@
               "id": "search",
               "label": "Search",
               "order": 0,
+              "referenceKind": "session",
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "variable"
             }
           ],
           "registeredBy": "materione",
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": false,
           "cached": false,
           "description": "Every online player, by name and UUID",
           "displayName": "Online players",
@@ -4144,6 +4147,7 @@
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": true,
           "cached": true,
           "description": "Every live item of one pack, by its id",
           "displayName": "Pack items",
@@ -4174,6 +4178,7 @@
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": true,
           "cached": false,
           "description": "Entries written in the layer, each a mapping of fields",
           "displayName": "Static entries",
@@ -4203,6 +4208,7 @@
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": true,
           "cached": false,
           "description": "The pieces of a declared player or server string variable, separated by a separator",
           "displayName": "Variable list",
@@ -4225,7 +4231,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "variable"
             },
             {
               "advanced": false,

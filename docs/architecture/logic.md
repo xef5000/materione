@@ -2838,7 +2838,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
    author's name against it. A late registration takes effect on the next reload, as for item sources.
 5. **`ListSourceDescription` carries the entry schema and the `cached` flag.** `entry` is the list of `entry.*`
    variables the entries carry, with types, so the editor can offer them; a source whose fields are the author's own
-   declares the family `entry.*`. `cached` says the entries are expensive to read (decision 12). The description
+   declares the family `entry.*`. `cached` says the entries are expensive to read (decision 12); `announced` says the source reads only the variables its `variable`-widget parameters name (views.md §17, V1-21). The description
    is in the registry, so the editor reads it from there. **Deferred:** the vocabulary does not yet carry list sources,
    so the Logic tab cannot autocomplete `entry.*` from it. This is the same gap item sources have (§26), and it is
    closed with the node inspector (#224), not here. *Closed in §31 (decisions 9 and 17).*

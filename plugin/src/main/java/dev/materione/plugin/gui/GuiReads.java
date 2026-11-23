@@ -29,9 +29,9 @@ import java.util.Map;
  * and list sources, and its title pieces, all as compiled for the live view. Every read of a GUI is a content read:
  * a GUI has no visibility condition of its own, a viewer opens it.
  *
- * <p>The compiled item and list bindings are opaque, so a source's own variable parameters are read from its
- * authored payload: any {@code ${...}} in it, the {@code var} of the {@code variable} list source, the {@code search}
- * of the {@code content} list source and a list's {@code search.var}.
+ * <p>The compiled item and list bindings are opaque, so a source's own variable parameters are read from its authored
+ * payload: any {@code ${...}} in it, the parameters its self-description draws with the {@code variable} widget, and a
+ * list's {@code search.var}.
  */
 public final class GuiReads {
 

@@ -10,7 +10,8 @@
    */
   import Icon from '../../../../components/Icon.svelte';
   import { worstOf } from '../../../../logic/diagnose';
-  import { applyCompletion, completeAt, lintTemplate, type CompletionResult, type TemplateProblem } from '../../../../logic/template';
+  import { applyCompletion, completeAt, lintTemplate, rewriteDeclaredRead, type CompletionResult, type TemplateProblem } from '../../../../logic/template';
+  import type { DeclaredVariable } from '../../../../logic/variables';
   import type { NodeFlag } from '../../../../logic/verdicts';
   import { session } from '../../../../state.svelte';
   import { useInspector } from '../context';
@@ -65,11 +66,10 @@
     if (inspector.declaredStatus === 'idle') void inspector.loadDeclared(session.channel);
   });
 
-  function declared(problem: TemplateProblem): void {
+  function declared(problem: TemplateProblem, made: DeclaredVariable): void {
     declaring = null;
-    const replace = problem.declare?.replace;
-    if (replace === undefined) return;
-    const next = text.slice(0, problem.from) + replace + text.slice(problem.to);
+    const next = rewriteDeclaredRead(text, problem, made);
+    if (next === null || next === text) return;
     text = next;
     onchange(next);
   }
@@ -223,7 +223,7 @@
     <DeclareVariable
       start={declaring.declare.key}
       initialScope="session"
-      ondone={() => declared(declaring!)}
+      ondone={(made) => declared(declaring!, made)}
       oncancel={() => (declaring = null)}
     />
   {/if}

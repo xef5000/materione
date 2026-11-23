@@ -11,7 +11,7 @@
  * Pure of the DOM and of Svelte.
  */
 import type { TemplateScope } from './scope';
-import { sessionId, sessionReadOf } from './variables';
+import { readPath, sessionId, sessionReadOf, type DeclaredVariable } from './variables';
 
 export type CompletionKind = 'root' | 'path' | 'function' | 'placeholder';
 
@@ -176,8 +176,9 @@ export interface TemplateProblem {
    * Set when the problem is a session variable no declaration backs (`MTR-0063` on the server): the studio offers to
    * declare it. `key` is the variable's key in the pack being edited; `replace` is the path the read should be spelled
    * as once it is declared, when the author wrote the bare key (`vars.session.tab`, read as `vars.session.<pack>.tab`).
+   * `name` is the read as written, which `rewriteDeclaredRead` finds again in the text as it is when the form closes.
    */
-  declare?: { key: string; replace?: string };
+  declare?: { key: string; name: string; replace?: string };
 }
 
 const KEYWORDS = new Set(['true', 'false', 'null']);
@@ -239,7 +240,7 @@ function lintSession(name: string, from: number, to: number, scope: TemplateScop
       message: `'${name}' is not a declared session variable. A session variable is read as vars.session.${scope.sessions.pack}.${read.key}.`,
       from,
       to,
-      declare: { key: read.key, replace: `vars.session.${scope.sessions.pack}.${read.key}` },
+      declare: { key: read.key, name, replace: `vars.session.${scope.sessions.pack}.${read.key}` },
     });
   } else {
     problems.push({
@@ -247,9 +248,33 @@ function lintSession(name: string, from: number, to: number, scope: TemplateScop
       message: `'${name}' is not a declared session variable.`,
       from,
       to,
-      ...(own ? { declare: { key: read.key } } : {}),
+      ...(own ? { declare: { key: read.key, name } } : {}),
     });
   }
+}
+
+/** Whether `name` at `at` in `text` is a whole path: not the middle of a longer name or path. */
+function wholePath(text: string, at: number, name: string): boolean {
+  const word = /[A-Za-z0-9_.]/;
+  return text.slice(at, at + name.length) === name && !word.test(text[at - 1] ?? '') && !word.test(text[at + name.length] ?? '');
+}
+
+/**
+ * The template once the read a problem named is spelled as the declaration the author made: the read is found again in
+ * `text` as it is now (the problem's offsets are from before the form opened, and the text may have changed), nearest
+ * to where it was, and replaced by the path of what was declared, `readPath`, whatever name or scope
+ * the form ended with. Null when the problem is not a declaration offer or the read is no longer in the text.
+ */
+export function rewriteDeclaredRead(text: string, problem: TemplateProblem, made: DeclaredVariable): string | null {
+  const name = problem.declare?.name;
+  if (name === undefined) return null;
+  let best = -1;
+  for (let at = text.indexOf(name); at !== -1; at = text.indexOf(name, at + 1)) {
+    if (!wholePath(text, at, name)) continue;
+    if (best === -1 || Math.abs(at - problem.from) < Math.abs(best - problem.from)) best = at;
+  }
+  if (best === -1) return null;
+  return text.slice(0, best) + readPath(made) + text.slice(best + name.length);
 }
 
 /** What is wrong with a template without asking the server: an unclosed `${`, an unknown root or function. */
