@@ -16,6 +16,8 @@ import java.util.function.LongSupplier;
  * <ul>
  *   <li>a record that is no longer live or no longer the player's current view of its kind is dropped: a wake never
  *       renders into a window that replaced the one it was made for;</li>
+ *   <li>a wake that cannot run, because the player's thread is gone or the player or the kind is missing when it
+ *       does, leaves the bit clean, so the next write marks the record dirty and wakes it again;</li>
  *   <li>a bit already clean is a no-op (an explicit refresh got there first);</li>
  *   <li>the bit is cleared before the kind reads state, so a write during the render marks it again and wakes again;</li>
  *   <li>a kind that holds its frame still ({@link ViewKind.RenderOutcome#FROZEN}) leaves the bit set and is tried again
@@ -68,7 +70,7 @@ public final class ViewScheduler implements ViewWake {
         long now = tick.getAsLong();
         int interval = kinds.of(target.kind()).map(ViewKind::minInterval).orElse(1);
         long delay = Math.max(1, target.lastAutomatic() + interval - now);
-        later.run(target.player(), delay, () -> automatic(target), () -> { });
+        later.run(target.player(), delay, () -> automatic(target), target::clearDirty);
     }
 
     private void automatic(ViewDirty target) {
@@ -77,10 +79,10 @@ public final class ViewScheduler implements ViewWake {
         }
         Viewer viewer = viewers.apply(target.player());
         ViewKind kind = kinds.of(target.kind()).orElse(null);
+        target.clearDirty();
         if (viewer == null || kind == null) {
             return;
         }
-        target.clearDirty();
         ViewKind.RenderOutcome outcome = ViewKind.RenderOutcome.RENDERED;
         if (target instanceof ViewerRecord record) {
             outcome = kind.renderAutomatic(viewer, record);

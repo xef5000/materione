@@ -108,6 +108,8 @@ class ViewSchedulerTest {
         }
     }
 
+    private boolean retire;
+    private boolean offline;
     private final AtomicLong tick = new AtomicLong(100);
     private final List<Task> queue = new ArrayList<>();
     private long order;
@@ -122,8 +124,14 @@ class ViewSchedulerTest {
     private final VariableDeclaration season = variables.declare("demo", "season", VariableScope.SERVER, 1d);
     private final VariableDeclaration hudOn = variables.declare("rpg", "hud_on", VariableScope.PLAYER, false);
     private final ViewScheduler scheduler = new ViewScheduler(registry, kinds, tick::get,
-            (player, delay, task, retired) -> queue.add(new Task(tick.get() + delay, order++, task)),
-            id -> new Viewer(id, "p", null), ViewScheduler.RenderCounter.NONE);
+            (player, delay, task, retired) -> {
+                if (retire) {
+                    retired.run();
+                } else {
+                    queue.add(new Task(tick.get() + delay, order++, task));
+                }
+            },
+            id -> offline ? null : new Viewer(id, "p", null), ViewScheduler.RenderCounter.NONE);
     private final ReadsIndexHolder index = new ReadsIndexHolder();
 
     /** The live index, replaced per test. */
@@ -363,5 +371,30 @@ class ViewSchedulerTest {
 
     private void writeHud(UUID player, boolean on) {
         variables.service().store(VariableScope.PLAYER).write(hudOn, player, on);
+    }
+
+    @Test
+    void aRetiredWakeLeavesTheBitCleanSoALaterWriteRenders() {
+        publish(Map.of(new ViewRef("gui", MENU), reads(coins, ReadRole.CONTENT)));
+        open(alex, MENU);
+        retire = true;
+        writeCoins(alex, 1d);
+        retire = false;
+        writeCoins(alex, 2d);
+        ticks(3);
+        assertThat(gui.renders).hasValue(1);
+    }
+
+    @Test
+    void aViewerMissingWhenTheWakeRunsLeavesTheBitCleanSoALaterWriteRenders() {
+        publish(Map.of(new ViewRef("gui", MENU), reads(coins, ReadRole.CONTENT)));
+        open(alex, MENU);
+        writeCoins(alex, 1d);
+        offline = true;
+        ticks(1);
+        offline = false;
+        writeCoins(alex, 2d);
+        ticks(3);
+        assertThat(gui.renders).hasValue(1);
     }
 }

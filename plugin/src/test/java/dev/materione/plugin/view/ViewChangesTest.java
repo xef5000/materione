@@ -297,4 +297,27 @@ class ViewChangesTest {
 
         assertThat(woken).containsExactly(a);
     }
+
+    @Test
+    void aThrowingWakeDoesNotBreakTheWriteAndLeavesTheBitClean() {
+        publish(Map.of(MENU_VIEW, reads(coins, ReadRole.CONTENT)));
+        ViewerRecord a = open(alex, MENU);
+        variables.service().writeObserver(new ViewChanges(index::get, registry, kinds, target -> {
+            throw new IllegalStateException("scheduler is down");
+        }));
+
+        assertThat(writePlayer(coins, alex, 1d)).isTrue();
+        assertThat(a.isDirty()).isFalse();
+    }
+
+    @Test
+    void aThrowingObserverDoesNotBreakAWriteOrAMutate() {
+        variables.service().writeObserver((declaration, holder) -> {
+            throw new IllegalStateException("observer is down");
+        });
+
+        assertThat(writePlayer(coins, alex, 1d)).isTrue();
+        assertThat(variables.service().store(VariableScope.PLAYER)
+                .mutate(coins, alex, dev.materione.api.logic.variable.VariableOp.ADD, 1d).ok()).isTrue();
+    }
 }

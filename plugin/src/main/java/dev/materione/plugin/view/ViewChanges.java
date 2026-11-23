@@ -4,7 +4,10 @@ import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.plugin.logic.variable.VariableWriteObserver;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * The write observer (views.md section 5.3): called after every successful write to a player, server or session
@@ -27,6 +30,9 @@ import java.util.function.Supplier;
  * <p>An item variable goes through the item port, which is not observed, and a run's locals are never state.
  */
 public final class ViewChanges implements VariableWriteObserver {
+
+    private static final Logger LOG = Logger.getLogger(ViewChanges.class.getName());
+    private static final AtomicBoolean REPORTED = new AtomicBoolean();
 
     private final Supplier<ReadsIndex> index;
     private final ViewRegistry views;
@@ -113,7 +119,14 @@ public final class ViewChanges implements VariableWriteObserver {
 
     private void mark(ViewDirty target) {
         if (target != null && target.markDirty()) {
-            wake.wake(target);
+            try {
+                wake.wake(target);
+            } catch (RuntimeException failure) {
+                target.clearDirty();
+                if (REPORTED.compareAndSet(false, true)) {
+                    LOG.log(Level.WARNING, "The view wake threw; the viewer is left clean (reported once)", failure);
+                }
+            }
         }
     }
 }
