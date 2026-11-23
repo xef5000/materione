@@ -1,0 +1,5 @@
+[
+  { "codes": "MTR-0099", "reason": "Input slot on a container slot the client refuses items for; phase 2 of GUI containers beyond the chest (gui.md §12.4, plugin.md §5, #286)." },
+  { "codes": "MTR-0106..MTR-0117", "reason": "Block reserved by the HUD and frame-cycling designs (logic.md §41, views.md, protection.md)." },
+  { "codes": "MTR-1042", "reason": "Illustrative example in plugin.md (diagnostic code format); not a real code. Codes at 1000 and above are never allocated by --next-mtr." }
+]

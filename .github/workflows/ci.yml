@@ -1,6 +1,8 @@
 # CI — mirrors the M0 verification gate (roadmap) and docs/architecture/build.md.
 #
 # Jobs:
+#   rules          — repo rules a script can decide (scripts/checks/); every
+#                    event, docs-only PRs included
 #   changes        — classifies a PR's diff; drives the skips below
 #   build          — unit + ArchUnit tests, shaded jar artifact (skipped on
 #                    docs-only PRs)
@@ -43,6 +45,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Repo rules (issue #481): the CLAUDE.md rules a script can decide. Pure
+  # Node, seconds. Runs on every event, docs-only PRs included: it is the only
+  # job that checks docs. On PRs it also lists changed spec files in the job
+  # summary so review starts there.
+  rules:
+    name: repo rules (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Repo rules
+        run: |
+          node --test scripts/checks/run.test.mjs
+          node scripts/checks/run.mjs
+
+      - name: Spec-change report
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/checks/run.mjs --spec-report "$BASE"
+
   build:
     name: build (ubuntu)
     runs-on: ubuntu-latest

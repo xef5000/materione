@@ -24,7 +24,7 @@ test/            vitest on the real Workers runtime (@cloudflare/vitest-pool-wor
 ```
 
 The wire contract is pinned by the shared golden fixture
-[`fixtures/protocol/relay-mailbox-v1.json`](../../../fixtures/protocol/relay-mailbox-v1.json)
+[`fixtures/protocol/relay-mailbox-v1.json`](../../fixtures/protocol/relay-mailbox-v1.json)
 (the plugin's `RelayClient` tests and the SPA's `LongPollTransport` tests read
 the same file).
 
