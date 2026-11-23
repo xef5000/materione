@@ -3,6 +3,7 @@ package dev.materione.plugin.gui.session;
 import dev.materione.api.NamespacedId;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.render.Rendered;
+import dev.materione.plugin.view.ViewerMutator;
 import dev.materione.plugin.view.ViewerPayload;
 import dev.materione.plugin.view.ViewerRecord;
 import java.util.Collections;
@@ -74,6 +75,7 @@ public final class GuiViewerState implements ViewerPayload {
     }
 
     /** Sets the page state of {@code list}, or removes it when {@code value} is null; the list component's seam. */
+    @ViewerMutator
     public void putPage(String list, Object value) {
         mutating("page");
         if (value == null) {
@@ -109,6 +111,7 @@ public final class GuiViewerState implements ViewerPayload {
     }
 
     /** Records a render of the window (the paint path). */
+    @ViewerMutator
     public void remember(Rendered next) {
         mutating("last render");
         rendered = next;
@@ -120,12 +123,14 @@ public final class GuiViewerState implements ViewerPayload {
     }
 
     /** Records the definition after its presentation and input ownership have been installed. */
+    @ViewerMutator
     public void displayed(RuntimeGuis.Live gui) {
         mutating("displayed definition");
         displayed = gui;
     }
 
     /** A new window: nothing is shown yet, and its clock starts at zero (so an animation starts at its first frame). */
+    @ViewerMutator
     public void forgetWindow() {
         mutating("window");
         rendered = Rendered.EMPTY;
@@ -138,6 +143,7 @@ public final class GuiViewerState implements ViewerPayload {
     }
 
     /** Advances the window's clock by {@code ticks}, the refresh clock's period. */
+    @ViewerMutator
     public long advanceWindowTicks(long ticks) {
         mutating("window clock");
         windowTicks += ticks;
@@ -150,6 +156,7 @@ public final class GuiViewerState implements ViewerPayload {
     }
 
     /** Advances the ticker's clock. */
+    @ViewerMutator
     public long advanceTicks(long ticks) {
         mutating("ticker clock");
         elapsedTicks += ticks;
@@ -164,6 +171,7 @@ public final class GuiViewerState implements ViewerPayload {
 
     @Override
     @SuppressWarnings("unchecked")
+    @ViewerMutator
     public void restore(Map<String, Object> state) {
         if (state.get(PAGES) instanceof Map<?, ?> saved) {
             mutating("restore");

@@ -126,6 +126,7 @@ public final class ViewerRecord {
     }
 
     /** Sets the typed reading of the arguments, once, when the record is opened (the opener types them). */
+    @ViewerMutator
     public void typedArgs(Map<String, Object> typed) {
         mutating("typed arguments");
         this.typedArgs = Collections.unmodifiableMap(new LinkedHashMap<>(typed));
@@ -140,6 +141,7 @@ public final class ViewerRecord {
     }
 
     /** Sets one session value, or removes it when {@code value} is null ({@code set_var} with the session scope). */
+    @ViewerMutator
     public void sessionValue(String name, Object value) {
         mutating("session value");
         if (value == null) {
@@ -163,6 +165,7 @@ public final class ViewerRecord {
     }
 
     /** Marks the record as held by a prompt, or released from it. */
+    @ViewerMutator
     public void prompting(boolean holding) {
         mutating("prompting");
         prompting = holding;
@@ -199,6 +202,7 @@ public final class ViewerRecord {
     }
 
     /** Records the window that is about to show this record. */
+    @ViewerMutator
     public void attach(Object window) {
         mutating("window");
         this.window = window;
@@ -210,6 +214,7 @@ public final class ViewerRecord {
     }
 
     /** Puts a snapshot's session values and kind state into this (fresh) record. */
+    @ViewerMutator
     public void restore(Snapshot snapshot) {
         mutating("restore");
         vars.putAll(snapshot.vars());

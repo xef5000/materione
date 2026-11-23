@@ -1,7 +1,16 @@
 package dev.materione.plugin.view;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaClasses;
+import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchRule;
+import dev.materione.plugin.plantedview.PlantedViewerMutation;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ParamReader;
@@ -14,18 +23,12 @@ import dev.materione.plugin.gui.session.GuiViewerState;
 import dev.materione.plugin.logic.action.view.BackViewAction;
 import dev.materione.plugin.logic.action.view.OpenViewAction;
 import dev.materione.plugin.view.open.OpenRequest;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -155,32 +158,54 @@ class ViewerOwnerThreadTest {
     }
 
     /** The one place that may call a mutator: the view and GUI runtime packages, which run on the owner thread. */
-    private static final List<String> MAY_MUTATE = List.of(
-            "dev/materione/plugin/view/", "dev/materione/plugin/gui/");
-    private static final Pattern MUTATORS = Pattern.compile(
-            "\\.(attach|prompting|restore|typedArgs|remember|displayed|forgetWindow|advanceTicks|advanceWindowTicks"
-                    + "|sessionValue|putPage)\\((?!\\))");
+    private static final String[] MAY_MUTATE = {"dev.materione.plugin.view..", "dev.materione.plugin.gui.."};
+
+    private static ArchRule onlyTheViewAndGuiRuntimesCallAMutator(String... allowed) {
+        return noClasses().that().resideOutsideOfPackages(allowed)
+                .should().callMethodWhere(new DescribedPredicate<JavaMethodCall>("a @ViewerMutator method") {
+                    @Override
+                    public boolean test(JavaMethodCall call) {
+                        return call.getTarget().resolveMember().map(m -> m.isAnnotatedWith(ViewerMutator.class))
+                                .orElse(false);
+                    }
+                })
+                .because("a viewer record is owner-thread state (D8): its mutators run only in the view and GUI runtimes");
+    }
+
+    private static JavaClasses mainClasses() {
+        return new ClassFileImporter().withImportOption(new ImportOption.DoNotIncludeTests())
+                .importPackages("dev.materione.plugin");
+    }
 
     @Test
-    void onlyTheViewAndGuiRuntimesCallAMutatorOfAViewerRecord() throws IOException {
-        Path root = Path.of("src", "main", "java");
-        List<String> callers;
-        try (Stream<Path> files = Files.walk(root)) {
-            callers = files.filter(path -> path.toString().endsWith(".java")).flatMap(path -> {
-                String relative = root.relativize(path).toString().replace('\\', '/');
-                if (MAY_MUTATE.stream().anyMatch(relative::startsWith)) {
-                    return Stream.empty();
-                }
-                try {
-                    String source = Files.readString(path);
-                    boolean touchesRecord = source.contains("ViewerRecord") || source.contains("GuiViewerState");
-                    return touchesRecord && MUTATORS.matcher(source).find() ? Stream.of(relative) : Stream.empty();
-                } catch (IOException e) {
-                    throw new java.io.UncheckedIOException(e);
-                }
-            }).collect(Collectors.toList());
-        }
+    void onlyTheViewAndGuiRuntimesCallAMutatorOfAViewerRecord() {
+        JavaClasses plugin = mainClasses();
+        assertThat(plugin.size()).as("the plugin classes were found").isGreaterThan(100);
+        onlyTheViewAndGuiRuntimesCallAMutator(MAY_MUTATE).check(plugin);
+    }
 
-        assertThat(callers).as("classes that mutate a viewer record outside the view and gui runtimes").isEmpty();
+    @Test
+    void everyMethodThatReportsToTheGuardIsMarkedAMutator() {
+        JavaClasses plugin = mainClasses();
+        var reporting = plugin.stream().flatMap(type -> type.getMethods().stream())
+                .filter(method -> !method.getName().equals("mutating"))
+                .filter(method -> method.getMethodCallsFromSelf().stream().anyMatch(call ->
+                        call.getName().equals("mutating")
+                                && (call.getTargetOwner().isEquivalentTo(ViewerRecord.class)
+                                        || call.getTargetOwner().isEquivalentTo(GuiViewerState.class))))
+                .toList();
+
+        assertThat(reporting).as("methods that call the guard were found").hasSizeGreaterThan(5);
+        assertThat(reporting.stream().filter(method -> !method.isAnnotatedWith(ViewerMutator.class))
+                .map(method -> method.getFullName()).toList())
+                .as("methods that report a mutation to the guard without the @ViewerMutator marker").isEmpty();
+    }
+
+    @Test
+    void theRuleFailsOnAPlantedNoArgumentMutatorCall() {
+        JavaClasses planted = new ClassFileImporter().importClasses(PlantedViewerMutation.class);
+        assertThatThrownBy(() -> onlyTheViewAndGuiRuntimesCallAMutator(MAY_MUTATE).check(planted))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("forgetWindow");
     }
 }
