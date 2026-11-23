@@ -318,22 +318,43 @@ function checkGh(args, raw, ctx) {
   }
 }
 
-const WRITE_SHELL = /(^|[\s;|&])(rm|mv|cp|tee|truncate|chmod|chown|ln|install|dd)\s|>|\bsed\s+(-[a-zA-Z]*i|--in-place)|\bperl\s+-[a-zA-Z]*i|\bgit\s+(checkout|restore|rm|mv|update-index)\b|\bnode\s+-e|\bpython[0-9.]*\s+-c|Set-Content|Out-File|Remove-Item/;
+const WRITE_PROGRAMS = new Set(['rm', 'mv', 'cp', 'tee', 'truncate', 'chmod', 'chown', 'ln', 'install', 'dd', 'touch', 'unlink', 'rmdir', 'Set-Content', 'Out-File', 'Remove-Item', 'Move-Item', 'Copy-Item', 'New-Item']);
+const INTERPRETERS = new Set(['node', 'python', 'python3', 'perl', 'ruby', 'pwsh', 'powershell', 'deno', 'bun']);
+const FS_WRITE = /writeFile|appendFile|unlink|rmSync|rmdir|renameSync|copyFile|createWriteStream|open\([^)]*['"][wa]|Set-Content|Out-File|Remove-Item|os\.remove|shutil/;
 
-function checkGuardTampering(raw) {
-  const mentions = GUARD_PATHS.some((p) => raw.replaceAll('\\', '/').includes(p.replace(/\/$/, '')));
-  if (!mentions) return;
-  // Reading, testing and running the guard stay allowed.
-  const stripped = raw.replace(/node\s+(--test\s+)?\S*scripts\/agent-guard\/\S+\.mjs/g, '');
-  if (WRITE_SHELL.test(stripped) && GUARD_PATHS.some((p) => stripped.replaceAll('\\', '/').includes(p.replace(/\/$/, '')))) {
-    deny('This command would change the agent guard or the hook configuration that loads it. Those are the owner\'s to change (scripts/agent-guard/README.md § Changing the guard).');
+const mentionsGuard = (text) => {
+  const t = text.replaceAll('\\', '/');
+  return GUARD_PATHS.some((p) => t.includes(p.replace(/\/$/, '')));
+};
+
+// Works on lexed tokens, so a `>` or a guard path inside a quoted commit
+// message, a here-document, or `2>&1` is not mistaken for a write.
+function checkGuardTampering(tokens, p) {
+  for (let i = 0; i < tokens.length; i++) {
+    const m = /^\d*>>?(.*)$/.exec(tokens[i]);
+    if (m && mentionsGuard(m[1] || tokens[i + 1] || '')) return true;
   }
+  if (!p) return false;
+  const args = p.args;
+  if (WRITE_PROGRAMS.has(p.name) && args.some(mentionsGuard)) return true;
+  if ((p.name === 'sed' || p.name === 'perl') && args.some((a) => /^-[a-zA-Z]*i/.test(a) || a === '--in-place') && args.some(mentionsGuard)) return true;
+  if (p.name === 'git') {
+    const sub = subcommand(args, new Set(['-C', '-c']));
+    if (sub && ['checkout', 'restore', 'rm', 'mv', 'apply', 'update-index', 'switch'].includes(sub.name) && sub.rest.some(mentionsGuard)) return true;
+  }
+  if (INTERPRETERS.has(p.name)) {
+    const inline = args.findIndex((a) => ['-e', '--eval', '-c', '-Command', '-p'].includes(a));
+    if (inline >= 0 && mentionsGuard(args[inline + 1] ?? '') && FS_WRITE.test(args[inline + 1] ?? '')) return true;
+  }
+  return false;
 }
 
+const TAMPER = 'This command would change the agent guard or the hook configuration that loads it. Those are the owner\'s to change (scripts/agent-guard/README.md § Changing the guard).';
+
 function checkCommand(command, ctx, depth = 0) {
-  checkGuardTampering(command);
   for (const tokens of splitCommands(command)) {
     const p = program(tokens);
+    if (checkGuardTampering(tokens, p)) deny(TAMPER);
     if (!p) continue;
     const raw = tokens.join(' ');
     if (p.name === 'wrangler') checkWrangler(p.args);

@@ -116,6 +116,22 @@ test('the guard protects itself', () => {
   denied('echo {} > .claude/settings.json');
   allowed('node --test scripts/agent-guard/guard.test.mjs');
   allowed('cat scripts/agent-guard/README.md');
+  denied("cp /tmp/x.mjs scripts/agent-guard/guard.mjs");
+  denied("git checkout origin/main -- .claude/settings.json");
+  denied("node -e \"require('fs').writeFileSync('.claude/settings.json','{}')\"");
+  denied('cat > .claude/settings.json <<EOF\n{}\nEOF');
+  denied('echo x >> scripts/agent-guard/guard.mjs');
+});
+
+test('the guard does not mistake quoted text or here-documents for writes (false positives seen while building it)', () => {
+  // git add of the hook file plus a commit message holding an e-mail address in angle brackets
+  allowed('git add .claude/settings.json scripts/agent-guard && git commit -m "Guard\n\nCo-Authored-By: Claude <noreply@anthropic.com>"');
+  // stderr redirection while running the guard's own tests
+  allowed('node --test scripts/agent-guard/guard.test.mjs 2>&1 | grep -E "pass|fail"');
+  // a here-document (an issue body) that mentions the guard
+  allowed("cat > /tmp/issue.md <<'EOF'\nSee scripts/agent-guard/README.md => rules\nEOF\ngh issue create --body-file /tmp/issue.md");
+  // an inline script that only reads
+  allowed("node -e \"console.log(require('fs').readFileSync('.claude/settings.json','utf8'))\"");
 });
 
 test('malformed input fails open', () => {
