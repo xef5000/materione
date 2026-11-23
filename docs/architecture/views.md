@@ -877,9 +877,9 @@ reference, a second kind with no generator change) and the Logic tab specs. QA c
 ## 17. As built: row V1 (#456)
 
 Row V1 is built in three slices. This section records what each slice shipped and every decision it took beyond §3 to §9; the
-design above is unchanged. Slice 1 (session variables behind the store port, §17.1, §17.2) and slice 2 (the reads index and the write
-observer, §17.5, §17.6) are recorded here; the scheduler, `rerender:` and `/materione doctor` are recorded under their own headings as
-their slice lands.
+design above is unchanged. Slice 1 (session variables behind the store port, §17.1, §17.2), slice 2 (the reads index and the write
+observer, §17.5, §17.6) and slice 3 (the scheduler, `rerender:`, render on change and `/materione doctor`, §17.8 to §17.11) are
+recorded here.
 
 ### 17.1 Session variables behind the store port (slice 1)
 
@@ -934,7 +934,7 @@ declare action). QA catalog: `views.session.declared-and-held-by-one-window` (`q
 | **Classes** | A `vars.<scope>.<pack>.<key>` path is a notified read of that family. `player.*`, `server.*`, `%token%`s, function calls and non-`var` predicates mark the definition polled. A `vars.<scope>` path of fewer than four segments cannot be placed: polled, and `MTR-0127` (info) for the persistent scopes, `MTR-0063` for `session` (V1-6, V1-10). |
 | **Index** | `plugin.view.ReadsIndex` maps scope, then variable id, to an array of `(ViewRef, ReadRole)`; a miss is two map lookups. It is a shadow-swap view (`ReadsIndex.KEY`) built by `PipelineService` right after `RuntimeGuis`, from `GuiReads.of(RuntimeGuis, lookup)`, so a reload builds a new one and the swap publishes it with the registries. The observer reads it through the live registries supplier on every write. |
 | **Observer** | `VariableService.writeObserver(VariableWriteObserver)` installs the hook; each scope's store is wrapped in `ObservedVariableStore`, which calls it after a successful `write` and after a `mutate` whose outcome is `ok`. The player scope is wrapped around `SnapshotVariableStore`, the server scope around the server store, the session scope around `SessionVariableStore`. `plugin.view.ViewChanges` implements the hook and does the matching of §5.3, on the writer's thread, touching only dirty bits. |
-| **Dirty bit and wake** | `ViewDirty` (implemented by `ViewerRecord` and `ViewCandidate`) holds one `AtomicBoolean`; `markDirty` is a compare-and-set that returns true only for clean to dirty, and only that transition calls the `ViewWake` hook. `GuiStack` installs `ViewWake.NONE` until the scheduler lands: bits are set, nothing renders. |
+| **Dirty bit and wake** | `ViewDirty` (implemented by `ViewerRecord` and `ViewCandidate`) holds one `AtomicBoolean`; `markDirty` is a compare-and-set that returns true only for clean to dirty, and only that transition calls the `ViewWake` hook. `GuiStack` installs the scheduler of §17.8 as the hook. |
 | **Predicate kinds** | `ViewKind.predicate()` (default: the facet's rule is `PREDICATE`) selects the candidate path. `ViewRegistry.candidate(kind, player)` creates a `ViewCandidate`; `forget` drops it at quit. Matching for a predicate kind: a `player` write marks that player's candidate; a `server` write marks every candidate for a visibility read and the candidates of the attached viewers for a content read. |
 
 ### 17.6 Decisions beyond the design (slice 2)
@@ -955,5 +955,55 @@ filter, search and entry; polled facts; the unplaced path once; `MTR-0063` for a
 condition and a list search; the index built from a reload), `ViewChangesTest` (acceptance case 2's three write paths each mark exactly
 the matched viewers; a failed write marks nobody; an unread write marks nobody; 100 writes wake once; the predicate candidate of a
 player with no visible definition is marked, case 1's propagation half; a candidate ends at quit; a reload that adds a read), and the
-budgets `ViewReadsIndexTest` and `ViewFanOutPerfTest` (plugin.md §9). Not yet tested: the wake and the re-attach half of case 1
-(the scheduler and the HUD kind), and the observer on a running server (the harness).
+budgets `ViewReadsIndexTest` and `ViewFanOutPerfTest` (plugin.md §9). The wake and the re-attach half of case 1 are tested in §17.11; the observer on a running server is the QA catalog's (§17.11).
+
+### 17.8 The scheduler, `rerender:` and render on change (slice 3)
+
+| Part | As built |
+|---|---|
+| **Scheduler** | `plugin.view.ViewScheduler` is the `ViewWake` the write observer calls. `wake(target)` queues one one-shot on the target player's entity scheduler (`executeEntityLater`) at `max(1, lastAutomatic + minInterval - now)` ticks; an idle viewer has no task and there is no loop over viewers. The one-shot (on the owner thread) drops a record that is no longer open or no longer the player's current view of its kind, drops a candidate that is no longer the player's, does nothing when the bit is already clean, clears the bit, and then renders. A kind answers `ViewKind.renderAutomatic` with `RENDERED`, `FROZEN` or `STALE`; `FROZEN` sets the bit again and queues the next tick's wake, so the held-cursor freeze renders the latest state once the cursor clears. `lastAutomatic` (a `volatile long` on `ViewDirty`) is set only by an automatic render that applied. |
+| **Explicit refresh** | `refreshNow(record)` renders at once on the calling thread (the record's owner thread) through `ViewKind.render`, clearing the bit first, so a queued wake finds it clean; `refreshSoon(record)` queues one wake at the next tick that ignores `minInterval`. Neither counts against the interval. `view.refresh` is #457; the shipped `gui.refresh` clears the bit the same way (`GuiLiveRefresh.refresh`). |
+| **`rerender:`** | A top-level `rerender: on_change` or `off` of the `gui` type, an enum parameter with default `on_change` (self-described: the registry, the editor snapshot and the SDK carry it). `CompiledGui.rerender` holds it; the pipeline leaves a GUI that says `off` out of the `ReadsIndex` (`GuiReads.of(..., rerenders)`), so no write marks its viewers: the clock, an explicit refresh and a reload still render it. |
+| **GUI render** | `GuiLiveRefresh.automatic` runs the partial pass the clock runs (`WindowHost.advance`: dynamic layers and the dynamic title; `DynamicSlotsPerfTest`'s budget row is unchanged). `WindowHost.advance` now returns false when the window is held still by the cursor rule (the cursor carries an item and the title would change, or a held title is pending): nothing is applied. A definition whose window shape changed is `STALE` for an automatic render; the reload that changed it re-opens or rewrites the window. The wake is a scheduled task, never inline in a click (logic.md §21 decision 8), and `BukkitWindowHost` still defers a render that would meet an in-flight click by a tick. Click targets follow the last rendered frame as before (§4.2 item 6). |
+| **Predicate candidates** | A candidate's wake calls `ViewKind.evaluate(viewer, candidate)`; the default does nothing and a `predicate` kind (the HUD, #7) attaches the definitions that became visible and detaches the ones that stopped. No shipped kind is a predicate kind, so the mechanism is proved with a test kind (§17.11). |
+| **Doctor** | `ViewRenderStats` counts automatic renders per definition over a window of at most five minutes; `/materione doctor` prints the five with the highest rate as `re-renders: gui <id>: N/s (count)`. |
+
+### 17.9 Decisions beyond the design (slice 3)
+
+| # | Decision | Why |
+|---|---|---|
+| V1-16 | **`rerender: off` is applied when the index is built, not when a write is matched.** A GUI that says `off` has no entry in the `ReadsIndex`. | One decision per reload instead of a policy lookup on every write; the write's cost for an `off` GUI is the same single miss as for an unread variable. The extraction for load diagnostics (V1-12) is unaffected: `MTR-0063` and `MTR-0127` still report for an `off` GUI. |
+| V1-17 | **A bare `rerender: off` is `off`.** YAML 1.1 reads the unquoted word as the boolean false, so the compiler treats both the string and `false` as `off`; anything else is `on_change`. No new diagnostic for another value. | The word the design and the schema choice use must work as written. The studio's select writes the string. |
+| V1-18 | **The tick source is `System.nanoTime()` divided by 50 ms.** | No tick counter is reachable from the gateway on both Paper and Folia; the clock only decides `minInterval` waits longer than one tick, and a kind whose floor is one tick (the GUI) always waits the one tick the gateway gives. |
+| V1-19 | **A frozen automatic render retries every tick until the cursor clears; the host's own held-title retry runs alongside.** | Both read the latest state when they run; the retry is a bit test and a task per tick while the cursor holds an item, and stops on the first applied render. |
+| V1-20 | **No shipped fixture or built-in GUI needed `rerender: off`.** Every GUI that calls `gui.refresh` after a write (`browser`, the `guilogic` search, `overlay:tabs` and `ownership`, `showcase:players`, `settings`, `shop`, the floor GUI, the recipes) keeps the call: it is explicit and clears the bit, so no render doubles, and a list's entries are read again only by a full refresh. The GUIs with a `refresh:` clock keep it for animations and polled reads. No existing fixture file changed bytes for the policy; one fixture GUI and its variables were added (`guilogic:live`, no clock, no `gui.refresh`) for the QA entries. | The shipped behavior stays a subset of the new one; a quieter window is an author's choice, not a migration. |
+
+### 17.10 Breaking changes made, by §7.1 row
+
+| §7.1 row | Changed here |
+|---|---|
+| a GUI re-renders when a variable it reads is written (V1) | the container GUI: a window that shows a declared variable updates with no clock and no `gui.refresh`; `rerender: off` keeps the shipped behavior per file. `WindowHost.advance` returns a boolean. |
+
+Goldens changed: the code-mode registry (`fixtures/codemode/registry/*.json`: the `rerender` parameter), the editor demo snapshot
+(`fixtures/golden/editor-demo-snapshot.json`) and the SDK declarations (`fixtures/golden/codemode/*.d.ts`), regenerated with the
+repo's tasks (fixtures/README.md).
+
+### 17.11 Tests (slice 3) and acceptance status
+
+`ViewSchedulerTest` (virtual clock: a hundred writes in a tick are one render, an idle viewer has no task, a render is never
+inline in the write, `minInterval`, a window replaced before the wake is not rendered, a write during a render is shown by the next
+render, explicit refresh and a queued wake render once, an explicit refresh ignores the interval, a stale record's refresh renders
+nothing, a frozen frame leaves the bit set and renders after release, a server write renders every matched viewer once, and case
+1's mechanism: a write to a visibility read reaches a candidate with nothing visible, which is re-evaluated and attaches, while no
+write means no evaluation), `ViewFootprintTest`, `ViewRenderStatsTest`, `RerenderOnChangeTest` (a GUI showing a server variable
+updates after a write with no clock and no refresh, `rerender: off` does not until an explicit refresh, a session toggle
+re-renders its window, the held cursor, and the `guilogic:live` fixture), `GuiInputSlotsTest` (the compile of `rerender:`) and
+`GuiTypeTest` (the schema). QA catalog (`qa/catalog/views.mjs`, not yet run: it needs the probe): `views.server-var.live-single`
+and `views.session-toggle.rerenders-window`.
+
+| Acceptance case | Status after V1 |
+|---|---|
+| 1. A player with no visible HUD shows their first one | The mechanism is built and tested with a test predicate kind: write, candidate marked, wake, evaluation, attach. The HUD kind that supplies the real `evaluate` is #7. |
+| 2. Every successful write path notifies the right reader | Done (§17.7); the three paths also render a GUI (`RerenderOnChangeTest`). |
+| 3. A wake updates the right window at the next eligible render | Done for the GUI: the interval, one automatic render per tick, clear-then-read, explicit-versus-queued, the replaced window and the held cursor. `view.refresh` on a stale record failing "no open view" is V2 (#457); the scheduler entry points it will call are built. |
+

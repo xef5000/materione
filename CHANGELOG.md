@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Views V1, a window shows what the state says: the reads index, the write observer and the scheduler (#456, #335, docs/architecture/views.md sections 5 and 17).**
+  A container GUI that shows a declared variable now updates on a write with no `refresh:` clock and no `gui.refresh`: a write
+  to a `player`, `server` or `session` variable the window reads marks its viewers, and one render at the next tick (never inline in
+  a click, at most one per viewer per tick, held still while the cursor carries an item) brings the dynamic layers and title up to
+  date. **New top-level GUI field `rerender: on_change | off` (default `on_change`); `off` renders only on the clock, `gui.refresh`
+  and a reload.** `/materione doctor` lists the definitions with the most automatic re-renders per second. The scheduler also
+  carries the entry points the explicit `view.refresh` of #457 will use, and the candidate path a predicate view kind (the HUD) will
+  use to attach the first piece a player becomes eligible for.
+
 - **Views V1, session variables are declared and live behind the variable store port (#456, #335, docs/architecture/views.md section 17).**
   `scope: session` joins the `variable` type's scopes (`player`, `server`, `item`): a session variable is typed, defaulted and
   described like any other, private to one open view, kept by `view.back`, gone when the view closes. A `session` store keyed by the

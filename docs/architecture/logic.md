@@ -546,7 +546,9 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
   raster layers opt in with `materione:overlay_frames: {every: <ticks>, layers: [component-field patches...]}` (§6.4).
 - **Dynamic detection.** A layer is *dynamic* when it has `visible_if`, a template, a templated
   source or `frames`. The compiler records this, and refresh re-evaluates **only** dynamic layers.
-- **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render).
+- **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render). A write to a declared variable a
+  dynamic layer or the dynamic title reads re-renders the window on its own, at the next tick, unless the file says
+  `rerender: off` (views.md §4.2, §5.5, §17.8): the clock is then needed only for polled reads and animations.
 - **The render model.** `SlotRenderer` produces the session's `RenderedSlots`. `RenderDiff` writes
   only changed slots, which keeps a 54-slot, 20-tick refresh within budget.
 
