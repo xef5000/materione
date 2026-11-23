@@ -278,6 +278,30 @@ class ViewRefresherTest {
     }
 
     @Test
+    void aCrossThreadRefreshWithAQueuedWakeRendersOnce() {
+        reads(ASK, coins);
+        open(alex, ASK);
+        write(alex, 5d);
+        owner = false;
+        refresher.definition("dialog", ASK);
+        ticks(1);
+        assertThat(dialog.sends).isEqualTo(1);
+    }
+
+    @Test
+    void aWriteAfterACrossThreadRefreshWasQueuedStillRendersOnce() {
+        reads(ASK, coins);
+        ViewerRecord record = open(alex, ASK);
+        owner = false;
+        refresher.definition("dialog", ASK);
+        write(alex, 5d);
+        assertThat(record.isDirty()).as("the write after the refresh marks the bit again").isTrue();
+        ticks(1);
+        assertThat(dialog.sends).isEqualTo(1);
+        assertThat(record.isDirty()).isFalse();
+    }
+
+    @Test
     void aSessionVariableSelectsTheOneRecordHoldingTheInstance() {
         VariableDeclaration tab = variables.declare("demo", "tab", VariableScope.SESSION, "a");
         ViewerRecord mine = open(alex, ASK);

@@ -239,4 +239,18 @@ class GuiRulesCompileTest {
         assertThat(problems).hasSize(1);
         assertThat(problems.get(0).code()).isEqualTo(DiagnosticCodes.FLOW_CALL_INVALID);
     }
+
+    @Test
+    void everyViewRefreshSelectorFormCompilesThroughTheFlowCompiler() {
+        f.variables.declare(GuiFixture.PACK, "coins", dev.materione.api.logic.variable.VariableScope.PLAYER, 0d);
+        f.variables.declare(GuiFixture.PACK, "season", dev.materione.api.logic.variable.VariableScope.SERVER, 1d);
+        f.declareSession("tab", "a");
+        for (String step : List.of("view.refresh", "view.refresh: {view: shop}", "view.refresh: {view: shop, kind: gui}",
+                "view.refresh: {var: player.coins}", "view.refresh: {var: player.coins, holder: Bob}",
+                "view.refresh: {var: player.coins, holder: \"{player.name}\"}",
+                "view.refresh: {var: server." + GuiFixture.PACK + ".season}", "view.refresh: {var: session.tab}")) {
+            assertThat(check(HEAD + "    - on: gui.open\n      do:\n        - " + step + "\n"))
+                    .as(step).isEmpty();
+        }
+    }
 }

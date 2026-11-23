@@ -124,10 +124,12 @@ public final class ViewScheduler implements ViewWake {
     }
 
     /**
-     * Schedules an explicit refresh from a thread that is not the record's owner: one wake at the next tick that
-     * ignores the kind's interval.
+     * Schedules an explicit refresh from a thread that is not the record's owner: one render at the next tick that
+     * ignores the kind's interval. The bit is cleared now, so a wake queued earlier finds it clean and the refresh is
+     * the only render; a write after this call marks the bit again and wakes again.
      */
     public void refreshSoon(ViewerRecord record) {
+        record.clearDirty();
         later.run(record.player(), 1, () -> refreshNow(record), () -> { });
     }
 

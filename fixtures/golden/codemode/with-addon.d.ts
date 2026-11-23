@@ -4240,8 +4240,11 @@ interface ViewRefreshActionParams extends ActionOptions {
   kind?: string;
   /** Refresh the viewers whose view reads this declared variable: player.<key>, server.<pack>.<key> or session.<key>. */
   var?: string | Ref<"variable">;
-  /** With a player variable: whose viewers, a player name or UUID; the flow's own player when omitted. */
-  holder?: string;
+  /**
+   * With a player variable: whose viewers, a player name or UUID; the flow's own player when omitted.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  holder?: string | Expr;
 }
 
 interface ActionCatalog {

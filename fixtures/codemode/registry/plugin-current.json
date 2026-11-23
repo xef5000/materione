@@ -2184,6 +2184,7 @@
             {
               "advanced": false,
               "description": "With a player variable: whose viewers, a player name or UUID; the flow's own player when omitted",
+              "expression": true,
               "id": "holder",
               "label": "Holder",
               "order": 0,
