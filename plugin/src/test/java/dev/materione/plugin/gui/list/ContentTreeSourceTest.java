@@ -63,7 +63,7 @@ class ContentTreeSourceTest {
             session.put("search", search);
         }
         return dev.materione.plugin.view.TestSessionValues.in(
-                new MapLogicContext(Map.of("view", Map.of("args", args))), session);
+                new MapLogicContext(Map.of("view", Map.of("id", "demo:browser", "args", args))), "demo", session);
     }
 
     private List<Map<String, Object>> read(Object path, Object search) {

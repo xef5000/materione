@@ -2,15 +2,14 @@ package dev.materione.plugin.gui.event;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.Facets;
-import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.view.ViewerRecord;
-import dev.materione.plugin.view.ViewerSessionVariables;
 import dev.materione.plugin.runtime.behavior.PlaceholderResolver;
 import dev.materione.plugin.logic.variable.VariableService;
 import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.UUID;
 import java.util.Map;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -20,7 +19,7 @@ import dev.materione.plugin.gui.session.GuiViewerState;
  * Builds the context a GUI rule runs against (logic.md §2.6, §6.2): the variable tree the trigger
  * descriptions declare ({@code player.*}, {@code server.*}, {@code view.*}, {@code click.*},
  * {@code layer.id}, mutable {@code vars}) and the facets an action reaches for (the player, the
- * viewer record, and its session values as {@code vars.session.*}). One place builds it, so every GUI
+ * viewer record, and a variable binding whose session scope is this view instance). One place builds it, so every GUI
  * trigger offers the same {@code view.*} and the schema in
  * {@link dev.materione.plugin.gui.trigger.GuiTriggers} stays true.
  *
@@ -47,8 +46,7 @@ public final class GuiContexts {
         root.put("vars", new LinkedHashMap<String, Object>());
         root.putAll(extra);
         return withPlayer(new MapLogicContext(root)
-                .with(ViewerRecord.FACET, session)
-                .with(VariableFacets.SESSION, new ViewerSessionVariables(session)), viewer, variables);
+                .with(ViewerRecord.FACET, session), viewer, variables, session.instance());
     }
 
     /**
@@ -68,7 +66,7 @@ public final class GuiContexts {
         root.put("server", serverVars());
         root.put("view", viewVars(gui, args, new LinkedHashMap<String, Object>()));
         root.put("vars", new LinkedHashMap<String, Object>());
-        return withPlayer(new MapLogicContext(root), viewer, variables);
+        return withPlayer(new MapLogicContext(root), viewer, variables, null);
     }
 
     /**
@@ -87,10 +85,14 @@ public final class GuiContexts {
         return view;
     }
 
-    /** Attaches the player facet and placeholder resolver, when there is a player. */
-    private static MapLogicContext withPlayer(MapLogicContext context, Viewer viewer, VariableService variables) {
+    /**
+     * Attaches the variable binding (with the view instance whose session variables the run reaches, or none), the
+     * player facet and the placeholder resolver, when there is a player.
+     */
+    private static MapLogicContext withPlayer(
+            MapLogicContext context, Viewer viewer, VariableService variables, UUID view) {
         if (variables != null) {
-            context.withVariables(variables.bind(viewer.id()));
+            context.withVariables(variables.bind(viewer.id(), null, view));
         }
         Player player = viewer.player();
         if (player != null) {

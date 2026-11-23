@@ -31,13 +31,15 @@ class TitleRefreshQueueTest {
         var queue = new TitleRefreshQueue();
         var scheduled = new ArrayList<Runnable>();
         var displayed = new ArrayList<String>();
-        session.sessionValue("tab", "first");
+        var variables = new dev.materione.plugin.view.TestVariables(new dev.materione.plugin.view.ViewRegistry());
+        var tab = variables.declare("shop", "tab", "");
+        variables.put(session, tab, "first");
         queue.update(session, true, true, () -> displayed.add("immediate"), () -> displayed.add("stale"),
                 (task, retired) -> scheduled.add(task));
         queue.update(session, true, true, () -> displayed.add("immediate"),
-                () -> displayed.add(session.sessionValues().get("tab").toString()),
+                () -> displayed.add(variables.get(session, tab).toString()),
                 (task, retired) -> scheduled.add(task));
-        session.sessionValue("tab", "latest");
+        variables.put(session, tab, "latest");
         scheduled.forEach(Runnable::run);
         assertThat(displayed).containsExactly("latest");
     }

@@ -13,7 +13,6 @@ import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.variable.CompileEnvironment;
 import dev.materione.api.logic.variable.VariableDeclaration;
-import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.api.logic.variable.VariableRef;
 import dev.materione.api.logic.variable.VariableType;
 import dev.materione.api.registry.ParameterSchema;
@@ -27,7 +26,7 @@ import java.util.concurrent.CompletionStage;
 /**
  * {@code var: {var: player.shop.coins, op: ">=", value: 100}} (logic.md §3, §22): a typed compare on a
  * variable, so a requirement needs no expression. The variable is named as {@code set_var} names it: a
- * run-local, {@code session.<name>}, or a declared {@code player.} or {@code server.} variable. A declared
+ * run-local, or a declared {@code player.}, {@code server.}, {@code item.} or {@code session.} variable. A declared
  * variable is resolved at load: an undeclared name is {@code MTR-0063}, and a literal that does not fit its
  * type, or an ordering on a variable that is not a number, is {@code MTR-0064}. A declared variable never
  * written compares as its default.
@@ -63,13 +62,10 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
     }
 
     /** Which variable is read. */
-    public sealed interface Source permits LocalSource, SessionSource, DeclaredSource {}
+    public sealed interface Source permits LocalSource, DeclaredSource {}
 
     /** A run-local variable. */
     public record LocalSource(String name) implements Source {}
-
-    /** A variable of the open GUI session. */
-    public record SessionSource(String name) implements Source {}
 
     /** A declared persistent variable, resolved at load. */
     public record DeclaredSource(VariableDeclaration declaration) implements Source {}
@@ -87,10 +83,10 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
     @Override
     public ConditionDescription describe() {
         return new ConditionDescription(new SelfDescription("Variable",
-                "Compares a run-local, session or declared player, server or item variable with a value",
+                "Compares a run-local variable or a declared player, server, item or session variable with a value",
                 List.of(
                         new ParameterSchema("var", ParameterType.STRING, true, null,
-                                "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
+                                "Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>",
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("op", ParameterType.ENUM, false, "==", "How to compare", SYMBOLS, null),
                         new ParameterSchema("value", ParameterType.STRING, true, null,
@@ -143,7 +139,6 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
         }
         return switch (ref) {
             case VariableRef.Local local -> new LocalSource(local.name());
-            case VariableRef.Session session -> new SessionSource(session.name());
             case VariableRef.Persistent persistent -> {
                 NamespacedId id = persistent.id();
                 VariableDeclaration declaration = env.variable(id).orElseThrow(() -> new ParseRejection(
@@ -196,9 +191,6 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
     private static Object read(Source source, LogicContext context) {
         return switch (source) {
             case LocalSource local -> context.locals().get(local.name());
-            case SessionSource session -> context.facet(VariableFacets.SESSION)
-                    .flatMap(variables -> variables.get(session.name()))
-                    .orElse(null);
             case DeclaredSource declared -> context.variables().stored(declared.declaration())
                     .orElse(declared.declaration().defaultValue());
         };

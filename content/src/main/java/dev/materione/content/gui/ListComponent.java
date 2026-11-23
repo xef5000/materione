@@ -66,7 +66,7 @@ public final class ListComponent implements GuiComponent {
                                         "Sort", "entries", 40, true, "text", "", "name")),
                         new ParameterSchema("search", ParameterType.RAW, false, null,
                                 "Which entries a search keeps: { fields: [name] }, matched against the text in "
-                                        + "vars.session.search (or var:), ignoring case", null, null)
+                                        + "the session variable search of the GUI's pack (or var:), ignoring case", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Search", "entries", 35, true, "text", "", "{fields: [name]}")),
                         new ParameterSchema("entry", ParameterType.RAW, true, null,

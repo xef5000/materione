@@ -81,6 +81,7 @@ class ViewVerbsTest {
         public OpenResult open(OpenRequest request) {
             var record = new ViewerRecord(request.viewer().id(), request.viewer().name(), contentType, request.view(),
                     request.args(), new ViewerPayload() { });
+            views.admit(record);
             if (request.restore() != null) {
                 record.restore(request.restore());
             }
@@ -229,7 +230,8 @@ class ViewVerbsTest {
         // a dialog is replaced by a GUI-kind open: put its snapshot on the shared history by hand, as an opener does
         ViewerRecord ask = new ViewerRecord(f.viewer.id(), "Probe", "dialog", NamespacedId.of(GuiFixture.PACK, "ask"),
                 Map.of("topic", "rules"), new ViewerPayload() { });
-        ask.sessionValue("answer", "yes");
+        f.declareSession("answer", "");
+        f.putSession(ask, "answer", "yes");
         f.sessions.history(f.viewer.id()).push(ask.snapshot());
 
         assertThat(run(new BackViewAction(f.bridge.view()), Map.of(), context(menu))).isEqualTo(ActionOutcome.OK);
@@ -237,7 +239,7 @@ class ViewVerbsTest {
         ViewerRecord reopened = f.sessions.current(f.viewer.id(), "dialog").orElseThrow();
         assertThat(reopened.definition()).isEqualTo(NamespacedId.of(GuiFixture.PACK, "ask"));
         assertThat(reopened.args()).containsEntry("topic", "rules");
-        assertThat(reopened.sessionValues()).containsEntry("answer", "yes");
+        assertThat(f.session(reopened, "answer")).isEqualTo("yes");
         assertThat(f.sessions.history(f.viewer.id()).size()).as("back pops, it does not grow the history").isZero();
     }
 

@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -23,8 +22,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *       {@code view.args.*}). Later the subject stack and the key (rows V3, V5).
  *   <li><b>Viewer-local state</b>: the {@link #payload() payload}, the window showing the record and whether a prompt
  *       holds it. Never read by a rule outside the viewer's own runs.
- *   <li><b>Session values</b> ({@code vars.session.*}): per view instance, kept by {@code view.back}. They move behind
- *       the variable store port in row V1; until then they are this record's map.
+ *   <li><b>Session values</b> ({@code vars.session.*}): per view instance, kept by {@code view.back}. They live in the
+ *       {@link SessionVariableStore} behind the variable store port, keyed by {@link #instance()}; the record holds none.
  * </ul>
  *
  * <p>It lives exactly as long as the window is open. A live reload of the definition keeps the same record (the
@@ -54,7 +53,8 @@ public final class ViewerRecord {
     private final NamespacedId definition;
     private final Map<String, String> args;
     private volatile Map<String, Object> typedArgs;
-    private final Map<String, Object> vars = new ConcurrentHashMap<>();
+    private final UUID instance = UUID.randomUUID();
+    private volatile SessionVariableStore sessions;
     private final AtomicReference<CloseReason> ended = new AtomicReference<>();
     private final ViewerPayload payload;
     private volatile boolean prompting;
@@ -133,22 +133,11 @@ public final class ViewerRecord {
     }
 
     /**
-     * The session values (read by rules as {@code vars.session.<name>}), as a read-only live view: {@link
-     * #sessionValue(String, Object)} writes them, and {@code view.back} restores them.
+     * This view instance's identity: the holder of its session variables in the {@code session} store (views.md §3.4).
+     * A replaced view is a new record and so a new instance; {@code view.back} opens a new instance too.
      */
-    public Map<String, Object> sessionValues() {
-        return Collections.unmodifiableMap(vars);
-    }
-
-    /** Sets one session value, or removes it when {@code value} is null ({@code set_var} with the session scope). */
-    @ViewerMutator
-    public void sessionValue(String name, Object value) {
-        mutating("session value");
-        if (value == null) {
-            vars.remove(name);
-        } else {
-            vars.put(name, value);
-        }
+    public UUID instance() {
+        return instance;
     }
 
     /** The kind's viewer-local state. Kinds read it through their own accessor ({@code GuiViewerState.of(record)}). */
@@ -189,7 +178,12 @@ public final class ViewerRecord {
      * @return true when this call ended it
      */
     public boolean end(CloseReason reason) {
-        return ended.compareAndSet(null, Objects.requireNonNull(reason, "reason"));
+        boolean won = ended.compareAndSet(null, Objects.requireNonNull(reason, "reason"));
+        SessionVariableStore store = sessions;
+        if (won && store != null) {
+            store.close(instance);
+        }
+        return won;
     }
 
     /**
@@ -210,23 +204,36 @@ public final class ViewerRecord {
 
     /** What {@code view.back} needs to bring this record's view back as it was. */
     public Snapshot snapshot() {
-        return new Snapshot(kind, definition, args, Map.copyOf(vars), payload.snapshot());
+        SessionVariableStore store = sessions;
+        return new Snapshot(kind, definition, args, store == null ? Map.of() : store.values(instance), payload.snapshot());
     }
 
     /** Puts a snapshot's session values and kind state into this (fresh) record. */
     @ViewerMutator
     public void restore(Snapshot snapshot) {
         mutating("restore");
-        vars.putAll(snapshot.vars());
+        SessionVariableStore store = sessions;
+        if (store != null) {
+            store.restore(instance, snapshot.vars());
+        }
         payload.restore(snapshot.state());
     }
 
     /**
      * Installs the guard that checks mutations of viewer-local state. The {@link ViewRegistry} installs its own when a
-     * record is begun; the default checks nothing.
+     * record is admitted; the default checks nothing.
      */
     void guard(MutationGuard guard) {
         this.guard = Objects.requireNonNull(guard, "guard");
+    }
+
+    /** Binds the store that holds this instance's session values, and opens the instance in it. */
+    void sessions(SessionVariableStore store) {
+        this.sessions = Objects.requireNonNull(store, "store");
+        store.open(this);
+        if (!isOpen()) {
+            store.close(instance);
+        }
     }
 
     /**
@@ -251,11 +258,11 @@ public final class ViewerRecord {
      * @param kind the view kind
      * @param definition the view definition
      * @param args the arguments it opened with
-     * @param vars the session values
+     * @param vars the session values, by declared variable
      * @param state the kind's {@link ViewerPayload#snapshot()}
      */
     public record Snapshot(
-            String kind, NamespacedId definition, Map<String, String> args, Map<String, Object> vars,
+            String kind, NamespacedId definition, Map<String, String> args, Map<NamespacedId, Object> vars,
             Map<String, Object> state) {
 
         public Snapshot {

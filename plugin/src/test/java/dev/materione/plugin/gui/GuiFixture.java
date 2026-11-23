@@ -76,6 +76,8 @@ public final class GuiFixture {
     public final List<String> ran = new ArrayList<>();
     public final List<Diagnostic> diagnostics = new ArrayList<>();
     public final ViewRegistry sessions = new ViewRegistry();
+    /** The variable service the runs bind through: in-memory player and server stores, the registry's session store. */
+    public final dev.materione.plugin.view.TestVariables variables;
     public final ViewKinds kinds = new ViewKinds();
     public final FakeWindows windows = new FakeWindows();
     public final ManualTicks ticks = new ManualTicks();
@@ -115,7 +117,8 @@ public final class GuiFixture {
     public GuiFixture(String pack, dev.materione.plugin.logic.support.ItemCatalog items) {
         this.pack = pack;
         var registries = new RegistryService();
-        logic = LogicTestSupport.newService(registries);
+        variables = new dev.materione.plugin.view.TestVariables(sessions);
+        logic = LogicTestSupport.newService(registries, variables.service());
         Plugin owner = LogicTestSupport.owner("materione");
         BuiltinLogic.register(logic, owner, items, bridge);
         logic.actions().register(owner, NamespacedId.of("materione", "mark"), new Mark(ran));
@@ -132,7 +135,7 @@ public final class GuiFixture {
         engine = new RuleEngine(new FlowInterpreter(new InlineScheduler(), RunBudget.DEFAULT, diagnostics::add),
                 new CooldownStore());
         guis = lookup();
-        events = new GuiEvents(engine::fire);
+        events = new GuiEvents(engine::fire, variables.service());
         router = new ClickRouter(guis, events, (session, layer) -> visibility.visible(session, layer), guard);
         ticker = new GuiTicker(guis, events, ticks, windows);
         lifecycle = new GuiLifecycle(guis, sessions, events, windows);
@@ -185,6 +188,24 @@ public final class GuiFixture {
     public void remove(String name) {
         compiled.remove(NamespacedId.of(pack, name));
         publish();
+    }
+
+    /** Declares the session variable {@code <pack>:key} (typed like {@code sample}) so a GUI written afterwards can name it. */
+    public dev.materione.api.logic.variable.VariableDeclaration declareSession(String key, Object sample) {
+        return variables.declare(pack, key, sample);
+    }
+
+    /** Writes a declared session variable of {@code record} through the store port, as a rule's {@code set_var} does. */
+    public void putSession(ViewerRecord record, String key, Object value) {
+        var declaration = variables.service().declaration(NamespacedId.of(pack, key)).orElseThrow();
+        if (!variables.put(record, declaration, value)) {
+            throw new AssertionError("session variable " + key + " was not written");
+        }
+    }
+
+    /** The value of a declared session variable of {@code record}, or its default. */
+    public Object session(ViewerRecord record, String key) {
+        return variables.get(record, variables.service().declaration(NamespacedId.of(pack, key)).orElseThrow());
     }
 
     private void publish() {

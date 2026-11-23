@@ -11,8 +11,11 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.variable.CompileEnvironment;
-import dev.materione.api.logic.variable.SessionVariables;
-import dev.materione.api.logic.variable.VariableFacets;
+import dev.materione.api.logic.variable.VariableDeclaration;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.TestVariables;
+import dev.materione.plugin.view.ViewRegistry;
+import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.variable.VariableTestSupport;
@@ -229,44 +232,87 @@ class SetVarActionTest {
         }
     }
 
+    /** A session variable is declared like any other and held by one open view instance (views.md section 3.4). */
     @Nested
     class Session {
 
-        @Test
-        void aSessionVariableIsWrittenThroughTheSessionFacet() {
-            Map<String, Object> store = new HashMap<>();
-            SessionVariables session = new SessionVariables() {
-                @Override
-                public Optional<Object> get(String name) {
-                    return Optional.ofNullable(store.get(name));
-                }
+        private final ViewRegistry registry = new ViewRegistry();
+        private final TestVariables variables = new TestVariables(registry);
+        private final VariableDeclaration page = variables.declare("shop", "page", 0d);
+        private final ViewerRecord view = GuiViewerState.record(
+                STEVE, "Steve", NamespacedId.of("shop", "menu"), Map.of());
 
-                @Override
-                public void put(String name, Object value) {
-                    store.put(name, value);
-                }
-            };
-            var context = new MapLogicContext(Map.of()).with(VariableFacets.SESSION, session);
+        private ParamReader sessionReader(Map<String, Object> params) {
+            return ParamReader.of(params, EngineExpressions.INSTANCE, CompileEnvironment.of("shop",
+                    id -> variables.service().declaration(id)));
+        }
+
+        private MapLogicContext inView() {
+            registry.admit(view);
+            return new MapLogicContext(Map.of())
+                    .withVariables(variables.service().bind(STEVE, null, view.instance()));
+        }
+
+        private void run(MapLogicContext context, Map<String, Object> params) {
+            assertThat(action.execute(action.parse(sessionReader(params)), context)).isEqualTo(ActionOutcome.OK);
+        }
+
+        @Test
+        void aSessionVariableIsWrittenThroughTheStorePortOfItsView() {
+            var context = inView();
 
             run(context, params("var", "session.page", "value", 2));
             run(context, params("var", "session.page", "op", "add", "value", 1));
 
-            assertThat(store).containsEntry("page", 3.0);
+            assertThat(variables.get(view, page)).isEqualTo(3.0);
+            assertThat(context.value("vars.session.shop.page")).isEqualTo(3.0);
         }
 
         @Test
-        void withNoOpenGuiTheStepFails() {
-            var context = new MapLogicContext(Map.of());
+        void resetReturnsTheDeclaredDefault() {
+            var context = inView();
+            run(context, params("var", "session.page", "value", 5));
 
-            ActionOutcome outcome = action.execute(
-                    action.parse(reader(params("var", "session.page", "value", 2))), context);
+            run(context, params("var", "session.page", "op", "reset"));
 
-            assertThat(outcome).isInstanceOf(ActionOutcome.Failed.class);
-            assertThat(((ActionOutcome.Failed) outcome).reason()).contains("no open gui");
+            assertThat(context.value("vars.session.shop.page")).isEqualTo(0.0);
         }
 
-        private void run(MapLogicContext context, Map<String, Object> params) {
-            assertThat(action.execute(action.parse(reader(params)), context)).isEqualTo(ActionOutcome.OK);
+        @Test
+        void withNoOpenViewTheStepFails() {
+            var context = new MapLogicContext(Map.of())
+                    .withVariables(variables.service().bind(STEVE, null, null));
+
+            ActionOutcome outcome = action.execute(
+                    action.parse(sessionReader(params("var", "session.page", "value", 2))), context);
+
+            assertThat(outcome).isInstanceOf(ActionOutcome.Failed.class);
+            assertThat(((ActionOutcome.Failed) outcome).reason()).contains("no open view holds");
+        }
+
+        @Test
+        void aClosedViewRefusesTheWrite() {
+            var context = inView();
+            view.end(dev.materione.plugin.view.CloseReason.PLAYER);
+
+            ActionOutcome outcome = action.execute(
+                    action.parse(sessionReader(params("var", "session.page", "value", 2))), context);
+
+            assertThat(outcome).isInstanceOf(ActionOutcome.Failed.class);
+        }
+
+        @Test
+        void anUndeclaredSessionNameIsRejectedAtLoad() {
+            assertThatThrownBy(() -> action.parse(sessionReader(params("var", "session.missing", "value", 1))))
+                    .isInstanceOfSatisfying(ParseRejection.class, rejection ->
+                            assertThat(rejection.code()).isEqualTo(DiagnosticCodes.VARIABLE_UNDECLARED));
+        }
+
+        @Test
+        void aLiteralThatDoesNotFitTheDeclaredTypeIsRejectedAtLoad() {
+            assertThatThrownBy(() -> action.parse(sessionReader(params("var", "session.page", "value", "lots"))))
+                    .isInstanceOfSatisfying(ParseRejection.class, rejection ->
+                            assertThat(rejection.code()).isEqualTo(DiagnosticCodes.VARIABLE_TYPE_MISMATCH));
         }
     }
 

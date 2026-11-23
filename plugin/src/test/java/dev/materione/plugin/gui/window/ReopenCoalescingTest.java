@@ -145,7 +145,7 @@ class ReopenCoalescingTest {
                 public void click(GuiMenu menu, InventoryClickEvent event) {}
                 public void outside(GuiMenu menu, InventoryClickEvent event) {}
             };
-            var renderer = new GuiRenderer(RenderReporter.SILENT);
+            var renderer = new GuiRenderer(RenderReporter.SILENT, fixture.variables.service());
             var guard = new InputGuard();
             var journal = new GuiJournal(plugin, scheduling, fixture.sessions);
             var diagnostics = new ArrayList<String>();
@@ -264,13 +264,14 @@ class ReopenCoalescingTest {
     }
 
     static RuntimeGuis.Live dynamic(GuiFixture fixture, String yaml) {
+        fixture.declareSession("show", false);
         var definition = fixture.definition(yaml + """
                     - id: label
                       type: text
                       x: 8
                       y: 6
                       text: Dynamic
-                      visible_if: "vars.session.show == true"
+                      visible_if: "vars.session.demo.show == true"
                 """);
         var compiled = GuiCompiler.compile(definition, 0xE200, ref -> java.util.Optional.empty(),
                 (layer, frame) -> 0xE201).model();

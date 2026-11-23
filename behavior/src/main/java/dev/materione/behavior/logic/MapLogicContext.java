@@ -5,7 +5,6 @@ import dev.materione.api.logic.ContextFacet;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
-import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.behavior.expr.EvaluationContext;
 import java.util.LinkedHashMap;
@@ -21,9 +20,10 @@ import java.util.function.UnaryOperator;
  * class, filled with plain Java values, is the fake context every engine and action test uses.
  *
  * <p>Reading {@code vars} follows the scopes of logic.md §3.3: a bare {@code vars.x} and
- * {@code vars.local.x} are the run's locals, {@code vars.session.x} is the GUI session's variable,
+ * {@code vars.local.x} are the run's locals,
  * and {@code vars.player.<pack>.<key>} / {@code vars.server.<pack>.<key>} / {@code vars.item.<pack>.<key>} (held by
- * the item stack the run is about, logic.md §38) are declared persistent variables. A declared variable that was never written reads as its default; an undeclared one
+ * the item stack the run is about, logic.md §38) and {@code vars.session.<pack>.<key>} (held by the open view,
+ * views.md §3.4) are declared variables. A declared variable that was never written reads as its default; an undeclared one
  * reads as absent.
  *
  * <p>One instance belongs to one run and is not thread-safe (see {@link LogicContext}). The root
@@ -128,7 +128,7 @@ public final class MapLogicContext implements LogicContext, EvaluationAware {
         List<String> rest = path.subList(2, path.size());
         return switch (head) {
             case "local" -> walk(locals(), rest);
-            case "session" -> session(rest);
+            case "session" -> persistent(VariableScope.SESSION, rest);
             case "player" -> persistent(VariableScope.PLAYER, rest);
             case "server" -> persistent(VariableScope.SERVER, rest);
             case "item" -> persistent(VariableScope.ITEM, rest);
@@ -136,12 +136,6 @@ public final class MapLogicContext implements LogicContext, EvaluationAware {
         };
     }
 
-    private Object session(List<String> rest) {
-        if (rest.size() != 1) {
-            return null;
-        }
-        return facet(VariableFacets.SESSION).flatMap(session -> session.get(rest.get(0))).orElse(null);
-    }
 
     /** {@code <pack>.<key>} under a persistent scope: the stored value, or the declared default. */
     private Object persistent(VariableScope scope, List<String> rest) {

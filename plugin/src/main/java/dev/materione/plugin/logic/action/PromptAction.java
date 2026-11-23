@@ -15,14 +15,17 @@ import dev.materione.api.logic.Quantity;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.NamespacedId;
+import dev.materione.api.logic.variable.CompileEnvironment;
+import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableRef;
+import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.gui.prompt.PromptReply;
 import dev.materione.plugin.gui.prompt.PromptService;
 import dev.materione.plugin.view.ViewerRecord;
-import dev.materione.plugin.view.ViewerSessionVariables;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
@@ -40,7 +43,7 @@ import org.bukkit.entity.Player;
  * }</pre>
  *
  * <p>The step parks the run until the answer comes, and counts against the player's parked-run budget. The answer is
- * written to {@code var} (a run-local name, or {@code session.<name>} for the open GUI's variables) and the run goes on.
+ * written to {@code var} (a run-local name, or {@code session.<key>} for a declared session variable of the open view) and the run goes on.
  * A question that goes unanswered (a cancel word, an empty answer, a timeout, a quit, a method that cannot start) runs
  * the {@code else:} steps and ends the run: the steps after the prompt were written to use the answer, so they never
  * run without one. The engine wraps the step in a {@code require} for this ({@link ActionType#takesElse()}).
@@ -54,14 +57,14 @@ import org.bukkit.entity.Player;
  */
 public final class PromptAction implements ActionType<PromptAction.Params> {
 
-    /** Where the answer goes: a run-local variable, or a variable of the open GUI session. */
+    /** Where the answer goes: a run-local variable, or a declared session variable of the open view. */
     public sealed interface Target permits Local, Session {}
 
     /** A run-local variable. */
     public record Local(String name) implements Target {}
 
-    /** A variable of the open GUI session ({@code vars.session.<name>}). */
-    public record Session(String name) implements Target {}
+    /** A declared session variable of the open view ({@code vars.session.<pack>.<key>}). */
+    public record Session(VariableDeclaration declaration) implements Target {}
 
     /**
      * The parsed step.
@@ -107,7 +110,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
                         new ParameterSchema("text", ParameterType.STRING, true, null,
                                 "What the player is asked; a template may use variables", null, null).acceptingExpression(),
                         new ParameterSchema("var", ParameterType.STRING, true, null,
-                                "Where the answer goes: a run-local name, or session.<name> for the open GUI",
+                                "Where the answer goes: a run-local name, or session.<key> for a declared session variable of the open view",
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("timeout", ParameterType.INTEGER, false,
                                 String.valueOf(DEFAULT_TIMEOUT_SECONDS),
@@ -134,7 +137,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
         InputMethod method = methods.resolve(methodId).orElseThrow(() -> new ParseRejection(
                 DiagnosticCodes.PROMPT_METHOD_UNKNOWN,
                 "method '" + methodId + "' is not an input method (chat, sign or anvil)"));
-        Target target = targetOf(params.text("var"), params.environment().pack());
+        Target target = targetOf(params.text("var"), params.environment());
         TemplateText text = params.template("text");
         Quantity timeout = Quantity.integerOr(params, "timeout", DEFAULT_TIMEOUT_SECONDS, 1,
                 PromptService.MAX_TIMEOUT_SECONDS);
@@ -146,20 +149,39 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
         return new Params(method, text, target, timeout, cancel.isEmpty() ? null : cancel);
     }
 
-    /** The target of the answer: a persistent variable is refused, because a question is not a declared write. */
-    private static Target targetOf(String var, String ownPack) {
+    /**
+     * The target of the answer: a run-local name or a declared session variable. A player, server or item variable is
+     * refused ({@code MTR-0082}), because a question is not a declared persistent write; an undeclared session variable
+     * is {@code MTR-0063}, as for {@code set_var}.
+     */
+    private static Target targetOf(String var, CompileEnvironment env) {
         VariableRef ref;
         try {
-            ref = VariableRef.parse(var, ownPack);
+            ref = VariableRef.parse(var, env.pack());
         } catch (IllegalArgumentException malformed) {
             throw new ParseRejection(DiagnosticCodes.PROMPT_TARGET_INVALID, malformed.getMessage());
         }
         return switch (ref) {
             case VariableRef.Local local -> new Local(local.name());
-            case VariableRef.Session session -> new Session(session.name());
-            case VariableRef.Persistent persistent -> throw new ParseRejection(DiagnosticCodes.PROMPT_TARGET_INVALID,
-                    "'" + var + "' is a persistent variable; a prompt answers into a run-local or session variable");
+            case VariableRef.Persistent persistent -> {
+                if (persistent.scope() != null && persistent.scope() != VariableScope.SESSION) {
+                    throw notSession(var);
+                }
+                NamespacedId id = persistent.id();
+                VariableDeclaration declaration = env.variable(id).orElseThrow(() -> new ParseRejection(
+                        DiagnosticCodes.VARIABLE_UNDECLARED,
+                        "'" + id + "' is not a declared variable (declare it in a variables file of its pack)"));
+                if (declaration.scope() != VariableScope.SESSION) {
+                    throw notSession(var);
+                }
+                yield new Session(declaration);
+            }
         };
+    }
+
+    private static ParseRejection notSession(String var) {
+        return new ParseRejection(DiagnosticCodes.PROMPT_TARGET_INVALID,
+                "'" + var + "' is a persistent variable; a prompt answers into a run-local or session variable");
     }
 
     /** Only the flow interpreter runs a prompt: it parks there. Reached only by a caller that bypasses it. */
@@ -181,9 +203,9 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
         }
         ViewerRecord session = context.facet(ViewerRecord.FACET).filter(ViewerRecord::isOpen).orElse(null);
         if (params.target() instanceof Session target && session == null) {
-            String reason = "session." + target.name() + ": no open gui";
-            prompts.report(DiagnosticCodes.PROMPT_METHOD_FAILED, "a prompt answers into session." + target.name()
-                    + ", but no GUI is open for " + player.getName());
+            String reason = "session." + target.declaration().id().value() + ": no open view";
+            prompts.report(DiagnosticCodes.PROMPT_METHOD_FAILED, "a prompt answers into " + target.declaration().id()
+                    + ", but no view is open for " + player.getName());
             return CompletableFuture.completedFuture(ActionOutcome.failed(reason));
         }
         String question = params.text().render(context);
@@ -196,19 +218,28 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
             }
             return reads.on(threading(), () -> prompts.begin(new PromptService.Request(player, params.method(),
                     question, params.cancelWord(), seconds.getAsInt(), reads::active,
-                    reply -> settle(params, context, session, reply)))).thenCompose(started -> started);
+                    reply -> settle(params, context, reply)))).thenCompose(started -> started);
         });
     }
 
     /** Writes the answer where the step says, or fails with the reason it went unanswered. Runs on the player's thread. */
-    private static ActionOutcome settle(Params params, LogicContext context, ViewerRecord session, PromptReply reply) {
+    private static ActionOutcome settle(Params params, LogicContext context, PromptReply reply) {
         if (reply instanceof PromptReply.Unanswered unanswered) {
             return ActionOutcome.failed(unanswered.reason());
         }
         String answer = ((PromptReply.Answer) reply).text();
         switch (params.target()) {
             case Local local -> context.locals().put(local.name(), answer);
-            case Session target -> new ViewerSessionVariables(session).put(target.name(), answer);
+            case Session target -> {
+                VariableDeclaration declaration = target.declaration();
+                Object typed = declaration.type().coerce(answer).orElse(null);
+                if (typed == null) {
+                    return ActionOutcome.failed(declaration.id() + ": '" + answer + "' is not a " + declaration.type().id());
+                }
+                if (!context.variables().store(declaration, typed)) {
+                    return ActionOutcome.failed(declaration.id() + ": the view that asked is closed");
+                }
+            }
         }
         return ActionOutcome.OK;
     }

@@ -41,10 +41,11 @@ class GuiLiveRefreshTest {
     @BeforeEach
     void setUp() {
         f = new GuiFixture();
+        f.declareSession("tab", "");
         f.gui(shop("Shop", 3));
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of("category", "tools"),
                 OpenRequest.Cause.API)).record();
-        session.sessionValue("tab", "weapons");
+        f.putSession(session, "tab", "weapons");
         GuiViewerState.of(session).putPage("list", 4);
         f.windows.log.clear();
     }
@@ -61,7 +62,7 @@ class GuiLiveRefreshTest {
         assertThat(session.isOpen()).isTrue();
         assertThat(f.sessions.current(f.viewer.id())).containsSame(session);
         assertThat(session.args()).containsEntry("category", "tools");
-        assertThat(session.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(f.session(session, "tab")).isEqualTo("weapons");
         assertThat(GuiViewerState.of(session).pages()).containsEntry("list", 4);
     }
 
@@ -190,7 +191,7 @@ class GuiLiveRefreshTest {
                     - on: gui.click
                       layer: pad
                       do:
-                        - mark: "v1 ${view.args.category} ${vars.session.tab}"
+                        - mark: "v1 ${view.args.category} ${vars.session.demo.tab}"
                 """);
         f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,
@@ -212,7 +213,7 @@ class GuiLiveRefreshTest {
                     - on: gui.click
                       layer: pad
                       do:
-                        - mark: "v2 ${view.args.category} ${vars.session.tab}"
+                        - mark: "v2 ${view.args.category} ${vars.session.demo.tab}"
                 """);
         f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,

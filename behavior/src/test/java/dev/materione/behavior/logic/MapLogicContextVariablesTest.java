@@ -3,10 +3,8 @@ package dev.materione.behavior.logic;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.api.logic.variable.SessionVariables;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
-import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableType;
 import java.util.HashMap;
@@ -186,33 +184,52 @@ class MapLogicContextVariablesTest {
     }
 
     @Nested
-    class Session {
+    class SessionScope {
 
-        @Test
-        void aSessionVariableReadsThroughTheSessionFacet() {
-            Map<String, Object> store = new HashMap<>(Map.of("page", 2.0));
-            SessionVariables session = new SessionVariables() {
+        private final NamespacedId page = NamespacedId.of("ui", "page");
+        private final VariableDeclaration declaration =
+                new VariableDeclaration(page, VariableScope.SESSION, VariableType.NUMBER, 1, "Window page");
+
+        private VariableBinding binding(Object stored) {
+            return new VariableBinding() {
                 @Override
-                public Optional<Object> get(String name) {
-                    return Optional.ofNullable(store.get(name));
+                public Optional<VariableDeclaration> declaration(NamespacedId id) {
+                    return id.equals(page) ? Optional.of(declaration) : Optional.empty();
                 }
 
                 @Override
-                public void put(String name, Object value) {
-                    store.put(name, value);
+                public Optional<Object> stored(VariableDeclaration found) {
+                    return Optional.ofNullable(stored);
+                }
+
+                @Override
+                public boolean store(VariableDeclaration found, Object value) {
+                    return false;
                 }
             };
-            var context = new MapLogicContext(Map.of()).with(VariableFacets.SESSION, session);
-
-            assertThat(context.value("vars.session.page")).isEqualTo(2.0);
-            assertThat(context.value("vars.session.missing")).isNull();
         }
 
         @Test
-        void withNoSessionTheSessionScopeIsEmpty() {
-            var context = new MapLogicContext(Map.of());
+        void aSessionVariableReadsTheWindowsValueOrItsDefault() {
+            assertThat(new MapLogicContext(Map.of()).withVariables(binding(2.0)).value("vars.session.ui.page"))
+                    .isEqualTo(2.0);
+            assertThat(new MapLogicContext(Map.of()).withVariables(binding(null)).value("vars.session.ui.page"))
+                    .isEqualTo(1.0);
+        }
 
-            assertThat(context.value("vars.session.page")).isNull();
+        @Test
+        void theScopeMustMatchTheDeclarationAndTheNameMustBeDeclared() {
+            var context = new MapLogicContext(Map.of()).withVariables(binding(2.0));
+
+            assertThat(context.value("vars.player.ui.page")).isNull();
+            assertThat(context.value("vars.session.ui.missing")).isNull();
+            assertThat(context.value("vars.session.page")).isNull(); // reads spell the pack
+        }
+
+        @Test
+        void withNoBindingTheSessionScopeIsEmpty() {
+            assertThat(new MapLogicContext(Map.of()).value("vars.session.ui.page")).isNull();
         }
     }
 }
+

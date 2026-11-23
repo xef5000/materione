@@ -90,7 +90,7 @@ class BuiltinBrowserPackTest {
         assertThat(Files.readString(pack.resolve(PackLayout.MANIFEST_FILE))).contains("id: materione");
         assertThat(PackLayout.sourceDocuments(pack, failure -> { }))
                 .extracting(file -> pack.relativize(file).toString().replace('\\', '/'))
-                .containsExactly("pack.yml", "guis/browser.yml");
+                .containsExactly("pack.yml", "guis/browser.yml", "variables/browser.yml");
     }
 
     @Test
@@ -112,7 +112,10 @@ class BuiltinBrowserPackTest {
         BuiltinLogic.register(service, host, ItemCatalog.none(), new GuiBridge());
         BuiltinLogic.registerPrompts(service, host, PromptRuntime.create(GuiFixture.plugin(), unusedScheduling(),
                 new GuiBridge(), diagnostic -> { }));
-        var lookup = new RegistryLogicLookup(registries, id -> Optional.empty());
+        var search = new dev.materione.api.logic.variable.VariableDeclaration(NamespacedId.of("materione", "search"),
+                dev.materione.api.logic.variable.VariableScope.SESSION,
+                dev.materione.api.logic.variable.VariableType.STRING, "", "The browser's search text");
+        var lookup = new RegistryLogicLookup(registries, id -> id.equals(search.id()) ? Optional.of(search) : Optional.empty());
 
         var definition = new GuiFixture("materione", ItemCatalog.none()).definition(browserYaml());
         assertThat(definition.id()).isEqualTo(BROWSER);
@@ -173,7 +176,8 @@ class BuiltinBrowserPackTest {
         RuntimeRegistries registries = RuntimeRegistries.builder()
                 .view(RuntimeContentIndex.KEY, RuntimeContentIndex.of(entries)).build();
         fixture = new GuiFixture("materione", () -> Optional.of(registries));
-        fixture.windows.renderer = new GuiRenderer(RenderReporter.SILENT);
+        fixture.declareSession("search", "");
+        fixture.windows.renderer = new GuiRenderer(RenderReporter.SILENT, fixture.variables.service());
         fixture.permissions.addAll(List.of("materione.browse", "materione.browse.get"));
         fixture.opener.gate(GuiOpenGates.of(
                 (viewer, node) -> viewer.player().hasPermission(node), PlayerNames.NONE, (rule, context, owner) -> { }));
@@ -451,7 +455,7 @@ class BuiltinBrowserPackTest {
     private static dev.materione.behavior.logic.MapLogicContext browserWindow(
             Map<String, Object> args, Map<String, Object> session, Map<String, Object> pages) {
         return dev.materione.plugin.view.TestSessionValues.in(new dev.materione.behavior.logic.MapLogicContext(
-                Map.of("view", new java.util.LinkedHashMap<>(Map.of("args", args, "page", pages)))), session);
+                Map.of("view", new java.util.LinkedHashMap<>(Map.of("id", "materione:browser", "args", args, "page", pages)))), "materione", session);
     }
 
     @Test

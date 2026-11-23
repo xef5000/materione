@@ -14,10 +14,8 @@ import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.ValueExpression;
 import dev.materione.api.logic.variable.CompileEnvironment;
-import dev.materione.api.logic.variable.SessionVariables;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
-import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.api.logic.variable.VariableOp;
 import dev.materione.api.logic.variable.VariableOps;
 import dev.materione.api.logic.variable.VariableRef;
@@ -38,7 +36,7 @@ import java.util.concurrent.CompletionStage;
  * - set_var: {var: count, value: "${vars.count + 1}"}          # run-local (the M2 shape: name: works too)
  * - set_var: {var: player.shop.coins, op: add, value: 5}        # declared player variable
  * - set_var: {var: server.shop.season, op: set, value: "winter"}
- * - set_var: {var: session.page, op: toggle}                    # GUI session variable
+ * - set_var: {var: session.page, op: toggle}                    # declared session variable of the open view
  * }</pre>
  *
  * <p>The target and the operation are decided at load. An undeclared persistent name, a reserved
@@ -69,16 +67,13 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     /** A bare expression: evaluated to a typed value each run. */
     public record Computed(ValueExpression expression) implements Value {}
 
-    /** Where the value goes: a run-local, the GUI session, or a declared persistent variable. */
-    public sealed interface Target permits LocalTarget, SessionTarget, PersistentTarget {}
+    /** Where the value goes: a run-local, or a declared variable of any scope (session included). */
+    public sealed interface Target permits LocalTarget, PersistentTarget {}
 
     /** A run-local variable (the M2 {@code vars.<name>}). */
     public record LocalTarget(String name) implements Target {}
 
-    /** A variable of the open GUI session. */
-    public record SessionTarget(String name) implements Target {}
-
-    /** A declared persistent variable, resolved at load. */
+    /** A declared variable, resolved at load. */
     public record PersistentTarget(VariableDeclaration declaration) implements Target {}
 
     /** The parsed step: where, what, and with which value. */
@@ -92,10 +87,10 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     @Override
     public ActionDescription describe() {
         return ActionDescription.of(new SelfDescription("Set variable",
-                "Stores a value in a run-local, session or declared player, server or item variable",
+                "Stores a value in a run-local variable or a declared player, server, item or session variable",
                 List.of(
                         new ParameterSchema("var", ParameterType.STRING, false, null,
-                                "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
+                                "Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>",
                                 null, null).withWidget("variable", ""),
                         new ParameterSchema("name", ParameterType.STRING, false, null,
                                 "Run-local variable name (the M2 spelling of var:)", null, null),
@@ -149,7 +144,6 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     public ActionOutcome execute(Params params, LogicContext context) {
         return switch (params.target()) {
             case LocalTarget local -> writeLocal(local.name(), params, context);
-            case SessionTarget session -> writeSession(session.name(), params, context);
             case PersistentTarget persistent -> writePersistent(persistent.declaration(), params, context);
         };
     }
@@ -173,29 +167,20 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         }));
     }
 
-    private record Prepared(Object current, SessionVariables session, VariableBinding binding,
+    private record Prepared(Object current, VariableBinding binding,
                             ActionOutcome failure, boolean direct) {}
 
     private static Prepared prepare(Params params, LogicContext context) {
         return switch (params.target()) {
-            case LocalTarget local -> new Prepared(context.locals().get(local.name()), null, null, null,
+            case LocalTarget local -> new Prepared(context.locals().get(local.name()), null, null,
                     params.op() == VariableOp.REMOVE || params.op() == VariableOp.RESET);
-            case SessionTarget target -> {
-                SessionVariables session = context.facet(VariableFacets.SESSION).orElse(null);
-                if (session == null) {
-                    yield new Prepared(null, null, null,
-                            ActionOutcome.failed("session." + target.name() + ": no open gui"), false);
-                }
-                boolean direct = params.op() == VariableOp.REMOVE || params.op() == VariableOp.RESET;
-                yield new Prepared(direct ? null : session.get(target.name()).orElse(null), session, null, null, direct);
-            }
             case PersistentTarget target -> {
                 VariableBinding binding = context.variables();
                 boolean needsCurrent = params.op() == VariableOp.ADD || params.op() == VariableOp.SUBTRACT
                         || params.op() == VariableOp.MULTIPLY || params.op() == VariableOp.TOGGLE;
                 Object current = needsCurrent
                         ? binding.stored(target.declaration()).orElse(target.declaration().defaultValue()) : null;
-                yield new Prepared(current, null, binding, null, false);
+                yield new Prepared(current, binding, null, false);
             }
         };
     }
@@ -214,7 +199,6 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         var result = VariableOps.apply(params.op(), type, prepared.current(), operand);
         String name = switch (params.target()) {
             case LocalTarget local -> local.name();
-            case SessionTarget session -> "session." + session.name();
             case PersistentTarget persistent -> persistent.declaration().id().toString();
         };
         if (!result.ok()) {
@@ -222,7 +206,6 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         }
         switch (params.target()) {
             case LocalTarget local -> context.locals().put(local.name(), result.value());
-            case SessionTarget session -> prepared.session().put(session.name(), result.value());
             case PersistentTarget persistent -> {
                 if (!prepared.binding().store(persistent.declaration(), result.value())) {
                     return ActionOutcome.failed(name + ": " + noHolder(persistent.declaration()));
@@ -244,7 +227,6 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     private static Target targetOf(VariableRef ref, CompileEnvironment env) {
         return switch (ref) {
             case VariableRef.Local local -> new LocalTarget(local.name());
-            case VariableRef.Session session -> new SessionTarget(session.name());
             case VariableRef.Persistent persistent -> {
                 NamespacedId id = persistent.id();
                 VariableDeclaration declaration = env.variable(id).orElseThrow(() -> new ParseRejection(
@@ -334,23 +316,6 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         return ActionOutcome.OK;
     }
 
-    private static ActionOutcome writeSession(String name, Params params, LogicContext context) {
-        var session = context.facet(VariableFacets.SESSION);
-        if (session.isEmpty()) {
-            return ActionOutcome.failed("session." + name + ": no open gui");
-        }
-        SessionVariables variables = session.get();
-        if (params.op() == VariableOp.REMOVE || params.op() == VariableOp.RESET) {
-            variables.put(name, null);
-            return ActionOutcome.OK;
-        }
-        var result = VariableOps.apply(params.op(), null, variables.get(name).orElse(null), operand(params, context));
-        if (!result.ok()) {
-            return ActionOutcome.failed("session." + name + ": " + result.reason());
-        }
-        variables.put(name, result.value());
-        return ActionOutcome.OK;
-    }
 
     private static ActionOutcome writePersistent(VariableDeclaration declaration, Params params, LogicContext context) {
         VariableBinding binding = context.variables();
@@ -374,8 +339,11 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     }
 
     private static String noHolder(VariableDeclaration declaration) {
-        return declaration.scope() == VariableScope.ITEM ? "no item stack to hold this item variable (this run has none)"
-                : "no holder for this " + declaration.scope().id() + " variable (is the player online?)";
+        return switch (declaration.scope()) {
+            case ITEM -> "no item stack to hold this item variable (this run has none)";
+            case SESSION -> "no open view holds this session variable (this run is not in one, or the view closed)";
+            default -> "no holder for this " + declaration.scope().id() + " variable (is the player online?)";
+        };
     }
 
     private static ActionOutcome mutateServer(

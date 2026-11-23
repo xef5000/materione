@@ -41,7 +41,7 @@ browser:
       text: "NOTHING HERE YET"
       font: smallcaps
       color: "#707070"
-      visible_if: "view.page.entries.size == 0 && (vars.session.search == null || vars.session.search == '')"
+      visible_if: "view.page.entries.size == 0 && (vars.session.materione.search == null || vars.session.materione.search == '')"
     - id: no_results
       type: text
       x: 62
@@ -49,7 +49,7 @@ browser:
       text: "NO RESULTS"
       font: smallcaps
       color: "#707070"
-      visible_if: "view.page.entries.size == 0 && vars.session.search != null && vars.session.search != ''"
+      visible_if: "view.page.entries.size == 0 && vars.session.materione.search != null && vars.session.materione.search != ''"
     - id: entries
       type: list
       slots: { from: 0, to: 44 }
@@ -86,13 +86,13 @@ browser:
       name: "<white>Where you are"
       lore:
         - "<gray>${view.args.path == null || view.args.path == '' ? 'All packs' : view.args.path}"
-        - "<gray>Search: ${vars.session.search == null || vars.session.search == '' ? 'none' : vars.session.search}"
+        - "<gray>Search: ${vars.session.materione.search == null || vars.session.materione.search == '' ? 'none' : vars.session.materione.search}"
     - id: clear
       type: item
       slot: 50
       item: minecraft:barrier
       name: "<white>Clear the search"
-      visible_if: "vars.session.search != null && vars.session.search != ''"
+      visible_if: "vars.session.materione.search != null && vars.session.materione.search != ''"
     - id: next
       type: item
       slot: 51

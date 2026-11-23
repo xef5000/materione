@@ -1,0 +1,7 @@
+# The content browser's own state (views.md section 3.4): the search text lives in one open browser window, private to
+# its viewer, and goes with the window.
+search:
+  scope: session
+  type: string
+  default: ""
+  description: "The browser's search text"

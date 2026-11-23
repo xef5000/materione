@@ -12,11 +12,11 @@ import java.util.regex.Pattern;
  * entry, so the list is unfiltered until a search is made.
  *
  * <pre>{@code
- * search: { fields: [name] }                 # reads vars.session.search
+ * search: { fields: [name] }                 # reads the GUI pack's session variable "search"
  * search: { var: query, fields: [name, lore] }
  * }</pre>
  *
- * @param var the session variable the search text is read from (a plain name)
+ * @param var the session variable the search text is read from (a plain name: the key of a session variable declared in the GUI's own pack)
  * @param fields the entry fields matched, in order; never empty
  */
 public record ListSearch(String var, List<String> fields) {

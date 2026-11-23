@@ -97,6 +97,9 @@ public final class GuiStack {
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables,
             EscrowRuntime escrow) {
+        if (variables != null) {
+            variables.sessionStore(views.sessions()); // session variables: one more scope behind the store port
+        }
         StrictInputs strict = escrow == null ? StrictInputs.NONE : new StrictInputs(escrow);
         if (escrow != null) {
             escrow.bindWindows(strict);

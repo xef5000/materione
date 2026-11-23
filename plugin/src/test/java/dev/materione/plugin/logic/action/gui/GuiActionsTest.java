@@ -119,11 +119,12 @@ class GuiActionsTest {
     @BeforeEach
     void setUp() {
         f = new GuiFixture();
+        f.declareSession("tab", "");
         f.gui(MENU);
         f.gui(DETAIL);
         menu = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("menu"), Map.of("page", "2"),
                 OpenRequest.Cause.API)).record();
-        menu.sessionValue("tab", "weapons");
+        f.putSession(menu, "tab", "weapons");
         f.ran.clear();
     }
 
@@ -162,7 +163,7 @@ class GuiActionsTest {
         assertThat(restored.definition()).isEqualTo(GuiFixture.id("menu"));
         assertThat(restored).isNotSameAs(menu);
         assertThat(restored.args()).containsEntry("page", "2");
-        assertThat(restored.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(f.session(restored, "tab")).isEqualTo("weapons");
         // the flow that went back keeps running: its session ended, but runs belong to the player
         assertThat(f.ran).contains("mark:back-done");
         assertThat(detail.endedBecause()).isEqualTo(CloseReason.REPLACED);
@@ -182,7 +183,7 @@ class GuiActionsTest {
 
         assertThat(f.windows.log).containsExactly("open menu", "rewrite menu");
         assertThat(f.sessions.current(f.viewer.id())).containsSame(menu);
-        assertThat(menu.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(f.session(menu, "tab")).isEqualTo("weapons");
         assertThat(f.ran).containsExactly("mark:refreshed");
     }
 

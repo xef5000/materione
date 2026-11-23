@@ -71,16 +71,30 @@ public final class ListEntries {
     }
 
     /**
-     * The search text the window's session holds for {@code search}, trimmed and lower-cased, or null when there is
+     * The search text the window's session holds for {@code search} (the session variable of that name in the GUI's own
+     * pack, views.md §3.4), trimmed and lower-cased, or null when there is
      * none (unset, blank, or not text or a number): a null search keeps every entry.
      */
     static String searchText(ListSearch search, LogicContext context) {
-        Object raw = context.resolve(List.of("vars", "session", search.var()));
+        Object raw = sessionValue(context, search.var());
         if (!(raw instanceof String) && !(raw instanceof Number)) {
             return null;
         }
         String text = String.valueOf(raw).trim().toLowerCase(Locale.ROOT);
         return text.isEmpty() ? null : text;
+    }
+
+    /**
+     * The value of the session variable {@code key} declared in the pack of the GUI the context runs for, or null when
+     * the context names no GUI or the variable is not declared there. A list's {@code search:} and the content list
+     * source name their variable by key alone; the declaration lives next to the GUI.
+     */
+    static Object sessionValue(LogicContext context, String key) {
+        Object id = context.resolve(List.of("view", "id"));
+        if (!(id instanceof String text) || text.indexOf(':') < 0) {
+            return null;
+        }
+        return context.resolve(List.of("vars", "session", text.substring(0, text.indexOf(':')), key));
     }
 
     /**

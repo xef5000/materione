@@ -1,0 +1,6 @@
+# The search window's text (views.md section 3.4): a session variable, private to one open window.
+search:
+  scope: session
+  type: string
+  default: ""
+  description: "The search window's search text"

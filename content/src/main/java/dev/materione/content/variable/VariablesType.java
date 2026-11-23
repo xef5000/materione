@@ -24,6 +24,7 @@ import java.util.Optional;
  * daily_claimed: { scope: player, type: boolean, default: false }
  * season:        { scope: server, type: string, default: "spring" }
  * level:         { scope: item,   type: number, default: 1 }     # held by the run's item stack (logic.md §38)
+ * tab:           { scope: session, type: string, default: "all" } # held by one open view (views.md §3.4)
  * }</pre>
  *
  * <p>The declaration is pack-namespaced by its resource id ({@code shop:coins}). It produces no pack
@@ -53,13 +54,16 @@ public final class VariablesType implements ContentType {
     public SelfDescription describe() {
         return new SelfDescription(
                 "Variable",
-                "A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. "
-                        + "An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together",
+                "A declared variable: stored per player, on the server, on an item stack or in one open view, typed, with a default. "
+                        + "An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together. "
+                        + "A session variable belongs to one open view: private to that viewer, kept by view.back, gone when the view closes",
                 List.of(
                         new ParameterSchema("scope", ParameterType.STRING, true, null,
-                                "Where the value is stored: player (per player), server (one for the server) or item (on the item stack the "
-                                        + "run is about; stacks whose values differ do not stack)",
-                                List.of(VariableScope.PLAYER.id(), VariableScope.SERVER.id(), VariableScope.ITEM.id()), null, null),
+                                "Where the value is stored: player (per player), server (one for the server), item (on the item stack the "
+                                        + "run is about; stacks whose values differ do not stack) or session (one open view: private to that viewer, "
+                                        + "gone when the view closes)",
+                                List.of(VariableScope.PLAYER.id(), VariableScope.SERVER.id(), VariableScope.ITEM.id(),
+                                        VariableScope.SESSION.id()), null, null),
                         new ParameterSchema("type", ParameterType.STRING, true, null,
                                 "The value's type: number, string or boolean",
                                 List.of(VariableType.NUMBER.id(), VariableType.STRING.id(), VariableType.BOOLEAN.id()),

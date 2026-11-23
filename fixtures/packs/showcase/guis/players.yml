@@ -29,7 +29,7 @@ players:
       slot: 4
       item: minecraft:paper
       name: "<white>Page ${view.page.list.number} of ${view.page.list.count}"
-      lore: ["<gray>Search: ${vars.session.search}"]
+      lore: ["<gray>Search: ${vars.session.showcase.search}"]
     - id: back
       type: item
       slot: 0

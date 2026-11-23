@@ -3,6 +3,7 @@ package dev.materione.behavior.flow;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.ConditionType;
+import dev.materione.api.logic.ParseRejection;
 import dev.materione.behavior.expr.ExprNode;
 import dev.materione.behavior.expr.ExpressionException;
 import dev.materione.behavior.expr.ExpressionParser;
@@ -151,7 +152,9 @@ final class ConditionCompiler {
         try {
             return bind(key, resolved.get(), payload, path);
         } catch (RuntimeException e) {
-            unit.problem(DiagnosticCodes.LOGIC_STEP_REJECTED, Severity.WARN, path,
+            // a type that knows its own problem names its code (logic.md §3.2); everything else is MTR-0057
+            var code = e instanceof ParseRejection rejection ? rejection.code() : DiagnosticCodes.LOGIC_STEP_REJECTED;
+            unit.problem(code, code == DiagnosticCodes.LOGIC_STEP_REJECTED ? Severity.WARN : code.defaultSeverity(), path,
                     "condition '" + key + "' rejected: " + e.getMessage(),
                     "fix this condition's parameters; the step that holds it was skipped");
             throw Skip.step();

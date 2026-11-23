@@ -135,7 +135,7 @@ public final class GuiTriggers {
                         "The key the view is bound to; empty until keyed state exists (views.md section 3.7)"),
                 ContextVariable.of("view.page.*", ParameterType.RAW, "The page state of a list in this GUI"),
                 ContextVariable.of("vars.session.*", ParameterType.RAW,
-                        "A session value of this open view: per window, kept by view.back (views.md section 3.4)"),
+                        "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)"),
                 ContextVariable.of("vars.*", ParameterType.RAW, "Variables written earlier in this run by set_var"));
     }
 

@@ -9,10 +9,10 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
 import dev.materione.api.logic.variable.CompileEnvironment;
-import dev.materione.api.logic.variable.SessionVariables;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
-import dev.materione.api.logic.variable.VariableFacets;
+import dev.materione.api.logic.variable.VariableScope;
+import dev.materione.api.logic.variable.VariableType;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.variable.VariableTestSupport;
@@ -35,10 +35,20 @@ class VarConditionTest {
         return map;
     }
 
+    private static final VariableDeclaration TAB = new VariableDeclaration(
+            NamespacedId.of("shop", "tab"), VariableScope.SESSION, VariableType.STRING, "", "");
+
+    /** The shop declarations and the window's session variable. */
+    private static Map<NamespacedId, VariableDeclaration> declared() {
+        var all = new HashMap<>(VariableTestSupport.declared());
+        all.put(TAB.id(), TAB);
+        return all;
+    }
+
     /** A reader for a resource of pack {@code shop} that sees the shop declarations. */
     private static ParamReader reader(Map<String, Object> params) {
         return ParamReader.of(params, EngineExpressions.INSTANCE,
-                CompileEnvironment.of("shop", id -> Optional.ofNullable(VariableTestSupport.declared().get(id))));
+                CompileEnvironment.of("shop", id -> Optional.ofNullable(declared().get(id))));
     }
 
     private boolean test(MapLogicContext context, Object... keyValues) {
@@ -59,7 +69,7 @@ class VarConditionTest {
         return new VariableBinding() {
             @Override
             public Optional<VariableDeclaration> declaration(NamespacedId id) {
-                return Optional.ofNullable(VariableTestSupport.declared().get(id));
+                return Optional.ofNullable(declared().get(id));
             }
 
             @Override
@@ -104,24 +114,26 @@ class VarConditionTest {
 
     @Test
     void runLocalAndSessionVariablesAreReadWhereSetVarWritesThem() {
-        var context = new MapLogicContext(Map.of());
+        var context = new MapLogicContext(Map.of()).withVariables(stored(Map.of(TAB.id(), "tools")));
         context.locals().put("tries", 3);
-        Map<String, Object> store = new HashMap<>(Map.of("tab", "tools"));
-        context.with(VariableFacets.SESSION, new SessionVariables() {
-            @Override
-            public Optional<Object> get(String name) {
-                return Optional.ofNullable(store.get(name));
-            }
-
-            @Override
-            public void put(String name, Object value) {
-                store.put(name, value);
-            }
-        });
 
         assertThat(test(context, "var", "tries", "op", "<=", "value", 3)).isTrue();
         assertThat(test(context, "var", "session.tab", "value", "tools")).isTrue();
-        assertThat(test(context, "var", "session.tab", "op", ">", "value", "a")).isFalse();
+        assertThat(test(context, "var", "session.shop.tab", "op", "!=", "value", "tools")).isFalse();
+    }
+
+    @Test
+    void aSessionVariableNeverWrittenComparesAsItsDefault() {
+        var context = new MapLogicContext(Map.of()).withVariables(stored(Map.of()));
+
+        assertThat(test(context, "var", "session.tab", "value", "tools")).isFalse();
+        assertThat(test(context, "var", "session.tab", "op", "!=", "value", "tools")).isTrue();
+    }
+
+    @Test
+    void anUndeclaredSessionNameIsRejectedAtLoad() {
+        assertThat(rejectionOf("var", "session.gone", "value", "x")).isEqualTo(DiagnosticCodes.VARIABLE_UNDECLARED);
+        assertThat(rejectionOf("var", "session.other.tab", "value", "x")).isEqualTo(DiagnosticCodes.VARIABLE_UNDECLARED);
     }
 
     @Test

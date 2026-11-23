@@ -1,0 +1,16 @@
+# Window-local switches of the overlay GUIs (views.md section 3.4): each lives in one open window and goes with it.
+cover:
+  scope: session
+  type: boolean
+  default: false
+  description: "Whether the ownership GUI shows its cover layer"
+tab:
+  scope: session
+  type: boolean
+  default: false
+  description: "Whether the tabs GUI shows its second tab"
+selected:
+  scope: session
+  type: boolean
+  default: false
+  description: "Whether the title-transport floor GUI (harness/protocol/floor.yml, copied into this pack) shows its banner"

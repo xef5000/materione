@@ -19,6 +19,11 @@ public final class LogicTestSupport {
         return new LogicService(host(), registries);
     }
 
+    /** A logic service whose rules resolve declared variables through {@code variables}, with no vocabulary yet. */
+    public static LogicService newService(RegistryService registries, dev.materione.plugin.logic.variable.VariableService variables) {
+        return new LogicService(host(), registries, null, null, null, variables);
+    }
+
     /** A logic service with a rule engine over {@code scheduling}, so flows can be fired through it headless. */
     public static LogicService newRunningService(
             RegistryService registries, dev.materione.api.scheduling.SchedulingGateway scheduling) {

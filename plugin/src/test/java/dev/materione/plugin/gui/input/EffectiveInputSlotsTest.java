@@ -20,6 +20,7 @@ class EffectiveInputSlotsTest {
     @Test
     void inputOwnershipFollowsVisibleCurrentFrameAndReturnsWhenUncovered() {
         var fixture = new GuiFixture();
+        fixture.declareSession("tab", false);
         var definition = fixture.definition("""
                 shop:
                   title: Shop
@@ -32,7 +33,7 @@ class EffectiveInputSlotsTest {
                       y: 18
                       width: 16
                       height: 16
-                      visible_if: "vars.session.tab == true"
+                      visible_if: "vars.session.demo.tab == true"
                       materione:overlay_frames:
                         every: 4
                         layers: [{x: 8}, {x: 26}]
@@ -53,11 +54,11 @@ class EffectiveInputSlotsTest {
         var live = RuntimeGuis.build(Map.of(compiled.id(), compiled), id -> java.util.Optional.empty(),
                 id -> java.util.Optional.empty(), ignored -> { }, fixture.logic.lookup()).gui(compiled.id()).orElseThrow();
         var session = GuiViewerState.record(UUID.randomUUID(), "Probe", compiled.id(), Map.of());
-        var renderer = new GuiRenderer(RenderReporter.SILENT);
-        session.sessionValue("tab", false);
+        var renderer = new GuiRenderer(RenderReporter.SILENT, fixture.variables.service());
+        fixture.putSession(session, "tab", false);
         var hiddenRender = renderer.render(fixture.viewer, session, live, true, 0);
         assertThat(live.inputs().effective(live.clicks(), hiddenRender).isInput(0)).isTrue();
-        session.sessionValue("tab", true);
+        fixture.putSession(session, "tab", true);
         var firstFrame = renderer.render(fixture.viewer, session, live, true, 0);
         var secondFrame = renderer.render(fixture.viewer, session, live, true, 4);
         assertThat(live.inputs().effective(live.clicks(), firstFrame).isInput(0)).isFalse();

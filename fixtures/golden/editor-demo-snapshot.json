@@ -1133,7 +1133,7 @@
             },
             {
               "advanced": false,
-              "description": "Where the answer goes: a run-local name, or session.<name> for the open GUI",
+              "description": "Where the answer goes: a run-local name, or session.<key> for a declared session variable of the open view",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -1286,13 +1286,13 @@
           "available": true,
           "category": "data",
           "deferred": false,
-          "description": "Stores a value in a run-local, session or declared player, server or item variable",
+          "description": "Stores a value in a run-local variable or a declared player, server, item or session variable",
           "displayName": "Set variable",
           "id": "set_var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
+              "description": "Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -2834,13 +2834,13 @@
         {
           "available": true,
           "category": "data",
-          "description": "Compares a run-local, session or declared player, server or item variable with a value",
+          "description": "Compares a run-local variable or a declared player, server, item or session variable with a value",
           "displayName": "Variable",
           "id": "var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
+              "description": "Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -7843,7 +7843,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -7961,7 +7961,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8079,7 +8079,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8222,7 +8222,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8420,7 +8420,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8567,7 +8567,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8699,7 +8699,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8842,7 +8842,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8997,7 +8997,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -11041,7 +11041,7 @@
           },
           {
             "advanced": true,
-            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in vars.session.search (or var:), ignoring case",
+            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in the session variable search of the GUI's pack (or var:), ignoring case",
             "example": "{fields: [name]}",
             "id": "search",
             "label": "Search",
@@ -13900,7 +13900,7 @@
         ]
       },
       {
-        "description": "A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together",
+        "description": "A declared variable: stored per player, on the server, on an item stack or in one open view, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together. A session variable belongs to one open view: private to that viewer, kept by view.back, gone when the view closes",
         "directory": "variables",
         "displayName": "Variable",
         "expressionForm": "vars.{scope}.{pack}.{id}",
@@ -13911,9 +13911,10 @@
             "allowedValues": [
               "player",
               "server",
-              "item"
+              "item",
+              "session"
             ],
-            "description": "Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack)",
+            "description": "Where the value is stored: player (per player), server (one for the server), item (on the item stack the run is about; stacks whose values differ do not stack) or session (one open view: private to that viewer, gone when the view closes)",
             "id": "scope",
             "label": "Scope",
             "order": 0,
@@ -20395,7 +20396,7 @@
       ]
     },
     {
-      "description": "A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together",
+      "description": "A declared variable: stored per player, on the server, on an item stack or in one open view, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together. A session variable belongs to one open view: private to that viewer, kept by view.back, gone when the view closes",
       "directory": "variables",
       "displayName": "Variable",
       "expressionForm": "vars.{scope}.{pack}.{id}",
@@ -20406,9 +20407,10 @@
           "allowedValues": [
             "player",
             "server",
-            "item"
+            "item",
+            "session"
           ],
-          "description": "Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack)",
+          "description": "Where the value is stored: player (per player), server (one for the server), item (on the item stack the run is about; stacks whose values differ do not stack) or session (one open view: private to that viewer, gone when the view closes)",
           "id": "scope",
           "label": "Scope",
           "order": 0,

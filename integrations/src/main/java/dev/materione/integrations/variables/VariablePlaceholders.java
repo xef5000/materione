@@ -182,6 +182,9 @@ public final class VariablePlaceholders {
         String playerName = null;
         int longest = -1;
         for (VariableDeclaration declaration : variables.declarations()) {
+            if (declaration.scope() == VariableScope.SESSION) {
+                continue; // held by one open view, not by a player a placeholder can name
+            }
             String prefix = declaration.pack() + "_" + declaration.id().value();
             if (rest.equals(prefix) && prefix.length() > longest) {
                 match = declaration;

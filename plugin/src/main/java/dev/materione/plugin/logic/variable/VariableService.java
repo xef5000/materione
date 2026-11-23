@@ -114,7 +114,15 @@ public final class VariableService implements AutoCloseable {
      * report it.
      */
     public VariableBinding bind(UUID player, StackRef stack) {
-        return new RunVariables(this::declaration, stores, player, stackStore, stack, this::stackMiss);
+        return bind(player, stack, null);
+    }
+
+    /**
+     * As {@link #bind(UUID, StackRef)}, for a run in the view instance {@code view}, whose session variables it reaches
+     * (views.md section 3.4); a null instance is a run in no view.
+     */
+    public VariableBinding bind(UUID player, StackRef stack, UUID view) {
+        return new RunVariables(this::declaration, stores, player, stackStore, stack, this::stackMiss, view);
     }
 
     /** Minimum milliseconds between two reports for the same variable of a run that has no stack. */
@@ -168,7 +176,18 @@ public final class VariableService implements AutoCloseable {
         return views;
     }
 
-    /** The store of {@code scope}. */
+    /**
+     * Registers the {@code session} scope's store (the view runtime's). Called once at boot, before any run; a
+     * decorator that watches the port wraps the store here, as the player scope's snapshot store does.
+     */
+    public void sessionStore(VariableStore store) {
+        if (store.scope() != VariableScope.SESSION) {
+            throw new IllegalArgumentException("the session store must hold the session scope");
+        }
+        stores.put(VariableScope.SESSION, store);
+    }
+
+    /** The store of {@code scope}; null for the session scope when no view runtime registered its store. */
     public VariableStore store(VariableScope scope) {
         return stores.get(scope);
     }
@@ -282,6 +301,7 @@ public final class VariableService implements AutoCloseable {
                 return ApiResult.fail(DiagnosticCodes.VARIABLE_UNDECLARED, id + " is not a declared variable");
             }
             VariableDeclaration declared = found.get();
+            if (declared.scope() == VariableScope.SESSION) { return sessionRefused(id); }
             if (declared.scope() == VariableScope.ITEM) {
                 return getItem(declared, player);
             }
@@ -295,6 +315,12 @@ public final class VariableService implements AutoCloseable {
                         .orElseGet(() -> ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
                                 id + " is unavailable: " + unavailable.getMessage()));
             }
+        }
+
+        /** A session variable has no holder outside an open view: the API names a player, not a view instance. */
+        private ApiResult<Object> sessionRefused(NamespacedId id) {
+            return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                    id + " is a session variable: it lives in one open view and is reached from that view's rules");
         }
 
         /** An item variable of the stack the player holds in the main hand (logic.md §38); an empty hand reads the default. */
@@ -356,6 +382,7 @@ public final class VariableService implements AutoCloseable {
                 }
                 stored = coerced.get();
             }
+            if (declared.scope() == VariableScope.SESSION) { return sessionRefused(id); }
             if (declared.scope() == VariableScope.ITEM) {
                 return setItem(declared, id, player, stored);
             }

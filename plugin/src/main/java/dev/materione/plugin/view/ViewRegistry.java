@@ -32,6 +32,7 @@ public final class ViewRegistry {
 
     private final ConcurrentHashMap<UUID, PlayerViews> players = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<ViewRef, Set<ViewerRecord>> byDefinition = new ConcurrentHashMap<>();
+    private final SessionVariableStore sessions = new SessionVariableStore();
     private volatile MutationGuard guard = MutationGuard.NONE;
 
     /**
@@ -40,6 +41,25 @@ public final class ViewRegistry {
      */
     public void guard(MutationGuard guard) {
         this.guard = Objects.requireNonNull(guard, "guard");
+    }
+
+    /**
+     * The {@code session} store (views.md §3.4): the session values of every admitted record, behind the variable store
+     * port. The variable service registers it as the session scope's store.
+     */
+    public SessionVariableStore sessions() {
+        return sessions;
+    }
+
+    /**
+     * Gives a record its session instance and its mutation guard, before it is shown: an opener admits the record as
+     * soon as it exists, so a restored back snapshot and an opening rule can already hold session values. {@link #begin}
+     * admits too; both are idempotent. A record that never begins must be ended ({@link ViewerRecord#end}), which drops
+     * its instance.
+     */
+    public void admit(ViewerRecord record) {
+        record.guard(guard);
+        record.sessions(sessions);
     }
 
     /** The player's current record: the most recently begun of those still open, of any kind. */
@@ -74,7 +94,7 @@ public final class ViewRegistry {
      * @return the record of the same kind it displaced, if the player had one; the caller ends it
      */
     public Optional<ViewerRecord> begin(ViewerRecord next) {
-        next.guard(guard);
+        admit(next);
         PlayerViews entry = players.computeIfAbsent(next.player(), ignored -> new PlayerViews());
         synchronized (entry) {
             ViewerRecord previous = entry.byKind.put(next.kind(), next);
@@ -116,7 +136,10 @@ public final class ViewRegistry {
         PlayerViews entry = players.remove(player);
         if (entry != null) {
             synchronized (entry) {
-                entry.byKind.values().forEach(this::unindex);
+                entry.byKind.values().forEach(record -> {
+                    unindex(record);
+                    sessions.close(record.instance());
+                });
             }
         }
     }
