@@ -870,7 +870,7 @@ operation lists of T09, T19 and T23 (`fixtures/golden/codemode/ops/`: `view.clos
 switch), `ViewerOwnerThreadTest` (the ban test), `ViewFacetSelfDescriptionTest`, `OpenGateParityTest`, core
 `ViewReferenceValidationTest` (the `MTR-0126` and `MTR-0105` cases), webui `codemode-generate.spec.ts` (the facet, the union
 reference, a second kind with no generator change) and the Logic tab specs. QA catalog: `views.verbs.open-replace-back-close` and
-`views.placeholders.open-and-last` (`qa/catalog/views.mjs`, not yet run: they need the probe).
+`views.placeholders.open-and-last` (`qa/catalog/views.mjs`; passed on the probe, run `run-2026-11-23T06-54-10`).
 
 ---
 
@@ -1068,8 +1068,8 @@ compares what it would send; an unchanged automatic wake keeping the token and s
 explicit refresh while a wake is queued rendering once), `PlaceAndGuiConditionsTest` (`in_view`), `ViewReferenceValidationTest`
 (`MTR-0105` and the kind narrowing for `view.refresh` and `in_view`), and `PaperViewIT` on the 1.21.4 harness (a window that says
 `rerender: off` against all three selectors, driven by real container clicks; then two players with `guilogic:live` open, one
-clicks the lever that writes the server variable, and both windows show it). QA catalog (`qa/catalog/views.mjs`, not yet run: it
-needs the probe): `views.server-var.live` and `views.refresh.polled`.
+clicks the lever that writes the server variable, and both windows show it). QA catalog (`qa/catalog/views.mjs`; passed on the probe,
+run `run-2026-11-23T06-54-10`): `views.server-var.live` and `views.refresh.polled`.
 
 ### 18.5 Acceptance status
 
