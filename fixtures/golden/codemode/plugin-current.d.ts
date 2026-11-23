@@ -6,7 +6,7 @@ type Capability = "assets" | "blocks" | "codemode" | "delivery" | "furniture" | 
 /** The content types this server registers. */
 type ContentTypeName = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "item" | "painting" | "recipe" | "rule" | "sound" | "variable";
 /** What a `Ref` can point at: a content type, or an asset kind a field names. */
-type RefKind = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "recipe" | "rule" | "sound" | "template" | "texture" | "variable";
+type RefKind = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "recipe" | "rule" | "session" | "sound" | "template" | "texture" | "variable";
 /** The action ids this server registers. */
 type ActionId = "actionbar" | "break_blocks" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "damage" | "drop_item" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.page" | "gui.refresh" | "gui.slot_item" | "heal" | "launch" | "message" | "particle" | "potion" | "prompt" | "run_command" | "set_block" | "set_var" | "sound" | "stack.edit" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title" | "velocity" | "view.back" | "view.close" | "view.open";
 /** The condition ids this server registers. */
@@ -5333,7 +5333,7 @@ interface ContentListParams {
    */
   arg?: string;
   /** The session variable that holds a search; while it has text, every entry is listed flat. */
-  search?: string;
+  search?: string | Ref<"variable">;
 }
 
 /** The `entry.*` variables a row of the `content` list carries. */
@@ -5409,7 +5409,7 @@ interface StaticListEntry {
 /** Parameters of the `variable` list source. */
 interface VariableListParams {
   /** The declared variable, pack:key. */
-  var: string;
+  var: string | Ref<"variable">;
   /**
    * What separates the pieces.
    * @defaultValue ,
@@ -5455,7 +5455,7 @@ interface ListSourceCatalog {
    * @since 1.0.0
    * @registeredBy materione
    */
-  variable(params: VariableListParams | string): ListSourceSpec<"variable">;
+  variable(params: VariableListParams | string | Ref<"variable">): ListSourceSpec<"variable">;
 }
 
 /** The properties every GUI layer carries, whatever its component. */
