@@ -68,6 +68,11 @@ jobs:
           node --test qa/evidence-redaction.test.mjs qa/runner.test.mjs qa/guioverlay.test.mjs qa/command-contracts.test.mjs
           node qa/runner.mjs check
 
+      # Agent guard (issue #480): the PreToolUse hook every agent harness loads.
+      # Pure Node; each rule is tested against the real command it catches.
+      - name: Agent guard
+        run: node --test scripts/agent-guard/guard.test.mjs
+
       # The cloud editor must keep working with every released plugin
       # (fixtures/protocol/released/): protocol versions overlap and every RPC
       # op it calls is registered or capability-gated. Pure Node, no install.
