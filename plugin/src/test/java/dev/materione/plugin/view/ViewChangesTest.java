@@ -317,7 +317,7 @@ class ViewChangesTest {
         });
 
         assertThat(writePlayer(coins, alex, 1d)).isTrue();
-        assertThat(variables.service().store(VariableScope.PLAYER)
-                .mutate(coins, alex, dev.materione.api.logic.variable.VariableOp.ADD, 1d).ok()).isTrue();
+        assertThat(variables.service().store(VariableScope.SERVER)
+                .mutate(season, null, VariableOp.ADD, 1d).ok()).isTrue();
     }
 }
