@@ -1,7 +1,7 @@
 # The in-game QA suite
 
 Systematic, trackable, fixable in-game testing on top of the [agent probe
-loop](probe.md) (issue #38). The probe made in-game verification *possible*;
+loop](../docs/probe.md) (issue #38). The probe made in-game verification *possible*;
 this layer makes it *systematic*: a committed test catalog, a ledger that
 answers "what has been tested, at which code state", dependency-ordered
 execution that stops dependents of a failure, and failure dossiers that a
