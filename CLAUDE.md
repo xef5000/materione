@@ -199,3 +199,20 @@ enter an Apache codebase.
   the charter) — auto assertions for observable logic, `visual` tests with screenshots
   for render/GUI work. The committed ledger (`qa/ledger/`) tracks what passed at which
   commit; blessing runs happen on main, not on feature branches.
+
+## Done means evidence
+
+"Compiles" and "tests pass" are not done. Before you say a change works or open a PR, run it
+against the real artifact and put the commands and their output in the PR's **Evidence**
+section; say plainly what you did not verify. The owner reviews evidence, not intentions.
+
+Project skills (`.claude/skills/`, adapted from pstack, MIT) carry the procedures:
+
+| Skill | Use it |
+|---|---|
+| `verify` | after any change with observable behavior: picks the cheapest real lane (unit/golden, Paper boot, browser, Worker, probe, QA catalog) and says what evidence to paste |
+| `blast-radius` | before changing shared code, a wire format, a schema or a default: proves the one fact the change's safety rests on |
+| `interrogate` | before asking the owner to review a code PR: adversaries must prove every finding with a run |
+| `comment-review` | before a PR: deletes comments that will go stale, flags code that needs one to make sense |
+| `reflect` | when the owner corrects you, or at the end of a task: turns the lesson into a check, type, test or skill edit, not a memory note |
+| `correct` | when a mistake has recurred: fixes the class at the highest level (architecture → types → check → docs) |
