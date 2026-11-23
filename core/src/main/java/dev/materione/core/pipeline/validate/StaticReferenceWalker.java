@@ -93,16 +93,24 @@ public final class StaticReferenceWalker implements StaticReferences {
                 if (params.get(parameter.getKey()) instanceof String scalar) {
                     List<String> at = new ArrayList<>(path);
                     at.add(parameter.getKey());
-                    reference(origin, parameter.getValue(), scalar, at, out);
+                    String restrict = StaticReferences.VIEW.equals(parameter.getValue())
+                            && params.get("kind") instanceof String named
+                            && !named.isBlank() && !named.contains("${") && !named.contains("%") ? named.trim() : null;
+                    reference(origin, parameter.getValue(), scalar, at, restrict, out);
                 }
             }
         }
     }
 
     private static void reference(String origin, String kind, String written, List<String> path, List<Ref> out) {
+        reference(origin, kind, written, path, null, out);
+    }
+
+    private static void reference(
+            String origin, String kind, String written, List<String> path, String viewKind, List<Ref> out) {
         if (kind == null || written.isBlank() || written.contains("${") || written.contains("%")) {
             return;
         }
-        out.add(new Ref(kind, written.trim(), List.copyOf(path), origin));
+        out.add(new Ref(kind, written.trim(), List.copyOf(path), origin, viewKind));
     }
 }

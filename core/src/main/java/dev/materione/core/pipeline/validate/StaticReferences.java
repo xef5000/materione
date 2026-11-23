@@ -28,8 +28,15 @@ public interface StaticReferences {
      * @param written the id as authored (bare or qualified)
      * @param target the path of the value in the resource's definition, for the diagnostic's target
      * @param origin the action or condition the parameter belongs to ({@code give_item})
+     * @param viewKind for a {@link #VIEW} reference, the view kind the step restricts the id to with its own
+     *         {@code kind:} (views.md section 16.2, V0-1); null when it names none
      */
-    record Ref(String kind, String written, List<String> target, String origin) {}
+    record Ref(String kind, String written, List<String> target, String origin, String viewKind) {
+
+        public Ref(String kind, String written, List<String> target, String origin) {
+            this(kind, written, target, origin, null);
+        }
+    }
 
     /** Every static reference in the resource's {@code behavior:} and {@code flows:}; none for a resource with no logic. */
     List<Ref> of(ContentResource resource);

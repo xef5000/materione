@@ -99,6 +99,34 @@ class ViewReferenceValidationTest {
                 .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
     }
 
+    private static List<Diagnostic> validateKind(String view, String kind, List<ContentResource> definitions) {
+        var walker = new StaticReferenceWalker(VOCABULARY, () -> KINDS);
+        var resources = new java.util.ArrayList<ContentResource>();
+        resources.add(resource("demo", "menu", "gui",
+                "menu:\n  container: chest_3\n  behavior:\n    - on: gui.click\n      do:\n        - view.open: {view: "
+                        + view + ", kind: " + kind + "}\n"));
+        resources.addAll(definitions);
+        var packs = List.of(new ContentPack("demo", Path.of("."), null, resources));
+        var environment = new ValidationEnvironment(packs, java.util.Set.of(), Map.of(), walker);
+        return new ReferenceValidator().validate(resources.get(0), environment);
+    }
+
+    @Test
+    void theStepsKindNarrowsWhichViewsTheIdNames() {
+        var sharedGuiAndHud = List.of(
+                resource("demo", "x", "gui", "x:\n  container: chest_3\n"),
+                resource("demo", "x", "hud", "x:\n  layers: []\n"));
+        var onlyHud = List.of(resource("demo", "x", "hud", "x:\n  layers: []\n"));
+
+        assertThat(validateKind("x", "hud", sharedGuiAndHud)).extracting(Diagnostic::code)
+                .containsExactly(DiagnosticCodes.VIEW_NOT_OPENABLE);
+        assertThat(validateKind("x", "gui", sharedGuiAndHud)).isEmpty();
+        assertThat(validateKind("x", "gui", onlyHud)).extracting(Diagnostic::code)
+                .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
+        assertThat(validateKind("x", "banana", sharedGuiAndHud)).extracting(Diagnostic::code)
+                .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
+    }
+
     @Test
     void aHostThatNamesNoViewKindsDoesNotJudgeTheReference() {
         assertThat(validate(Map.of(), "demo:ghost")).isEmpty();

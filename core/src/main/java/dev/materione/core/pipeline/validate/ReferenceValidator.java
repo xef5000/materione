@@ -657,7 +657,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if (kinds.isEmpty()) {
             return;
         }
-        List<ContentResource> named = viewsNamed(environment, ref.written(), kinds.keySet());
+        // the step's own kind: narrows the kinds the id may name, as the run-time resolver does; a kind that is
+        // none of the view kinds names no view, so it is the unresolved reference
+        java.util.Set<String> searched = ref.viewKind() == null ? kinds.keySet()
+                : kinds.containsKey(ref.viewKind()) ? java.util.Set.of(ref.viewKind()) : java.util.Set.of();
+        List<ContentResource> named = viewsNamed(environment, ref.written(), searched);
         var target = dev.materione.api.diagnostics.DiagnosticTarget.field(ref.target().toArray(String[]::new));
         if (named.isEmpty()) {
             problems.add(new Diagnostic(
