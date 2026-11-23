@@ -263,7 +263,7 @@ within the resource's own pack.
 - **Actions.** `set_var: {var, op, value}`, where `op` is one of `set`, `add`, `subtract`,
   `multiply`, `toggle`, `remove` or `reset`. `value` is a template. Arithmetic on a non-number is a
   failed action, not a crash.
-- **Expressions.** `vars.local.x`, `vars.session.x`, `vars.player.shop.coins`,
+- **Expressions.** `vars.local.x`, `vars.session.shop.page`, `vars.player.shop.coins`,
   `vars.server.shop.season` and `vars.item.rpg.level` (the item stack the run is about, §38). Bare `vars.x` keeps meaning local, so M2 behaviour is unchanged.
 - **PlaceholderAPI.** The expansion provides `%materione_var_<pack>_<key>%`,
   `%materione_var_<pack>_<key>_<player>%`, `%materione_gui_open%` and `%materione_gui_last%`.
@@ -3232,8 +3232,8 @@ Each decision is reversible by the owner.
 **The template field**
 
 9. **`${` completes from one scope.** `scopeFor` collects, at the selected node: the trigger's context schema filtered to the
-   host (§2.6), the declared variables as `vars.<scope>.<pack>.<key>` (§20 decision 4), the run-local and session names the
-   rule's `set_var` and `prompt` steps write (`vars.name`, `vars.session.name`), `args.*` and the `with:` keys of the calls
+   host (§2.6), the declared variables as `vars.<scope>.<pack>.<key>` (§20 decision 4), the run-local names the
+   rule's `set_var` and `prompt` steps write (`vars.name`; a session variable is a declared one, offered as `vars.session.<pack>.<key>`, and a name no declaration backs is flagged with a shortcut to declare it, views.md §17), `args.*` and the `with:` keys of the calls
    in a named flow (whose context is that of the rules that call it), and, for a rule on a list layer, the concrete
    `entry.<field>` paths the list source declares (§28.5). Completion offers the next path segment, with the value's type,
    and the expression functions with their signature and return type (`contains(text, part)`, from the vocabulary).
