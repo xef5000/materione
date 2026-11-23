@@ -697,11 +697,11 @@ interface SoundFields {
 interface SoundHandle extends ResourceHandle<"sound", SoundFields> {}
 
 /**
- * A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together.
+ * A declared variable: stored per player, on the server, on an item stack or in one open view, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together. A session variable belongs to one open view: private to that viewer, kept by view.back, gone when the view closes.
  * Content type `variable`, stored under `variables/`.
  */
 interface VariableFields {
-  /** Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack) */
+  /** Where the value is stored: player (per player), server (one for the server), item (on the item stack the run is about; stacks whose values differ do not stack) or session (one open view: private to that viewer, gone when the view closes) */
   scope: string;
   /** The value's type: number, string or boolean. */
   type: string;
@@ -3825,7 +3825,7 @@ interface PromptActionParams extends ActionOptions, GuardOptions {
    * Accepts an expression: `m.expr` or an `m.fn` result.
    */
   text: string | Expr;
-  /** Where the answer goes: a run-local name, or session.<name> for the open GUI. */
+  /** Where the answer goes: a run-local name, or session.<key> for a declared session variable of the open view. */
   var: string | Ref<"variable">;
   /**
    * Seconds the player has to answer, from 1 to 600; or a template that renders to them.
@@ -3880,7 +3880,7 @@ interface SetBlockActionParams extends ActionOptions {
 
 /** Parameters of `set_var`. */
 interface SetVarActionParams extends ActionOptions {
-  /** Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>. */
+  /** Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>. */
   var?: string | Ref<"variable">;
   /** Run-local variable name (the M2 spelling of var:) */
   name?: string;
@@ -4336,7 +4336,7 @@ interface ActionCatalog {
    */
   setBlock(params: SetBlockActionParams | string | Expr, options?: ActionOptions): ActionStep<"set_block">;
   /**
-   * Stores a value in a run-local, session or declared player, server or item variable.
+   * Stores a value in a run-local variable or a declared player, server, item or session variable.
    * @since 2.0.0
    * @registeredBy materione
    * @category data
@@ -4637,7 +4637,7 @@ interface SlotHasConditionParams {
 
 /** Parameters of the `var` condition. */
 interface VarConditionParams {
-  /** Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>. */
+  /** Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>. */
   var: string | Ref<"variable">;
   /**
    * How to compare.
@@ -4738,7 +4738,7 @@ interface ConditionCatalog {
    */
   slotHas(params: SlotHasConditionParams): Condition<"slot_has">;
   /**
-   * Compares a run-local, session or declared player, server or item variable with a value.
+   * Compares a run-local variable or a declared player, server, item or session variable with a value.
    * @since 2.0.0
    * @registeredBy materione
    * @category data
@@ -5613,7 +5613,7 @@ interface ListLayerParams extends GuiLayerCommon {
    */
   sort?: JsonValue;
   /**
-   * Which entries a search keeps: { fields: [name] }, matched against the text in vars.session.search (or var:), ignoring case.
+   * Which entries a search keeps: { fields: [name] }, matched against the text in the session variable search of the GUI's pack (or var:), ignoring case.
    * @example {fields: [name]}
    */
   search?: JsonValue;

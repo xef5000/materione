@@ -6,18 +6,18 @@
  *
  * The spelling the editor writes for a declared persistent variable is the qualified `pack:key` (section 20, decision
  * 5): the scope comes from the declaration, so the same spelling reads and writes either scope and a typo cannot
- * create a second key. Session and run-local variables need no declaration and are offered from the steps that use
- * them (`scope.ts`).
+ * create a second key). A session variable is declared the same way (views.md section 3.4); only run-local names need
+ * no declaration, and they are offered from the steps that use them (`scope.ts`).
  *
  * The parsing is pure; the loading and declaring take the sealed channel and nothing else.
  */
 import { ops, unwrap, type FieldEditPayload, type ResourceRef, type RpcChannel } from '../api';
 import { isRecord } from './tree';
 
-export type VariableScope = 'player' | 'server' | 'item';
+export type VariableScope = 'player' | 'server' | 'item' | 'session';
 export type VariableType = 'number' | 'string' | 'boolean';
 
-export const VARIABLE_SCOPES: readonly VariableScope[] = ['player', 'server', 'item'];
+export const VARIABLE_SCOPES: readonly VariableScope[] = ['player', 'server', 'item', 'session'];
 export const VARIABLE_TYPES: readonly VariableType[] = ['number', 'string', 'boolean'];
 
 export interface DeclaredVariable {
@@ -64,7 +64,7 @@ export function declarationsOf(pack: string, path: string, parsed: unknown): Dec
   const out: DeclaredVariable[] = [];
   for (const [key, body] of Object.entries(parsed)) {
     if (!isRecord(body)) continue;
-    const scope = body.scope === 'player' || body.scope === 'server' || body.scope === 'item' ? body.scope : null;
+    const scope = VARIABLE_SCOPES.find((candidate) => candidate === body.scope) ?? null;
     const type = body.type === 'number' || body.type === 'string' || body.type === 'boolean' ? body.type : null;
     if (!scope || !type) continue;
     out.push({
@@ -166,4 +166,37 @@ export function readPath(variable: DeclaredVariable): string {
 /** How a default reads in the picker, briefly. */
 export function describeDefault(variable: DeclaredVariable): string {
   return typeof variable.default === 'string' ? `"${variable.default}"` : String(variable.default);
+}
+
+/** A session variable as a step or an expression names it: the pack when written, and the key. */
+export interface SessionName {
+  pack: string | null;
+  key: string;
+}
+
+const SESSION_WORD = /^[a-z][a-z0-9_]*$/;
+
+/** The session variable a step's `var:` names (`session.key` or `session.pack.key`), or null for any other spelling. */
+export function sessionNameOf(spelling: string): SessionName | null {
+  const parts = spelling.trim().split('.');
+  if (parts[0] !== 'session' || parts.length < 2 || parts.length > 3) return null;
+  const rest = parts.slice(1);
+  if (!rest.every((part) => SESSION_WORD.test(part))) return null;
+  return rest.length === 1 ? { pack: null, key: rest[0]! } : { pack: rest[0]!, key: rest[1]! };
+}
+
+/** The session variable an expression path reads (`vars.session.key` or `vars.session.pack.key`), or null. */
+export function sessionReadOf(path: string): SessionName | null {
+  return path.startsWith('vars.') ? sessionNameOf(path.slice('vars.'.length)) : null;
+}
+
+/** The `pack:key` a session name resolves to, a bare key meaning the editing pack's own. */
+export function sessionId(name: SessionName, ownPack: string): string {
+  return `${name.pack ?? ownPack}:${name.key}`;
+}
+
+/** Whether a session name resolves to a declared session variable. */
+export function sessionDeclared(name: SessionName, ownPack: string, declared: readonly DeclaredVariable[]): boolean {
+  const id = sessionId(name, ownPack);
+  return declared.some((variable) => variable.scope === 'session' && variable.id === id);
 }

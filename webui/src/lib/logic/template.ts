@@ -11,6 +11,7 @@
  * Pure of the DOM and of Svelte.
  */
 import type { TemplateScope } from './scope';
+import { sessionId, sessionReadOf } from './variables';
 
 export type CompletionKind = 'root' | 'path' | 'function' | 'placeholder';
 
@@ -171,6 +172,12 @@ export interface TemplateProblem {
   message: string;
   from: number;
   to: number;
+  /**
+   * Set when the problem is a session variable no declaration backs (`MTR-0063` on the server): the studio offers to
+   * declare it. `key` is the variable's key in the pack being edited; `replace` is the path the read should be spelled
+   * as once it is declared, when the author wrote the bare key (`vars.session.tab`, read as `vars.session.<pack>.tab`).
+   */
+  declare?: { key: string; replace?: string };
 }
 
 const KEYWORDS = new Set(['true', 'false', 'null']);
@@ -215,7 +222,33 @@ function lintBody(body: string, offset: number, scope: TemplateScope, problems: 
     const root = name.split('.')[0]!;
     if (scope.roots.size > 0 && !scope.roots.has(root)) {
       problems.push({ severity: 'warn', message: `'${root}' is not available in this rule: its trigger does not provide it.`, from, to });
+      continue;
     }
+    lintSession(name, from, to, scope, problems);
+  }
+}
+
+/** A `vars.session` read that names no declared session variable: the studio offers to declare it. */
+function lintSession(name: string, from: number, to: number, scope: TemplateScope, problems: TemplateProblem[]): void {
+  const read = scope.sessions ? sessionReadOf(name) : null;
+  if (!read || !scope.sessions || scope.sessions.declared.has(sessionId(read, scope.sessions.pack))) return;
+  const own = read.pack === null || read.pack === scope.sessions.pack;
+  if (read.pack === null) {
+    problems.push({
+      severity: 'warn',
+      message: `'${name}' is not a declared session variable. A session variable is read as vars.session.${scope.sessions.pack}.${read.key}.`,
+      from,
+      to,
+      declare: { key: read.key, replace: `vars.session.${scope.sessions.pack}.${read.key}` },
+    });
+  } else {
+    problems.push({
+      severity: 'warn',
+      message: `'${name}' is not a declared session variable.`,
+      from,
+      to,
+      ...(own ? { declare: { key: read.key } } : {}),
+    });
   }
 }
 

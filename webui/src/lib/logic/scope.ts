@@ -1,6 +1,6 @@
 /**
  * What a template may name at a node (logic.md section 2.6, 3, 31): the trigger's context schema, the declared
- * variables, the run-local and session variables the flow writes, the arguments a named flow is called with, the
+ * variables (session scope included), the run-local variables the flow writes, the arguments a named flow is called with, the
  * expression functions and the placeholders. One list serves the autocomplete and the unknown-root lint, so what the
  * field offers is what the compiler accepts (D5).
  *
@@ -18,7 +18,7 @@ export interface ScopeEntry {
   path: string;
   type: string;
   description: string;
-  origin: 'context' | 'variable' | 'local' | 'session' | 'args';
+  origin: 'context' | 'variable' | 'local' | 'args';
 }
 
 export interface TemplateScope {
@@ -27,6 +27,12 @@ export interface TemplateScope {
   placeholders: PlaceholderEntry[];
   /** The first segments an expression may start with; anything else is the compiler's "unknown root". */
   roots: ReadonlySet<string>;
+  /**
+   * The declared session variables, as `pack:key`, and the pack being edited: present once the declarations are
+   * known, so the lint can tell a session read that names nothing declared (`MTR-0063` on the server) from one the
+   * picker has not loaded yet.
+   */
+  sessions?: { pack: string; declared: ReadonlySet<string> };
 }
 
 /** The expansions Materione's own PlaceholderAPI expansion defines (logic.md section 3.3). */
@@ -67,23 +73,22 @@ function callersOf(graph: Graph, block: LogicBlock, flow: string): { args: Set<s
   return { args, triggers };
 }
 
-/** The run-local and session variable names the owner's flow writes (`set_var`, `prompt`), as expression paths. */
+/** The run-local variable names the owner's flow writes (`set_var`, `prompt`), as expression paths. */
 function written(graph: Graph, owner: string, vocabulary: Vocabulary): ScopeEntry[] {
   const out: ScopeEntry[] = [];
   const seen = new Set<string>();
-  const note = (path: string, origin: 'local' | 'session', description: string): void => {
+  const note = (path: string, description: string): void => {
     if (seen.has(path)) return;
     seen.add(path);
-    out.push({ path, type: 'raw', description, origin });
+    out.push({ path, type: 'raw', description, origin: 'local' });
   };
   for (const node of graph.nodes) {
     if (node.owner !== owner || node.kind !== 'action' || (node.op !== 'set_var' && node.op !== 'prompt')) continue;
     const payload = readPayload(node.value, vocabulary.actions.get(node.op)?.shorthand);
     const name = typeof payload.var === 'string' ? payload.var : typeof payload.name === 'string' ? payload.name : '';
     if (!name || name.includes('${')) continue;
-    if (name.startsWith('session.')) note(`vars.session.${name.slice('session.'.length)}`, 'session', 'A session variable of this GUI');
-    else if (name.startsWith('local.')) note(`vars.${name.slice('local.'.length)}`, 'local', 'Written earlier in this run');
-    else if (!/^(player|server|item)\./.test(name) && !name.includes(':')) note(`vars.${name}`, 'local', 'Written earlier in this run');
+    if (name.startsWith('local.')) note(`vars.${name.slice('local.'.length)}`, 'Written earlier in this run');
+    else if (!/^(player|server|item|session)\./.test(name) && !name.includes(':')) note(`vars.${name}`, 'Written earlier in this run');
   }
   return out;
 }
@@ -114,6 +119,7 @@ export function scopeFor(
   declared: readonly DeclaredVariable[],
   host = 'gui',
   layers: readonly LayerLike[] = [],
+  sessionPack: string | null = null,
 ): TemplateScope {
   if (!vocabulary) return EMPTY_SCOPE;
   const paths: ScopeEntry[] = [];
@@ -176,5 +182,8 @@ export function scopeFor(
     })),
     ...vocabulary.placeholders,
   ];
-  return { paths, functions: vocabulary.functions, placeholders, roots };
+  const sessions = sessionPack === null
+    ? undefined
+    : { pack: sessionPack, declared: new Set(declared.filter((variable) => variable.scope === 'session').map((variable) => variable.id)) };
+  return { paths, functions: vocabulary.functions, placeholders, roots, sessions };
 }

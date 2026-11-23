@@ -5,13 +5,16 @@
    * their signatures); typing `%` completes from the placeholder expansions the scope knows. A name the field would
    * not offer is the name it flags, locally and at once; the compiler's verdict on the same text arrives through
    * `logic.validate` once typing pauses and is drawn here too (`flags`). The value commits on Enter or when the field
-   * loses focus, so a half-typed template never reaches the document.
+   * loses focus, so a half-typed template never reaches the document. A `vars.session` read that no declaration backs
+   * (`MTR-0063`) is flagged with a shortcut that declares the session variable and spells the read as it must be.
    */
   import Icon from '../../../../components/Icon.svelte';
   import { worstOf } from '../../../../logic/diagnose';
-  import { applyCompletion, completeAt, lintTemplate, type CompletionResult } from '../../../../logic/template';
+  import { applyCompletion, completeAt, lintTemplate, type CompletionResult, type TemplateProblem } from '../../../../logic/template';
   import type { NodeFlag } from '../../../../logic/verdicts';
+  import { session } from '../../../../state.svelte';
   import { useInspector } from '../context';
+  import DeclareVariable from '../DeclareVariable.svelte';
 
   interface Props {
     label: string;
@@ -54,6 +57,22 @@
   const open = $derived(result !== null);
   const problems = $derived(lintTemplate(text, scope, { bare }));
   const worst = $derived(problems.some((p) => p.severity === 'error') ? 'error' : (worstOf(flags) ?? (problems.length > 0 ? 'warn' : null)));
+
+  // a session read no declaration backs: the form declares it, then the read is spelled as it must be (views.md section 9)
+  let declaring = $state<TemplateProblem | null>(null);
+  // the declarations are read the first time a field needs them
+  $effect(() => {
+    if (inspector.declaredStatus === 'idle') void inspector.loadDeclared(session.channel);
+  });
+
+  function declared(problem: TemplateProblem): void {
+    declaring = null;
+    const replace = problem.declare?.replace;
+    if (replace === undefined) return;
+    const next = text.slice(0, problem.from) + replace + text.slice(problem.to);
+    text = next;
+    onchange(next);
+  }
 
   function sync(): void {
     caret = input?.selectionStart ?? text.length;
@@ -188,12 +207,25 @@
   {#if problems.length > 0 || flags.length > 0}
     <ul class="problems" data-testid="field-problems">
       {#each problems as problem, index (`l${index}`)}
-        <li class={problem.severity} data-lint><Icon name="triangle-alert" size={12} /> {problem.message}</li>
+        <li class={problem.severity} data-lint>
+          <Icon name="triangle-alert" size={12} /> {problem.message}
+          {#if problem.declare}
+            <button type="button" class="inline" data-testid="declare-session" {disabled} onmousedown={(event) => event.preventDefault()} onclick={() => (declaring = problem)}>Declare it</button>
+          {/if}
+        </li>
       {/each}
       {#each flags as flag, index (`f${index}`)}
         <li class={flag.severity} data-verdict><Icon name={flag.severity === 'info' ? 'info' : 'triangle-alert'} size={12} /> {flag.message}</li>
       {/each}
     </ul>
+  {/if}
+  {#if declaring?.declare}
+    <DeclareVariable
+      start={declaring.declare.key}
+      initialScope="session"
+      ondone={() => declared(declaring!)}
+      oncancel={() => (declaring = null)}
+    />
   {/if}
 </div>
 
@@ -298,5 +330,14 @@
   }
   .problems .info {
     color: var(--muted);
+  }
+  .problems .inline {
+    padding: 0 var(--space-1);
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
   }
 </style>
