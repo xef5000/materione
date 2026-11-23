@@ -841,7 +841,7 @@ const RECIPE_RULES: Record<string, (params: Record<string, unknown>) => Record<s
         ],
         else: [{ message: p.message }],
       },
-      'gui.refresh',
+      'view.refresh',
     ],
   }],
   close_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['view.close'] }],
@@ -982,7 +982,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         document.parsed.main!.behavior = [
           { on: 'gui.click', layer: 'buy', do: [{ message: 'hello' }] },
           { on: 'gui.click', layer: 'sword', do: [{ sound: '' }] },
-          { on: 'gui.click', layer: ['apple', 'coin'], do: ['gui.refresh'] },
+          { on: 'gui.click', layer: ['apple', 'coin'], do: ['view.refresh'] },
         ];
         document.raw = serializeFixtureYaml(document.parsed);
       }

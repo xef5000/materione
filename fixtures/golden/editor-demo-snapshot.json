@@ -661,18 +661,6 @@
           "available": true,
           "category": "gui",
           "deferred": false,
-          "description": "Re-renders the open GUI in place",
-          "displayName": "Refresh GUI",
-          "id": "gui.refresh",
-          "parameters": [],
-          "registeredBy": "materione",
-          "sinceVersion": "1.0.0",
-          "threading": "player_region"
-        },
-        {
-          "available": true,
-          "category": "gui",
-          "deferred": false,
           "description": "Clears, takes, resizes, repairs or enchants the item in an input slot of this GUI",
           "displayName": "Input slot item",
           "id": "gui.slot_item",
@@ -2138,6 +2126,65 @@
           "shorthand": "view",
           "sinceVersion": "1.0.0",
           "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Re-renders the viewers it selects: this flow's own view with no selector, every viewer of a view with view:, or the viewers whose view reads a variable with var:",
+          "displayName": "Refresh view",
+          "id": "view.refresh",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Refresh every viewer of this view: pack:id, or a name in this view's pack",
+              "id": "view",
+              "label": "View",
+              "order": 0,
+              "referenceKind": "view",
+              "required": false,
+              "section": "general",
+              "type": "reference",
+              "uiHint": "reference"
+            },
+            {
+              "advanced": false,
+              "description": "The view kind (gui, dialog) when the id is shared by two kinds",
+              "id": "kind",
+              "label": "Kind",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Refresh the viewers whose view reads this declared variable: player.<key>, server.<pack>.<key> or session.<key>",
+              "id": "var",
+              "label": "Var",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "variable"
+            },
+            {
+              "advanced": false,
+              "description": "With a player variable: whose viewers, a player name or UUID; the flow's own player when omitted",
+              "id": "holder",
+              "label": "Holder",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "view",
+          "sinceVersion": "1.0.0",
+          "threading": "any"
         }
       ],
       "categories": [
@@ -2671,26 +2718,37 @@
         {
           "available": true,
           "category": "gui",
-          "description": "True when the player has a Materione GUI open, or the GUI with this id",
-          "displayName": "In GUI",
-          "id": "in_gui",
+          "description": "True when the player has a view open, or the view with this id, or a view of this kind",
+          "displayName": "In view",
+          "id": "in_view",
           "parameters": [
             {
               "advanced": false,
-              "description": "GUI id, e.g. shop:menu; any open GUI when omitted",
-              "id": "id",
-              "label": "Id",
+              "description": "View id, e.g. shop:menu, or a name in this resource's pack; any open view when omitted",
+              "id": "view",
+              "label": "View",
               "order": 0,
-              "referenceKind": "gui",
+              "referenceKind": "view",
+              "required": false,
+              "section": "general",
+              "type": "reference",
+              "uiHint": "reference"
+            },
+            {
+              "advanced": false,
+              "description": "The view kind (gui, dialog): only a view of this kind counts",
+              "id": "kind",
+              "label": "Kind",
+              "order": 0,
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "reference"
+              "uiHint": "text"
             }
           ],
           "registeredBy": "materione",
-          "shorthand": "id",
-          "sinceVersion": "2.0.0"
+          "shorthand": "view",
+          "sinceVersion": "1.0.0"
         },
         {
           "available": true,
@@ -14082,7 +14140,7 @@
           },
           {
             "advanced": true,
-            "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it",
+            "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; view.refresh and reloads always update it",
             "id": "refresh",
             "label": "Refresh",
             "order": 30,
@@ -20607,7 +20665,7 @@
         },
         {
           "advanced": true,
-          "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it",
+          "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; view.refresh and reloads always update it",
           "id": "refresh",
           "label": "Refresh",
           "order": 30,

@@ -85,6 +85,36 @@ public final class ViewRegistry {
         return entry == null ? Optional.empty() : Optional.ofNullable(entry.last);
     }
 
+    /** The views the player has open now, one per kind that has a record. */
+    public List<ViewRef> open(UUID player) {
+        PlayerViews entry = players.get(player);
+        if (entry == null) {
+            return List.of();
+        }
+        var out = new ArrayList<ViewRef>();
+        for (ViewerRecord record : entry.byKind.values()) {
+            if (record.isOpen()) {
+                out.add(record.ref());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The id of the player with a view open whose name is {@code name} (case-insensitive), if any: a player with none
+     * has no viewer for a refresh to select, so the registry's records are all a by-name selection needs.
+     */
+    public Optional<UUID> playerNamed(String name) {
+        for (PlayerViews entry : players.values()) {
+            for (ViewerRecord record : entry.byKind.values()) {
+                if (record.playerName().equalsIgnoreCase(name)) {
+                    return Optional.of(record.player());
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     /** The player's view history (created empty on first use). */
     public ViewHistory history(UUID player) {
         return players.computeIfAbsent(player, ignored -> new PlayerViews()).history;

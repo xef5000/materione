@@ -40,7 +40,7 @@ public final class GuiRenderer {
      * session keeps (logic.md §6.7): it is recorded before the title is laid out, so a title that reads
      * {@code view.page.<list>.count} sees this render's count. Nothing is written to the window.
      *
-     * @param full true to re-read every layer (a reload or {@code gui.refresh}); false to re-read only the
+     * @param full true to re-read every layer (a reload or {@code view.refresh}); false to re-read only the
      *     dynamic layers (the refresh clock)
      * @param ticks the window's clock
      */

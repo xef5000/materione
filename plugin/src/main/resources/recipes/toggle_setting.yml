@@ -30,4 +30,4 @@ rules:
           - message: "{{on_message}}"
         else:
           - message: "{{off_message}}"
-      - gui.refresh
+      - view.refresh

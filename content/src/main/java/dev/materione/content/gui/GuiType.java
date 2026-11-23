@@ -162,7 +162,7 @@ public final class GuiType implements ContentType {
                                                         "Locked", "Clicks in the viewer's inventory are cancelled")))),
                         new ParameterSchema("refresh", ParameterType.INTEGER, false, null,
                                 "Refresh clock in ticks: the window re-evaluates its dynamic layers this often "
-                                        + "(conditions, templates, animations). Off when absent; gui.refresh and "
+                                        + "(conditions, templates, animations). Off when absent; view.refresh and "
                                         + "reloads always update it", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Refresh", "behavior", 30, true, "number", "", "")),

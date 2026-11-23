@@ -24,7 +24,7 @@ forge.rules.add(m.triggers.guiClick({ layer: "forge_button" }), () => ({
     m.actions.custodyConsume({ slot: 11, await: "saved" }),
     m.actions.custodyConsume({ slot: 13, await: "saved" }),
     m.actions.giveItem({ item: refined, amount: 1 }),
-    m.actions.guiRefresh(),
+    m.actions.viewRefresh(),
   ],
 }));
 

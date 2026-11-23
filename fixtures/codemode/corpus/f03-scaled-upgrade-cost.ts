@@ -11,7 +11,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "upgrade" }), () => ({
             else: [m.actions.message(`<red>You need ${500 * lvl} coins.`)],
           }),
           m.actions.setVar({ var: "bench:bloodfang_level", op: "add", value: m.expr`1` }),
-          m.actions.guiRefresh(),
+          m.actions.viewRefresh(),
         ],
       })),
       { else: [m.actions.message("<gold>Bloodfang is already at max level.")] },

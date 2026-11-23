@@ -25,7 +25,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "claim" }), () => ({
         then: [m.actions.giveMoney(100 * day)],
       })),
     ),
-    m.actions.guiRefresh(),
+    m.actions.viewRefresh(),
   ],
 }));
 

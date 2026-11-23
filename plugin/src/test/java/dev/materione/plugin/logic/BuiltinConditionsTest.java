@@ -7,7 +7,7 @@ import dev.materione.api.registry.BehaviorVocabulary;
 import dev.materione.api.registry.RegistryKeys;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.logic.support.ItemCatalog;
-import dev.materione.plugin.logic.support.OpenGuis;
+import dev.materione.plugin.logic.support.OpenViews;
 import dev.materione.plugin.logic.support.SlotPeek;
 import dev.materione.plugin.logic.currency.CurrencyReads;
 import dev.materione.plugin.gui.GuiBridge;
@@ -25,7 +25,7 @@ class BuiltinConditionsTest {
 
     /** Only the eight in #210's scope: {@code var} waits for the variables API (#211), {@code slot_has} for #218. */
     private static final Set<String> EXPECTED = Set.of("has_permission", "has_money", "has_exp", "has_item",
-            "has_item_space", "is_near", "in_world", "in_gui", "var", "slot_has");
+            "has_item_space", "is_near", "in_world", "in_view", "var", "slot_has");
 
     private static final Set<String> COMPOSITES = Set.of("all", "any", "not", "at_least");
 
@@ -48,8 +48,8 @@ class BuiltinConditionsTest {
         assertThat(byId.get("has_item_space").description().shorthand()).isEqualTo("slots");
         assertThat(byId.get("in_world").description().shorthand()).isEqualTo("worlds");
         assertThat(byId.get("in_world").description().category().id()).isEqualTo("world");
-        assertThat(byId.get("in_gui").description().shorthand()).isEqualTo("id");
-        assertThat(byId.get("in_gui").description().category().id()).isEqualTo("gui");
+        assertThat(byId.get("in_view").description().shorthand()).isEqualTo("view");
+        assertThat(byId.get("in_view").description().category().id()).isEqualTo("gui");
         assertThat(byId.get("is_near").description().shorthand()).isNull();
         assertThat(byId.get("is_near").description().category().id()).isEqualTo("world");
     }
@@ -83,7 +83,7 @@ class BuiltinConditionsTest {
 
     @Test
     void noBuiltInConditionTakesACompositeName() {
-        var ids = BuiltinLogic.conditions(service.providers(), OpenGuis.none(), ItemCatalog.none(), SlotPeek.none())
+        var ids = BuiltinLogic.conditions(service.providers(), OpenViews.none(), ItemCatalog.none(), SlotPeek.none())
                 .stream()
                 .map(ConditionType::id)
                 .toList();

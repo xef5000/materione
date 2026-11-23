@@ -89,7 +89,7 @@ shop:
         - run_command:
             command: "say MATERIONE-SHOWCASE-BUY"
             as: console
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: servers
       do:

@@ -4,7 +4,7 @@ import java.util.concurrent.CompletionStage;
 
 /**
  * One predicate in the {@code conditions} registry (logic.md §4.2): {@code has_permission},
- * {@code has_money}, {@code in_gui}. Registered and described exactly like an {@link ActionType},
+ * {@code has_money}, {@code in_view}. Registered and described exactly like an {@link ActionType},
  * and parsed once at load into the immutable {@code P}.
  *
  * <h2>Contracts</h2>

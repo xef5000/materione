@@ -127,7 +127,7 @@ describe('projection round trip', () => {
     expect(targetOf(graph, branch.id, 'then')).toBe('behavior.0.do.0.then.0');
     expect(targetOf(graph, branch.id, 'else')).toBe('behavior.0.do.0.else.0');
     expect(targetOf(graph, branch.id, 'after')).toBe('behavior.0.do.1');
-    expect(graph.byId.get('behavior.0.do.1')!.op).toBe('gui.refresh'); // a bare name is an action node
+    expect(graph.byId.get('behavior.0.do.1')!.op).toBe('view.refresh'); // a bare name is an action node
     const guard = graph.byId.get('behavior.1.do.0')!;
     expect(guard.kind).toBe('require');
     expect(guard.ports.map((port) => port.id)).toEqual(['after', 'steps', 'failed']);

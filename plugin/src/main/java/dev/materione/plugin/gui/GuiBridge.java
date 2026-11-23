@@ -7,6 +7,7 @@ import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
 import dev.materione.plugin.view.ViewBridge;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewRefresher;
 import dev.materione.plugin.view.ViewRegistry;
 import java.util.Objects;
 import java.util.Optional;
@@ -30,7 +31,7 @@ public final class GuiBridge {
     /** The collaborators an action needs. */
     public record Services(
             GuiLookup guis, ViewRegistry views, ViewKinds kinds, GuiOpener opener, GuiLifecycle lifecycle,
-            GuiLiveRefresh refresh, InputSlotPort inputs, GuiPages pages) {
+            GuiLiveRefresh refresh, InputSlotPort inputs, GuiPages pages, ViewRefresher refresher) {
 
         public Services {
             Objects.requireNonNull(guis, "guis");
@@ -41,6 +42,7 @@ public final class GuiBridge {
             Objects.requireNonNull(refresh, "refresh");
             Objects.requireNonNull(inputs, "inputs");
             Objects.requireNonNull(pages, "pages");
+            Objects.requireNonNull(refresher, "refresher");
         }
     }
 
@@ -50,7 +52,7 @@ public final class GuiBridge {
     /** Binds the runtime. Called once, when the runtime is built; a second call replaces the first. */
     public void bind(Services services) {
         this.services = Objects.requireNonNull(services, "services");
-        view.bind(new ViewBridge.Services(services.views(), services.kinds()));
+        view.bind(new ViewBridge.Services(services.views(), services.kinds(), services.refresher()));
     }
 
     /** The bound services, or empty before the runtime exists. */

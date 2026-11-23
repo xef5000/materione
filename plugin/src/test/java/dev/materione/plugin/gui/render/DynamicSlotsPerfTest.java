@@ -67,7 +67,7 @@ class DynamicSlotsPerfTest {
             best = Math.min(best, perPass);
         }
 
-        System.out.printf("MATERIONE-PERF gui.refresh pass %d sessions x %d dynamic slots: %.3f ms (budget %.1f)%n",
+        System.out.printf("MATERIONE-PERF view.refresh pass %d sessions x %d dynamic slots: %.3f ms (budget %.1f)%n",
                 SESSIONS, SLOTS, best, BUDGET_MS_PER_PASS);
         assertThat(best)
                 .as("one refresh pass (%d sessions x %d dynamic slots), best of three: %.3f ms",

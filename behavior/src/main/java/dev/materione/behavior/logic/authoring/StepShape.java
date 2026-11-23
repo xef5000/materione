@@ -12,7 +12,7 @@ import java.util.Set;
  * The structural check of one authored step, and the kind it names (logic.md §2.2). A step is a
  * mapping with exactly one kind: a control kind ({@code if}, {@code require}, {@code choose},
  * {@code wait}, {@code stop}, {@code call}) or one registered action. Anything else is an unknown kind
- * and the edit is refused. Bare names ({@code - gui.refresh}, {@code - stop}) are steps too.
+ * and the edit is refused. Bare names ({@code - view.refresh}, {@code - stop}) are steps too.
  *
  * <p>This is the authoring check, not the compiler's: the compiler also checks the parameters and the
  * expressions, and reports them as diagnostics on the accepted edit.

@@ -58,7 +58,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "upgrade", click: "left" }), () => (
     }),
     m.steps.require([m.actions.takeMoney(500)], { else: [m.actions.message("<red>The upgrade costs 500 coins.")] }),
     m.actions.setVar({ var: level, op: "add", value: "1" }),
-    m.actions.guiRefresh(),
+    m.actions.viewRefresh(),
   ],
 }));
 

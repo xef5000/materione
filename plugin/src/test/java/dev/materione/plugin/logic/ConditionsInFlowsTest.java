@@ -97,13 +97,13 @@ class ConditionsInFlowsTest {
     @Test
     void aConditionIsCountedInsideAtLeast() {
         fake.permissions.add("probe.fly");
-        // in_gui is false here (no GUI port is wired in this test), so at least two of the two cannot hold
+        // in_view is false here (no GUI port is wired in this test), so at least two of the two cannot hold
         var parsed = compile(map("on", "click:right", "do", List.of(
                 map("if", map("at_least", map("count", 2, "of",
-                                List.of(map("has_permission", "probe.fly"), map("in_gui", "shop:menu")))),
+                                List.of(map("has_permission", "probe.fly"), map("in_view", "shop:menu")))),
                         "then", List.of(map("message", "both"))),
                 map("if", map("at_least", map("count", 1, "of",
-                                List.of(map("has_permission", "probe.fly"), map("in_gui", "shop:menu")))),
+                                List.of(map("has_permission", "probe.fly"), map("in_view", "shop:menu")))),
                         "then", List.of(map("message", "one"))))));
 
         assertThat(parsed.problems()).isEmpty();

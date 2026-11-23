@@ -28,7 +28,7 @@ import dev.materione.plugin.gui.session.GuiViewerState;
  * of a changed or removed GUI get the new version, and their <em>session carries on</em>. Arguments,
  * session variables and the back stack belong to the session, which a reload does not touch; only the
  * window is rewritten, re-opened or (for a GUI that is gone) closed. The same in-place rewrite is
- * what {@code gui.refresh} does on demand.
+ * what {@code view.refresh} does on demand.
  *
  * <p>Runs on the global thread after the swap ({@link #afterSwap}) and touches a viewer only on that
  * viewer's own thread. It decides nothing about content: {@link GuiRefreshPlan} says what each window
@@ -94,7 +94,7 @@ public final class GuiLiveRefresh {
     }
 
     /**
-     * {@code gui.refresh}: rewrites the viewer's window from the GUI as it is live now, in place.
+     * {@code view.refresh}: rewrites the viewer's window from the GUI as it is live now, in place.
      *
      * @return false when the GUI is no longer live or the viewer's window is not this session's
      */
@@ -149,7 +149,7 @@ public final class GuiLiveRefresh {
     /**
      * One viewer's window brought up to date. Runs on the viewer's own thread.
      *
-     * @param full true to read every layer again (a reload, {@code gui.refresh}); false to read the dynamic layers
+     * @param full true to read every layer again (a reload, {@code view.refresh}); false to read the dynamic layers
      *     and keep the cached entries of the lists (a page change)
      */
     void refreshViewer(Viewer viewer, ViewerRecord session, Optional<RuntimeGuis.Live> now, boolean full) {

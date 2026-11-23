@@ -38,7 +38,7 @@ public record GuiRun(GuiBridge.Services services, Viewer viewer, ViewerRecord re
     }
 
     /**
-     * Resolves a run that acts on its own open GUI window ({@code gui.refresh}, {@code gui.page},
+     * Resolves a run that acts on its own open GUI window ({@code gui.page},
      * {@code gui.slot_item}): the run must belong to a GUI viewer record that is still open and still the player's.
      */
     public static GuiRun ofOpenSession(GuiBridge bridge, LogicContext context) {

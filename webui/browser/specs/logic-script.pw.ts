@@ -55,7 +55,7 @@ const SEEDED = `behavior:
       - apple
       - coin
     do:
-      - gui.refresh
+      - view.refresh
 `;
 
 test('shows the resource\'s behavior as YAML, and nothing else of the file', async ({ page }) => {
