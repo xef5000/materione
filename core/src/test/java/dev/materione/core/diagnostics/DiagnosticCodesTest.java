@@ -61,8 +61,10 @@ class DiagnosticCodesTest {
         // MTR-0120 a template value refused at run time, the step did nothing: logic.md sections 42 and 44, #464, #470;
         // MTR-0122 a protection provider failed and that call was denied, MTR-0123 a protection setting is invalid,
         // MTR-0124 a protection provider cannot be used on this server: protection.md, logic.md section 43, #466;
-        // MTR-0125 a command's selector matched more players than it runs for: logic.md section 40, #467)
-        assertThat(DiagnosticCodes.all()).hasSize(112);
+        // MTR-0125 a command's selector matched more players than it runs for: logic.md section 40, #467;
+        // MTR-0126 a view.open names a view kind no verb opens: views.md sections 3.6 and 16, #455)
+        assertThat(DiagnosticCodes.all()).hasSize(113);
+        assertThat(DiagnosticCodes.VIEW_NOT_OPENABLE.code()).isEqualTo("MTR-0126");
         assertThat(DiagnosticCodes.COMMAND_SELECTOR_CAPPED.code()).isEqualTo("MTR-0125");
         assertThat(DiagnosticCodes.COMMAND_SELECTOR_CAPPED.defaultSeverity()).isEqualTo(Severity.WARN);
         assertThat(DiagnosticCodes.PROTECTION_PROVIDER_FAILED.code()).isEqualTo("MTR-0122");

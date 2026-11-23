@@ -12,7 +12,6 @@ import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.WindowHost;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -72,7 +71,7 @@ public final class GuiLiveRefresh {
                     + " removed=" + removed + " players=" + Bukkit.getOnlinePlayers().size());
         }
         Set<NamespacedId> affected = Set.copyOf(changes.keySet());
-        for (ViewerRecord session : List.copyOf(sessions.all())) {
+        for (ViewerRecord session : sessions.all(GuiViewerState.KIND)) {
             Optional<RuntimeGuis.Live> now = after.gui(session.definition());
             boolean refresh = affected.contains(session.definition());
             if (!refresh && now.filter(live -> live.logic().ticks() || live.clockPeriod() > 0).isEmpty()) {

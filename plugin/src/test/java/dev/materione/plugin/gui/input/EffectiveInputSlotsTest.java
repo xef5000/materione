@@ -54,10 +54,10 @@ class EffectiveInputSlotsTest {
                 id -> java.util.Optional.empty(), ignored -> { }, fixture.logic.lookup()).gui(compiled.id()).orElseThrow();
         var session = GuiViewerState.record(UUID.randomUUID(), "Probe", compiled.id(), Map.of());
         var renderer = new GuiRenderer(RenderReporter.SILENT);
-        session.sessionValues().put("tab", false);
+        session.sessionValue("tab", false);
         var hiddenRender = renderer.render(fixture.viewer, session, live, true, 0);
         assertThat(live.inputs().effective(live.clicks(), hiddenRender).isInput(0)).isTrue();
-        session.sessionValues().put("tab", true);
+        session.sessionValue("tab", true);
         var firstFrame = renderer.render(fixture.viewer, session, live, true, 0);
         var secondFrame = renderer.render(fixture.viewer, session, live, true, 4);
         assertThat(live.inputs().effective(live.clicks(), firstFrame).isInput(0)).isFalse();

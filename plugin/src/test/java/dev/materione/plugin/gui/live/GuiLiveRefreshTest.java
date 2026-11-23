@@ -44,8 +44,8 @@ class GuiLiveRefreshTest {
         f.gui(shop("Shop", 3));
         session = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("shop"), Map.of("category", "tools"),
                 OpenRequest.Cause.API)).record();
-        session.sessionValues().put("tab", "weapons");
-        GuiViewerState.of(session).pages().put("list", 4);
+        session.sessionValue("tab", "weapons");
+        GuiViewerState.of(session).putPage("list", 4);
         f.windows.log.clear();
     }
 

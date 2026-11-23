@@ -133,7 +133,7 @@ class GuiOpenerTest {
     @Test
     void openingAnotherGuiReplacesTheFirstFiresItsCloseAndRemembersIt() {
         ViewerRecord shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).record();
-        shop.sessionValues().put("tab", "weapons");
+        shop.sessionValue("tab", "weapons");
         f.ran.clear();
 
         ViewerRecord map = open("map", Map.of(), OpenRequest.Cause.ACTION).record();
@@ -148,7 +148,7 @@ class GuiOpenerTest {
     @Test
     void goingBackRestoresTheArgumentsAndTheSessionVariables() {
         ViewerRecord shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).record();
-        shop.sessionValues().put("tab", "weapons");
+        shop.sessionValue("tab", "weapons");
         open("map", Map.of(), OpenRequest.Cause.ACTION);
         f.ran.clear();
 

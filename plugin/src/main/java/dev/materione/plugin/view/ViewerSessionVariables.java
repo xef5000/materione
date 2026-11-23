@@ -24,11 +24,6 @@ public final class ViewerSessionVariables implements SessionVariables {
 
     @Override
     public void put(String name, Object value) {
-        record.mutating("session value");
-        if (value == null) {
-            record.sessionValues().remove(name);
-        } else {
-            record.sessionValues().put(name, value);
-        }
+        record.sessionValue(name, value);
     }
 }

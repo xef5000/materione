@@ -5,6 +5,7 @@ import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.render.Rendered;
 import dev.materione.plugin.view.ViewerPayload;
 import dev.materione.plugin.view.ViewerRecord;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -67,9 +68,19 @@ public final class GuiViewerState implements ViewerPayload {
         }
     }
 
-    /** Per-list page state ({@code view.page.<list>}); the seam the list component fills. */
+    /** Per-list page state ({@code view.page.<list>}), read-only: {@link #putPage(String, Object)} writes it. */
     public Map<String, Object> pages() {
-        return pages;
+        return Collections.unmodifiableMap(pages);
+    }
+
+    /** Sets the page state of {@code list}, or removes it when {@code value} is null; the list component's seam. */
+    public void putPage(String list, Object value) {
+        mutating("page");
+        if (value == null) {
+            pages.remove(list);
+        } else {
+            pages.put(list, value);
+        }
     }
 
     /** Claims the right to run this viewer's ticker; false when one already runs. */

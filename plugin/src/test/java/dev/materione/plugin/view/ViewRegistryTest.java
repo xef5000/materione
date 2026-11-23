@@ -24,8 +24,8 @@ class ViewRegistryTest {
     @Test
     void aSessionHoldsItsArgumentsVariablesAndPageStateAndStartsOpen() {
         ViewerRecord session = session(alex, SHOP);
-        session.sessionValues().put("tab", "weapons");
-        GuiViewerState.of(session).pages().put("players", 2);
+        session.sessionValue("tab", "weapons");
+        GuiViewerState.of(session).putPage("players", 2);
 
         assertThat(session.isOpen()).isTrue();
         assertThat(session.definition()).isEqualTo(SHOP);
@@ -76,7 +76,7 @@ class ViewRegistryTest {
 
         assertThat(sessions.current(alex)).isEmpty();
         assertThat(sessions.current(blake)).containsSame(b);
-        assertThat(sessions.showing(SHOP)).containsExactly(b);
+        assertThat(sessions.showing(GuiViewerState.KIND, SHOP)).containsExactly(b);
         assertThat(sessions.openCount()).isEqualTo(1);
     }
 
@@ -139,10 +139,10 @@ class ViewRegistryTest {
     @Test
     void aSnapshotRestoresArgumentsVariablesAndPagesIntoAFreshSession() {
         ViewerRecord original = session(alex, SHOP);
-        original.sessionValues().put("tab", "weapons");
-        GuiViewerState.of(original).pages().put("list", 3);
+        original.sessionValue("tab", "weapons");
+        GuiViewerState.of(original).putPage("list", 3);
         ViewerRecord.Snapshot snapshot = original.snapshot();
-        original.sessionValues().put("tab", "armour"); // later changes do not reach the snapshot
+        original.sessionValue("tab", "armour"); // later changes do not reach the snapshot
 
         ViewerRecord back = GuiViewerState.record(alex, "Alex", snapshot.definition(), snapshot.args());
         back.restore(snapshot);
@@ -244,15 +244,30 @@ class ViewRegistryTest {
         sessions.begin(second);
         sessions.begin(session(alex, MAP)); // alex leaves the shop for the map
 
-        assertThat(sessions.showing(SHOP)).containsExactly(second);
-        assertThat(sessions.showing(MAP)).hasSize(1);
+        assertThat(sessions.showing(GuiViewerState.KIND, SHOP)).containsExactly(second);
+        assertThat(sessions.showing(GuiViewerState.KIND, MAP)).hasSize(1);
 
         sessions.end(second, CloseReason.PLAYER);
-        assertThat(sessions.showing(SHOP)).isEmpty();
+        assertThat(sessions.showing(GuiViewerState.KIND, SHOP)).isEmpty();
 
         sessions.forget(alex);
-        assertThat(sessions.showing(MAP)).isEmpty();
+        assertThat(sessions.showing(GuiViewerState.KIND, MAP)).isEmpty();
         assertThat(sessions.all()).isEmpty();
+    }
+
+    @Test
+    void aGuiAndADialogSharingAnIdAreIndexedApart() {
+        ViewerRecord gui = session(alex, SHOP);
+        ViewerRecord dialog = record(alex, "dialog", SHOP);
+        sessions.begin(gui);
+        sessions.begin(dialog);
+
+        assertThat(sessions.showing(GuiViewerState.KIND, SHOP)).containsExactly(gui);
+        assertThat(sessions.showing("dialog", SHOP)).containsExactly(dialog);
+
+        sessions.end(dialog, CloseReason.PLAYER);
+        assertThat(sessions.showing(GuiViewerState.KIND, SHOP)).containsExactly(gui);
+        assertThat(sessions.showing("dialog", SHOP)).isEmpty();
     }
 
     @Test

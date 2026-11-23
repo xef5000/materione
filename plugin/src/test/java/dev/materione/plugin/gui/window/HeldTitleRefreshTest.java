@@ -19,10 +19,10 @@ class HeldTitleRefreshTest {
         var session = session();
         var tasks = new ArrayList<Runnable>();
         var calls = new ArrayList<String>();
-        session.sessionValues().put("value", "old");
+        session.sessionValue("value", "old");
         queue.ensure(session, () -> calls.add(session.sessionValues().get("value").toString()),
                 (task, retired) -> { tasks.add(task); return ScheduledHandle.NONE; });
-        session.sessionValues().put("value", "latest");
+        session.sessionValue("value", "latest");
         queue.ensure(session, () -> calls.add("obsolete"), (task, retired) -> {
             tasks.add(task);
             return ScheduledHandle.NONE;

@@ -22,7 +22,7 @@ releases may change file formats, settings and the public API.
   `<kind>:<id>`.** The triggers (`gui.opening`, `gui.open`, `gui.close`, `gui.click`, ...), `gui.refresh`, `in_gui` (row V2),
   `gui.page` and `gui.slot_item` are unchanged. `view.close` takes an optional `view:` (close that view if it is the one the player
   has open, from any rule) and both `view.open` and `view.close` take an optional `kind:` for an id two kinds share. A static
-  `view.open` that names a kind no verb opens (a HUD) is `MTR-0057`. The **view facet** (`viewerRule`, `rerenderDefault`,
+  `view.open` that names a kind no verb opens (a HUD) is the new `MTR-0126` (the step is kept and fails when it runs). The **view facet** (`viewerRule`, `rerenderDefault`,
   `supportsTarget`, `supportsKey`) is now part of a content type's self-description: `gui` declares it, `authoring.describe` reports it
   as a `view` block, the generated SDK gets `viewOpen`, `viewClose` and `viewBack`, types a `view` reference as the union of the
   view kinds and says on a view kind's doc comment what it is, and the editor's reference field offers every view kind's

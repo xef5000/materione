@@ -77,7 +77,7 @@ public final class GuiPages {
             return Optional.empty(); // already on that page (a step past the last one): nothing moved, nothing fires
         }
         Object stored = GuiViewerState.of(session).pages().get(list);
-        GuiViewerState.of(session).pages().put(list, new ListPage(number, before.count(), before.size()).toMap());
+        GuiViewerState.of(session).putPage(list, new ListPage(number, before.count(), before.size()).toMap());
         if (!refresh.repaint(viewer, session)) {
             restore(session, list, stored);
             return Optional.of("the window is not showing this GUI");
@@ -88,10 +88,6 @@ public final class GuiPages {
     }
 
     private static void restore(ViewerRecord session, String list, Object stored) {
-        if (stored == null) {
-            GuiViewerState.of(session).pages().remove(list);
-        } else {
-            GuiViewerState.of(session).pages().put(list, stored);
-        }
+        GuiViewerState.of(session).putPage(list, stored);
     }
 }

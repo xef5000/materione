@@ -10,6 +10,7 @@ import dev.materione.api.scheduling.ScheduledHandle;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.Viewer;
+import dev.materione.plugin.gui.session.GuiViewerState;
 import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
 import java.util.Objects;
@@ -272,7 +273,9 @@ public final class PromptService {
         if (services == null) {
             return null;
         }
-        ViewerRecord current = services.views().current(viewer.id()).filter(ViewerRecord::isOpen).orElse(null);
+        // the container window only: a prompt hides a GUI, and a record of another kind has no GUI lifecycle
+        ViewerRecord current = services.views().current(viewer.id(), GuiViewerState.KIND)
+                .filter(ViewerRecord::isOpen).orElse(null);
         if (current == null) {
             return null;
         }

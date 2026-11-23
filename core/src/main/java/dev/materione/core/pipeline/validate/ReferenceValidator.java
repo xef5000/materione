@@ -644,10 +644,12 @@ public final class ReferenceValidator implements ValidateStage.Validator {
     /**
      * A {@code view.open} that names a view by a static id (views.md section 3.6, 9): the id must be a definition of
      * some view kind, which the host's content types say (their view facet), and that kind must be one a verb opens. A
-     * kind whose viewers are formed by a condition (a HUD) shows itself and cannot be opened: that is a step rejected at
-     * load ({@code MTR-0057}), and the step fails the same way when it runs. A host that names no view kinds does not
+     * kind whose viewers are formed by a condition (a HUD) shows itself and cannot be opened: that is {@code MTR-0126},
+     * the step is kept, and it fails the same way when it runs. Only {@code view.open} is judged so. A host that names no view kinds does not
      * judge the reference.
      */
+    private static final String OPEN_VIEW = "view.open";
+
     private static void validateViewReference(
             ContentResource resource, StaticReferences.Ref ref, ValidationEnvironment environment,
             List<Diagnostic> problems) {
@@ -665,10 +667,12 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                     resource.id(), null, "check the id, or declare the view in a pack", target));
             return;
         }
-        if (named.stream().noneMatch(found -> kinds.get(found.contentType()).openable())) {
+        // only an open is judged: view.close's view: names what to close, and a predicate kind has nothing to close
+        if (OPEN_VIEW.equals(ref.origin())
+                && named.stream().noneMatch(found -> kinds.get(found.contentType()).openable())) {
             ContentResource shown = named.get(0);
             problems.add(new Diagnostic(
-                    DiagnosticCodes.LOGIC_STEP_REJECTED, Severity.WARN,
+                    DiagnosticCodes.VIEW_NOT_OPENABLE, Severity.WARN,
                     resource.id() + " step '" + ref.origin() + "' at " + String.join(".", ref.target())
                             + " names " + shown.contentType() + " '" + ref.written()
                             + "', which shows itself to the players for whom its condition holds; no verb opens it",

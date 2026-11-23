@@ -123,7 +123,7 @@ class GuiActionsTest {
         f.gui(DETAIL);
         menu = f.opener.open(OpenRequest.of(f.viewer, GuiFixture.id("menu"), Map.of("page", "2"),
                 OpenRequest.Cause.API)).record();
-        menu.sessionValues().put("tab", "weapons");
+        menu.sessionValue("tab", "weapons");
         f.ran.clear();
     }
 

@@ -197,7 +197,7 @@ class OwnershipRefreshTransactionTest {
             assertThat(live.logic().rules("gui.slot_change")).hasSize(1);
             var playerId = UUID.randomUUID();
             var session = GuiViewerState.record(playerId, "Probe", compiled.id(), Map.of());
-            session.sessionValues().put("cover", false);
+            session.sessionValue("cover", false);
             var sessions = new ViewRegistry();
             sessions.begin(session);
             var pdc = proxy(PersistentDataContainer.class, (name, args) -> {
@@ -319,7 +319,7 @@ class OwnershipRefreshTransactionTest {
                 var clicks = new InputSlotClicks(lookup, sessions, eventRecorder, guard, journal);
                 var operations = new InputSlotOps(lookup, journal);
                 topItems[0] = FakeStack.of(5);
-                session.sessionValues().put("cover", true);
+                session.sessionValue("cover", true);
                 host.rewrite(viewer, session, newer);
                 assertThat(GuiViewerState.of(session).displayed()).containsSame(live);
                 assertThat(clicks.policyOf(menu, player).slots().isInput(0)).isTrue();
@@ -397,7 +397,7 @@ class OwnershipRefreshTransactionTest {
             }
             topItems[0] = FakeStack.of(5);
             var events = new GuiEvents((rules, event) -> {
-                session.sessionValues().put("cover", true);
+                session.sessionValue("cover", true);
                 host.rewrite(viewer, session, live);
                 assertThat(menu.inputSlots()).contains(0);
                 assertThat(topItems[0].getAmount()).isEqualTo(5);
@@ -405,7 +405,7 @@ class OwnershipRefreshTransactionTest {
                 assertThat(journalWrites.get()).isZero();
                 assertThat(sends.get()).isZero();
                 if (revert) {
-                    session.sessionValues().put("cover", false);
+                    session.sessionValue("cover", false);
                     host.rewrite(viewer, session, live);
                     assertThat(menu.inputSlots()).contains(0);
                     assertThat(returns.get()).isZero();
@@ -454,8 +454,8 @@ class OwnershipRefreshTransactionTest {
                 assertThat(sends.get()).isZero();
                 assertThat(cursor.get().getAmount()).isEqualTo(2);
                 assertThat(tasks).hasSize(1);
-                session.sessionValues().put("cover", false);
-                session.sessionValues().put("cover", true);
+                session.sessionValue("cover", false);
+                session.sessionValue("cover", true);
                 if (!fail) {
                     var newestGlyph = new AtomicInteger(0xE201);
                     var newest = GuiCompiler.compile(fixture.definition(yaml.replace("DYNAMIC", "LATEST")),

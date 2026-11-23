@@ -684,6 +684,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0125", Severity.WARN, "A command's selector matched more players than it runs for");
 
     /**
+     * A {@code view.open} names, by a static id, a definition of a view kind no verb opens (a {@code predicate} kind, a
+     * HUD, whose viewers are formed by its own condition; views.md sections 3.6 and 16). Reported by the level-3
+     * reference check. The step is kept, and fails the same way when it runs.
+     */
+    public static final DiagnosticCode VIEW_NOT_OPENABLE =
+            new DiagnosticCode("MTR-0126", Severity.WARN, "A view.open names a view kind no verb opens");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -828,7 +836,8 @@ public final class DiagnosticCodes {
             QUANTITY_REFUSED,
             PROTECTION_PROVIDER_FAILED,
             PROTECTION_SETTING_INVALID,
-            PROTECTION_PROVIDER_UNUSABLE);
+            PROTECTION_PROVIDER_UNUSABLE,
+            VIEW_NOT_OPENABLE);
 
     private DiagnosticCodes() {}
 

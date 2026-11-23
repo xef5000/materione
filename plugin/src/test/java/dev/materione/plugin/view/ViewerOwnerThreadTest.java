@@ -127,7 +127,7 @@ class ViewerOwnerThreadTest {
         // the live refresh walks every record, a placeholder reads the current and last view, row V1's write observer
         // looks viewers up by definition: all of it from a thread that is not the owner's
         Thread reader = new Thread(() -> {
-            f.sessions.showing(menuId).forEach(record -> record.ref().toString());
+            f.sessions.showing(GuiViewerState.KIND, menuId).forEach(record -> record.ref().toString());
             f.sessions.all().forEach(ViewerRecord::isOpen);
             new ViewRegistryPort(f.sessions).openView(f.viewer.id());
             new ViewRegistryPort(f.sessions).lastView(f.viewer.id());
@@ -158,8 +158,8 @@ class ViewerOwnerThreadTest {
     private static final List<String> MAY_MUTATE = List.of(
             "dev/materione/plugin/view/", "dev/materione/plugin/gui/");
     private static final Pattern MUTATORS = Pattern.compile(
-            "\\.(attach|prompting|restore|typedArgs|remember|displayed|forgetWindow|advanceTicks|advanceWindowTicks)"
-                    + "\\((?!\\))");
+            "\\.(attach|prompting|restore|typedArgs|remember|displayed|forgetWindow|advanceTicks|advanceWindowTicks"
+                    + "|sessionValue|putPage)\\((?!\\))");
 
     @Test
     void onlyTheViewAndGuiRuntimesCallAMutatorOfAViewerRecord() throws IOException {

@@ -9,6 +9,7 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.view.ViewBridge;
+import dev.materione.plugin.view.ViewHistory;
 import dev.materione.plugin.view.ViewKind;
 import dev.materione.plugin.view.ViewRun;
 import dev.materione.plugin.view.ViewerRecord;
@@ -21,7 +22,8 @@ import java.util.Optional;
  * {@code view.back}: goes back to the view the player left by opening this one, whatever its kind (a GUI, then a
  * dialog, then back to the GUI; views.md §3.6). The previous view comes back with the arguments it was opened with and
  * the session values it had (logic.md §3.1); this one is replaced and is not remembered, so going back twice goes two
- * views back. With nothing to go back to the step fails and the window stays.
+ * views back. With nothing to go back to the step fails and the window stays; a back that fails (the view is not live,
+ * the open is refused) keeps its history entry, so a later back tries the same view again.
  */
 public final class BackViewAction implements ActionType<BackViewAction.Params> {
 
@@ -64,15 +66,21 @@ public final class BackViewAction implements ActionType<BackViewAction.Params> {
         } catch (ViewRun.Refused refused) {
             return ActionOutcome.failed(refused.getMessage());
         }
-        Optional<ViewerRecord.Snapshot> previous = run.services().views().history(run.viewer().id()).pop();
+        ViewHistory history = run.services().views().history(run.viewer().id());
+        Optional<ViewerRecord.Snapshot> previous = history.pop();
         if (previous.isEmpty()) {
             return ActionOutcome.failed("nothing to go back to");
         }
         Optional<ViewKind> kind = run.services().kinds().of(previous.get().kind());
         if (kind.isEmpty()) {
+            history.push(previous.get()); // a failed back keeps its entry: the next back tries the same view
             return ActionOutcome.failed("the " + previous.get().kind() + " view kind is not available");
         }
         OpenResult result = kind.get().open(OpenRequest.back(run.viewer(), previous.get()));
-        return result.ok() ? ActionOutcome.OK : ActionOutcome.failed(result.reason());
+        if (!result.ok()) {
+            history.push(previous.get());
+            return ActionOutcome.failed(result.reason());
+        }
+        return ActionOutcome.OK;
     }
 }

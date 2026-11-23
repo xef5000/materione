@@ -31,13 +31,13 @@ class TitleRefreshQueueTest {
         var queue = new TitleRefreshQueue();
         var scheduled = new ArrayList<Runnable>();
         var displayed = new ArrayList<String>();
-        session.sessionValues().put("tab", "first");
+        session.sessionValue("tab", "first");
         queue.update(session, true, true, () -> displayed.add("immediate"), () -> displayed.add("stale"),
                 (task, retired) -> scheduled.add(task));
         queue.update(session, true, true, () -> displayed.add("immediate"),
                 () -> displayed.add(session.sessionValues().get("tab").toString()),
                 (task, retired) -> scheduled.add(task));
-        session.sessionValues().put("tab", "latest");
+        session.sessionValue("tab", "latest");
         scheduled.forEach(Runnable::run);
         assertThat(displayed).containsExactly("latest");
     }

@@ -67,7 +67,7 @@ class ViewRegistryPortTest {
 
         variables.put("page", 2);
         assertThat(shop.sessionValues()).containsEntry("page", 2);
-        shop.sessionValues().put("tab", "tools");
+        shop.sessionValue("tab", "tools");
         assertThat(variables.get("tab")).contains("tools");
 
         variables.put("page", null);

@@ -93,7 +93,7 @@ public final class GuiRenderer {
         lists.pages().forEach((layer, page) -> {
             Map<String, Object> value = page.toMap();
             if (!value.equals(GuiViewerState.of(session).pages().get(layer))) {
-                GuiViewerState.of(session).pages().put(layer, value);
+                GuiViewerState.of(session).putPage(layer, value);
             }
         });
     }

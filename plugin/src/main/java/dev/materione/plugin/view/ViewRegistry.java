@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ViewRegistry {
 
     private final ConcurrentHashMap<UUID, PlayerViews> players = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<NamespacedId, Set<ViewerRecord>> byDefinition = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ViewRef, Set<ViewerRecord>> byDefinition = new ConcurrentHashMap<>();
     private volatile MutationGuard guard = MutationGuard.NONE;
 
     /**
@@ -121,9 +121,12 @@ public final class ViewRegistry {
         }
     }
 
-    /** The open records showing {@code definition}, as a snapshot safe to iterate while records end. */
-    public List<ViewerRecord> showing(NamespacedId definition) {
-        Set<ViewerRecord> showing = byDefinition.get(definition);
+    /**
+     * The open records of {@code kind} showing {@code definition}, as a snapshot safe to iterate while records end. The
+     * index is keyed by kind and id together: a GUI and a dialog may share an id and are different definitions.
+     */
+    public List<ViewerRecord> showing(String kind, NamespacedId definition) {
+        Set<ViewerRecord> showing = byDefinition.get(new ViewRef(kind, definition));
         return showing == null ? List.of() : List.copyOf(showing);
     }
 
@@ -168,12 +171,20 @@ public final class ViewRegistry {
         return count;
     }
 
+    /**
+     * Adds inside the map's atomic update, so an {@link #unindex} that empties and drops the same set on another
+     * thread cannot leave this record in a set the map no longer holds.
+     */
     private void index(ViewerRecord record) {
-        byDefinition.computeIfAbsent(record.definition(), ignored -> ConcurrentHashMap.newKeySet()).add(record);
+        byDefinition.compute(record.ref(), (definition, showing) -> {
+            Set<ViewerRecord> set = showing != null ? showing : ConcurrentHashMap.<ViewerRecord>newKeySet();
+            set.add(record);
+            return set;
+        });
     }
 
     private void unindex(ViewerRecord record) {
-        byDefinition.computeIfPresent(record.definition(), (definition, showing) -> {
+        byDefinition.computeIfPresent(record.ref(), (definition, showing) -> {
             showing.remove(record);
             return showing.isEmpty() ? null : showing;
         });

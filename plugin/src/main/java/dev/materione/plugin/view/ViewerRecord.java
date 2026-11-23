@@ -132,11 +132,21 @@ public final class ViewerRecord {
     }
 
     /**
-     * The session values (read by rules as {@code vars.session.<name>}). The map is live: {@code set_var} with the
-     * session scope writes through it, and {@code view.back} restores it.
+     * The session values (read by rules as {@code vars.session.<name>}), as a read-only live view: {@link
+     * #sessionValue(String, Object)} writes them, and {@code view.back} restores them.
      */
     public Map<String, Object> sessionValues() {
-        return vars;
+        return Collections.unmodifiableMap(vars);
+    }
+
+    /** Sets one session value, or removes it when {@code value} is null ({@code set_var} with the session scope). */
+    public void sessionValue(String name, Object value) {
+        mutating("session value");
+        if (value == null) {
+            vars.remove(name);
+        } else {
+            vars.put(name, value);
+        }
     }
 
     /** The kind's viewer-local state. Kinds read it through their own accessor ({@code GuiViewerState.of(record)}). */

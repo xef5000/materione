@@ -22,6 +22,7 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.gui.prompt.PromptReply;
 import dev.materione.plugin.gui.prompt.PromptService;
 import dev.materione.plugin.view.ViewerRecord;
+import dev.materione.plugin.view.ViewerSessionVariables;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
@@ -207,7 +208,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
         String answer = ((PromptReply.Answer) reply).text();
         switch (params.target()) {
             case Local local -> context.locals().put(local.name(), answer);
-            case Session target -> session.sessionValues().put(target.name(), answer);
+            case Session target -> new ViewerSessionVariables(session).put(target.name(), answer);
         }
         return ActionOutcome.OK;
     }

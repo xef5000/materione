@@ -229,7 +229,7 @@ class ViewVerbsTest {
         // a dialog is replaced by a GUI-kind open: put its snapshot on the shared history by hand, as an opener does
         ViewerRecord ask = new ViewerRecord(f.viewer.id(), "Probe", "dialog", NamespacedId.of(GuiFixture.PACK, "ask"),
                 Map.of("topic", "rules"), new ViewerPayload() { });
-        ask.sessionValues().put("answer", "yes");
+        ask.sessionValue("answer", "yes");
         f.sessions.history(f.viewer.id()).push(ask.snapshot());
 
         assertThat(run(new BackViewAction(f.bridge.view()), Map.of(), context(menu))).isEqualTo(ActionOutcome.OK);
@@ -239,6 +239,20 @@ class ViewVerbsTest {
         assertThat(reopened.args()).containsEntry("topic", "rules");
         assertThat(reopened.sessionValues()).containsEntry("answer", "yes");
         assertThat(f.sessions.history(f.viewer.id()).size()).as("back pops, it does not grow the history").isZero();
+    }
+
+    @Test
+    void aBackThatFailsKeepsItsHistoryEntry() {
+        ViewerRecord gone = new ViewerRecord(f.viewer.id(), "Probe", "board", NamespacedId.of(GuiFixture.PACK, "x"),
+                Map.of(), new ViewerPayload() { });
+        f.sessions.history(f.viewer.id()).push(gone.snapshot());
+
+        ActionOutcome outcome = run(new BackViewAction(f.bridge.view()), Map.of(), context(menu));
+
+        assertThat(outcome).isInstanceOf(ActionOutcome.Failed.class);
+        assertThat(f.sessions.history(f.viewer.id()).peek()).as("the next back tries the same view again")
+                .hasValueSatisfying(snapshot -> assertThat(snapshot.kind()).isEqualTo("board"));
+        assertThat(menu.isOpen()).isTrue();
     }
 
     @Test

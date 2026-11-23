@@ -21,8 +21,8 @@ import org.junit.jupiter.api.Test;
 /**
  * A {@code view.open} that names a view by a static id (views.md sections 3.6, 9): the id must be a definition of a view
  * kind, which the host's content types say through their view facet, and that kind must be one a verb opens. A kind
- * whose viewers are formed by a condition (a HUD) cannot be opened, and naming one is a step rejected at load
- * ({@code MTR-0057}); an id no pack declares is {@code MTR-0105}, its existing meaning; a host that names no view kinds
+ * whose viewers are formed by a condition (a HUD) cannot be opened, and naming one in a {@code view.open} is
+ * {@code MTR-0126} (the step is kept and fails when it runs); an id no pack declares is {@code MTR-0105}, its existing meaning; a host that names no view kinds
  * does not judge the reference.
  */
 class ViewReferenceValidationTest {
@@ -32,8 +32,8 @@ class ViewReferenceValidationTest {
             "dialog", new ViewFacet(ViewFacet.ViewerRule.OPENED, ViewFacet.RerenderPolicy.OFF, false, false),
             "hud", new ViewFacet(ViewFacet.ViewerRule.PREDICATE, ViewFacet.RerenderPolicy.ON_CHANGE, false, false));
 
-    /** {@code view.open} names a view: its parameter {@code view} is a reference of kind {@code view}. */
-    private static final LogicVocabulary VOCABULARY = key -> "view.open".equals(key)
+    /** {@code view.open} and {@code view.close} name a view: their {@code view} is a reference of kind {@code view}. */
+    private static final LogicVocabulary VOCABULARY = key -> "view.open".equals(key) || "view.close".equals(key)
             ? Optional.of(new LogicVocabulary.Entry(true, Map.of("view", StaticReferences.VIEW), "view"))
             : Optional.empty();
 
@@ -42,15 +42,20 @@ class ViewReferenceValidationTest {
                 LosslessYaml.parse(yaml));
     }
 
-    private static ContentResource opener(String target) {
+    private static ContentResource opener(String verb, String target) {
         return resource("demo", "menu", "gui",
-                "menu:\n  container: chest_3\n  behavior:\n    - on: gui.click\n      do:\n        - view.open: " + target + "\n");
+                "menu:\n  container: chest_3\n  behavior:\n    - on: gui.click\n      do:\n        - " + verb + ": " + target
+                        + "\n");
     }
 
     private static List<Diagnostic> validate(Map<String, ViewFacet> kinds, String target) {
+        return validate(kinds, "view.open", target);
+    }
+
+    private static List<Diagnostic> validate(Map<String, ViewFacet> kinds, String verb, String target) {
         var walker = new StaticReferenceWalker(VOCABULARY, () -> kinds);
         var packs = List.of(new ContentPack("demo", Path.of("."), null, List.of(
-                opener(target),
+                opener(verb, target),
                 resource("demo", "shop", "gui", "shop:\n  container: chest_3\n"),
                 resource("demo", "ask", "dialog", "ask:\n  title: Ask\n"),
                 resource("demo", "mana", "hud", "mana:\n  layers: []\n"))));
@@ -76,15 +81,22 @@ class ViewReferenceValidationTest {
     }
 
     @Test
-    void aHudNamedByAViewOpenIsAStepRejectedAtLoad() {
+    void aHudNamedByAViewOpenIsTheNotOpenableWarning() {
         for (String written : List.of("demo:mana", "mana")) {
             List<Diagnostic> found = validate(KINDS, written);
 
             assertThat(found).as(written).hasSize(1);
-            assertThat(found.get(0).code()).isEqualTo(DiagnosticCodes.LOGIC_STEP_REJECTED);
-            assertThat(found.get(0).code().code()).isEqualTo("MTR-0057");
+            assertThat(found.get(0).code()).isEqualTo(DiagnosticCodes.VIEW_NOT_OPENABLE);
+            assertThat(found.get(0).code().code()).isEqualTo("MTR-0126");
             assertThat(found.get(0).message()).contains("hud").contains("shows itself").contains("no verb opens it");
         }
+    }
+
+    @Test
+    void aViewCloseNamingAHudIsNotJudgedOpenable() {
+        assertThat(validate(KINDS, "view.close", "demo:mana")).isEmpty();
+        assertThat(validate(KINDS, "view.close", "demo:ghost")).extracting(Diagnostic::code)
+                .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
     }
 
     @Test
