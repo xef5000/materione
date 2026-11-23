@@ -40,7 +40,7 @@ public final class StaticListSource implements ListSource<StaticListSource.Param
                         List.of(new ParameterSchema("entries", ParameterType.RAW, true, null,
                                 "The entries: a list of mappings", null, null)),
                         "1.0.0"),
-                List.of(ContextVariable.of("entry.*", ParameterType.RAW, "A field of the entry, as written")));
+                List.of(ContextVariable.of("entry.*", ParameterType.RAW, "A field of the entry, as written"))).announcing();
     }
 
     @Override

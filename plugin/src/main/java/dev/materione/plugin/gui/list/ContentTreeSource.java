@@ -80,7 +80,7 @@ public final class ContentTreeSource implements ListSource<ContentTreeSource.Par
                                         "The GUI argument that holds the location (empty is the root)", null, null),
                                 new ParameterSchema("search", ParameterType.STRING, false, null,
                                         "The session variable that holds a search; while it has text, every entry "
-                                                + "is listed flat", null, null)),
+                                                + "is listed flat", null, null).withWidget("variable", "session")),
                         "1.0.0"),
                 null,
                 List.of(
@@ -104,7 +104,7 @@ public final class ContentTreeSource implements ListSource<ContentTreeSource.Par
                                 "A line for the lore: the id of an item, how many items a folder holds"),
                         ContextVariable.of("entry.search", ParameterType.STRING,
                                 "The lower-cased text a search matches: an item's id and plain name")),
-                false);
+                false).announcing();
     }
 
     @Override

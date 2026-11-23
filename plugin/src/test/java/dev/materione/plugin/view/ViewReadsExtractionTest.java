@@ -5,7 +5,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.logic.ContextVariable;
+import dev.materione.api.logic.ListSource;
+import dev.materione.api.logic.ListSourceDescription;
+import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.variable.VariableScope;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.ParameterType;
+import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.LogicTestSupport;
+import java.util.List;
+import java.util.Map;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.GuiReads;
 import dev.materione.plugin.gui.rules.GuiRuleDiagnoser;
@@ -232,5 +243,69 @@ class ViewReadsExtractionTest {
         assertThat(first.readers(VariableScope.PLAYER, NamespacedId.of("demo", "coins")))
                 .as("the old index is immutable").hasSize(1);
         assertThat(second.families()).isEqualTo(1);
+    }
+
+    /** An addon-style list source: one parameter drawn with the variable widget, and whatever its announcement says. */
+    private static final class TagsSource implements ListSource<String> {
+        private final boolean announced;
+
+        TagsSource(boolean announced) {
+            this.announced = announced;
+        }
+
+        @Override
+        public String id() {
+            return "tags";
+        }
+
+        @Override
+        public ListSourceDescription describe() {
+            var description = new ListSourceDescription(
+                    new SelfDescription("Tags", "Tags kept in a variable",
+                            List.of(new ParameterSchema("from", ParameterType.STRING, true, null, "The variable", null, null)
+                                    .withWidget("variable", "")),
+                            "1.0.0"),
+                    "from", List.of(ContextVariable.of("entry.tag", ParameterType.STRING, "A tag")), false);
+            return announced ? description.announcing() : description;
+        }
+
+        @Override
+        public String parse(ParamReader params) {
+            return params.text("from");
+        }
+
+        @Override
+        public List<Map<String, Object>> entries(String parameters, LogicContext context) {
+            return List.of();
+        }
+    }
+
+    private ViewReads addonReads(boolean announced, String source) {
+        f.logic.listSources().register(LogicTestSupport.owner("addon"), NamespacedId.of("addon", "tags"),
+                new TagsSource(announced));
+        return reads("""
+                    - id: names
+                      type: list
+                      slots: { from: 9, to: 11 }
+                      source: %s
+                      entry:
+                        item: minecraft:paper
+                """.formatted(source));
+    }
+
+    @Test
+    void anAddonListSourceThatNamesAVariableByItsDescriptionIsANotifiedRead() {
+        var reads = addonReads(true, "{ type: \"addon:tags\", from: \"demo:playlist\" }");
+
+        assertThat(reads.keys()).containsOnlyKeys(key(VariableScope.PLAYER, "playlist"));
+        assertThat(reads.polled()).isFalse();
+    }
+
+    @Test
+    void aListSourceThatDoesNotSayItReadsOnlyWhatItNamesIsPolled() {
+        var reads = addonReads(false, "{ type: \"addon:tags\", from: \"demo:playlist\" }");
+
+        assertThat(reads.keys()).containsOnlyKeys(key(VariableScope.PLAYER, "playlist"));
+        assertThat(reads.polled()).isTrue();
     }
 }

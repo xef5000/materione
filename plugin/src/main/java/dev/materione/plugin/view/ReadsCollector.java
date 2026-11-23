@@ -128,6 +128,11 @@ public final class ReadsCollector {
         return this;
     }
 
+    /** The list source registered under {@code authoredId}, as the GUI wrote it. */
+    public java.util.Optional<dev.materione.api.logic.ListSource<?>> listSource(String authoredId) {
+        return lookup.listSource(authoredId);
+    }
+
     /**
      * Reads the variable a source names by its id alone, in whatever scope it is declared. An undeclared one reads
      * nothing here: the source reports it when it runs.

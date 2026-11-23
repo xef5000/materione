@@ -41,13 +41,13 @@ public final class VariableListSource implements ListSource<VariableListSource.P
                         "The pieces of a declared player or server string variable, separated by a separator",
                         List.of(
                                 new ParameterSchema("var", ParameterType.STRING, true, null,
-                                        "The declared variable, pack:key", null, null),
+                                        "The declared variable, pack:key", null, null).withWidget("variable", ""),
                                 new ParameterSchema("separator", ParameterType.STRING, false, ",",
                                         "What separates the pieces", null, null)),
                         "1.0.0"),
                 "var",
                 List.of(ContextVariable.of("entry.value", ParameterType.STRING, "One piece of the variable's text")),
-                false);
+                false).announcing();
     }
 
     @Override

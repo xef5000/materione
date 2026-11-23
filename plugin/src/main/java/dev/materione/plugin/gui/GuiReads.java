@@ -2,10 +2,14 @@ package dev.materione.plugin.gui;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.logic.ListSource;
+import dev.materione.api.logic.ListSourceDescription;
+import dev.materione.api.registry.ParameterSchema;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.content.gui.CompiledGui;
 import dev.materione.content.gui.ItemComponent;
 import dev.materione.content.gui.item.ItemSpec;
+import dev.materione.content.gui.list.ListSpec;
 import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
 import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.list.CompiledListLayer;
@@ -34,8 +38,10 @@ public final class GuiReads {
     /** Why a GUI reads what it reads: every read is content. */
     private static final ReadRole ROLE = ReadRole.CONTENT;
 
-    private static final NamespacedId VARIABLE_LIST = NamespacedId.of("materione", "variable");
-    private static final NamespacedId CONTENT_LIST = NamespacedId.of("materione", "content");
+    /** The widget a source parameter is drawn with when its value names a variable. */
+    private static final String VARIABLE_WIDGET = "variable";
+    /** The reference kind of such a parameter whose value is the key of a session variable of the GUI's own pack. */
+    private static final String SESSION_KIND = "session";
 
     private GuiReads() {}
 
@@ -105,24 +111,47 @@ public final class GuiReads {
         String pack = gui.namespace();
         collector.condition(list.filter(), ROLE);
         payload(collector, authored.source().payload());
-        if (VARIABLE_LIST.equals(authored.source().source())
-                && authored.source().payload() instanceof Map<?, ?> params
-                && params.get("var") instanceof String named) {
+        source(collector, authored.source(), pack);
+        if (list.search() != null) {
+            collector.sessionVariable(list.search().var(), pack, ROLE);
+        }
+        layer(collector, list.entry(), authored.entry());
+    }
+
+    /**
+     * Reads what a list source reads from its self-description: a parameter drawn with the {@code variable} widget
+     * names a variable, which is a notified read, a bare name being a variable of the GUI's pack; with the reference
+     * kind {@code session} it names a session variable by its key. A source that does not say it reads only such
+     * variables, or one that is not registered, marks the view polled.
+     */
+    private static void source(ReadsCollector collector, ListSpec spec, String pack) {
+        ListSource<?> source = collector.listSource(spec.source().toString()).orElse(null);
+        if (source == null) {
+            collector.polled();
+            return;
+        }
+        ListSourceDescription description = source.describe();
+        if (!description.announced()) {
+            collector.polled();
+        }
+        Map<?, ?> params = spec.payload() instanceof Map<?, ?> map ? map
+                : description.shorthand() == null || spec.payload() == null ? Map.of()
+                : Map.of(description.shorthand(), spec.payload());
+        for (ParameterSchema parameter : description.self().parameters()) {
+            if (!VARIABLE_WIDGET.equals(parameter.editor().widget())
+                    || !(params.get(parameter.id()) instanceof String named) || named.isBlank()) {
+                continue;
+            }
+            if (SESSION_KIND.equals(parameter.editor().referenceKind())) {
+                collector.sessionVariable(named, pack, ROLE);
+                continue;
+            }
             try {
                 collector.declaredVariable(variable(named, pack), ROLE);
             } catch (IllegalArgumentException malformed) {
                 // the source rejected the name when it compiled
             }
         }
-        if (CONTENT_LIST.equals(authored.source().source())
-                && authored.source().payload() instanceof Map<?, ?> params
-                && params.get("search") instanceof String key && !key.isBlank()) {
-            collector.sessionVariable(key, pack, ROLE);
-        }
-        if (list.search() != null) {
-            collector.sessionVariable(list.search().var(), pack, ROLE);
-        }
-        layer(collector, list.entry(), authored.entry());
     }
 
     /** Reads the title pieces: each piece's condition and text template. */

@@ -45,7 +45,7 @@ public final class PackItemsSource implements ListSource<PackItemsSource.Params>
                         "1.0.0"),
                 "pack",
                 List.of(ContextVariable.of("entry.item", ParameterType.STRING, "The item's id, pack:name")),
-                true);
+                true).announcing();
     }
 
     @Override
