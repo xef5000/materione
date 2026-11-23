@@ -73,6 +73,32 @@ export default [
     },
   }),
 
+  test({
+    id: 'views.session.declared-and-held-by-one-window',
+    title: 'overlay:tab is a declared session variable (fixtures/packs/overlay/variables/windows.yml): /materione var list shows it as per open view, /materione var get and var set refuse it because it lives in one open window, and the open overlay:tabs window\'s own toggle button (slot 11, set_var session.tab through the session store) still runs its rule to the console marker',
+    covers: [...COVERS, 'fixtures/packs/overlay/**', 'plugin/src/main/java/dev/materione/plugin/command/VarCommand.java'],
+    dependsOn: ['guilogic.open-and-back'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        ctx.expect(await ctx.rcon('materione var list')).toContain('overlay:tab');
+        ctx.expect(await ctx.rcon('materione var list')).toContain('per open view');
+        ctx.expect(await ctx.rcon('materione var get - overlay:tab')).toContain('session variable');
+        ctx.expect(await ctx.rcon('materione var set - overlay:tab true')).toContain('session variable');
+
+        await ctx.rcon('materione gui open overlay:tabs Probe');
+        await ctx.waitForServerLog(/MATERIONE-OVERLAY-OPEN/);
+        await ctx.sleep(600);
+        await click(ctx, 11); // set_var {var: session.tab, op: toggle}
+        await ctx.waitForServerLog(/MATERIONE-OVERLAY-TOGGLED/);
+        ctx.expect(await containerOpen(ctx)).toBe(true); // the window survived its own session write
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
   // Requires the public PlaceholderAPI plugin installed in the disposable probe server.
   test({
     id: 'views.placeholders.open-and-last',

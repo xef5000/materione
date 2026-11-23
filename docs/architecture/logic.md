@@ -1838,8 +1838,8 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
 3. **Four words are reserved as scopes.** `local`, `session`, `player` and `server` cannot be run-local names,
    so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error). *(§38 adds a fifth
    reserved word, `item`, for the stack holder, and designs the open key that restates all of them.)*
-4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.x` is the GUI
-   session's variable, read through the `VariableFacets.SESSION` facet (absent: empty). `vars.player.<pack>.<key>`
+4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.<pack>.<key>` is a declared variable
+   held by the open view and read through the session store (views.md §3.4; it was a free-form `VariableFacets.SESSION` map before). `vars.player.<pack>.<key>`
    and `vars.server.<pack>.<key>` read a declared variable: the stored value, or the default when nothing is
    stored. A scope that does not match the declaration, or an undeclared name, reads as absent (`null`).
 5. **Writes.** A `set_var` names its target with the same path as the read, without the `vars.` root: `count`

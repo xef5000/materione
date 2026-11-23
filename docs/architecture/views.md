@@ -871,3 +871,56 @@ switch), `ViewerOwnerThreadTest` (the ban test), `ViewFacetSelfDescriptionTest`,
 `ViewReferenceValidationTest` (the `MTR-0126` and `MTR-0105` cases), webui `codemode-generate.spec.ts` (the facet, the union
 reference, a second kind with no generator change) and the Logic tab specs. QA catalog: `views.verbs.open-replace-back-close` and
 `views.placeholders.open-and-last` (`qa/catalog/views.mjs`, not yet run: they need the probe).
+
+---
+
+## 17. As built: row V1 (#456)
+
+Row V1 is built in three slices. This section records what each slice shipped and every decision it took beyond §3 to §9; the
+design above is unchanged. Slice 1 is recorded here; the reads index, the write observer, the scheduler, `rerender:` and the budgets
+are recorded under their own headings as their slices land.
+
+### 17.1 Session variables behind the store port (slice 1)
+
+| Part | As built |
+|---|---|
+| **Scope** | `VariableScope.SESSION` joins `player`, `server` and `item`. `scope: session` is a value of the `variable` type's `scope` parameter, so a declaration is typed, defaulted and described like any other, and the registry self-description, the editor snapshot and the generated SDK carry it (`p.variables.create(id, { scope: "session", ... })`). |
+| **Store** | `plugin.view.SessionVariableStore` implements the existing `VariableStore` port for the scope: the holder is the view instance (`ViewerRecord.instance()`, a UUID), not a player. `write` and `mutate` are `@ViewerMutator` and report to the owner-thread guard. `VariableService.sessionStore(store)` registers it as the scope's store; an observing decorator wraps it there, the way `SnapshotVariableStore` wraps the player store. `GuiStack` registers the registry's store at construction. |
+| **Lifetime** | `ViewRegistry.admit(record)` gives a record its guard and its instance before it is shown (the opener admits as soon as the record exists, so a restored snapshot and a `gui.opening` rule can already hold values); `begin` admits too. `ViewerRecord.end` drops the instance, so the values die with the view, with the replaced view, with a cancelled open and with a player who left (`ViewRegistry.forget`). A replaced view is a new record and so a new instance; `view.back` restores a snapshot's values into a new instance. |
+| **Bypass removed** | `ViewerRecord.sessionValue(s)`, `SessionVariables`, `VariableFacets.SESSION`, `ViewerSessionVariables` and the `SessionTarget` / `SessionSource` / `Session` shapes of `set_var`, `var` and `prompt` are gone: a session write is `VariableStore.write` or `mutate` on the port, through the run's `VariableBinding` (`VariableService.bind(player, stack, view)`). |
+| **Declaration** | `session.<key>` (the resource's own pack) and `session.<pack>.<key>` are references like `player.<key>`; an undeclared one in `set_var`, a `var` condition or a `prompt` answer is `MTR-0063` at load, a literal that does not fit the type is `MTR-0064`. An expression reads `vars.session.<pack>.<key>`; a never-written variable reads its declared default. |
+| **Studio** | The Logic tab's variable field flags a `session.<key>` the declarations do not back and offers "Declare it" (the form opens on the session scope with the key filled in); the template field does the same for a `${vars.session...}` read and, for a bare `vars.session.<key>`, rewrites the read to `vars.session.<pack>.<key>` once declared. A session declaration is offered in the pickers and in completion like any other. The webui has no dialog studio yet (dialogs are unbuilt), so the dialog half of §9 lands with the dialog kind. |
+
+### 17.2 Decisions beyond the design (slice 1)
+
+| # | Decision | Why |
+|---|---|---|
+| V1-1 | **A session variable is read as `vars.session.<pack>.<key>`, and written as `session.<key>` or `session.<pack>.<key>`.** The bare `vars.session.<key>` of V0 is gone, like every other scope's unqualified read. | §9 spells the read with the pack; one grammar for every declared scope (logic.md §20 decision 6) means one resolver, one reads-index key and one editor completion. |
+| V1-2 | **The session store is the existing `VariableStore` port, not a new one.** The holder (`UUID`) is the view instance; no `HolderRef` type is added. | The port already keys on a `UUID`; the item scope needed its own port only because a stack is not a UUID. A decorator written once for the port then covers every UUID-held scope, which is what the observer of slice 2 needs. |
+| V1-3 | **A run that is in no view reads a session variable as its default and cannot write it.** The write fails the step ("no open view holds this session variable"); `/materione var get` and `var set`, the placeholders and `api.logic().variables()` refuse a session variable with a message that says it lives in one open view, and `/materione var list` shows it as `per open view`. | A holder that is not a player or the server is reached from that view's rules only; refusing is honest, a guess is not. |
+| V1-4 | **`view.back` restores values by writing into the new instance's store directly, not through `write`.** | The restored instance has no render yet to notify; the observer of slice 2 must not fire for it. A write after the restore goes through the port. |
+| V1-5 | **The condition compiler reports a `ParseRejection` under its own code**, as the action compiler does: an undeclared name in a `var` condition is `MTR-0063`, not the `MTR-0057` it carried. | plugin.md §5 and the condition's own documentation said `MTR-0063`; the compiler dropped the code. It affects every scope and fixes the documented behavior. |
+| V1-6 | **Only `set_var`, `var` and `prompt` are load-checked for an undeclared session name.** A `${vars.session.x}` read in an expression, a list's `search.var` and the content list source's `search` are not: they read empty when undeclared, as an undeclared `vars.player...` read does. The studio lints the template read instead (V1-9). | Expression reads are run-time by nature for every scope (codemode.md validation stages); checking only the session scope would be a second rule. The issue's "undeclared read is `MTR-0063`" holds for the `var` condition, the read form the compiler resolves. |
+| V1-7 | **A list's `search.var` and the content list source's `search` name a session variable by key; it is the one declared in the GUI's own pack.** | The author wrote a bare name before; the pack is the GUI's, found from `view.id`, so no schema field changed. |
+| V1-8 | **A `prompt` into a session variable coerces the answer to the declared type, and fails the step when it does not fit.** A prompt into a player, server or item variable stays `MTR-0082`. | The answer is text; a number-typed variable can still be answered. |
+| V1-9 | **The template lint is local and runs only once the declarations are loaded.** | A lint before the declarations load would flag every read. |
+
+### 17.3 Breaking changes made, by §7.1 row
+
+| §7.1 row | Changed here |
+|---|---|
+| undeclared session variables → declared (V1) | the built-in browser (`materione:search`), the `guilogic`, `overlay` and `showcase` fixture packs, the harness floor GUI (its variable is in the overlay pack), the Logic tab's variable and template fields |
+| session state in `GuiSession.vars()`, written past the store port → the `session` store (V1) | `ViewerRecord`, `ViewRegistry`, `GuiContexts`, `RunVariables`, `VariableService`, `set_var`, `var`, `prompt`, the list search |
+
+Goldens changed: the editor demo snapshot and the code-mode registry (`fixtures/golden/editor-demo-snapshot.json`,
+`fixtures/codemode/registry/*.json`: the `scope` choices, the action and condition descriptions, the `vars.session.*` context line)
+and the SDK declarations (`fixtures/golden/codemode/*.d.ts`).
+
+### 17.4 Tests (slice 1)
+
+`SessionVariableStoreTest` (read default, a decorator on the port sees `write` and `mutate`, the holder is the instance, type rules,
+replace, back, close, quit), `SessionVariablesGuiTest` (a rule writes, reads and compares a declared variable through the real GUI
+runtime; `MTR-0063` for an undeclared write and read; values die with the window), `SetVarActionTest.Session`, `VarConditionTest`,
+`PromptActionTest`, `VariableRefTest`, `MapLogicContextVariablesTest.SessionScope`, `VariablesTypeTest`, the owner-thread ban test (the
+store's mutators are marked), and webui `logic-session-variables.spec.ts` (the declaration reader, the spellings, the scope, the lint and its
+declare action). QA catalog: `views.session.declared-and-held-by-one-window` (`qa/catalog/views.mjs`, not yet run: it needs the probe).
