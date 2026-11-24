@@ -601,10 +601,10 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 18 | T04 T05 T07 | Small: expression functions and one rule option |
-| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 22 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
-| 4 | **Commands as content** (#330), **shipped** | CMD | 22 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
-| 5 | **Target addressing** (#331), **shipped** | TARGET | 22 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
-| 6 | **Timers** (rides #327's rule unit) (#332), **shipped** | TIMER | 22 | T26 | Small once RULE exists; one bounded platform wheel, logic.md §44 |
+| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 23 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
+| 4 | **Commands as content** (#330), **shipped** | CMD | 23 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
+| 5 | **Target addressing** (#331), **shipped** | TARGET | 23 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
+| 6 | **Timers** (rides #327's rule unit) (#332), **shipped** | TIMER | 23 | T26 | Small once RULE exists; one bounded platform wheel, logic.md §44 |
 | 7 | **Keyed state: stack holder now; open key/TTL later** (#333), **step 1 shipped** | STATE | 23 | T01 (stack half; needs ranks 1 and 5) | Medium for step 1; the entity/open-key/TTL half remains later |
 | 8 | **Custody holders and transfer** (#334) | CUSTODY | 24 | T18 | Large, with an open design problem (primitives.md §3) |
 | 9 | **Views over state; dialog and HUD as view kinds** (#335) | VIEW | 27 | T02 (needs 4, 5, 7, 8), T20 (needs 1, 3, 6), T28 (needs 1) | Large: #6 and #7 reshaped |
