@@ -19,7 +19,7 @@
               {
                 "stack.edit": {
                   "lore": [
-                    "Level: ${vars.player.bench.bloodfang_level}"
+                    "Level: ${vars.item.bench.bloodfang_level}"
                   ]
                 }
               }

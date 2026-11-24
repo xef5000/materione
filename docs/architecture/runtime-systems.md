@@ -197,6 +197,15 @@ per second, put-before-check gate) in addition to join. `model_tree` stays parse
 and lore unless a component opts out; the `ItemText` wrapper opts out at the root while an
 author's `&o` still wins on its own segments.
 
+**As shipped (M6, #333 step 1):** a declared variable with `scope: item` is held in the
+subject stack's own PDC (`materione:var.<pack>.<key>`). Item-triggered runs bind that exact
+stack; an item-triggered `view.open` carries the handle into the view's open, render and
+click contexts and exact-handle writes schedule a rerender. Different variable bytes keep
+stacks apart, while a value equal to the declaration's default clears the key so equal
+effective state still stacks. `/materione var` and `LogicApi.variables()` address the
+named player's main hand. See [`logic.md`](logic.md) §38 for the migration and the later
+key/TTL/entity holder design.
+
 ---
 
 ## 4. Custom blocks

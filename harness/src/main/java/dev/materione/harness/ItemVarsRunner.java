@@ -3,6 +3,7 @@ package dev.materione.harness;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.time.Duration;
 
 /**
  * Item-scoped variables on a real Paper server (logic.md section 38, #333): the state a stack holds in its own data. The
@@ -129,6 +130,21 @@ public final class ItemVarsRunner {
         expect(rig, problems, "a kill reads the level of the sword in hand",
                 "damage @e[type=husk,tag=target,limit=1] 1000 minecraft:player_attack by Alice",
                 M + "KILL Alice level=5");
+
+        // a GUI opened by an item run carries that exact subject stack. Its layer and click rule read and write the
+        // item's variable binding, rather than the player's or a command's held-item lookup.
+        rig.command("clear Alice", "Removed");
+        rig.command("materione give itemvars:view_sword Alice", "MATERIONE-GIVE-OK");
+        rig.probe("use", "Alice");
+        if (rig.log().awaitLine("MATERIONE-GUI-OPENED id=itemvars:level_gui player=Alice",
+                Duration.ofSeconds(10)) == null) {
+            problems.add("the item click did not open the GUI bound to the subject stack");
+        }
+        expect(rig, problems, "the GUI click writes the subject stack", "dprobe click Alice 11 0 PICKUP",
+                M + "GUI Alice level=2");
+        expect(rig, problems, "the GUI's value is now on the held stack", "materione var get Alice itemvars:level",
+                "itemvars:level = 2");
+        rig.probe("close", "Alice");
     }
 
     private static String hit() throws InterruptedException {

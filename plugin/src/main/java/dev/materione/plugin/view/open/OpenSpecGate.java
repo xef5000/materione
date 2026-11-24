@@ -2,6 +2,7 @@ package dev.materione.plugin.view.open;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.run.RunOwner;
 import dev.materione.plugin.commands.ArgParser;
@@ -58,6 +59,11 @@ public final class OpenSpecGate implements OpenGate {
     public interface OpenContexts {
 
         LogicContext open(Viewer viewer, NamespacedId id, Map<String, ?> typedArgs, VariableService variables);
+
+        default LogicContext open(
+                Viewer viewer, NamespacedId id, Map<String, ?> typedArgs, VariableService variables, StackRef stack) {
+            return open(viewer, id, typedArgs, variables);
+        }
     }
 
     private final Permissions permissions;
@@ -78,6 +84,11 @@ public final class OpenSpecGate implements OpenGate {
 
     @Override
     public Admission admit(Viewer viewer, Subject subject, Map<String, String> args) {
+        return admit(viewer, subject, args, null);
+    }
+
+    @Override
+    public Admission admit(Viewer viewer, Subject subject, Map<String, String> args, StackRef stack) {
         OpenPlan plan = subject.plan();
         if (plan == null) {
             return Admission.allow(args);
@@ -91,7 +102,7 @@ public final class OpenSpecGate implements OpenGate {
         }
         if (plan.hasRequirement() && !permissions.has(viewer, subject.bypassNode())) {
             LogicContext context = contexts.open(
-                    viewer, subject.id(), ArgParser.typed(plan, parsed.values()), variables);
+                    viewer, subject.id(), ArgParser.typed(plan, parsed.values()), variables, stack);
             if (!plan.requirementMet(context)) {
                 if (plan.deny() != null) {
                     denies.run(plan.deny(), context, RunOwner.of(viewer.id().toString(), viewer.player()));

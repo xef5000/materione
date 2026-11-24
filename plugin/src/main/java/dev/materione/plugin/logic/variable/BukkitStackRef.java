@@ -1,7 +1,10 @@
 package dev.materione.plugin.logic.variable;
 
 import dev.materione.api.logic.variable.StackRef;
+import java.util.Map;
+import java.util.function.Supplier;
 import java.util.UUID;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -12,13 +15,17 @@ import org.bukkit.inventory.ItemStack;
 public final class BukkitStackRef implements StackRef {
 
     private final UUID owner;
-    private final StackPdc pdc;
+    private final Supplier<StackPdc> pdc;
     private final String identity;
 
     BukkitStackRef(UUID owner, StackPdc pdc) {
+        this(owner, () -> pdc, pdc.identity());
+    }
+
+    private BukkitStackRef(UUID owner, Supplier<StackPdc> pdc, String identity) {
         this.owner = owner;
         this.pdc = pdc;
-        this.identity = pdc.identity();
+        this.identity = identity;
     }
 
     /**
@@ -32,18 +39,60 @@ public final class BukkitStackRef implements StackRef {
         return new BukkitStackRef(owner, StackPdc.of(stack));
     }
 
+    /**
+     * A handle to the matching live inventory slot when the event's stack is one the player carries. The slot is
+     * fixed for the handle's lifetime, so opening a view does not leave it pointing at the pre-open item mirror.
+     */
+    public static BukkitStackRef of(ItemStack stack, Player owner) {
+        if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || owner == null) {
+            return null;
+        }
+        var inventory = owner.getInventory();
+        int held = inventory.getHeldItemSlot();
+        ItemStack live = inventory.getItem(held);
+        if (same(live, stack)) {
+            return at(owner, held);
+        }
+        for (int slot = 0; slot < inventory.getSize(); slot++) {
+            live = inventory.getItem(slot);
+            if (live == stack) {
+                return at(owner, slot);
+            }
+        }
+        return of(stack, owner.getUniqueId());
+    }
+
+    private static BukkitStackRef at(Player owner, int slot) {
+        ItemStack initial = owner.getInventory().getItem(slot);
+        return new BukkitStackRef(owner.getUniqueId(),
+                () -> StackPdc.of(owner.getInventory().getItem(slot)),
+                StackPdc.of(initial).identity());
+    }
+
+    private static boolean same(ItemStack live, ItemStack event) {
+        return live != null && !live.getType().isAir()
+                && live.getType() == event.getType() && live.isSimilar(event);
+    }
+
     @Override
     public UUID owner() {
         return owner;
     }
 
     StackPdc pdc() {
-        return pdc;
+        StackPdc current = pdc.get();
+        return current == null ? StackPdc.EMPTY : current;
     }
 
     /** The identity the stack had when this handle was made; blank for a vanilla item. */
     public String identity() {
         return identity;
+    }
+
+    @Override
+    public Map<String, Object> itemView() {
+        StackPdc current = pdc();
+        return identity.equals(current.identity()) ? current.itemView() : Map.of();
     }
 
     /**
@@ -53,6 +102,7 @@ public final class BukkitStackRef implements StackRef {
      * @return false when the stack is gone or is now another item, or could not be edited
      */
     public boolean editMeta(java.util.function.Consumer<org.bukkit.inventory.meta.ItemMeta> edit) {
-        return identity.equals(pdc.identity()) && pdc.editMeta(edit);
+        StackPdc current = pdc();
+        return identity.equals(current.identity()) && current.editMeta(edit);
     }
 }

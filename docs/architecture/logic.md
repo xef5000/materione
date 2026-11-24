@@ -1954,6 +1954,17 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     owner. No cached balance substitutes for a current read. Recursive or simultaneous reads for the same
     player and currency fail unavailable until the in-flight call finishes.
 
+**Holder extension (#333; full decisions in §38).** The variable primitive grows in two independent
+steps. Step 1 is the fifth shipped holder, `scope: item`: the declaration keeps the same id/type/default
+shape, `vars.item.<pack>.<key>` reads the stack of a trigger-declared run, and `set_var` writes through
+`StackVariableStore` into that stack's own PDC. An item-triggered `view.open` carries the same handle in
+the view binding, so GUI open gates, renders and click rules read and write the same state. A GUI open
+with no subject reads the default and fails writes with the rate-limited `MTR-0065`.
+Step 2 is designed, not built: an expression-keyed holder, `ttl:`, expiry, the entity holder and one
+general holder port replace the holder-specific shape once there is more than the stack addition. The
+existing `player`, `server` and `session` files and every current `vars.*` spelling remain unchanged;
+the only Step 1 reserved-word migration is a local named `item`, diagnosed by `MTR-0063`.
+
 **Diagnostics and the rest**
 
 21. **New codes.** `MTR-0063` (undeclared or reserved name, error, load), `MTR-0064` (value or op does not fit the type,
@@ -3965,7 +3976,9 @@ four scopes whose holders are fixed (the run, a GUI window, a player, the server
 adds one holder, the item stack a run is about.** **Step 2 (designed here, not built) opens the key.** Neither adds a feature: nothing in the engine
 is named for a weapon, a level or a trade. The code of step 1 is in `api.logic.variable` (`VariableScope.ITEM`, `StackRef`, `StackVariableStore`),
 `behavior` (`MapLogicContext`, `ExprRoots`, `CompileUnit`), `content.variable` (`VariablesType`), `plugin.logic.variable` (`PdcStackVariableStore`,
-`BukkitStackRef`, `RunVariables`, `VariableService`), `plugin.runtime.behavior` (`BehaviorService`, `WorldEvents`) and `plugin.command.VarCommand`; the
+`BukkitStackRef`, `RunVariables`, `VariableService`), `plugin.runtime.behavior` (`BehaviorService`, `WorldEvents`),
+`plugin.view` and `plugin.gui` (`OpenRequest`, `ViewerRecord`, `GuiOpener`, `GuiContexts`, `ViewChanges`) and
+`plugin.command.VarCommand`; the
 fixtures are `fixtures/packs/itemvars/`. Traces: D1 (the value is runtime state, never content, and files stay the source of truth), D5 (a registry
 entry with self-description puts the scope in the editor and the code-mode SDK with no SDK code), D6 (one pipeline: the declaration is a file, the checks
 are the compiler's), D8 (every read and write goes through the thread rule of the owner), D12 (a primitive; the universality tests are below), D13 (the
@@ -3991,17 +4004,22 @@ SDK is generated from the same description). Each decision is reversible by the 
 4. **The trigger declares it, the variable does not.** A run has an item stack when its trigger puts one in the run: every trigger fired by the item
    bridge (`click`, `break`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage`, and `death` for an item) passes the stack the event is about; `entity.hit`,
    `entity.kill` and `player.hurt` pass the stack that hosts the rule, or, in a rule document, the item in the player's main hand (§37 decision 6). The
-   bridge hands it to the binding of the run (`VariableService.bind(player, stack)`; `WorldEvents`, `BehaviorService.logicContext`). The stack is **a handle, not
-   a copy**: a read sees the stack's current data, a write lands on the stack. An empty hand is no stack. A trigger is "about an item" for the compiler
+   bridge hands it to the binding of the run (`VariableService.bind(player, stack)`; `WorldEvents`, `BehaviorService.logicContext`). A `view.open` action started
+   by that run carries the same handle into the view's fixed binding. Its history snapshot keeps the handle, and its open
+   requirement, rules, layers and renders bind to it. The stack is **a handle, not a copy**: a read sees the stack's current
+   data, a write lands on the stack. An empty hand is no stack. A trigger is "about an item" for the compiler
    exactly when its context schema provides the `item` root, so one declaration (the trigger's, §2.6) serves the runtime, the check and the editor's autocomplete.
-5. **A handle belongs to one run and is checked at every access.** A run parked by `wait` or `delay` resumes against the same stack object; the handle
-   remembers the Materione identity the stack had, and an access whose stack now holds another identity (the object was reused for another item), or that
-   no longer exists, reads absent and refuses a write. A handle is never kept past its run.
+5. **A handle belongs to one run or the view that run bound, and is checked at every access.** A carried
+   stack is addressed by its fixed inventory slot, so opening a window does not leave the run on a pre-open
+   item mirror. A run parked by `wait` or `delay` resumes against that same address; the handle
+   remembers the Materione identity the stack had, and an access whose stack now holds another identity, or that
+   no longer exists, reads absent and refuses a write. A view retains the handle only for its record's lifetime.
 
 **The store**
 
-6. **A second port beside `VariableStore`, with the same contract.** `StackVariableStore` (api) is `read(declaration, stack)` and `write(declaration, stack, value)`
-   (null clears), values and never defaults. It is a separate interface because the holder is a `StackRef`, not a player id; the cross-server adapters of #25
+6. **A stack-specialized view behind the existing `VariableStore` port.** `StackVariableStore` extends the port with
+   `read(declaration, stack)` and `write(declaration, stack, value)` (null clears), values and never defaults. Its
+   `UUID` methods refuse a holder, because the holder is a `StackRef`, not a player id; the cross-server adapters of #25
    implement the `UUID`-keyed `VariableStore` and are untouched. Generalizing the holder of `VariableStore` itself is step 2's design (below), so that there
    is one port once there are more than two kinds of holder. `PdcStackVariableStore` (plugin) keeps each value in the **stack's own persistent data** under
    `materione:var.<pack>.<key>`, the key the player scope uses in a player's container, next to where `durability` keeps `materione:durability-used`. The value
@@ -4020,16 +4038,19 @@ SDK is generated from the same description). Each decision is reversible by the 
    No store call touches a world or an entity off its owner's thread, and the item store never schedules anything itself.
 9. **Atomic mutation is not offered.** `mutate` (§20 decision 12) is for the server store, where concurrent writers exist; every write of a stack happens on its owner's
    thread, and `set_var` reads the current value and stores the result there, as it does for a player variable.
+   A successful write notifies the view observer: a view that reads the declaration and is bound to the same
+   stack handle is dirtied once and rerenders on its viewer's owner thread.
 
 **Checks, at load and at run time**
 
-10. **A run that cannot name a stack is a diagnostic at load, with the existing code.** `MTR-0060` ("not a variable the trigger provides", §2.6) already checks every
+10. **A rule that cannot name a stack is a diagnostic at load, with the existing code.** `MTR-0060` ("not a variable the trigger provides", §2.6) already checks every
     `${root.x}`; step 1 teaches it two more spellings of "this needs a stack": `vars.item.*` in a template, condition or call argument (`ExprRoots` adds `item` for
     it), and a declared write or condition that is not written as a template, which a step announces with `ParamReader.requireRoot("item", why)` (`set_var` and
     `var` do; any addon action may). A trigger that provides no `item` root (`player.join`, `place`) gets the warning with the trigger's name, the
-    variable named and the hint "needs a trigger that is about an item stack"; the rule still loads, as for any unknown root. **A GUI has no stack today**, so every
-    `vars.item.*` in a GUI template, `visible_if`, item or title is the same warning until the GUI is opened about a stack ([`backpack-preset.md`](backpack-preset.md)
-    P-A, `view.item` of [`views.md`](views.md) §3.7): that work adds `item` to the GUI's roots and passes the subject stack to the GUI run's binding, the two seams step 1 built.
+    variable named and the hint "needs a trigger that is about an item stack"; the rule still loads, as for any unknown root. GUI triggers declare the optional
+    subject stack, so `vars.item.*` and item writes compile in open requirements, rules, layers, titles and lists. `item.*`
+    is the stack's facts and `view.item` names those facts from every opened kind. A GUI opened by a command, API or
+    another run with no stack still opens: it reads defaults and reports the stack miss at run time.
     The offline validation (`logic.validate`, a transaction's dry run) runs the same compiler and reports the same warning. No code was added ([`plugin.md`](plugin.md) §5).
     *A known gap:* the roots are the trigger's, not the host's, so `vars.item.*` in a rule document on `death` (whose `item.*` is provided to item hosts only) passes the
     check and reads the default at run time.
@@ -4090,27 +4111,31 @@ the issue names, not part of step 1.
 
 | Sketch | As built | Why |
 |---|---|---|
-| "the GUI can read the stack a click or an `open` was about" | Every GUI reads `vars.item.*` as `MTR-0060` today; the seams are built (a binding takes a stack; the GUI roots are one set) | A GUI opened about a stack is P-A of the backpack design (#304, `view.item` of views.md), not shipped; building a private subject-stack concept here would be the second source of that truth. T01's upgrade button needs P-A, which is M6 work with #304 (owner question 1, answered) |
-| "the store port generalized" in step 1's "stack store behind the existing store port" | A second port, `StackVariableStore`, with the same contract; the generalization is step 2's design (decision 13) | The holder is not a player id; widening `VariableStore` changes every adapter and every test for a holder only step 2 needs a general form of |
+| "the GUI can read the stack a click or an `open` was about" | As sketched: `view.open` records the opening run's stack in the view binding and its back snapshots | This is P-A of the backpack design, implemented once here and reused by #304. Stack custody is still a separate primitive. |
+| "the store port generalized" in step 1's "stack store behind the existing store port" | `StackVariableStore` is a specialized extension of `VariableStore`; the full holder value is step 2's design (decision 13) | The holder is not a player id; widening every existing method would change every adapter for a holder only step 2 needs a general form of |
 | "a run with no stack that reads `vars.item.*` gets the default and a rate-limited diagnostic" | As sketched, plus a load-time `MTR-0060` when the trigger cannot provide a stack at all | Most of those mistakes are visible offline, which is the whole point of D6's checks |
 
 ### Not built, on purpose
 
-Step 2 in full (`keyed`, `ttl`, `expire`, the entity holder, the generalized port). A GUI that reads the stack it was opened about (P-A). Folding `durability` onto the item scope. A holder id written to stacks for the views observer (V3
-matches by P-A's stack id; step 1 writes no bytes to a stack except a variable's own value). Atomic `mutate` for stacks. An `item`-scope `variable` list source.
+Step 2 in full (`keyed`, `ttl`, `expire`, the entity holder, the generalized port). Stack custody and folding
+`durability` onto the item scope. A stable holder id written to stacks for cross-handle view matching (step 1
+observes the exact handle bound by `view.open` and writes no extra bytes). Atomic `mutate` for stacks. An
+`item`-scope `variable` list source.
 
 ### Verification
 
 `VariableRefTest` and `MapLogicContextVariablesTest` (the spelling, the reserved word, the read), `ItemScopeRootsTest` (`MTR-0060` for a read, a condition and a declared write on a trigger with no item, clean on one with it),
 `StackVariablesTest` (the store: round trips, two stacks, the default clears the key, a vanished stack, a reused object, the owner's thread; the run: no stack, the rate limit; the API and the held item), `ItemScopeFlowTest` (two swords, two levels through `set_var`
-and the `var` condition, `reset` returns the untouched bytes), `ItemVarsPipelineTest` (the `itemvars` fixture pack from files to the shadow with no diagnostics; the offline `MTR-0060`), `ItemLayerCompilerTest` (a GUI cannot name a stack), `VariablesTypeTest` and the
-editor demo snapshot and code-mode registry goldens (the schema), `PaperItemVarsIT` on Paper 1.21.4 (two swords, two levels; a vanilla copy that carries its state; a drop and a pick-up; tokens that do and do not merge; a restart; a rule document reading the held stack; the pick-up is `ItemEntity#playerTouch` through the new `dprobe pickup`, because a fake-connection player is not ticked into collecting items) and the QA catalog's `itemvars` suite
+and the `var` condition, `reset` returns the untouched bytes), `ItemVarsPipelineTest` (the `itemvars` fixture pack from files to the shadow with no diagnostics; the offline `MTR-0060`), `ItemLayerCompilerTest`,
+`GuiRulesCompileTest`, `ViewVerbsTest`, `ViewReadsExtractionTest` and `ViewChangesTest` (a view reads, carries, indexes
+and rerenders its subject stack), `VariablesTypeTest` and the
+editor demo snapshot and code-mode registry goldens (the schema), `PaperItemVarsIT` on Paper 1.21.4 (two swords, two levels; a vanilla copy that carries its state; a drop and a pick-up; tokens that do and do not merge; a restart; a rule document reading the held stack; an item-opened GUI reading, writing and rerendering its subject; the pick-up is `ItemEntity#playerTouch` through the new `dprobe pickup`, because a fake-connection player is not ticked into collecting items) and the QA catalog's `itemvars` suite
 (**not run and not blessed**: it needs the local 26.x probe, and blessing runs happen on main).
 
 ### Owner questions
 
-1. **The GUI subject stack (P-A).** T01's upgrade button writes the sword's level from a GUI. That needs the GUI opened about a stack, which is P-A of #304 and not built. **Answered (owner, 2026-11-19): P-A is M6 work, with the backpack (#304); M6.5 is limited to the AI assistant.** Until it ships, a GUI cannot read or write an
-   item variable, and T01's GUI half stays blocked on it, not on #333.
+1. **The GUI subject stack (P-A).** Shipped with #333 step 1: T01's upgrade button reads and writes the
+   sword's level. The backpack's P-B custody holder, pinning and crash protocol remain #304/#334 work.
 2. **Per stack, not per item.** The state is the stack's: a stack of 16 shares one value, and a split copies it (decision 7). That is the only definition vanilla's own stacking allows. If a pack wants one value per item, the item must not stack (`max_stack_size: 1`), which
    is content. Should the declaration warn when an `item` variable is read by an item whose stack size can exceed one?
 3. **`death` in a rule document.** The `item` root is provided by the trigger, not the host, so the compile-time check cannot tell a rule document's `death` (no stack) from an item's. Per-host roots would fix it and change the compiler's contract for every
@@ -4883,8 +4908,9 @@ item-text pipeline of everywhere else (MiniMessage, italics off by default, temp
 below the maximum so an edit never breaks the item; Materione's own durability counter is untouched). It **patches components and never replaces the stack**, so identity, item variables,
 enchantments and count survive. It fails on a run with no stack, on a stack that was replaced while the run was parked, and on `damage` for an item with no durability. A rule on a trigger
 that is not about an item is told so at load (`MTR-0060`, `params.requireRoot("item", ...)`, the same check §38 decision 10 gave `set_var`). The issue limits the verb to the held stack, and it is
-limited: the run's stack is the held stack for every item trigger (and the main-hand stack for a rule document, §37 decision 6). A GUI has no stack today (§38 decision 10), so the verb
-is a load warning in a GUI until the GUI is opened about a stack (backpack P-A).
+limited: the run's stack is the held stack for every item trigger (and the main-hand stack for a rule
+document, §37 decision 6). A GUI opened by an item run has that subject stack; a command-opened GUI
+has none, and the action then fails soft at run time.
 
 ### What changed for existing content
 

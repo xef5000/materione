@@ -21,6 +21,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.block.BlockFace;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -35,9 +36,11 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -70,6 +73,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe arm &lt;gate&gt;                          set the production crash gate's armed name (-Dmaterione.escrow.gate must be set)
  *   dprobe disable                              disable the Materione plugin (onDisable runs, as on /reload or a stop)
  *   dprobe save &lt;name&gt;                         Player#saveData, synchronous, on the calling (main) thread
+ *   dprobe use &lt;name&gt;                          fire a main-hand right-click with the player's held item
  *   dprobe open &lt;name&gt;                         open a 27-slot window owned by the probe
  *   dprobe win &lt;name&gt; &lt;slot&gt; &lt;MATERIAL&gt; &lt;n&gt;     put a stack into a slot of the open window
  *   dprobe click &lt;name&gt; &lt;rawSlot&gt; &lt;button&gt; &lt;PICKUP|QUICK_MOVE|SWAP|...&gt;   a ServerboundContainerClickPacket
@@ -284,6 +288,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "arm" -> arm(args[1]);
                 case "disable" -> disableProduct();
                 case "save" -> save(player(args[1]));
+                case "use" -> use(player(args[1]));
                 case "open" -> open(player(args[1]));
                 case "win" -> win(player(args[1]), Integer.parseInt(args[2]), args[3], Integer.parseInt(args[4]));
                 case "click" -> click(player(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]), args[4]);
@@ -320,6 +325,14 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     }
 
     // ---- the fake-connection player -------------------------------------------------------------------------------
+
+    private void use(Player player) {
+        ItemStack held = player.getInventory().getItemInMainHand();
+        Bukkit.getPluginManager().callEvent(new PlayerInteractEvent(
+                player, org.bukkit.event.block.Action.RIGHT_CLICK_AIR, held, null, BlockFace.SELF,
+                EquipmentSlot.HAND));
+        log("use ok=true player=" + player.getName());
+    }
 
     private void join(String name) throws Exception {
         if (Bukkit.getPlayerExact(name) != null) {

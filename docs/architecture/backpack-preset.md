@@ -66,7 +66,7 @@ and the tests of §10 pin the fix:
 | 2 | A chest window of 1 to 6 rows with a per-item title | A `gui` resource with `container: chest_N` (gui.md §12.4) and a text layer templated on an open argument (`${view.args.title}`, logic.md §6.4 dynamic title) | Shipped | P |
 | 3 | The item passes its parameters to the window | `view.open` with `args`, typed `open.args` (logic.md §6.1) | Shipped | P |
 | 4 | Player items may be put in and taken out of the window | `slots` layer with `input: true` (logic.md §6.5, §25) | Shipped | P+ (primitives.md §4.7) |
-| 5 | **The window knows which stack it was opened about**, and keeps knowing it while the stack sits in an inventory slot | **The run's item carried into a view** | **Missing** | **G** |
+| 5 | **The window knows which stack it was opened about**, and keeps knowing it while the stack sits in an inventory slot | **The run's item carried into a view** | **Built by #333 step 1** | **P** |
 | 6 | **The slots load from, and are held by, that stack**, not returned to the player on close | **Custody with a stack holder** | **Missing** (custody has one holder, the player's account) | **G** |
 | 7 | Crash safety for transfers in and out | Custody tier 1 (gui-input-durability.md §5.4) with the stack as the holder | Mechanism shipped for the account holder; Phase B of §6.2 | P (after 6) |
 | 8 | Refuse nesting a backpack in a backpack by default (Q4: deny, `allow_nested` opts in) | An `accept:` condition that can tell a stack holds custody | **Missing** as an expression property | G (small) |
@@ -82,20 +82,18 @@ preset mechanism, which every later preset reuses.
 an `open` was about". P-A is that concept for views, and it is **one** concept shared with #333: whichever issue lands first builds
 it and the other reuses it.
 
-> **As built by #333 step 1 ([`logic.md`](logic.md) §38).** Step 1 landed first and built the *run's* half only: the stack of a run is
-> a `StackRef` (api, an opaque handle with its owner player) given to the run's variable binding by the trigger that fired it, and the
-> item-scope store reads and writes through it. It did **not** build the GUI half: no session records a subject stack, `view.open` does
-> not carry one, and every `vars.item.*` in a GUI is `MTR-0060` at load. P-A reuses the handle rather than adding a second one: the
-> subject reference of the table below (owner, slot, holder id, checked at each use) is a `StackRef` implementation that resolves the
-> live stack and refuses on a mismatch; the GUI run's binding is built with it (`VariableService.bind(player, stack)`), and `item`
-> is added to the GUI's variable roots. Nothing in the store changes.
+> **As built by #333 step 1 ([`logic.md`](logic.md) §38).** A trigger gives the run a `StackRef`.
+> `view.open` carries that handle into `ViewerRecord` and its history snapshots; the open requirement,
+> render and every GUI rule bind to it through `VariableService.bind(player, stack)`. The GUI declares the
+> `item` context and reads it as `view.item`; item-variable writes wake the exact bound view. A reference is
+> checked for identity liveness by the store on every access. Nothing in the stack store changes.
 
 | | Statement |
 |---|---|
-| What it is | `view.open` run from a flow that has an item records that stack as the session's **subject stack**: a reference made of the owner player, the inventory slot index and the stack's holder id (§5.1). |
+| What it is | `view.open` run from a flow that has an item records that stack's live `StackRef` (owner player and checked item identity) as the view's **subject stack**. The stable slot/holder-id reference needed to pin custody remains P-B. |
 | How content reads it | `view.item` in expressions (the same item view `slot.item.*` exposes), and as the default target of P-B. A GUI opened with no subject (a command, `/materione gui open`) reads `view.item` as null and a layer that needs it renders inert with a diagnostic (§9, D-1). |
-| Liveness | The reference is checked at each use: same player, same slot, same holder id. A mismatch ends the session (§6.4 H2). |
-| U-tests | U1 names a capability (a view's subject), not a backpack. U2 any item trigger, any GUI. U3 content passes it with `view.open`, no Java. U4 part of the `view.open` action's and the GUI context's self-description. U5 validated offline: a GUI that reads `view.item` and is opened by a command is a load-time warning. |
+| Liveness | The stack store checks the identity at every item-variable access. A stale or vanished handle degrades to the default/refuses a write; P-B's pin and H2 close are later custody behavior. |
+| U-tests | U1 names a capability (a view's subject), not a backpack. U2 any item trigger, any GUI. U3 content passes it with `view.open`, no Java. U4 part of the GUI trigger context's self-description. U5 the trigger root is checked offline; an open with no subject fails soft with `MTR-0065` at run time. |
 
 **P-B: custody with a stack holder (need 6).** primitives.md §5.1 step (2), and the second holder #334 schedules ("then stack
 holder (#304)"). The `slots` layer names its holder, defaulting to today's behavior exactly (#334's sketch):
@@ -466,7 +464,7 @@ Each row is one issue and one PR, sized for one agent. Rows are ordered by depen
 | Row | Work | Depends on | Agent |
 |---|---|---|---|
 | **R** | Probe on the 26.x seam: a templated title argument with legacy and MiniMessage formatting in a GUI without art (§3.2 *Title fidelity*); `view.open` with a templated id; screenshots | none | Haiku |
-| **A** | P-A: the subject stack on `view.open` from an item run, `view.item` in context, the liveness check, D-1 (load half). Coordinate with #333 step 1 (one implementation) | none | Sonnet, high |
+| **A** | P-A: the subject stack on `view.open` from an item run, `view.item` in context, liveness through the stack store, and subject-aware writes/renders | none | **Built by #333 step 1** |
 | **B** | P-B Phase A: `holder: item` on `slots` (schema, studio field, self-description), the stack store over the shipped keys, the per-tick mirror, capacity, the pin, the 256 KiB cap, D-1 runtime half, D-2, D-3, the `holds_custody` item property (need 8); unit and harness tests; the legacy-bytes golden captured from today's mechanic; T03 by-hand corpus update | A | Sonnet, high |
 | **G** | The six built-in GUIs `materione:backpack_1..6` (vanilla look, nesting refused unless `allow_nested`), their compiled goldens, `backpack.opens-builtin-gui` visual QA | B, R | Haiku |
 | **T** | The `preset` content type (§4.4): registration through the public content-type registry, its schema (`params:`, `applies_to:`, contributed `behavior:`/`flows:`), lossless round-trip fixtures, validation that a contributed field exists on the host's schema (R4), namespacing and the cross-pack reference rules, D-6; the type's self-description golden and the generated SDK builder | none | Sonnet, high |

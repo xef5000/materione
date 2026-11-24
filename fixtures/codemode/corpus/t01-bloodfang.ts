@@ -2,12 +2,11 @@
 // XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, rpg.weapons only.
 const p = m.pack("bench");
 const level = p.variables.create("bloodfang_level", {
-  scope: "player",
+  scope: "item",
   type: "number",
   default: 1,
-  holder: "item",
 });
-const xp = p.variables.create("bloodfang_xp", { scope: "player", type: "number", default: 0 });
+const xp = p.variables.create("bloodfang_xp", { scope: "item", type: "number", default: 0 });
 const sword = p.items.create("bloodfang", {
   material: "DIAMOND_SWORD",
   display_name: m.mm("<dark_red>Bloodfang"),
@@ -16,17 +15,24 @@ const sword = p.items.create("bloodfang", {
 
 sword.rules.add(m.triggers.entityHit(), () => ({
   if: m.conditions.hasPermission("rpg.weapons"),
-  do: [m.actions.potion({ type: "wither", duration: 100, target: "event.target" })],
+  do: [
+    m.actions.potion({
+      type: "wither",
+      duration: 100,
+      amplifier: m.expr`${level} - 1`,
+      target: "event.target",
+    }),
+  ],
 }));
 
 sword.rules.add(m.triggers.entityKill(), () => ({
   if: m.conditions.hasPermission("rpg.weapons"),
   do: [
-    m.actions.setVar({ var: xp, op: "add", value: "10" }),
+    m.actions.setVar({ var: xp, op: "add", value: m.expr`10` }),
     m.steps.if(m.expr`${xp} >= 100 && ${level} < 5`, {
       then: [
-        m.actions.setVar({ var: level, op: "add", value: "1" }),
-        m.actions.setVar({ var: xp, op: "set", value: "0" }),
+        m.actions.setVar({ var: level, op: "add", value: m.expr`1` }),
+        m.actions.setVar({ var: xp, op: "set", value: m.expr`0` }),
       ],
     }),
   ],
@@ -36,7 +42,12 @@ const menu = p.guis.create("bloodfang_upgrade", {
   container: "chest_3",
   title: "Bloodfang Upgrade",
   layers: [
-    m.guiComponents.text({ id: "stats", x: 8, y: 6, text: "Level ${vars.player.bench.bloodfang_level}" }),
+    m.guiComponents.text({
+      id: "stats",
+      x: 8,
+      y: 6,
+      text: "Level ${vars.item.bench.bloodfang_level} XP ${vars.item.bench.bloodfang_xp}",
+    }),
     m.guiComponents.button({ id: "upgrade", x: 70, y: 30, width: 36, height: 20 }),
   ],
 });
@@ -50,7 +61,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "upgrade" }), () => ({
     m.steps.require([m.actions.takeMoney(500)], {
       else: [m.actions.message("<red>You need 500 coins.")],
     }),
-    m.actions.setVar({ var: level, op: "add", value: "1" }),
+    m.actions.setVar({ var: level, op: "add", value: m.expr`1` }),
     m.actions.guiRefresh(),
   ],
 }));

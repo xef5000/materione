@@ -18,6 +18,9 @@ const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/runtime/behavior/BehaviorService.java',
   'plugin/src/main/java/dev/materione/plugin/runtime/behavior/WorldEvents.java',
   'plugin/src/main/java/dev/materione/plugin/command/VarCommand.java',
+  'plugin/src/main/java/dev/materione/plugin/logic/action/view/OpenViewAction.java',
+  'plugin/src/main/java/dev/materione/plugin/gui/event/GuiContexts.java',
+  'plugin/src/main/java/dev/materione/plugin/view/**',
   'fixtures/packs/itemvars/**',
 ];
 
@@ -35,6 +38,24 @@ async function strike(ctx, tag, amount = 1) {
 // The level of the stack Probe holds in the main hand, as /materione var prints it.
 async function heldLevel(ctx) {
   return ctx.rcon('materione var get Probe itemvars:level');
+}
+
+async function useHeldItem(ctx) {
+  return ctx.exec(`mc.gameMode.useItem(player, net.minecraft.world.InteractionHand.MAIN_HAND)
+return 'used'`);
+}
+
+function clickContainer(ctx, slot) {
+  return ctx.exec(`mc.gameMode.handleContainerInput(
+  player.containerMenu.containerId, ${slot}, 0,
+  net.minecraft.world.inventory.ContainerInput.PICKUP, player)
+return 'clicked'`);
+}
+
+async function closeWindow(ctx) {
+  try {
+    await ctx.exec('player.closeContainer(); return "closed"');
+  } catch { /* nothing open */ }
 }
 
 export default [
@@ -126,6 +147,49 @@ export default [
       await summon(ctx, 'iv_c');
       await strike(ctx, 'iv_c', 1000);
       await ctx.waitForChat(/CHECK kill level=1/);
+    },
+  }),
+
+  test({
+    id: 'itemvars.gui-open-is-about-the-sword',
+    title: 'itemvars:view_sword right-click opens itemvars:level_gui about that exact stack: the rendered upgrade item says Level 1, its click writes the sword to level 2, and the held-item API reads level 2 while another sword is unchanged',
+    mode: 'auto',
+    covers: COVERS,
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('gamemode survival Probe');
+        await ctx.rcon('clear Probe');
+        await ctx.rcon('materione give itemvars:view_sword Probe');
+        await ctx.waitForChat(/Given itemvars:view_sword/);
+        await ctx.exec('player.getInventory().selected = 0');
+
+        await useHeldItem(ctx);
+        await ctx.waitForServerLog(/MATERIONE-GUI-OPENED id=itemvars:level_gui player=Probe/);
+        await ctx.sleep(500);
+        const name = String(await ctx.exec(`return player.containerMenu.slots.get(11)
+  .getItem().getHoverName().getString()`));
+        ctx.expect(name).toBe('Level 1');
+
+        await clickContainer(ctx, 11);
+        await ctx.waitForChat(/CHECK gui level=2/);
+        await ctx.waitForServerLog(/MATERIONE-ITEMVARS-GUI Probe level=2/);
+        ctx.expect(await heldLevel(ctx)).toContain('itemvars:level = 2');
+        await ctx.sleep(1500);
+        const rerendered = String(await ctx.exec(`return player.containerMenu.slots.get(11)
+  .getItem().getHoverName().getString()`));
+        ctx.expect(rerendered).toBe('Level 2');
+
+        await closeWindow(ctx);
+        await ctx.rcon('materione give itemvars:view_sword Probe');
+        await ctx.exec('player.getInventory().selected = 1');
+        await ctx.sleep(500);
+        ctx.expect(await heldLevel(ctx)).toContain('itemvars:level = 1');
+      } finally {
+        await closeWindow(ctx);
+      }
     },
   }),
 ];

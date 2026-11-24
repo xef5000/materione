@@ -3,21 +3,33 @@ package dev.materione.api.logic.variable;
 import java.util.Optional;
 
 /**
- * The storage port for {@link VariableScope#ITEM} (logic.md §38): the same contract as {@link VariableStore} with
- * the holder a {@link StackRef} instead of a player id. There is one port per holder kind; a holder that is not a
- * player id cannot ride {@code UUID}-keyed methods, and generalizing {@link VariableStore}'s holder is
- * the keyed-state design of §38 (step 2), not this port's job.
+ * The stack-specialized view of the {@link VariableStore} port for {@link VariableScope#ITEM} (logic.md §38).
+ * The existing port still owns the store lifecycle and observation contract; this interface adds the
+ * {@link StackRef} overloads without changing a {@code UUID}-keyed addon. A fully generalized holder belongs
+ * to keyed state in §38 (step 2).
  *
  * <p>Implementations hold values, never defaults: an unset value reads as empty, and the caller supplies the
  * declaration's default. Values are already of the declared type. A write that stores nothing observable (a value
  * equal to the default) may clear the key instead, so two stacks in the same effective state also share the same
  * bytes and stack together.
  */
-public interface StackVariableStore {
+public interface StackVariableStore extends VariableStore {
 
     /** Always {@link VariableScope#ITEM}. */
     default VariableScope scope() {
         return VariableScope.ITEM;
+    }
+
+    /** A stack store has no UUID holder; the stack-aware methods below are its contract. */
+    @Override
+    default Optional<Object> read(VariableDeclaration declaration, java.util.UUID holder) {
+        return Optional.empty();
+    }
+
+    /** A stack store refuses a UUID holder; callers provide the run's {@link StackRef}. */
+    @Override
+    default boolean write(VariableDeclaration declaration, java.util.UUID holder, Object value) {
+        return false;
     }
 
     /**
