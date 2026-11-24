@@ -90,9 +90,9 @@ it and the other reuses it.
 
 | | Statement |
 |---|---|
-| What it is | `view.open` run from a flow that has an item records that stack's live `StackRef` (owner player and checked item identity) as the view's **subject stack**. The stable slot/holder-id reference needed to pin custody remains P-B. |
+| What it is | `view.open` run from a flow that has an item records that stack's live `StackRef` (owner player, physical token and checked item identity) as the view's **subject stack**. The stable slot/holder-id reference needed to pin custody remains P-B. |
 | How content reads it | `view.item` in expressions (the same item view `slot.item.*` exposes), and as the default target of P-B. A GUI opened with no subject (a command, `/materione gui open`) reads `view.item` as null and a layer that needs it renders inert with a diagnostic (§9, D-1). |
-| Liveness | The stack store checks the identity at every item-variable access. A stale or vanished handle degrades to the default/refuses a write; P-B's pin and H2 close are later custody behavior. |
+| Liveness | The stack store checks physical and Materione identity at every item-variable access. A stale or vanished handle degrades to the default/refuses a write and reports the rate-limited store miss; P-B's pin and H2 close are later custody behavior. |
 | U-tests | U1 names a capability (a view's subject), not a backpack. U2 any item trigger, any GUI. U3 content passes it with `view.open`, no Java. U4 part of the GUI trigger context's self-description. U5 the trigger root is checked offline; an open with no subject fails soft with `MTR-0065` at run time. |
 
 **P-B: custody with a stack holder (need 6).** primitives.md §5.1 step (2), and the second holder #334 schedules ("then stack

@@ -370,7 +370,7 @@ code at 305ecdd8; acceptance case 2, §11.1):
 |---|---|---|
 | `VariableStore.write` (set, clear: `set_var` with `set`/`remove`/`reset`, `/materione var set`, `LogicApi.variables().set`) | `api/…/variable/VariableStore.java`; callers `RunVariables.write`, `VariableService` | an observing decorator around each scope's store, the way `SnapshotVariableStore` already wraps the player store |
 | `VariableStore.mutate` (the atomic ops: `add`, `subtract`, `multiply`, `toggle`) | the same port, a separate default method; caller `RunVariables.mutate` | the same decorator overrides `mutate` and notifies when the outcome succeeded |
-| `StackVariableStore.write` | `RunVariables.store` for `scope: item` | an observing decorator notifies with the exact `StackRef`; the view observer matches the subject handle in the record |
+| `StackVariableStore.write` | `RunVariables.store` for `scope: item` | an observing decorator notifies with the `StackRef`; the view observer matches the record's stable subject equality/key, so a fresh mirror of the same stack matches |
 | `SessionVariables.put` (`set_var session.x`) | today `GuiSessionVariables.put` writes `GuiSession.vars()` directly and **bypasses the store port** | removed by row V1: session state moves behind the port as the `session` store (§3.4), so it takes the two rows above; no bypass remains |
 
 A hit narrows to viewers by the written holder:
@@ -380,7 +380,7 @@ A hit narrows to viewers by the written holder:
 | `player` | the player P | viewers of the reading definitions **whose viewer is P** (a view reads its own viewer's player variables); for a `predicate` kind, **P's candidate record** whether or not it is attached to that definition |
 | `server` | — | every viewer of every reading definition; for a `predicate` kind whose **visibility** reads it, every candidate record (every online player) |
 | `session` | the window instance | that window's viewer record only |
-| `item` (#333 step 1) | the stack handle | viewers whose binding is the exact handle written by `view.open` or a run inside that view |
+| `item` (#333 step 1) | the stack handle's stable subject key | viewers whose binding is the same physical/logical stack written by `view.open` or a run inside that view; reference identity is not required |
 | `keyed` (#333 step 2) | the key value K | viewers whose binding key is K, plus viewers whose **last render resolved K** (a HUD or a layer that computes its key) |
 | `local` | — | never (a run's locals are not state) |
 

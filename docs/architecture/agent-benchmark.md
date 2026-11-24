@@ -91,7 +91,7 @@
 | T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**22 pass, 0 partial, 7 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
+**23 pass, 0 partial, 6 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
 `now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41), #330 (commands as
 content, logic.md §40), #464 (the money amount as an expression, logic.md §42), #332 (scheduled triggers, logic.md §44) and #333
 step 1 (item-held state, logic.md §38): T04, T05 and T07 flipped to Pass alongside T06, T10 and T15, T12, T13 and T14 with #329,
@@ -107,8 +107,8 @@ verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-s
 |---|---|---|---|
 | F1 | "Make bleed stack up to 3 times" | one variable held by the *struck entity*, one changed rule | Fail: STATE (entity holder) |
 | F2 | "Show the level in the sword's lore" | one step that edits the held stack | Pass (#329: `stack.edit`) |
-| F3 | "The upgrade costs 500 times the level" | one `setFields` on the button's rule | Pass once T01 passes |
-| F4 | "Rename the permission to `rpg.bloodfang`" | `findReferences`, then `setFields` on each hit | Pass once T01 passes |
+| F3 | "The upgrade costs 500 times the level" | one `setFields` on the button's rule | Pass |
+| F4 | "Rename the permission to `rpg.bloodfang`" | `findReferences`, then `setFields` on each hit | Pass |
 | F5 | "Level 5 swords emit red particles when held" | one rule on `equip` with a repeating particle | Fail: TIMER (`particle` exists since #329; the generic timer has no item-held context) |
 
 ---
@@ -617,8 +617,9 @@ why ranks 2 to 11 each read one higher than when this table was first written, a
 
 **What the ranking says.**
 
-1. **Four issues of small or medium cost (ranks 1 to 4) take the benchmark from 10 to 21 of 29** (one of the 21 is T21, counted in the baseline since #464). None of them is on the
-   `/trade` path. The audit's worked example is the *hardest* task in the set (five gaps, three of them large), not a typical one.
+1. **The shipped baseline is 23 of 29.** Ranks 1 to 7 are already passing in the corpus, including T21 after #464, T26 after #332 and T01 after
+   #333 step 1. None of that closes the `/trade` path. The audit's worked example remains the *hardest* task in the set (five
+   gaps, three of them large), not a typical one.
 2. **`#320`'s own example, Bloodfang, needs ranks 1, 5 and 7.** The slice's exit criterion (#320's acceptance) therefore fixes the
    minimum: **rules and triggers, target addressing, and stack-held state**. Rank 2 to 4 are cheap and broad and belong with them.
 3. **`/trade` is not in the slice.** It needs custody transfer and multi-viewer views, both large and one with an unsolved

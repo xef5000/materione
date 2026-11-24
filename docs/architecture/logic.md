@@ -4011,9 +4011,12 @@ SDK is generated from the same description). Each decision is reversible by the 
    exactly when its context schema provides the `item` root, so one declaration (the trigger's, §2.6) serves the runtime, the check and the editor's autocomplete.
 5. **A handle belongs to one run or the view that run bound, and is checked at every access.** A carried
    stack is addressed by its fixed inventory slot, so opening a window does not leave the run on a pre-open
-   item mirror. A run parked by `wait` or `delay` resumes against that same address; the handle
-   remembers the Materione identity the stack had, and an access whose stack now holds another identity, or that
-   no longer exists, reads absent and refuses a write. A view retains the handle only for its record's lifetime.
+   item mirror. A handle also captures the physical stack token (Paper inventory/event mirrors to the same stack
+   share it) and its Materione identity. A run parked by `wait` or `delay` resumes against that same subject:
+   a reused slot with another stack, including another stack of the same id or a vanilla stack, reads absent and
+   refuses a write. Amount is mutable state and not part of the subject key; a similar stack with another physical
+   token is never substituted. A vanished or replaced subject takes the rate-limited `MTR-0065` miss path. A view
+   retains the handle only for its record's lifetime.
 
 **The store**
 
@@ -4038,8 +4041,8 @@ SDK is generated from the same description). Each decision is reversible by the 
    No store call touches a world or an entity off its owner's thread, and the item store never schedules anything itself.
 9. **Atomic mutation is not offered.** `mutate` (§20 decision 12) is for the server store, where concurrent writers exist; every write of a stack happens on its owner's
    thread, and `set_var` reads the current value and stores the result there, as it does for a player variable.
-   A successful write notifies the view observer: a view that reads the declaration and is bound to the same
-   stack handle is dirtied once and rerenders on its viewer's owner thread.
+   A successful write notifies the view observer: a view that reads the declaration and is bound to an equal,
+   stable stack handle is dirtied once and rerenders on its viewer's owner thread.
 
 **Checks, at load and at run time**
 
