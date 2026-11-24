@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   githubSlugs, markdownLinks, checkLinks, checkNaming, definedCodes, expandReserved, checkDocCodes, nextFreeCode,
-  isRatchetedSource, milestoneCommentLines, checkRatchet,
+  isRatchetedSource, milestoneCommentLines, checkRatchet, checkEncoding,
 } from './run.mjs';
 
 const repo = (files) => ({ read: (f) => files[f], exists: (f) => f in files || Object.keys(files).some((k) => k.startsWith(`${f}/`)) });
@@ -13,6 +13,17 @@ test('slugs follow GitHub: punctuation dropped, spaces hyphenated, repeats numbe
   assert.ok(s.has('cloudflare-cost-guardrails-binding-from-m5--cloud-work'));
   assert.ok(s.has('notes') && s.has('notes-1'));
   assert.ok(!s.has('not-a-heading'));
+});
+
+test('encoding #491: a lone Latin-1 section sign in Markdown is rejected as invalid UTF-8', () => {
+  const files = {
+    'docs/architecture/views.md': Buffer.from([0x73, 0x65, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x20, 0xa7]),
+    'docs/valid.md': Buffer.from('Materione — valid UTF-8', 'utf8'),
+    'assets/example.png': Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+  };
+  assert.deepEqual(checkEncoding(Object.keys(files), (file) => files[file]), [
+    'docs/architecture/views.md: not valid UTF-8',
+  ]);
 });
 
 test('links: the two broken links found on main in this change are caught', () => {

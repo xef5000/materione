@@ -6,6 +6,7 @@ check exists because the mistake it catches happened. `run.test.mjs` replays tho
 
 | Check | Catches | Real instance |
 |---|---|---|
+| UTF-8 encoding | Tracked text files that are not valid UTF-8 | V2 work (#491) wrote one Latin-1 `§` (byte `0xA7`) into `docs/architecture/views.md`; docs-only PRs skipped the Gradle encoding test |
 | Docs links and anchors | A relative Markdown link to a missing file, or a `#anchor` with no matching heading (GitHub slug rules) | `qa/README.md` linked `probe.md` (it lives in `docs/`); `cloud/editor-worker/README.md` climbed one directory past the root. Both were on `main` when this check landed. |
 | Naming | "MaterYard" in any spelling outside CLAUDE.md | CLAUDE.md hard rule |
 | Diagnostic codes in docs | An `MTR-####` in Markdown that `DiagnosticCodes.java` doesn't define and [`mtr-reserved.json`](mtr-reserved.json) doesn't reserve | Docs named `MTR-0099` and `MTR-0106..0117` as reserved only in prose; allocation was tracked as prose in `logic.md` ("the next free code is…"), and codes collided across branches (`d6dd520a`, `29b39373`) |

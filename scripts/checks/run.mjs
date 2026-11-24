@@ -13,6 +13,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { TextDecoder } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -21,6 +22,10 @@ const RESERVED = path.join(ROOT, 'scripts/checks/mtr-reserved.json');
 const BLOCKBENCH_MANIFEST = path.join(ROOT, 'scripts/checks/baselines/blockbench.blobs.json');
 const BLOCKBENCH_DIR = 'webui/public/blockbench/';
 const DIAGNOSTIC_CODES = 'api/src/main/java/dev/materione/api/diagnostics/DiagnosticCodes.java';
+const BINARY_EXTENSIONS = new Set([
+  'bin', 'class', 'dat', 'gif', 'gz', 'ico', 'jar', 'jpeg', 'jpg', 'nbt', 'ogg',
+  'otf', 'pdf', 'png', 'ttf', 'wav', 'webp', 'woff', 'woff2', 'zip',
+]);
 
 export const SPEC_FILES = ['CLAUDE.md', 'AGENTS.md', 'docs/architecture.md', 'docs/roadmap.md', 'docs/architecture/primitives.md'];
 
@@ -279,6 +284,10 @@ function readRepo(file) {
   return fs.readFileSync(path.join(ROOT, file), 'utf8');
 }
 
+function readRepoBytes(file) {
+  return fs.readFileSync(path.join(ROOT, file));
+}
+
 function existsRepo(file) {
   return fs.existsSync(path.join(ROOT, file));
 }
@@ -289,6 +298,23 @@ function loadJson(file, fallback) {
 
 function annotate(level, message) {
   if (process.env.GITHUB_ACTIONS) console.log(`::${level}::${message.split('\n')[0].replace(/%/g, '%25')}`);
+}
+
+export function checkEncoding(files, read) {
+  const problems = [];
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  for (const file of files) {
+    const extension = path.posix.extname(file).slice(1).toLowerCase();
+    if (BINARY_EXTENSIONS.has(extension)) continue;
+    const bytes = read(file);
+    if (bytes.includes(0)) continue;
+    try {
+      decoder.decode(bytes);
+    } catch {
+      problems.push(`${file}: not valid UTF-8`);
+    }
+  }
+  return problems;
 }
 
 function specReport(base) {
@@ -346,6 +372,7 @@ function main(argv) {
   }
 
   const checks = [
+    ['UTF-8 encoding', () => checkEncoding(files, readRepoBytes)],
     ['docs links and anchors', () => checkLinks(markdown, readRepo, existsRepo)],
     ['naming', () => checkNaming(files.filter((f) => /\.(md|java|kt|kts|ts|tsx|mjs|js|json|ya?ml|gradle)$/.test(f) && !f.startsWith('nexo-reference/')), readRepo)],
     ['diagnostic codes in docs', () => checkDocCodes(markdown, readRepo, defined, reserved)],
