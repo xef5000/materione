@@ -1,5 +1,6 @@
 package dev.materione.api.logic.variable;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -8,8 +9,8 @@ import java.util.UUID;
  * the platform's {@link StackVariableStore} knows what it wraps.
  *
  * <p>A handle is a reference to a live stack, not a copy of its state: a read through it sees the stack's
- * current values, and a write lands on the stack the handle refers to. It is valid for the run that was given
- * it and must not be kept past that run.
+ * current values, and a write lands on the stack the handle refers to. A trigger gives it to one run; that run
+ * may bind an opened view to the same handle for the view's lifetime.
  */
 public interface StackRef {
 
@@ -19,4 +20,12 @@ public interface StackRef {
      * thread may read or write the stack.
      */
     UUID owner();
+
+    /**
+     * The stack facts exposed to {@code item.*} and {@code view.item}: identity, material and amount, plus any
+     * platform facts the stack supplies. A stale handle has no facts.
+     */
+    default Map<String, Object> itemView() {
+        return Map.of();
+    }
 }

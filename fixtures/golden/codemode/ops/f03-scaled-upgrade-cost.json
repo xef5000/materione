@@ -20,7 +20,7 @@
               {
                 "choose": [
                   {
-                    "if": "${vars.player.bench.bloodfang_level == 1}",
+                    "if": "${vars.item.bench.bloodfang_level == 1}",
                     "then": [
                       {
                         "require": [
@@ -45,7 +45,7 @@
                     ]
                   },
                   {
-                    "if": "${vars.player.bench.bloodfang_level == 2}",
+                    "if": "${vars.item.bench.bloodfang_level == 2}",
                     "then": [
                       {
                         "require": [
@@ -70,7 +70,7 @@
                     ]
                   },
                   {
-                    "if": "${vars.player.bench.bloodfang_level == 3}",
+                    "if": "${vars.item.bench.bloodfang_level == 3}",
                     "then": [
                       {
                         "require": [
@@ -95,7 +95,7 @@
                     ]
                   },
                   {
-                    "if": "${vars.player.bench.bloodfang_level == 4}",
+                    "if": "${vars.item.bench.bloodfang_level == 4}",
                     "then": [
                       {
                         "require": [

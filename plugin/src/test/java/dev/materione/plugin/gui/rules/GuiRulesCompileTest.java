@@ -218,6 +218,16 @@ class GuiRulesCompileTest {
     }
 
     @Test
+    void aGuiRuleMayReadTheSubjectStackCarriedByTheOpen() {
+        assertThat(check(HEAD + """
+                    - on: gui.click
+                      layer: buy
+                      do:
+                        - message: "${vars.item.rpg.level} ${view.item.id} ${item.amount}"
+                """)).isEmpty();
+    }
+
+    @Test
     void namedFlowsAreCompiledWithTheGuiRulesAndCallsAreLinked() {
         List<Diagnostic> problems = check("""
                 shop:

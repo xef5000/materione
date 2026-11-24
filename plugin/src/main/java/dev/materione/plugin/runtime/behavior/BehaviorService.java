@@ -289,7 +289,7 @@ public final class BehaviorService {
                         : variables.bind(player == null ? null : player.getUniqueId(),
                                 stack == null || player == null ? null
                                         : dev.materione.plugin.logic.variable.BukkitStackRef.of(
-                                                stack, player.getUniqueId())));
+                                                stack, player)));
     }
 
     static Map<String, Object> itemContext(ItemStack stack) {

@@ -17,6 +17,7 @@ import dev.materione.core.registry.RegistryService;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.core.runtime.RuntimeVariables;
 import dev.materione.plugin.logic.LogicTestSupport;
+import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.plugin.runtime.behavior.WorldRules;
 import dev.materione.testing.golden.GoldenFiles;
@@ -64,6 +65,8 @@ class ItemVarsPipelineTest {
                 file(PACK.resolve("variables/sword.yml"), "variable", "level"),
                 file(PACK.resolve("variables/sword.yml"), "variable", "title"),
                 file(PACK.resolve("items/trained_sword.yml"), "item", "trained_sword"),
+                file(PACK.resolve("items/view_sword.yml"), "item", "view_sword"),
+                file(PACK.resolve("guis/level_gui.yml"), "gui", "level_gui"),
                 file(PACK.resolve("rules/arena.yml"), "rule", "arena"));
     }
 
@@ -81,6 +84,9 @@ class ItemVarsPipelineTest {
         // the item and the rule document both loaded their rules: neither was skipped for naming a stack
         var sword = shadow.view(ItemBehaviors.KEY).forItem(NamespacedId.of("itemvars", "trained_sword")).orElseThrow();
         assertThat(sword).extracting(rule -> rule.id()).containsExactly("train", "earn_title");
+        assertThat(shadow.view(ItemBehaviors.KEY)
+                .forItem(NamespacedId.of("itemvars", "view_sword")).orElseThrow()).hasSize(1);
+        assertThat(shadow.view(RuntimeGuis.KEY).gui(NamespacedId.of("itemvars", "level_gui"))).isPresent();
         assertThat(shadow.view(WorldRules.KEY).forTrigger(EventTypes.ENTITY_KILL)).hasSize(1);
     }
 

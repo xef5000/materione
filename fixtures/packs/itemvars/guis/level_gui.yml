@@ -1,0 +1,18 @@
+level_gui:
+  title: "Sword level"
+  container: chest_3
+  layers:
+    - id: upgrade
+      type: item
+      slot: 11
+      item: minecraft:experience_bottle
+      name: "Level ${vars.item.itemvars.level}"
+  behavior:
+    - id: upgrade_subject
+      on: gui.click
+      layer: upgrade
+      click: left
+      do:
+        - set_var: {var: "item.level", op: add, value: 1}
+        - chat: "CHECK gui level=${vars.item.itemvars.level}"
+        - run_command: "say MATERIONE-ITEMVARS-GUI ${player.name} level=${vars.item.itemvars.level}"

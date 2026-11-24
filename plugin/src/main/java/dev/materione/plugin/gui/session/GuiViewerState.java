@@ -1,6 +1,7 @@
 package dev.materione.plugin.gui.session;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.render.Rendered;
 import dev.materione.plugin.view.ViewerMutator;
@@ -46,7 +47,13 @@ public final class GuiViewerState implements ViewerPayload {
      * @param args the arguments the GUI was opened with, by name; copied and read-only afterwards
      */
     public static ViewerRecord record(UUID player, String playerName, NamespacedId gui, Map<String, String> args) {
-        return new ViewerRecord(player, playerName, KIND, gui, args, new GuiViewerState());
+        return record(player, playerName, gui, args, null);
+    }
+
+    /** A GUI record bound to the subject stack of the opening run. */
+    public static ViewerRecord record(
+            UUID player, String playerName, NamespacedId gui, Map<String, String> args, StackRef stack) {
+        return new ViewerRecord(player, playerName, KIND, gui, args, stack, new GuiViewerState());
     }
 
     /** The GUI state of a GUI's record. A record of another kind has none: asking is a programming error. */

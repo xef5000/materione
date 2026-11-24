@@ -2,5 +2,5 @@
 // One step that edits the stack the rule is about (stack.edit, #329): the kill rule hangs on the sword, so the stack is the sword.
 const sword = m.edit(m.ref.item("bench:bloodfang"));
 sword.rules.add(m.triggers.entityKill(), () => ({
-  do: [m.actions.stackEdit({ lore: ["Level: ${vars.player.bench.bloodfang_level}"] })],
+  do: [m.actions.stackEdit({ lore: ["Level: ${vars.item.bench.bloodfang_level}"] })],
 }));

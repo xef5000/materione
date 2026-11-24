@@ -8,6 +8,7 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.variable.StackRef;
+import dev.materione.api.logic.variable.StackVariableStore;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
@@ -187,8 +188,8 @@ class StackVariablesTest {
 
         @Test
         void aForeignHandleOrNoHandleHoldsNothing() {
-            assertThat(store.read(LEVEL_DECL, null)).isEmpty();
-            assertThat(store.write(LEVEL_DECL, null, 2.0)).isFalse();
+            assertThat(store.read(LEVEL_DECL, (StackRef) null)).isEmpty();
+            assertThat(store.write(LEVEL_DECL, (StackRef) null, 2.0)).isFalse();
             assertThat(store.read(LEVEL_DECL, () -> STEVE)).isEmpty();
         }
 
@@ -244,6 +245,7 @@ class StackVariablesTest {
             VariableService service = service();
             VariableBinding binding = service.bind(STEVE, mainHand.ref(STEVE));
 
+            assertThat(service.store(VariableScope.ITEM)).isInstanceOf(StackVariableStore.class);
             assertThat(binding.stored(LEVEL_DECL)).isEmpty(); // never written: the caller takes the default
             assertThat(binding.store(LEVEL_DECL, 3.0)).isTrue();
 
@@ -251,6 +253,25 @@ class StackVariablesTest {
             assertThat(mainHand.data.get(PdcVariableStore.keyOf(LEVEL_DECL),
                     org.bukkit.persistence.PersistentDataType.DOUBLE)).isEqualTo(3.0);
             assertThat(diagnostics).isEmpty();
+        }
+
+        @Test
+        void aSuccessfulItemWriteNotifiesTheSubjectStackObserver() {
+            VariableService service = service();
+            StackRef subject = mainHand.ref(STEVE);
+            var notified = new ArrayList<StackRef>();
+            service.writeObserver(new VariableWriteObserver() {
+                @Override
+                public void written(VariableDeclaration declaration, UUID holder) {}
+
+                @Override
+                public void stackWritten(VariableDeclaration declaration, StackRef holder) {
+                    notified.add(holder);
+                }
+            });
+
+            assertThat(service.bind(STEVE, subject).store(LEVEL_DECL, 3.0)).isTrue();
+            assertThat(notified).containsExactly(subject);
         }
 
         @Test

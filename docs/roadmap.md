@@ -411,7 +411,11 @@ Worker is unchanged — no new endpoint, no cost-model change.
 - **The benchmark-ranked primitives** (moved from M6.5 by the owner, 2026-11-19): #329 entity and world verbs, #330 commands as
   content, #331 target addressing, #332 timers, #333 keyed state (step 1, state held by the item stack), and the GUI subject stack
   (P-A of the backpack design, #304). They are engine primitives (D12), not the assistant, and the views (#335 V0 to V2, #455 to
-  #457), dialogs and HUDs build on them.
+  #457), dialogs and HUDs build on them. **As built (#333 step 1):** an item-scope variable lives
+  in the stack PDC, item-triggered runs and `view.open` share one subject `StackRef`, GUI rules/renders
+  read and write it, and differing stack state does not merge. Two-sword persistence and the Bloodfang
+  benchmark task (T01) are covered by the fixture, Paper IT and QA catalog. The keyed/TTL/entity half
+  remains later.
 
 **Scheduled triggers as built (#332):** a rule document may use `every` with a tick or duration
 interval and `for: server | each_player`, or `schedule` with a server-local time and optional

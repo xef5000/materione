@@ -1,6 +1,7 @@
 package dev.materione.plugin.view.open;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.view.ViewerRecord;
 import java.util.Map;
@@ -19,7 +20,7 @@ import java.util.Objects;
  */
 public record OpenRequest(
         Viewer viewer, String kind, NamespacedId view, Map<String, String> args, Cause cause,
-        ViewerRecord.Snapshot restore) {
+        ViewerRecord.Snapshot restore, StackRef stack) {
 
     /** The kind the commands and the runtime API open: they are the GUI's ways in. */
     public static final String GUI = "gui";
@@ -44,17 +45,30 @@ public record OpenRequest(
 
     /** A fresh open of a GUI (the command and the runtime API). */
     public static OpenRequest of(Viewer viewer, NamespacedId gui, Map<String, String> args, Cause cause) {
-        return new OpenRequest(viewer, GUI, gui, args, cause, null);
+        return of(viewer, GUI, gui, args, cause, null);
+    }
+
+    /** A fresh GUI open bound to the opening run's stack, when there is one. */
+    public static OpenRequest of(
+            Viewer viewer, NamespacedId gui, Map<String, String> args, Cause cause, StackRef stack) {
+        return new OpenRequest(viewer, GUI, gui, args, cause, null, stack);
     }
 
     /** A fresh open of a view of any kind. */
     public static OpenRequest of(
             Viewer viewer, String kind, NamespacedId view, Map<String, String> args, Cause cause) {
-        return new OpenRequest(viewer, kind, view, args, cause, null);
+        return of(viewer, kind, view, args, cause, null);
+    }
+
+    /** A fresh open of any kind bound to the opening run's stack. */
+    public static OpenRequest of(
+            Viewer viewer, String kind, NamespacedId view, Map<String, String> args, Cause cause, StackRef stack) {
+        return new OpenRequest(viewer, kind, view, args, cause, null, stack);
     }
 
     /** The open that brings a remembered record back, of whatever kind it was. */
     public static OpenRequest back(Viewer viewer, ViewerRecord.Snapshot snapshot) {
-        return new OpenRequest(viewer, snapshot.kind(), snapshot.definition(), snapshot.args(), Cause.BACK, snapshot);
+        return new OpenRequest(viewer, snapshot.kind(), snapshot.definition(), snapshot.args(), Cause.BACK, snapshot,
+                snapshot.stack());
     }
 }

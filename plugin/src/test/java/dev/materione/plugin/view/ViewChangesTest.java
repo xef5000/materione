@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.content.ViewFacet;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableOp;
 import dev.materione.api.logic.variable.VariableScope;
@@ -85,6 +86,7 @@ class ViewChangesTest {
     private final VariableDeclaration coins = variables.declare("demo", "coins", VariableScope.PLAYER, 0d);
     private final VariableDeclaration season = variables.declare("demo", "season", VariableScope.SERVER, 1d);
     private final VariableDeclaration tab = variables.declare("demo", "tab", VariableScope.SESSION, "all");
+    private final VariableDeclaration level = variables.declare("demo", "level", VariableScope.ITEM, 1d);
     private final VariableDeclaration unread = variables.declare("demo", "unread", VariableScope.PLAYER, 0d);
     private final VariableDeclaration hudOn = variables.declare("rpg", "hud_on", VariableScope.PLAYER, false);
     private final VariableDeclaration realm = variables.declare("rpg", "realm", VariableScope.SERVER, "a");
@@ -103,7 +105,12 @@ class ViewChangesTest {
     }
 
     private ViewerRecord open(UUID player, NamespacedId definition) {
-        ViewerRecord record = GuiViewerState.record(player, "p-" + player.toString().substring(0, 4), definition, Map.of());
+        return open(player, definition, null);
+    }
+
+    private ViewerRecord open(UUID player, NamespacedId definition, StackRef stack) {
+        ViewerRecord record = GuiViewerState.record(
+                player, "p-" + player.toString().substring(0, 4), definition, Map.of(), stack);
         registry.begin(record);
         return record;
     }
@@ -185,6 +192,22 @@ class ViewChangesTest {
         assertThat(outcome.ok()).isTrue();
         assertThat(woken).containsExactly(a);
         assertThat(b.isDirty()).isFalse();
+    }
+
+    @Test
+    void anItemWriteMarksOnlyViewsBoundToThatSubjectStack() {
+        publish(Map.of(MENU_VIEW, reads(level, ReadRole.CONTENT)));
+        StackRef first = () -> alex;
+        StackRef second = () -> blake;
+        ViewerRecord a = open(alex, MENU, first);
+        ViewerRecord b = open(blake, MENU, second);
+        var observer = new ViewChanges(index::get, registry, kinds, woken::add);
+
+        observer.stackWritten(level, first);
+
+        assertThat(a.isDirty()).isTrue();
+        assertThat(b.isDirty()).isFalse();
+        assertThat(woken).containsExactly(a);
     }
 
     @Test

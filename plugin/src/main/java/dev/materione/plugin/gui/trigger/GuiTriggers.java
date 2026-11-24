@@ -130,7 +130,9 @@ public final class GuiTriggers {
                         "An argument the view was opened with, typed as its open: block declares it (a whole number is "
                                 + "a number, true and false a boolean, anything else text)"),
                 ContextVariable.of("view.item", ParameterType.RAW,
-                        "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)"),
+                        "The item the view was opened about; empty when the open had no subject stack"),
+                ContextVariable.of("item.*", ParameterType.RAW,
+                        "Facts of the item stack the view was opened about, the same item root an item-host run provides"),
                 ContextVariable.of("view.key", ParameterType.STRING,
                         "The key the view is bound to; empty until keyed state exists (views.md section 3.7)"),
                 ContextVariable.of("view.page.*", ParameterType.RAW, "The page state of a list in this GUI"),

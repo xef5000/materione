@@ -1,0 +1,9 @@
+view_sword:
+  material: DIAMOND_SWORD
+  display_name: "View Sword"
+  behavior:
+    - id: open_about_sword
+      on: click:right
+      do:
+        - cancel
+        - view.open: {view: "itemvars:level_gui"}

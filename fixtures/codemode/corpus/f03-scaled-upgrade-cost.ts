@@ -5,7 +5,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "upgrade" }), () => ({
   do: [
     m.steps.choose(
       [1, 2, 3, 4].map((lvl) => ({
-        if: m.expr`vars.player.bench.bloodfang_level == ${lvl}`,
+        if: m.expr`vars.item.bench.bloodfang_level == ${lvl}`,
         then: [
           m.steps.require([m.actions.takeMoney(500 * lvl)], {
             else: [m.actions.message(`<red>You need ${500 * lvl} coins.`)],

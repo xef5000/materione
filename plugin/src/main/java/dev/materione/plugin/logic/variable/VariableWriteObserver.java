@@ -1,6 +1,7 @@
 package dev.materione.plugin.logic.variable;
 
 import dev.materione.api.logic.variable.VariableDeclaration;
+import dev.materione.api.logic.variable.StackRef;
 import java.util.UUID;
 
 /**
@@ -21,4 +22,7 @@ public interface VariableWriteObserver {
      *     {@code server}
      */
     void written(VariableDeclaration declaration, UUID holder);
+
+    /** An item variable was written through its subject stack. */
+    default void stackWritten(VariableDeclaration declaration, StackRef holder) {}
 }

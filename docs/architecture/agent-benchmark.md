@@ -52,7 +52,7 @@
 | Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `view.open`, `view.close`, `view.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
 | Conditions | `has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has` |
 | Flow steps | action, `if`, `require`, `wait`, `stop`, `call` (same resource), `choose`; rule options `id`, `cooldown`, `charges`, `per`; action options `chance`, `delay` (there is no rule-level `chance`) |
-| Variables | scopes `local`, `session`, `player`, `server`; types `number`, `string`, `boolean` |
+| Variables | scopes `local`, `session`, `player`, `server`, `item`; types `number`, `string`, `boolean` |
 | GUI | components `panel`, `image`, `paint`, `text`, `button`, `item`, `slots`, `list`; the `open:` block (commands, typed args, permission, requirement) |
 
 ---
@@ -61,7 +61,7 @@
 
 | # | Task (the prompt, shortened) | Area | Verdict | Fails on |
 |---|---|---|---|---|
-| T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Fail | STATE |
+| T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Pass (#327, #329, #331, #333) | |
 | T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | STATE, VIEW, CUSTODY |
 | T03 | **Backpack**: a 3-row backpack item that keeps its contents | item | Pass (preset route) | by-hand route: CUSTODY |
 | T04 | **Kits**: `/kits` menu with Starter (once) and Daily (every 24 h) | GUI, items | Pass (#328) | |
@@ -93,14 +93,15 @@
 
 **22 pass, 0 partial, 7 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
 `now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41), #330 (commands as
-content, logic.md §40), #464 (the money amount as an expression, logic.md §42) and #332 (scheduled triggers, logic.md §44):
-T04, T05 and T07 flipped to Pass alongside T06, T10 and T15, T12, T13 and T14 with #329, T27 with #330, T21 with #464, and T26 with
-#332. The count was 10, 2 and 17 when the page was written, 13, 2 and 14 after #327, 16, 13 before #329 and #330, 20, 9 before #464,
-and 21, 8 before #332. "Fails on" lists what the honest program needs, not everything that
+content, logic.md §40), #464 (the money amount as an expression, logic.md §42), #332 (scheduled triggers, logic.md §44) and #333
+step 1 (item-held state, logic.md §38): T04, T05 and T07 flipped to Pass alongside T06, T10 and T15, T12, T13 and T14 with #329,
+T27 with #330, T21 with #464, T26 with #332, and T01 with #333. The count was 10, 2 and 17 when the page was written, 13, 2 and
+14 after #327, 16, 13 before #329 and #330, 20, 9 before #464, 21, 8 before #332, and 22, 7 before #333 step 1.
+"Fails on" lists what the honest program needs, not everything that
 would be nice.
 
 **The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built (and
-verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-seeded on a player-scoped Bloodfang world):
+verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-seeded on an item-scoped Bloodfang world):
 
 | # | Follow-up | Program shape | Verdict |
 |---|---|---|---|
@@ -117,34 +118,26 @@ verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-s
 Conventions: `const p = m.pack("bench")`. A `✗` comment is the error the generated surface would give. Lines without one
 type-check against today's registries. Summaries (`m.summary`) are omitted where they add nothing.
 
-### T01 Bloodfang sword — Fail (STATE)
+### T01 Bloodfang sword — Pass (#327, #329, #331, #333)
 
-The program is codemode.md §9.1. Its `✗` lines, restated against today's surface (the `entity.hit` and `entity.kill` triggers
-pass since #327: an item holds them and `target.*` and `damage.*` are in their context):
+The program is codemode.md §9.1:
 
 ```ts
-const level = p.variables.create("bloodfang_level", { type: "number", holder: "item", default: 1 });
-//                                                                    ^^^^^^ ✗ TS2353 'holder' does not exist; scope is
-//                                                                      "player" | "server"                       [STATE]
+const level = p.variables.create("bloodfang_level", { scope: "item", type: "number", default: 1 });
 sword.rules.add({
   on: m.triggers.entityHit,
-  do: [ m.actions.potion({ type: "wither", duration: 100, amplifier: 1, target: "event.target" }) ],
-});                                  // passes since #331 (the amplifier is a number, so the bleed cannot read the level yet)
-sword.rules.add({ on: m.triggers.entityKill, do: [ m.actions.setVar(xp, { op: "add", value: 10 }) ] });
+  do: [ m.actions.potion({
+    type: "wither", duration: 100, amplifier: m.expr`${level} - 1`, target: "event.target"
+  }) ],
+});
+sword.rules.add({ on: m.triggers.entityKill, do: [ m.actions.setVar(xp, { op: "add", value: m.expr`10` }) ] });
 ```
 
-What passes today: the item, the model reference, the two combat triggers, the GUI with its text and button, `has_money`/`take_money` under `require`,
-the sneak-right-click rule (`click` with `player.sneaking`), the permission test (`has_permission` as each rule's condition).
+The item, model reference, combat triggers, GUI, money gate, sneak-right-click rule and permission checks all pass.
 The bleed is written with the shipped `potion` verb aimed at the struck entity (`target: event.target`, #331, logic.md §39), so it
-needed TARGET and not a new damage verb; a *true-damage* bleed would add VERB. Scaling it by the level also needs the level in an
-expression the potion's amplifier accepts, which is STATE's business (#333), not a separate gap. With level and XP held by the **player** instead of the stack the state lines pass, but
-that is a different feature (two Bloodfangs share one level), so it is not offered as the solution.
-
-*Since #333 step 1 ([`logic.md`](logic.md) §38) the stack holder exists:* the declaration is spelled `scope: "item"` (the sketch's `holder: "item"`
-above is the draft spelling, kept so the corpus program stays the benchmark's record until T01 passes), `vars.item.<pack>.<key>` reads it and
-`set_var` writes it, with the run's item declared by the `entity.hit` and `entity.kill` triggers. With #331 (§39) the struck entity is addressable too, so T01 stays Fail only on
-the GUI half: the upgrade button reads and writes the sword's level from a GUI, which needs the GUI opened about a stack (P-A of
-[`backpack-preset.md`](backpack-preset.md), unbuilt).
+needs no new damage verb. `scope: "item"` makes level and XP stack-local; `entity.hit` and `entity.kill` supply that stack, and
+`view.open` carries it into the GUI so `vars.item.bench.*` is the same value in render and click rules. The mock corpus accepts the
+task first turn with both the in-memory and JVM oracles, and the fixture's live Paper path opens the GUI and writes the held stack.
 
 ### T02 `/trade <player>` — Fail (STATE, VIEW, CUSTODY)
 
@@ -589,7 +582,7 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **TARGET** | Target addressing: an action on another player or an entity | §5.6 | T01 T02 T21 (3) | **Closed by #331** (`target:` on `message`, `actionbar`, `title`, `sound`, `potion`, `give_item`, `give_money`, `take_money`, `teleport`; logic.md §39); T21 passes it (and kept QTY until #464) |
 | **QTY** | A quantity parameter that takes an expression: the amount of `give_money`, `take_money` and `has_money` reads a literal | new (found by #330) | T21 (1) | **Closed by #464** (`amount` of `give_money`, `take_money` and `has_money` takes an expression, as `give_exp` does; logic.md §42); T21 passes |
 | **VIEW** | Views over state: more than one viewer; the dialog and HUD view kinds | §5.3 | T02 T20 T28 (3) | none alone |
-| **STATE** | Keyed state: a holder other than player or server (a stack, an entity, a key), a TTL, an expiry trigger | §5.2 | T01 T02, F1 (2) | none alone |
+| **STATE** | Keyed state: a holder other than player or server (a stack, an entity, a key), a TTL, an expiry trigger | §5.2 | T02, F1 (2) | **Stack half closed by #333 step 1** (logic.md §38): T01 passes. T02 and F1 still need keyed/entity holders and TTL; the latter remains step 2 |
 | **TIMER** | A trigger that fires on a schedule | §5.5 | F5 (0 main tasks) | **Closed by #332** (`every` and `schedule`, logic.md §44); with RULE, T26 passes and T20 keeps only VIEW. F5 keeps its item-held context gap |
 | **CUSTODY** | Custody holders beyond the player's own account, and the atomic transfer | §5.1 | T02 T18, T03 by hand (2) | T18 |
 | **QUERY** | A read across the holders of one variable (ranking) | new | T17 (1) | none alone |
@@ -612,7 +605,7 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 4 | **Commands as content** (#330), **shipped** | CMD | 22 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
 | 5 | **Target addressing** (#331), **shipped** | TARGET | 22 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
 | 6 | **Timers** (rides #327's rule unit) (#332), **shipped** | TIMER | 22 | T26 | Small once RULE exists; one bounded platform wheel, logic.md §44 |
-| 7 | **Keyed state: holders, keys, TTL** (#333) | STATE | 23 | T01 (needs 1 and 5) | Large: the store port, stack and entity holders, migration checks |
+| 7 | **Keyed state: stack holder now; open key/TTL later** (#333), **step 1 shipped** | STATE | 23 | T01 (stack half; needs ranks 1 and 5) | Medium for step 1; the entity/open-key/TTL half remains later |
 | 8 | **Custody holders and transfer** (#334) | CUSTODY | 24 | T18 | Large, with an open design problem (primitives.md §3) |
 | 9 | **Views over state; dialog and HUD as view kinds** (#335) | VIEW | 27 | T02 (needs 4, 5, 7, 8), T20 (needs 1, 3, 6), T28 (needs 1) | Large: #6 and #7 reshaped |
 | 10 | **A ranking read across holders** (#336) | QUERY | 28 | T17 | Medium; touches offline player data |

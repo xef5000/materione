@@ -2183,12 +2183,13 @@ interface GuiClickContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2249,12 +2250,13 @@ interface GuiClickInventoryContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2314,12 +2316,13 @@ interface GuiClickOutsideContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2373,12 +2376,13 @@ interface GuiCloseContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2425,12 +2429,13 @@ interface GuiOpenContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2473,12 +2478,13 @@ interface GuiOpeningContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2526,12 +2532,13 @@ interface GuiPageContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2585,12 +2592,13 @@ interface GuiSlotChangeContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };
@@ -2649,12 +2657,13 @@ interface GuiTickContext {
       /** The view's kind: gui. */
       readonly kind: ContextValue<string>;
       readonly args: { readonly [name: string]: ContextValue<unknown> };
-      /** The item the view was opened about; empty until a subject stack binds (views.md section 3.7) */
+      /** The item the view was opened about; empty when the open had no subject stack. */
       readonly item: ContextValue<unknown>;
       /** The key the view is bound to; empty until keyed state exists (views.md section 3.7) */
       readonly key: ContextValue<string>;
       readonly page: { readonly [name: string]: ContextValue<unknown> };
     };
+    readonly item: { readonly [name: string]: ContextValue<unknown> };
     readonly vars: { readonly [name: string]: ContextValue<unknown> } & {
       readonly session: { readonly [name: string]: ContextValue<unknown> };
     };

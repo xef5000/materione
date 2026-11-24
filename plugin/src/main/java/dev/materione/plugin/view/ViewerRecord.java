@@ -2,10 +2,12 @@ package dev.materione.plugin.view;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ContextFacet;
+import dev.materione.api.logic.variable.StackRef;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -53,6 +55,7 @@ public final class ViewerRecord implements ViewDirty {
     private final String kind;
     private final NamespacedId definition;
     private final Map<String, String> args;
+    private final StackRef stack;
     private volatile Map<String, Object> typedArgs;
     private final UUID instance = UUID.randomUUID();
     private volatile SessionVariableStore sessions;
@@ -85,11 +88,23 @@ public final class ViewerRecord implements ViewDirty {
     public ViewerRecord(
             UUID player, String playerName, String kind, NamespacedId definition, Map<String, String> args,
             ViewerPayload payload) {
+        this(player, playerName, kind, definition, args, null, payload);
+    }
+
+    /**
+     * A record about to open under a subject stack.
+     *
+     * @param stack the item stack the opening run was about, or null for an open with no subject
+     */
+    public ViewerRecord(
+            UUID player, String playerName, String kind, NamespacedId definition, Map<String, String> args,
+            StackRef stack, ViewerPayload payload) {
         this.player = Objects.requireNonNull(player, "player");
         this.playerName = Objects.requireNonNull(playerName, "playerName");
         this.kind = Objects.requireNonNull(kind, "kind");
         this.definition = Objects.requireNonNull(definition, "definition");
         this.args = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(args, "args")));
+        this.stack = stack;
         this.payload = Objects.requireNonNull(payload, "payload");
         payload.boundTo(this);
     }
@@ -132,6 +147,11 @@ public final class ViewerRecord implements ViewDirty {
     /** The arguments the view was opened with, as text (a back snapshot replays them). */
     public Map<String, String> args() {
         return args;
+    }
+
+    /** The subject stack this view was opened about, if any. */
+    public Optional<StackRef> stack() {
+        return Optional.ofNullable(stack);
     }
 
     /**
@@ -225,7 +245,8 @@ public final class ViewerRecord implements ViewDirty {
     /** What {@code view.back} needs to bring this record's view back as it was. */
     public Snapshot snapshot() {
         SessionVariableStore store = sessions;
-        return new Snapshot(kind, definition, args, store == null ? Map.of() : store.values(instance), payload.snapshot());
+        return new Snapshot(kind, definition, args, stack,
+                store == null ? Map.of() : store.values(instance), payload.snapshot());
     }
 
     /** Puts a snapshot's session values and kind state into this (fresh) record. */
@@ -278,12 +299,13 @@ public final class ViewerRecord implements ViewDirty {
      * @param kind the view kind
      * @param definition the view definition
      * @param args the arguments it opened with
+     * @param stack the subject stack of the binding, when the view was opened by an item run
      * @param vars the session values, by declared variable
      * @param state the kind's {@link ViewerPayload#snapshot()}
      */
     public record Snapshot(
-            String kind, NamespacedId definition, Map<String, String> args, Map<NamespacedId, Object> vars,
-            Map<String, Object> state) {
+            String kind, NamespacedId definition, Map<String, String> args, StackRef stack,
+            Map<NamespacedId, Object> vars, Map<String, Object> state) {
 
         public Snapshot {
             Objects.requireNonNull(kind, "kind");

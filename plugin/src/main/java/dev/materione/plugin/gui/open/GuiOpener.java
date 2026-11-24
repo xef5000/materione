@@ -80,7 +80,8 @@ public final class GuiOpener {
         }
         RuntimeGuis.Live gui = found.get();
         OpenGate.Admission admission = gate.admit(
-                viewer, new OpenGate.Subject(GuiOpenGates.KIND, gui.id(), gui.open()), request.args());
+                viewer, new OpenGate.Subject(GuiOpenGates.KIND, gui.id(), gui.open()), request.args(),
+                request.stack());
         if (!admission.allowed()) {
             return OpenResult.refused(admission.usage() ? OpenResult.Outcome.USAGE : OpenResult.Outcome.DENIED,
                     admission.reason());
@@ -90,7 +91,8 @@ public final class GuiOpener {
             return OpenResult.refused(OpenResult.Outcome.FAILED, unavailable.get());
         }
 
-        var session = GuiViewerState.record(viewer.id(), viewer.name(), gui.id(), admission.args());
+        var session = GuiViewerState.record(
+                viewer.id(), viewer.name(), gui.id(), admission.args(), request.stack());
         sessions.admit(session);
         if (gui.open() != null) {
             session.typedArgs(ArgParser.typed(gui.open(), admission.args())); // one schema, one result (logic.md §40)

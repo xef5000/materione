@@ -1,0 +1,70 @@
+{
+  "golden": "t01-bloodfang",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": true
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "variables/bloodfang_level.yml",
+      "kind": "created",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "variables/bloodfang_xp.yml",
+      "kind": "created",
+      "operations": [
+        1
+      ]
+    },
+    {
+      "path": "items/bloodfang.yml",
+      "kind": "created",
+      "operations": [
+        2,
+        3,
+        4,
+        7
+      ]
+    },
+    {
+      "path": "guis/bloodfang_upgrade.yml",
+      "kind": "created",
+      "operations": [
+        5,
+        6
+      ]
+    }
+  ]
+}

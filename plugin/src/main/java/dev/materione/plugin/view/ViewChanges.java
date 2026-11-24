@@ -1,6 +1,7 @@
 package dev.materione.plugin.view;
 
 import dev.materione.api.logic.variable.VariableDeclaration;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.plugin.logic.variable.VariableWriteObserver;
 import java.util.Objects;
 import java.util.UUID;
@@ -27,7 +28,8 @@ import java.util.logging.Logger;
  *   <tr><td>{@code session}</td><td>the one record that holds the instance</td></tr>
  * </table>
  *
- * <p>An item variable goes through the item port, which is not observed, and a run's locals are never state.
+ * <p>An item variable wakes only the views bound to the exact subject stack that was written. A run's locals are
+ * never state.
  */
 public final class ViewChanges implements VariableWriteObserver {
 
@@ -69,7 +71,26 @@ public final class ViewChanges implements VariableWriteObserver {
             case PLAYER -> player(readers, holder);
             case SERVER -> server(readers);
             case SESSION -> session(readers, holder);
-            default -> { }
+            case ITEM -> { }
+        }
+    }
+
+    @Override
+    public void stackWritten(VariableDeclaration declaration, StackRef holder) {
+        if (holder == null) {
+            return;
+        }
+        ReadsIndex current = index.get();
+        if (current == null) {
+            return;
+        }
+        ReadsIndex.Reader[] readers = current.readers(declaration.scope(), declaration.id());
+        if (readers == null) {
+            return;
+        }
+        for (ReadsIndex.Reader reader : readers) {
+            views.forEachShowing(reader.view(), record ->
+                    record.stack().filter(stack -> stack == holder).ifPresent(ignored -> mark(record)));
         }
     }
 
