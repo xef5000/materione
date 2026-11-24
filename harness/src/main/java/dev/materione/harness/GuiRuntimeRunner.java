@@ -163,7 +163,7 @@ public final class GuiRuntimeRunner {
                     "MATERIONE-GUI-FAILED reason=not-live"));
 
             // 5. back to life with a slot naming an item that is not live: diagnosed at apply, the GUI stays
-            problems.addAll(saveAndExpect(browser, log, options,
+            problems.addAll(saveAndExpectApplied(browser, log, options,
                     guiYaml("Market",3, "corpus:not_a_gem"),
                     "MTR-0054"));
             problems.addAll(expect(console, log, options,
@@ -205,17 +205,36 @@ public final class GuiRuntimeRunner {
         return finish(process, log, problems, workspace);
     }
 
+    /** The line the server thread logs once a rebuilt registry is swapped in (MTR-0012). */
+    private static final String APPLIED_MARKER = "MTR-0012: applied:";
+
     /**
-     * Saves one document of the sample pack through the editor, then waits for the marker the apply
-     * writes. The save-to-marker time is held to the live-loop budget.
+     * Saves one document of the sample pack through the editor, then waits for the marker the save is expected
+     * to print. The save-to-marker time is held to the live-loop budget.
      */
     private static List<String> saveAndExpect(EditorBrowser.BrowserClient browser, LogWatcher log,
             HarnessOptions options, String content, String marker) throws Exception {
-        return saveAndExpect(browser, log, options, "sample", GUI_PATH, content, marker);
+        return saveAndExpect(browser, log, options, "sample", GUI_PATH, content, marker, false);
+    }
+
+    /**
+     * Like {@link #saveAndExpect(EditorBrowser.BrowserClient, LogWatcher, HarnessOptions, String, String)}, but
+     * for a marker the shadow build logs before the server thread swaps the registries: the save is complete only
+     * once the apply line appears, so the next console command sees the swapped registry.
+     */
+    private static List<String> saveAndExpectApplied(EditorBrowser.BrowserClient browser, LogWatcher log,
+            HarnessOptions options, String content, String marker) throws Exception {
+        return saveAndExpect(browser, log, options, "sample", GUI_PATH, content, marker, true);
     }
 
     private static List<String> saveAndExpect(EditorBrowser.BrowserClient browser, LogWatcher log,
             HarnessOptions options, String pack, String path, String content, String marker) throws Exception {
+        return saveAndExpect(browser, log, options, pack, path, content, marker, false);
+    }
+
+    private static List<String> saveAndExpect(EditorBrowser.BrowserClient browser, LogWatcher log,
+            HarnessOptions options, String pack, String path, String content, String marker,
+            boolean awaitApply) throws Exception {
         List<String> problems = new ArrayList<>();
         Wire.Response current = browser.call("browse.get", object("pack", pack, "path", path));
         if (!current.ok()) {
@@ -229,6 +248,10 @@ public final class GuiRuntimeRunner {
                 "pack", pack, "path", path, "rev", rev, "content", content));
         if (!put.ok()) {
             problems.add("edit.put " + path + " failed: " + put.toJson());
+            return problems;
+        }
+        if (awaitApply && log.awaitLine(APPLIED_MARKER, options.commandTimeout(), cursor) == null) {
+            problems.add("'" + APPLIED_MARKER + "' missing after the editor saved " + path);
             return problems;
         }
         if (log.awaitLine(marker, options.commandTimeout(), cursor) == null) {
