@@ -5317,14 +5317,24 @@ intended cadence.
 
 `each_player` snapshots the online player collection when the timer is due. The wheel enqueues one run per player and admits at
 most 32 player tasks on each global tick; the remaining players are spread over later global ticks and each action hops through
-the entity scheduler. A reload clears the fan-out queue and a generation check drops player tasks already queued from the old
-shadow. A player who leaves before their turn is ignored. A `server` run has `server.*` and persistent variables but deliberately
-no `player.*`, `location.*` or `world.*`.
+the entity scheduler. At most 640 admitted runs are waiting in the global queue **or already queued on an entity scheduler**.
+One timer wave is admitted whole or refused whole: when a snapshot would cross the bound, no player from that wave is queued and
+one `MTR-0129` reports the wave and run count. This is fail-soft rather than unbounded catch-up; an admitted run keeps the exact
+single semantics of the timer and player snapshot. A reload cancels the live handles, clears the queue and advances the
+generation, and a player who leaves before their turn is ignored.
+
+A daily timer passes its logical deadline through the dispatch. Therefore a Monday 06:00 occurrence first observed on Tuesday
+still builds Monday's `days` filter fact even if the player run waits in the fan-out queue until later. A `server` run has
+`server.*` and persistent variables but deliberately no `player.*`, `location.*` or `world.*`. The `player`, `location` and
+`world` entries on `every` are conditional context variables in registry self-description: the code-mode SDK guarantees them only
+when `for` includes `each_player`; the compiler applies the same filter-aware root set at load.
 
 **Budgets.** A registration is one interval/subject or one `at` value of one rule. The first 128 registrations in deterministic
-rule order are scheduled per pack; excess registrations stay in the authored rule and are not scheduled. One `MTR-0128` warning
-names the pack, its total, the first 128 retained and the number omitted. A single global wheel remains responsible for every pack;
-the per-tick fan-out bound above prevents a simultaneous `each_player` due wave from flooding regional schedulers.
+authored rule order are scheduled per pack; duplicate interval/audience pairs and duplicate `at` values collapse to one distinct
+registration. Excess registrations stay in the authored rule and are not scheduled. One `MTR-0128` warning names the pack, its
+total, the first 128 retained and the number omitted. A single global wheel remains responsible for every pack; the 640-run
+fan-out bound and the 32-per-tick admission rate keep dynamic registration and online-player counts from growing a queue without
+limit.
 
 **Traceability.**
 
@@ -5339,7 +5349,8 @@ the per-tick fan-out bound above prevents a simultaneous `each_player` due wave 
 
 **Verification.** `TimerIntervalTest`, `TriggerFiltersTest`, `WorldTriggersTest`, `ScheduledTriggerPlanTest` and
 `TimerWheelTest` pin the schema, budget, a pack with no timers, tick cadence, fake-clock drift, daily days and the one global
-task. `PaperScheduledTriggersIT` enables the `timers` fixture's one-second server timer and reads the incremented server variable.
+task, including logical-date drift, authored cross-type order, duplicate collapse and bounded whole-wave fan-out overload.
+`PaperScheduledTriggersIT` enables the `timers` fixture's one-second server timer and reads the incremented server variable.
 QA `timers.server-variable-increments` observes the corresponding broadcast in a real client. The benchmark corpus promotes T26
 to pass; T20 keeps only VIEW, while F5 keeps its item-held context gap.
 

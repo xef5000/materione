@@ -93,6 +93,9 @@ export interface SurfaceContextVar {
   description: string;
   /** The hosts that fill it; empty means every host that fires the trigger. */
   hosts: string[];
+  /** A trigger filter which must include one of `filterValues` before this variable exists. */
+  filter?: string;
+  filterValues?: string[];
 }
 
 export interface SurfaceContentType {
@@ -378,7 +381,14 @@ function context(value: unknown): SurfaceContextVar[] {
     const path = text(raw.path);
     const type = text(raw.type);
     if (path === undefined || type === undefined) return [];
-    return [{ path, type, description: text(raw.description) ?? '', hosts: strings(raw.hosts) }];
+    return [clean<SurfaceContextVar>({
+      path,
+      type,
+      description: text(raw.description) ?? '',
+      hosts: strings(raw.hosts),
+      filter: text(raw.filter),
+      filterValues: Array.isArray(raw.filterValues) ? strings(raw.filterValues) : undefined,
+    })];
   });
 }
 
@@ -438,12 +448,18 @@ export function assembleSurface(describe: unknown, capabilities: readonly string
   const triggers = each<SurfaceTrigger>(behavior.triggers, (raw) => {
     const base = entry(raw);
     if (base === undefined) return undefined;
+    const filters = params(raw.filters);
+    const triggerContext = context(raw.context).filter(
+      (variable) => variable.filter === undefined
+        || ((variable.filterValues?.length ?? 0) > 0
+          && filters.some((filter) => filter.id === variable.filter)),
+    );
     return {
       ...base,
       firedBy: strings(raw.firedBy),
       details: strings(raw.details),
-      filters: params(raw.filters),
-      context: context(raw.context),
+      filters,
+      context: triggerContext,
       cancellable: flag(raw.cancellable),
     };
   });

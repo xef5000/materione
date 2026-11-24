@@ -29,6 +29,8 @@ type ListSourceId = "content" | "online_players" | "pack_items" | "static" | "va
 type InputMethodId = "anvil" | "chat" | "sign";
 /** The step kinds of the flow model this server supports. */
 type StepKindId = "action" | "call" | "choose" | "if" | "require" | "stop" | "wait";
+/** The scalar values selected by a trigger filter, whether one value or a list is written. */
+type TriggerFilterValues<F> = F extends readonly (infer V)[] ? V : F;
 
 /**
  * A custom block: host technique, appearance, drops and world policy.
@@ -1984,7 +1986,21 @@ interface EveryTriggerArgs {
 }
 
 /** The context of `every` rules, by the host that fires it. */
-interface EveryContext {
+interface EveryContextBase {
+  /** What a rule on the host `rule` receives. */
+  readonly rule: {
+    readonly server: {
+      /** Players online. */
+      readonly online: ContextValue<number>;
+      /** Player slots. */
+      readonly max: ContextValue<number>;
+    };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+  };
+}
+
+/** The context of `every` rules, by the host that fires it. */
+interface EveryContextIncluded {
   /** What a rule on the host `rule` receives. */
   readonly rule: {
     readonly server: {
@@ -2034,6 +2050,62 @@ interface EveryContext {
     };
   };
 }
+
+/** The context of `every` rules, by the host that fires it. */
+interface EveryContextMixed {
+  /** What a rule on the host `rule` receives. */
+  readonly rule: {
+    readonly server: {
+      /** Players online. */
+      readonly online: ContextValue<number>;
+      /** Player slots. */
+      readonly max: ContextValue<number>;
+    };
+    readonly vars: { readonly [name: string]: ContextValue<unknown> };
+    readonly player?: {
+      /** The player's name; present only when for is each_player. */
+      readonly name?: ContextValue<string>;
+      /** The player's UUID; present only when for is each_player. */
+      readonly uuid?: ContextValue<string>;
+      /** The player's game mode; present only when for is each_player. */
+      readonly gamemode?: ContextValue<string>;
+      /** Whether the player is sneaking; present only when for is each_player. */
+      readonly sneaking?: ContextValue<boolean>;
+      /** Whether the player is an operator; present only when for is each_player. */
+      readonly op?: ContextValue<boolean>;
+      /** The player's health; present only when for is each_player. */
+      readonly health?: ContextValue<number>;
+      /** The player's experience level; present only when for is each_player. */
+      readonly level?: ContextValue<number>;
+      /** The player's X; present only when for is each_player. */
+      readonly x?: ContextValue<number>;
+      /** The player's Y; present only when for is each_player. */
+      readonly y?: ContextValue<number>;
+      /** The player's Z; present only when for is each_player. */
+      readonly z?: ContextValue<number>;
+    };
+    readonly location?: {
+      /** The player's X; present only when for is each_player. */
+      readonly x?: ContextValue<number>;
+      /** The player's Y; present only when for is each_player. */
+      readonly y?: ContextValue<number>;
+      /** The player's Z; present only when for is each_player. */
+      readonly z?: ContextValue<number>;
+      /** The player's world; present only when for is each_player. */
+      readonly world?: ContextValue<string>;
+    };
+    readonly world?: {
+      /** The player's world; present only when for is each_player. */
+      readonly name?: ContextValue<string>;
+      /** The player's world time; present only when for is each_player. */
+      readonly time?: ContextValue<number>;
+    };
+  };
+}
+
+type EveryContext<F = undefined> =
+  [Extract<TriggerFilterValues<F>, "each_player">] extends [never] ? EveryContextBase :
+  [Exclude<TriggerFilterValues<F>, "each_player">] extends [never] ? EveryContextIncluded : EveryContextMixed;
 
 /** The detail and the filters of the `example:ping` trigger. */
 interface PingTriggerArgs {
@@ -3380,7 +3452,7 @@ interface TriggerCatalog {
    * @since 0.1.0
    * @registeredBy materione
    */
-  every(params: EveryTriggerArgs): TriggerBinding<"every", EveryContext>;
+  every<F extends EveryTriggerArgs["for"] | undefined = "server">(params: EveryTriggerArgs & { readonly for?: F }): TriggerBinding<"every", EveryContext<F>>;
   /**
    * A ping reaches the item from the example addon.
    * Fired by: item.

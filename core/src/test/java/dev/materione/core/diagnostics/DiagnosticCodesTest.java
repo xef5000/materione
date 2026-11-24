@@ -64,9 +64,11 @@ class DiagnosticCodesTest {
         // MTR-0125 a command's selector matched more players than it runs for: logic.md section 40, #467;
         // MTR-0127 a view read the reads index cannot place: views.md section 5.2, #456
         // MTR-0126 a view.open names a view kind no verb opens: views.md sections 3.6 and 16, #455;
-        // MTR-0128 a pack exceeded its scheduled-trigger budget: logic.md section 44)
-        assertThat(DiagnosticCodes.all()).hasSize(115);
+        // MTR-0128 a pack exceeded its scheduled-trigger budget, MTR-0129 its fan-out queue was full:
+        // logic.md section 44)
+        assertThat(DiagnosticCodes.all()).hasSize(116);
         assertThat(DiagnosticCodes.TIMER_BUDGET_EXCEEDED.code()).isEqualTo("MTR-0128");
+        assertThat(DiagnosticCodes.TIMER_FANOUT_OVERLOADED.code()).isEqualTo("MTR-0129");
         assertThat(DiagnosticCodes.VIEW_READ_UNPLACED.code()).isEqualTo("MTR-0127");
         assertThat(DiagnosticCodes.VIEW_NOT_OPENABLE.code()).isEqualTo("MTR-0126");
         assertThat(DiagnosticCodes.COMMAND_SELECTOR_CAPPED.code()).isEqualTo("MTR-0125");

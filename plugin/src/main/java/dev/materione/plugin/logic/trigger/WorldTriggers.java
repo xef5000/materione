@@ -200,39 +200,43 @@ public final class WorldTriggers {
 
     private static List<ContextVariable> everyContext() {
         var out = new ArrayList<>(serverContext());
-        out.add(ContextVariable.of("player.name", ParameterType.STRING,
+        out.add(eachPlayer("player.name", ParameterType.STRING,
                 "The player's name; present only when for is each_player"));
-        out.add(ContextVariable.of("player.uuid", ParameterType.STRING,
+        out.add(eachPlayer("player.uuid", ParameterType.STRING,
                 "The player's UUID; present only when for is each_player"));
-        out.add(ContextVariable.of("player.gamemode", ParameterType.STRING,
+        out.add(eachPlayer("player.gamemode", ParameterType.STRING,
                 "The player's game mode; present only when for is each_player"));
-        out.add(ContextVariable.of("player.sneaking", ParameterType.BOOLEAN,
+        out.add(eachPlayer("player.sneaking", ParameterType.BOOLEAN,
                 "Whether the player is sneaking; present only when for is each_player"));
-        out.add(ContextVariable.of("player.op", ParameterType.BOOLEAN,
+        out.add(eachPlayer("player.op", ParameterType.BOOLEAN,
                 "Whether the player is an operator; present only when for is each_player"));
-        out.add(ContextVariable.of("player.health", ParameterType.DECIMAL,
+        out.add(eachPlayer("player.health", ParameterType.DECIMAL,
                 "The player's health; present only when for is each_player"));
-        out.add(ContextVariable.of("player.level", ParameterType.INTEGER,
+        out.add(eachPlayer("player.level", ParameterType.INTEGER,
                 "The player's experience level; present only when for is each_player"));
-        out.add(ContextVariable.of("player.x", ParameterType.DECIMAL,
+        out.add(eachPlayer("player.x", ParameterType.DECIMAL,
                 "The player's X; present only when for is each_player"));
-        out.add(ContextVariable.of("player.y", ParameterType.DECIMAL,
+        out.add(eachPlayer("player.y", ParameterType.DECIMAL,
                 "The player's Y; present only when for is each_player"));
-        out.add(ContextVariable.of("player.z", ParameterType.DECIMAL,
+        out.add(eachPlayer("player.z", ParameterType.DECIMAL,
                 "The player's Z; present only when for is each_player"));
-        out.add(ContextVariable.of("location.x", ParameterType.DECIMAL,
+        out.add(eachPlayer("location.x", ParameterType.DECIMAL,
                 "The player's X; present only when for is each_player"));
-        out.add(ContextVariable.of("location.y", ParameterType.DECIMAL,
+        out.add(eachPlayer("location.y", ParameterType.DECIMAL,
                 "The player's Y; present only when for is each_player"));
-        out.add(ContextVariable.of("location.z", ParameterType.DECIMAL,
+        out.add(eachPlayer("location.z", ParameterType.DECIMAL,
                 "The player's Z; present only when for is each_player"));
-        out.add(ContextVariable.of("location.world", ParameterType.STRING,
+        out.add(eachPlayer("location.world", ParameterType.STRING,
                 "The player's world; present only when for is each_player"));
-        out.add(ContextVariable.of("world.name", ParameterType.STRING,
+        out.add(eachPlayer("world.name", ParameterType.STRING,
                 "The player's world; present only when for is each_player"));
-        out.add(ContextVariable.of("world.time", ParameterType.INTEGER,
+        out.add(eachPlayer("world.time", ParameterType.INTEGER,
                 "The player's world time; present only when for is each_player"));
         return out;
+    }
+
+    private static ContextVariable eachPlayer(String path, ParameterType type, String description) {
+        return ContextVariable.of(path, type, description).when("for", "each_player");
     }
 
     private static List<ContextVariable> serverContext() {

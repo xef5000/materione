@@ -1,6 +1,7 @@
 package dev.materione.plugin.runtime.behavior;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.behavior.rule.EventTypes;
 import dev.materione.behavior.rule.Rule;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,17 +31,22 @@ public final class WorldRules {
 
     private final Map<NamespacedId, List<Rule>> byDocument;
     private final Map<String, List<Rule>> byTrigger;
+    private final List<Rule> scheduled;
     private final Set<String> itemTriggers;
     private final Set<String> subscribed;
 
     private WorldRules(Map<NamespacedId, List<Rule>> byDocument, Set<String> itemTriggers) {
         var documents = new LinkedHashMap<NamespacedId, List<Rule>>();
         var triggers = new LinkedHashMap<String, List<Rule>>();
+        var timers = new ArrayList<Rule>();
         var all = new LinkedHashSet<>(itemTriggers);
         byDocument.forEach((id, rules) -> {
             documents.put(id, List.copyOf(rules));
             for (Rule rule : rules) {
                 triggers.computeIfAbsent(rule.on().type(), key -> new ArrayList<>()).add(rule);
+                if (EventTypes.EVERY.equals(rule.on().type()) || EventTypes.SCHEDULE.equals(rule.on().type())) {
+                    timers.add(rule);
+                }
                 all.add(rule.on().type());
             }
         });
@@ -48,6 +54,7 @@ public final class WorldRules {
         var frozen = new LinkedHashMap<String, List<Rule>>();
         triggers.forEach((trigger, rules) -> frozen.put(trigger, List.copyOf(rules)));
         this.byTrigger = Map.copyOf(frozen);
+        this.scheduled = List.copyOf(timers);
         this.itemTriggers = Set.copyOf(itemTriggers);
         this.subscribed = Set.copyOf(all);
     }
@@ -80,6 +87,10 @@ public final class WorldRules {
     /** The rules of rule documents that answer {@code trigger}, in document order; never null. */
     public List<Rule> forTrigger(String trigger) {
         return byTrigger.getOrDefault(trigger, List.of());
+    }
+
+    List<Rule> scheduledRules() {
+        return scheduled;
     }
 
     /** The compiled rules of one rule document, or empty for an unknown or rule-less one. */

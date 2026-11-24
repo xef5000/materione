@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.logic.ContextVariable;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
@@ -14,6 +15,7 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.logic.LogicFixture;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.behavior.rule.FilterFacts;
+import dev.materione.behavior.rule.EventSelector;
 import dev.materione.behavior.rule.ParsedRules;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.rule.RuleFilters;
@@ -26,6 +28,7 @@ import dev.materione.behavior.runtime.RuleEngine;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -97,6 +100,24 @@ class TriggerFiltersTest {
             }
         };
         triggers.register(NamespacedId.of("materione", "clock"), clock, clock.describe().self(), "test");
+        var audience = new TriggerType() {
+            @Override
+            public String id() {
+                return "audience";
+            }
+
+            @Override
+            public TriggerDescription describe() {
+                return new TriggerDescription(SelfDescription.of("Audience", "A filter-aware trigger"),
+                        List.of(), List.of("rule"),
+                        List.of(new ParameterSchema("for", ParameterType.ENUM, false, "server", "who runs",
+                                List.of("server", "each_player"), null)),
+                        List.of(ContextVariable.of("player.name", ParameterType.STRING, "the player")
+                                .when("for", "each_player")), false);
+            }
+        };
+        triggers.register(
+                NamespacedId.of("materione", "audience"), audience, audience.describe().self(), "test");
     }
 
     @Test
@@ -236,6 +257,16 @@ class TriggerFiltersTest {
         assertThat(filters.matches(FilterFacts.of(Map.of("slot", "5")))).isFalse();
         assertThat(filters.matches(FilterFacts.NONE)).isFalse();
         assertThat(RuleFilters.none().matches(FilterFacts.NONE)).isTrue();
+    }
+
+    @Test
+    void contextRootsRespectTheBoundFilterValues() {
+        var selector = new EventSelector("audience", Optional.empty());
+
+        assertThat(RuleCompiler.rootsOf(logic.lookup(), selector, RuleFilters.none()))
+                .doesNotContain("player");
+        assertThat(RuleCompiler.rootsOf(logic.lookup(), selector,
+                new RuleFilters(Map.of("for", List.of("each_player"))))).contains("player");
     }
 
     private void fire(List<Rule> rules, Map<String, String> facts) {

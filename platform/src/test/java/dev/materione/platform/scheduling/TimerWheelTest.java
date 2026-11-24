@@ -15,6 +15,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
@@ -105,6 +106,22 @@ class TimerWheelTest {
     }
 
     @Test
+    void aDriftedDailyCallbackReceivesTheLogicalOccurrenceItMissed() {
+        var clock = new MutableClock(Instant.parse("2026-01-05T05:00:00Z")); // Monday
+        var scheduledFor = new AtomicReference<Instant>();
+        var wheel = new TimerWheel(clock, UTC, failure -> {
+            throw new AssertionError(failure);
+        });
+        wheel.replace(List.of(TimerWheel.Registration.daily(
+                "reset", LocalTime.of(6, 0), Set.of(DayOfWeek.MONDAY), scheduledFor::set)), 0);
+
+        clock.set(Instant.parse("2026-01-06T07:00:00Z"));
+        wheel.tick(1);
+
+        assertThat(scheduledFor.get()).isEqualTo(Instant.parse("2026-01-05T06:00:00Z"));
+    }
+
+    @Test
     void oneGlobalWakeupOwnsManyTimersAndNoTimersScheduleNothing() {
         var gateway = new FakeGateway();
         var clock = new MutableClock(Instant.parse("2026-01-01T00:00:00Z"));
@@ -149,6 +166,10 @@ class TimerWheelTest {
 
         void advance(long seconds) {
             now = now.plusSeconds(seconds);
+        }
+
+        void set(Instant now) {
+            this.now = now;
         }
 
         @Override

@@ -22,7 +22,7 @@ import java.util.TreeSet;
 final class CompileUnit {
 
     /** Roots every run has, whatever the trigger (logic.md §2.6). */
-    static final Set<String> UNIVERSAL_ROOTS = Set.of("player", "server", "vars");
+    static final Set<String> UNIVERSAL_ROOTS = Set.of("server", "vars");
 
     /** The root of the stack a run is about; a trigger on an item host provides it (logic.md section 38). */
     static final String ITEM_ROOT = "item";

@@ -154,6 +154,22 @@ describe('rules are typed from their trigger (benchmark S1, S7)', () => {
     expect(found.some((problem) => problem.code === 2339 && problem.message.includes('health'))).toBe(true);
   });
 
+  it('types timer context from its audience filter', () => {
+    const clock = `${pack}const clock = p.rules.create("clock", {});\n`;
+    expect(codes(`${clock}
+      clock.rules.add(m.triggers.every({ interval: "1s" }), (ctx) => ({
+        if: m.expr\`\${ctx.player.name} != ""\`, do: [],
+      }));`)).toContain(2339);
+    expect(codes(`${clock}
+      clock.rules.add(m.triggers.every({ interval: "1s", for: "server" }), (ctx) => ({
+        if: m.expr\`\${ctx.player.name} != ""\`, do: [],
+      }));`)).toContain(2339);
+    expect(codes(`${clock}
+      clock.rules.add(m.triggers.every({ interval: "1s", for: "each_player" }), (ctx) => ({
+        if: m.expr\`\${ctx.player.name} != ""\`, do: [],
+      }));`)).toEqual([]);
+  });
+
   it('rejects a trigger no rule of that host can use', () => {
     // gui.click is fired by a GUI, not by an item
     expect(codes(`${pack}${sword}

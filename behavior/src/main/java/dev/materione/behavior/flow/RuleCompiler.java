@@ -2,6 +2,7 @@ package dev.materione.behavior.flow;
 
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.api.logic.ContextVariable;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.EventSelector;
@@ -13,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -63,17 +65,22 @@ final class RuleCompiler {
                             + "click, break, place, interact, equip, unequip, drop, pickup, consume, damage, death…");
             return Optional.empty();
         }
-        var unit = new CompileUnit(context, "rule '" + id + "'", rootsOf(context.lookup, selector.get()),
-                "the '" + selector.get().type() + "' trigger provides");
-        var steps = new StepCompiler(unit, flows);
         try {
+            var filterUnit = new CompileUnit(context, "rule '" + id + "'", null,
+                    "the '" + selector.get().type() + "' trigger provides");
+            RuleFilters filters = TriggerFilters.read(
+                    rule, context.lookup.trigger(selector.get().type()), filterUnit, path);
+            var unit = new CompileUnit(context, "rule '" + id + "'",
+                    rootsOf(context.lookup, selector.get(), filters),
+                    "the '" + selector.get().type() + "' trigger provides");
+            var steps = new StepCompiler(unit, flows);
             Condition condition = condition(rule.get("if"), path.child("if"), steps);
             List<Step> body = steps.list(rule.get("do"), path.child("do"));
             if (body.isEmpty()) {
                 throw emptyBody(unit, rule.get("do"), path.child("do"));
             }
             // the cooldown branch compiles in its own unit, which also reads cooldown.* (logic.md §16)
-            var cooldown = new StepCompiler(cooldownUnit(id, selector.get()), flows);
+            var cooldown = new StepCompiler(cooldownUnit(id, selector.get(), filters), flows);
             List<Step> onCooldown = rule.get(RuleOptions.ON_COOLDOWN) == null
                     ? List.of()
                     : cooldown.list(rule.get(RuleOptions.ON_COOLDOWN), path.child(RuleOptions.ON_COOLDOWN));
@@ -85,7 +92,6 @@ final class RuleCompiler {
                 throw Skip.unit();
             }
             RuleOptions options = options(rule, unit, path);
-            RuleFilters filters = TriggerFilters.read(rule, context.lookup.trigger(selector.get().type()), unit, path);
             return Optional.of(new Rule(context.owner, id, selector.get(), condition, body, options, filters, path,
                     onCooldown));
         } catch (Skip skip) {
@@ -97,8 +103,8 @@ final class RuleCompiler {
      * The unit an {@code on_cooldown} flow compiles in: the trigger's roots plus {@code cooldown}, which only this
      * branch's run provides. Unchecked (null roots) when the trigger declares no schema, as for the rule's own steps.
      */
-    private CompileUnit cooldownUnit(String id, EventSelector selector) {
-        Set<String> roots = rootsOf(context.lookup, selector);
+    private CompileUnit cooldownUnit(String id, EventSelector selector, RuleFilters filters) {
+        Set<String> roots = rootsOf(context.lookup, selector, filters);
         if (roots != null) {
             roots = new HashSet<>(roots);
             roots.add(RuleOptions.COOLDOWN_ROOT);
@@ -172,17 +178,34 @@ final class RuleCompiler {
      * no schema, because "unknown" must not turn into a warning on every variable.
      */
     static Set<String> rootsOf(LogicLookup lookup, EventSelector selector) {
+        return rootsOf(lookup, selector, RuleFilters.none());
+    }
+
+    static Set<String> rootsOf(LogicLookup lookup, EventSelector selector, RuleFilters filters) {
         Optional<TriggerDescription> description = lookup.trigger(selector.type());
         if (description.isEmpty() || description.get().context().isEmpty()) {
             return null;
         }
         var roots = new HashSet<>(CompileUnit.UNIVERSAL_ROOTS);
         for (var variable : description.get().context()) {
+            if (variable.filter() != null && !filterIncludes(description.get(), filters, variable)) {
+                continue;
+            }
             String path = variable.path();
             int dot = path.indexOf('.');
             roots.add(dot < 0 ? path : path.substring(0, dot));
         }
         return roots;
+    }
+
+    private static boolean filterIncludes(
+            TriggerDescription trigger, RuleFilters filters, ContextVariable variable) {
+        List<String> values = filters.get(variable.filter()).orElseGet(() -> trigger.filters().stream()
+                .filter(filter -> filter.id().equals(variable.filter()))
+                .map(filter -> filter.defaultValue())
+                .filter(Objects::nonNull)
+                .toList());
+        return values.stream().anyMatch(variable.filterValues()::contains);
     }
 
     private void report(String id, StepPath path, String problem, String hint) {

@@ -98,6 +98,12 @@ class WorldTriggersTest {
         assertThat(paths(EventTypes.PLAYER_QUIT)).doesNotContain("player.first_join");
         assertThat(paths(EventTypes.PLAYER_RESPAWN)).doesNotContain("damage.cause");
         assertThat(paths(EventTypes.EVERY)).contains("player.name", "server.online", "vars.*");
+        assertThat(byId.get(EventTypes.EVERY).describe().context()
+                .stream().filter(variable -> variable.path().equals("player.name")).findFirst().orElseThrow())
+                .satisfies(variable -> {
+                    assertThat(variable.filter()).isEqualTo("for");
+                    assertThat(variable.filterValues()).containsExactly("each_player");
+                });
         assertThat(paths(EventTypes.SCHEDULE)).contains("server.online", "vars.*")
                 .doesNotContain("player.name");
     }

@@ -10250,96 +10250,160 @@
             },
             {
               "description": "The player's name; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.name",
               "type": "string"
             },
             {
               "description": "The player's UUID; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.uuid",
               "type": "string"
             },
             {
               "description": "The player's game mode; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.gamemode",
               "type": "string"
             },
             {
               "description": "Whether the player is sneaking; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.sneaking",
               "type": "boolean"
             },
             {
               "description": "Whether the player is an operator; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.op",
               "type": "boolean"
             },
             {
               "description": "The player's health; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.health",
               "type": "decimal"
             },
             {
               "description": "The player's experience level; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.level",
               "type": "integer"
             },
             {
               "description": "The player's X; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.x",
               "type": "decimal"
             },
             {
               "description": "The player's Y; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.y",
               "type": "decimal"
             },
             {
               "description": "The player's Z; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "player.z",
               "type": "decimal"
             },
             {
               "description": "The player's X; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "location.x",
               "type": "decimal"
             },
             {
               "description": "The player's Y; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "location.y",
               "type": "decimal"
             },
             {
               "description": "The player's Z; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "location.z",
               "type": "decimal"
             },
             {
               "description": "The player's world; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "location.world",
               "type": "string"
             },
             {
               "description": "The player's world; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "world.name",
               "type": "string"
             },
             {
               "description": "The player's world time; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
               "hosts": [],
               "path": "world.time",
               "type": "integer"

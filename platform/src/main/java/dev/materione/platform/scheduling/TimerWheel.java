@@ -45,7 +45,12 @@ public final class TimerWheel {
                 continue;
             }
             try {
-                arm.registration.action().run();
+                Runnable action = arm.registration.action();
+                if (action instanceof TimedAction timed) {
+                    timed.accept(deadline.wall);
+                } else {
+                    action.run();
+                }
             } catch (Throwable t) {
                 failures.accept(t);
             }
@@ -136,6 +141,31 @@ public final class TimerWheel {
         public static Registration daily(
                 String id, LocalTime at, Set<DayOfWeek> days, Runnable action) {
             return new Registration(id, null, at, days, action);
+        }
+
+        public static Registration daily(
+                String id, LocalTime at, Set<DayOfWeek> days, Consumer<Instant> action) {
+            return new Registration(id, null, at, days, new ConsumerAction(action));
+        }
+    }
+
+    private interface TimedAction extends Runnable {
+        void accept(Instant scheduledFor);
+
+        @Override
+        default void run() {
+            accept(null);
+        }
+    }
+
+    private record ConsumerAction(Consumer<Instant> consumer) implements TimedAction {
+        private ConsumerAction {
+            Objects.requireNonNull(consumer, "consumer");
+        }
+
+        @Override
+        public void accept(Instant scheduledFor) {
+            consumer.accept(scheduledFor);
         }
     }
 

@@ -14,8 +14,9 @@ releases may change file formats, settings and the public API.
   per online player) or   `schedule` (server-local `HH:MM`, optional days). All timers use
   one Folia-safe platform wheel rebuilt on live swap: it skips missed occurrences, stops when
   there are no timers, and fans per-player runs through entity schedulers at 32 per global
-  tick. The first 128 registrations per pack run; excess timers are diagnosed once with
-  `MTR-0128`. The registry self-description feeds the editor and code-mode SDK directly, the
+  tick with at most 640 queued or in flight. A due wave that cannot fit is refused whole with
+  `MTR-0129`. The first 128 distinct registrations in authored rule order per pack run; excess
+  timers are diagnosed once with `MTR-0128`. The registry self-description feeds the editor and code-mode SDK directly, the
   `timers` fixture drives a one-second server-variable increment in
   `PaperScheduledTriggersIT`, and QA `timers.server-variable-increments` observes the
   broadcast. The benchmark's T26 now passes; T20 keeps only VIEW, while while-held item

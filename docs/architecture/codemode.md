@@ -355,6 +355,10 @@ trigger's `filters`, each one value or a list of values (`click: ["left", "shift
 `TriggerBinding<Id, Context>`, where `Context` is generated from the trigger's declared context schema **by the host that fires
 it**: `{ item: {...}, furniture: {...} }`, each host's entry holding the variables whose `hosts` list is empty or names it, as a
 tree of `ContextValue<T>` (`ctx.player.sneaking`). A resource handle's `rules` is a `RuleSet<"item">`, and
+when a context variable names a filter requirement, the binding is generic in that filter:
+`every({ interval: "1s" })` has no `player`, while `for: "each_player"` includes it. A list that can contain
+both audience values makes only the conditional roots optional, matching the fact that the one authored
+rule expands to server and player firings.
 
 ```ts
 sword.rules.add(m.triggers.click({ detail: "right" }), (ctx) => ({

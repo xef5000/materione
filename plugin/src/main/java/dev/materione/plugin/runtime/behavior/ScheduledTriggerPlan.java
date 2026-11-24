@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -32,8 +33,13 @@ final class ScheduledTriggerPlan {
         var counts = new LinkedHashMap<String, Integer>();
         var skipped = new LinkedHashMap<String, Integer>();
         var firstExcess = new LinkedHashMap<String, Rule>();
-        addEvery(world.forTrigger(EventTypes.EVERY), entries, counts, skipped, firstExcess, report);
-        addSchedule(world.forTrigger(EventTypes.SCHEDULE), entries, counts, skipped, firstExcess, report);
+        for (Rule rule : world.scheduledRules()) {
+            if (EventTypes.EVERY.equals(rule.on().type())) {
+                addEvery(rule, entries, counts, skipped, firstExcess, report);
+            } else if (EventTypes.SCHEDULE.equals(rule.on().type())) {
+                addSchedule(rule, entries, counts, skipped, firstExcess, report);
+            }
+        }
         for (var excess : skipped.entrySet()) {
             Rule example = firstExcess.get(excess.getKey());
             report.accept(new Diagnostic(
@@ -48,50 +54,53 @@ final class ScheduledTriggerPlan {
     }
 
     private static void addEvery(
-            List<Rule> rules,
+            Rule rule,
             List<Entry> entries,
             Map<String, Integer> counts,
             Map<String, Integer> skipped,
             Map<String, Rule> firstExcess,
             Consumer<Diagnostic> report) {
-        for (Rule rule : rules) {
-            List<String> intervals = rule.filters().get("interval").orElse(List.of());
-            List<String> audiences = rule.filters().get("for").orElse(List.of("server"));
-            for (String rawInterval : intervals) {
-                TimerInterval interval;
-                try {
-                    interval = TimerInterval.parse(rawInterval);
-                } catch (IllegalArgumentException e) {
-                    invalid(rule, "invalid interval '" + rawInterval + "'", e, report);
-                    continue;
-                }
-                for (String rawAudience : audiences) {
-                    Audience audience = "each_player".equals(rawAudience) ? Audience.EACH_PLAYER : Audience.SERVER;
+        List<String> intervals = rule.filters().get("interval").orElse(List.of());
+        List<String> audiences = rule.filters().get("for").orElse(List.of("server"));
+        var admitted = new LinkedHashSet<EveryRegistration>();
+        for (String rawInterval : intervals) {
+            TimerInterval interval;
+            try {
+                interval = TimerInterval.parse(rawInterval);
+            } catch (IllegalArgumentException e) {
+                invalid(rule, "invalid interval '" + rawInterval + "'", e, report);
+                continue;
+            }
+            for (String rawAudience : audiences) {
+                Audience audience = "each_player".equals(rawAudience) ? Audience.EACH_PLAYER : Audience.SERVER;
+                var registration = new EveryRegistration(interval.kind(), interval.amount(), audience);
+                if (admitted.add(registration)) {
                     admit(entries, counts, skipped, firstExcess,
-                            Entry.every(rule, interval, audience, rawInterval, rawAudience));
+                            Entry.every(rule, interval, audience, interval.text(), rawAudience));
                 }
             }
         }
     }
 
     private static void addSchedule(
-            List<Rule> rules,
+            Rule rule,
             List<Entry> entries,
             Map<String, Integer> counts,
             Map<String, Integer> skipped,
             Map<String, Rule> firstExcess,
             Consumer<Diagnostic> report) {
-        for (Rule rule : rules) {
-            List<String> times = rule.filters().get("at").orElse(List.of());
-            Set<DayOfWeek> days = parseDays(rule.filters().get("days").orElse(List.of()));
-            for (String rawTime : times) {
-                LocalTime at;
-                try {
-                    at = LocalTime.parse(rawTime);
-                } catch (RuntimeException e) {
-                    invalid(rule, "invalid at time '" + rawTime + "'", e, report);
-                    continue;
-                }
+        List<String> times = rule.filters().get("at").orElse(List.of());
+        Set<DayOfWeek> days = parseDays(rule.filters().get("days").orElse(List.of()));
+        var admitted = new LinkedHashSet<LocalTime>();
+        for (String rawTime : times) {
+            LocalTime at;
+            try {
+                at = LocalTime.parse(rawTime);
+            } catch (RuntimeException e) {
+                invalid(rule, "invalid at time '" + rawTime + "'", e, report);
+                continue;
+            }
+            if (admitted.add(at)) {
                 admit(entries, counts, skipped, firstExcess, Entry.daily(rule, at, days, rawTime));
             }
         }
@@ -159,4 +168,6 @@ final class ScheduledTriggerPlan {
         SERVER,
         EACH_PLAYER
     }
+
+    private record EveryRegistration(TimerInterval.Kind kind, long amount, Audience audience) {}
 }
