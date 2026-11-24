@@ -31,7 +31,14 @@ import dev.materione.plugin.commands.OpenCommandRegistrar;
 import dev.materione.plugin.gui.open.GuiOpenGates;
 import dev.materione.plugin.view.open.OpenSpecGate;
 import dev.materione.plugin.commands.PlayerNames;
+import dev.materione.plugin.view.ReadsIndex;
+import dev.materione.plugin.view.ViewChanges;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewRenderStats;
+import dev.materione.plugin.view.ViewScheduler;
+import dev.materione.plugin.view.ViewWake;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
@@ -56,6 +63,11 @@ public final class GuiStack {
 
     private final ViewRegistry views = new ViewRegistry();
     private final ViewKinds kinds = new ViewKinds();
+    private static final long TICK_NANOS = 50_000_000L;
+
+    private final ViewChanges changes;
+    private final ViewScheduler scheduler;
+    private final ViewRenderStats renderStats;
     private final GuiOpener opener;
     private final GuiLifecycle lifecycle;
     private final GuiLiveRefresh refresh;
@@ -97,6 +109,14 @@ public final class GuiStack {
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables,
             EscrowRuntime escrow) {
+        this.changes = new ViewChanges(() -> {
+            RuntimeRegistries current = live.get();
+            return current == null ? null : current.view(ReadsIndex.KEY);
+        }, views, kinds, ViewWake.NONE);
+        if (variables != null) {
+            variables.sessionStore(views.sessions()); // session variables: one more scope behind the store port
+            variables.writeObserver(changes); // every write to a variable a view reads marks that view's viewers
+        }
         StrictInputs strict = escrow == null ? StrictInputs.NONE : new StrictInputs(escrow);
         if (escrow != null) {
             escrow.bindWindows(strict);
@@ -124,6 +144,19 @@ public final class GuiStack {
         this.openHandler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server(), diagnostics);
         this.openCommands = new OpenCommandRegistrar(plugin, openHandler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, views, windows, lifecycle, ticker);
+        this.renderStats = new ViewRenderStats(System::currentTimeMillis);
+        this.scheduler = new ViewScheduler(views, kinds, () -> System.nanoTime() / TICK_NANOS,
+                (player, ticks, task, retired) -> {
+                    Player online = Bukkit.getPlayer(player);
+                    if (online != null) {
+                        scheduling.executeEntityLater(plugin, online, ticks, task, retired);
+                    }
+                },
+                id -> {
+                    Player online = Bukkit.getPlayer(id);
+                    return online == null ? null : Viewer.of(online);
+                }, renderStats);
+        changes.wake(scheduler);
         this.windowListener = new GuiWindowListener(lifecycle, journal, strict);
         this.inputClicks = new InputSlotClicks(guis, views, events, guard, journal, strict);
         kinds.register(new GuiViewKind(guis, opener, lifecycle, refresh)); // the container GUI is the first view kind
@@ -134,6 +167,21 @@ public final class GuiStack {
     /** The input-slot rules the click router consults (logic.md §25). */
     public InputSlotClicks inputClicks() {
         return inputClicks;
+    }
+
+    /** The write observer: marks the viewers a variable write reaches and calls the wake hook ({@link ViewChanges#wake}). */
+    public ViewChanges changes() {
+        return changes;
+    }
+
+    /** The scheduler the write observer wakes, and the explicit refresh entry points ({@link ViewScheduler#refreshNow}). */
+    public ViewScheduler scheduler() {
+        return scheduler;
+    }
+
+    /** The automatic renders per definition, for {@code /materione doctor}. */
+    public ViewRenderStats renderStats() {
+        return renderStats;
     }
 
     public ViewKinds kinds() {

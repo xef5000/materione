@@ -1145,7 +1145,7 @@
             },
             {
               "advanced": false,
-              "description": "Where the answer goes: a run-local name, or session.<name> for the open GUI",
+              "description": "Where the answer goes: a run-local name, or session.<key> for a declared session variable of the open view",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -1298,13 +1298,13 @@
           "available": true,
           "category": "data",
           "deferred": false,
-          "description": "Stores a value in a run-local, session or declared player, server or item variable",
+          "description": "Stores a value in a run-local variable or a declared player, server, item or session variable",
           "displayName": "Set variable",
           "id": "set_var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
+              "description": "Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -2883,13 +2883,13 @@
         {
           "available": true,
           "category": "data",
-          "description": "Compares a run-local, session or declared player, server or item variable with a value",
+          "description": "Compares a run-local variable or a declared player, server, item or session variable with a value",
           "displayName": "Variable",
           "id": "var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>",
+              "description": "Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>",
               "id": "var",
               "label": "Var",
               "order": 0,
@@ -4062,6 +4062,7 @@
       ],
       "listSources": [
         {
+          "announced": true,
           "cached": false,
           "description": "The live content as packs, folders and entries, one location at a time",
           "displayName": "Content tree",
@@ -4147,16 +4148,18 @@
               "id": "search",
               "label": "Search",
               "order": 0,
+              "referenceKind": "session",
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "variable"
             }
           ],
           "registeredBy": "materione",
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": false,
           "cached": false,
           "description": "Every online player, by name and UUID",
           "displayName": "Online players",
@@ -4193,6 +4196,7 @@
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": true,
           "cached": true,
           "description": "Every live item of one pack, by its id",
           "displayName": "Pack items",
@@ -4223,6 +4227,7 @@
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": true,
           "cached": false,
           "description": "Entries written in the layer, each a mapping of fields",
           "displayName": "Static entries",
@@ -4252,6 +4257,7 @@
           "sinceVersion": "1.0.0"
         },
         {
+          "announced": true,
           "cached": false,
           "description": "The pieces of a declared player or server string variable, separated by a separator",
           "displayName": "Variable list",
@@ -4274,7 +4280,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "variable"
             },
             {
               "advanced": false,
@@ -7892,7 +7898,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8010,7 +8016,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8128,7 +8134,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8271,7 +8277,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8469,7 +8475,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8616,7 +8622,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8748,7 +8754,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -8891,7 +8897,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -9046,7 +9052,7 @@
               "type": "raw"
             },
             {
-              "description": "A session value of this open view: per window, kept by view.back (views.md section 3.4)",
+              "description": "A declared session variable of this open view, as vars.session.<pack>.<key>: per window, kept by view.back (views.md section 3.4)",
               "hosts": [],
               "path": "vars.session.*",
               "type": "raw"
@@ -11134,7 +11140,7 @@
           },
           {
             "advanced": true,
-            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in vars.session.search (or var:), ignoring case",
+            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in the session variable search of the GUI's pack (or var:), ignoring case",
             "example": "{fields: [name]}",
             "id": "search",
             "label": "Search",
@@ -13993,7 +13999,7 @@
         ]
       },
       {
-        "description": "A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together",
+        "description": "A declared variable: stored per player, on the server, on an item stack or in one open view, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together. A session variable belongs to one open view: private to that viewer, kept by view.back, gone when the view closes",
         "directory": "variables",
         "displayName": "Variable",
         "expressionForm": "vars.{scope}.{pack}.{id}",
@@ -14004,9 +14010,10 @@
             "allowedValues": [
               "player",
               "server",
-              "item"
+              "item",
+              "session"
             ],
-            "description": "Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack)",
+            "description": "Where the value is stored: player (per player), server (one for the server), item (on the item stack the run is about; stacks whose values differ do not stack) or session (one open view: private to that viewer, gone when the view closes)",
             "id": "scope",
             "label": "Scope",
             "order": 0,
@@ -14176,6 +14183,35 @@
             "section": "behavior",
             "type": "integer",
             "uiHint": "number"
+          },
+          {
+            "advanced": true,
+            "allowedValues": [
+              "on_change",
+              "off"
+            ],
+            "default": "on_change",
+            "description": "Whether a write to a variable the window reads re-renders it: on_change (the default) updates the dynamic layers and the dynamic title on its own; off renders only on the refresh clock, an explicit refresh and a reload",
+            "example": "on_change",
+            "id": "rerender",
+            "label": "Re-render",
+            "options": [
+              {
+                "description": "A write to a variable the window shows updates it",
+                "label": "On change",
+                "value": "on_change"
+              },
+              {
+                "description": "Only the clock, an explicit refresh and a reload update it",
+                "label": "Off",
+                "value": "off"
+              }
+            ],
+            "order": 31,
+            "required": false,
+            "section": "behavior",
+            "type": "enum",
+            "uiHint": "select"
           },
           {
             "advanced": false,

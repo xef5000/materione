@@ -15,11 +15,13 @@ import dev.materione.content.gui.ItemComponent;
 import dev.materione.content.gui.ListComponent;
 import dev.materione.content.gui.SlotsComponent;
 import dev.materione.content.gui.logic.GuiRuleChecker;
+import dev.materione.plugin.gui.GuiReads;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
 import dev.materione.plugin.gui.list.ListLayerCompiler;
 import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.commands.OpenPlan;
+import dev.materione.plugin.view.ReadsCollector;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -114,14 +116,19 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
         var compiler = new ItemLayerCompiler(registries);
         var lists = new ListLayerCompiler(registries);
         var out = new ArrayList<Diagnostic>();
+        var reads = new ReadsCollector(gui.id(), registries); // what the layers read: an undeclared session read is MTR-0063
         for (int index = 0; index < gui.layers().size(); index++) {
             GuiLayer layer = gui.layers().get(index);
             if (layer.visible() && layer.compiled() instanceof ItemComponent.Layer item) {
                 var placement = new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item);
-                out.addAll(compiler.compile(gui.id(), authoredIndex(gui, layer.id()), placement).problems());
+                var result = compiler.compile(gui.id(), authoredIndex(gui, layer.id()), placement);
+                out.addAll(result.problems());
+                result.layer().ifPresent(compiled -> GuiReads.layer(reads, compiled, item));
             } else if (layer.visible() && layer.compiled() instanceof ListComponent.Layer list) {
                 var placement = new CompiledGui.ListPlacement(layer.id(), index, list);
-                out.addAll(lists.compile(gui.id(), authoredIndex(gui, layer.id()), placement).problems());
+                var result = lists.compile(gui.id(), authoredIndex(gui, layer.id()), placement);
+                out.addAll(result.problems());
+                result.layer().ifPresent(compiled -> GuiReads.list(reads, gui.id(), compiled));
             } else if (layer.visible() && layer.compiled().target() != dev.materione.api.gui.RenderTarget.SLOT) {
                 var pieces = new ArrayList<dev.materione.content.gui.GuiVisualPlan.Piece>();
                 int authored = authoredIndex(gui, layer.id());
@@ -138,9 +145,12 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
                     }
                 }
                 var plan = new dev.materione.content.gui.GuiVisualPlan(gui.id().namespace(), pieces);
-                out.addAll(TitleProgram.compile(gui.id(), plan, registries).problems());
+                var compiled = TitleProgram.compile(gui.id(), plan, registries);
+                out.addAll(compiled.problems());
+                GuiReads.visuals(reads, compiled.program());
             }
         }
+        out.addAll(reads.problems());
         return out;
     }
 

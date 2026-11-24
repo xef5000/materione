@@ -70,8 +70,11 @@ public interface WindowHost {
     /**
      * Repaints the dynamic layers of the viewer's window, when it is this session's window: the refresh
      * clock's tick. Layers that do not change keep what they show, and the window's clock advances first.
+     *
+     * @return false when the window is held still (the cursor carries an item and the title would change): nothing was
+     *     applied and the caller should render again once the cursor clears
      */
-    void advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui);
+    boolean advance(Viewer viewer, ViewerRecord session, RuntimeGuis.Live gui);
 
     /**
      * The title and size of the window the viewer has open for this session, or empty when their

@@ -9,6 +9,28 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Views V1, a window shows what the state says: the reads index, the write observer and the scheduler (#456, #335, docs/architecture/views.md sections 5 and 17).**
+  A container GUI that shows a declared variable now updates on a write with no `refresh:` clock and no `gui.refresh`: a write
+  to a `player`, `server` or `session` variable the window reads marks its viewers, and one render at the next tick (never inline in
+  a click, at most one per viewer per tick, held still while the cursor carries an item) brings the dynamic layers and title up to
+  date. **New top-level GUI field `rerender: on_change | off` (default `on_change`); `off` renders only on the clock, `gui.refresh`
+  and a reload.** `/materione doctor` lists the definitions with the most automatic re-renders per second. The scheduler also
+  carries the entry points the explicit `view.refresh` of #457 will use, and the candidate path a predicate view kind (the HUD) will
+  use to attach the first piece a player becomes eligible for.
+
+- **Views V1, session variables are declared and live behind the variable store port (#456, #335, docs/architecture/views.md section 17).**
+  `scope: session` joins the `variable` type's scopes (`player`, `server`, `item`): a session variable is typed, defaulted and
+  described like any other, private to one open view, kept by `view.back`, gone when the view closes. A `session` store keyed by the
+  view instance (`ViewerRecord.instance()`) implements the same `VariableStore` port as the other scopes, so `set_var` reaches it
+  through `write` and `mutate` and a decorator on the port sees every write; the `GuiSessionVariables.put` bypass
+  (`ViewerRecord.sessionValue`, the `SESSION` facet) is gone. **Breaking, by design (no public release has GUIs; views.md section
+  7.1, row V1): a session variable must be declared, an undeclared `session.<key>` in `set_var`, a `var` condition or a `prompt`
+  answer is `MTR-0063` at load, and it is read as `vars.session.<pack>.<key>` (a never-written one reads its default).** The
+  built-in browser, the `guilogic`, `overlay` and `showcase` fixture packs and the harness floor GUI declare theirs. A `var`
+  condition that names an undeclared variable now reports `MTR-0063` (it reported `MTR-0057`). `/materione var`, the placeholders and
+  `api.logic().variables()` refuse a session variable (it lives in one open view). The Logic tab flags a session name no
+  declaration backs and offers to declare it, in the variable field and in a template.
+
 - **Views V0: one view model, one verb set, one root (#455, #335, docs/architecture/views.md section 16; also dialogs row G, #6).**
   The container GUI is the first **view kind**. A generic `ViewerRecord` (binding, session values, window, a kind payload) replaces
   `GuiSession`; `GuiViewerState` is the GUI's payload (list pages, last render, clocks). `ViewRegistry` replaces `GuiSessions`,

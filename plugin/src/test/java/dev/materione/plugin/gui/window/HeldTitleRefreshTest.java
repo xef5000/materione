@@ -19,10 +19,12 @@ class HeldTitleRefreshTest {
         var session = session();
         var tasks = new ArrayList<Runnable>();
         var calls = new ArrayList<String>();
-        session.sessionValue("value", "old");
-        queue.ensure(session, () -> calls.add(session.sessionValues().get("value").toString()),
+        var variables = new dev.materione.plugin.view.TestVariables(new dev.materione.plugin.view.ViewRegistry());
+        var value = variables.declare("shop", "value", "");
+        variables.put(session, value, "old");
+        queue.ensure(session, () -> calls.add(variables.get(session, value).toString()),
                 (task, retired) -> { tasks.add(task); return ScheduledHandle.NONE; });
-        session.sessionValue("value", "latest");
+        variables.put(session, value, "latest");
         queue.ensure(session, () -> calls.add("obsolete"), (task, retired) -> {
             tasks.add(task);
             return ScheduledHandle.NONE;

@@ -165,8 +165,18 @@ public final class GuiCompiler {
         ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
         var model = new CompiledGui(gui.id(), gui.container(), title.build(), gui.title(), slotList, clicks, gui.rules(),
                 PlayerInventory.of(gui.raw().get("player_inventory")), inputsOf(gui, clicks),
-                placements, gui.refresh(), visuals, lists);
+                placements, gui.refresh(), visuals, lists, rerenderOf(gui.raw().get("rerender")));
         return new GuiCompilation(model, report.diagnostics, assets, fonts, GuiFlatten.layerReports(gui, report.reasons));
+    }
+
+    /**
+     * {@code rerender:} as written; anything but {@code off} is {@code on_change} (views.md section 5.5). YAML 1.1
+     * reads a bare {@code off} as the boolean false, so that spelling is {@code off} too.
+     */
+    static dev.materione.api.content.ViewFacet.RerenderPolicy rerenderOf(Object written) {
+        return "off".equals(written) || Boolean.FALSE.equals(written)
+                ? dev.materione.api.content.ViewFacet.RerenderPolicy.OFF
+                : dev.materione.api.content.ViewFacet.RerenderPolicy.ON_CHANGE;
     }
 
     /**

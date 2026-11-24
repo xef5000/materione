@@ -114,6 +114,12 @@ public final class VarCommand {
             return;
         }
         for (VariableDeclaration declaration : declared) {
+            if (declaration.scope() == VariableScope.SESSION) {
+                sender.sendMessage(Component.text(declaration.id() + " ", NamedTextColor.AQUA)
+                        .append(Component.text("[session, " + declaration.type().id() + "] ", NamedTextColor.GRAY))
+                        .append(Component.text("= per open view", NamedTextColor.WHITE)));
+                continue;
+            }
             Object value = api.get(declaration.id(), holderFor(declaration, target)).orElse(null);
             sender.sendMessage(Component.text(declaration.id() + " ", NamedTextColor.AQUA)
                     .append(Component.text("[" + declaration.scope().id() + ", " + declaration.type().id() + "] ",
@@ -123,12 +129,18 @@ public final class VarCommand {
     }
 
     private void get(CommandSender sender, VariablesApi api, VariableDeclaration declared, Target target) {
+        if (sessionRefused(sender, declared)) {
+            return;
+        }
         Object value = api.get(declared.id(), holderFor(declared, target)).orElse(null);
         sender.sendMessage(Component.text(declared.id() + " = " + shown(value), NamedTextColor.GREEN)
                 .append(Component.text(holderNote(declared, target), NamedTextColor.GRAY)));
     }
 
     private void set(CommandSender sender, VariablesApi api, VariableDeclaration declared, Target target, String raw) {
+        if (sessionRefused(sender, declared)) {
+            return;
+        }
         Optional<Object> value = declared.type().coerce(declared.type() == VariableType.STRING ? raw : raw.trim());
         if (value.isEmpty()) {
             sender.sendMessage(Component.text("'" + raw + "' is not a " + declared.type().id(), NamedTextColor.RED));
@@ -143,6 +155,16 @@ public final class VarCommand {
         }
         sender.sendMessage(Component.text(declared.id() + " = " + shown(result.value()), NamedTextColor.GREEN)
                 .append(Component.text(holderNote(declared, target), NamedTextColor.GRAY)));
+    }
+
+    /** A session variable lives in one open view, so no command names a holder for it: refuses and says so. */
+    static boolean sessionRefused(CommandSender sender, VariableDeclaration declared) {
+        if (declared.scope() != VariableScope.SESSION) {
+            return false;
+        }
+        sender.sendMessage(Component.text(declared.id() + " is a session variable: it lives in one open view and "
+                + "is reached from that view's rules", NamedTextColor.RED));
+        return true;
     }
 
     /** The holder of a declaration for this command: the named player for player scope, nobody for server. */
@@ -166,8 +188,9 @@ public final class VarCommand {
      * The holder a command names: a server variable ignores it; a player variable needs an online
      * player. Prints the refusal and returns null when there is none.
      */
-    private Target target(CommandSender sender, String name, VariableDeclaration declared) {
-        if (declared != null && declared.scope() == VariableScope.SERVER) {
+    Target target(CommandSender sender, String name, VariableDeclaration declared) {
+        // a session variable has no holder to name: get/set refuse it with the session message whatever is given
+        if (declared != null && (declared.scope() == VariableScope.SERVER || declared.scope() == VariableScope.SESSION)) {
             return new Target(null, null);
         }
         if (name.equals("-")) {
@@ -229,5 +252,5 @@ public final class VarCommand {
     }
 
     /** The named holder of one command: its id and name, both null for a server variable or no player. */
-    private record Target(UUID uuid, String name) {}
+    record Target(UUID uuid, String name) {}
 }

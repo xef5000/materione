@@ -59,19 +59,4 @@ class ViewRegistryPortTest {
         assertThat(port.lastView(alex)).contains("gui:demo:shop");
         assertThat(port.openView(alex)).contains("gui:demo:map");
     }
-
-    @Test
-    void sessionVariablesAreTheSessionsOwnMap() {
-        ViewerRecord shop = session(SHOP);
-        var variables = new ViewerSessionVariables(shop);
-
-        variables.put("page", 2);
-        assertThat(shop.sessionValues()).containsEntry("page", 2);
-        shop.sessionValue("tab", "tools");
-        assertThat(variables.get("tab")).contains("tools");
-
-        variables.put("page", null);
-        assertThat(shop.sessionValues()).doesNotContainKey("page");
-        assertThat(variables.get("page")).isEmpty();
-    }
 }

@@ -692,6 +692,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0126", Severity.WARN, "A view.open names a view kind no verb opens");
 
     /**
+     * A view reads a variable that its reads index cannot place (a variable path with too few segments to name a
+     * declared variable): the read is polled, so that value updates only on the view's clock or {@code view.refresh}
+     * (views.md sections 5.2 and 10). Informational.
+     */
+    public static final DiagnosticCode VIEW_READ_UNPLACED =
+            new DiagnosticCode("MTR-0127", Severity.INFO, "A view reads a variable the reads index cannot place");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -837,7 +845,8 @@ public final class DiagnosticCodes {
             PROTECTION_PROVIDER_FAILED,
             PROTECTION_SETTING_INVALID,
             PROTECTION_PROVIDER_UNUSABLE,
-            VIEW_NOT_OPENABLE);
+            VIEW_NOT_OPENABLE,
+            VIEW_READ_UNPLACED);
 
     private DiagnosticCodes() {}
 

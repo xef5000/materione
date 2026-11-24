@@ -46,7 +46,10 @@ class ShowcasePackTest {
                     VariableType.BOOLEAN, false, "Shows the tip line in the showcase shop"),
             NamespacedId.of("showcase", "stock"),
             new VariableDeclaration(NamespacedId.of("showcase", "stock"), VariableScope.SERVER,
-                    VariableType.NUMBER, 3, "Emeralds left in the showcase shop"));
+                    VariableType.NUMBER, 3, "Emeralds left in the showcase shop"),
+            NamespacedId.of("showcase", "search"),
+            new VariableDeclaration(NamespacedId.of("showcase", "search"), VariableScope.SESSION,
+                    VariableType.STRING, "", "The players window's search text, private to one open window"));
 
     @Test
     void everyShowcaseGuiLoadsWithoutDiagnostics() throws IOException {
@@ -95,7 +98,7 @@ class ShowcasePackTest {
                     .containsExactlyElementsOf(GUIS.stream().sorted().map(name -> name + ".yml").toList());
         }
         assertThat(Files.readString(showcase().resolve("variables").resolve("showcase.yml")))
-                .contains("show_tips:", "scope: player", "stock:", "scope: server");
+                .contains("show_tips:", "scope: player", "stock:", "scope: server", "search:", "scope: session");
         assertThat(Files.readString(showcase().resolve("currencies").resolve("points.yml")))
                 .contains("integration: xp");
     }

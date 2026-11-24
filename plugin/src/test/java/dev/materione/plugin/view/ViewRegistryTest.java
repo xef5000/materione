@@ -15,6 +15,8 @@ class ViewRegistryTest {
     private static final NamespacedId MAP = NamespacedId.parse("demo:map");
 
     private final ViewRegistry sessions = new ViewRegistry();
+    private final TestVariables variables = new TestVariables(sessions);
+    private final dev.materione.api.logic.variable.VariableDeclaration tab = variables.declare("demo", "tab", "");
     private final UUID alex = UUID.randomUUID();
 
     private ViewerRecord session(UUID player, NamespacedId gui) {
@@ -24,13 +26,13 @@ class ViewRegistryTest {
     @Test
     void aSessionHoldsItsArgumentsVariablesAndPageStateAndStartsOpen() {
         ViewerRecord session = session(alex, SHOP);
-        session.sessionValue("tab", "weapons");
+        variables.put(session, tab, "weapons");
         GuiViewerState.of(session).putPage("players", 2);
 
         assertThat(session.isOpen()).isTrue();
         assertThat(session.definition()).isEqualTo(SHOP);
         assertThat(session.args()).containsEntry("category", "tools");
-        assertThat(session.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(variables.get(session, tab)).isEqualTo("weapons");
         assertThat(GuiViewerState.of(session).pages()).containsEntry("players", 2);
         assertThat(session.endedBecause()).isNull();
     }
@@ -139,16 +141,17 @@ class ViewRegistryTest {
     @Test
     void aSnapshotRestoresArgumentsVariablesAndPagesIntoAFreshSession() {
         ViewerRecord original = session(alex, SHOP);
-        original.sessionValue("tab", "weapons");
+        variables.put(original, tab, "weapons");
         GuiViewerState.of(original).putPage("list", 3);
         ViewerRecord.Snapshot snapshot = original.snapshot();
-        original.sessionValue("tab", "armour"); // later changes do not reach the snapshot
+        variables.put(original, tab, "armour"); // later changes do not reach the snapshot
 
         ViewerRecord back = GuiViewerState.record(alex, "Alex", snapshot.definition(), snapshot.args());
+        sessions.admit(back);
         back.restore(snapshot);
 
         assertThat(back.args()).isEqualTo(original.args());
-        assertThat(back.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(variables.get(back, tab)).isEqualTo("weapons");
         assertThat(GuiViewerState.of(back).pages()).containsEntry("list", 3);
         assertThat(back).isNotSameAs(original);
     }

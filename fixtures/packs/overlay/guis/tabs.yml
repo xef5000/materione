@@ -22,14 +22,14 @@ tabs:
       y: 36
       width: 36
       height: 16
-      visible_if: "vars.session.tab == true"
+      visible_if: "vars.session.overlay.tab == true"
     - id: label
       type: text
       x: 80
       y: 20
       text: "ACTIVE ${player.name}"
       font: default
-      visible_if: "vars.session.tab == true"
+      visible_if: "vars.session.overlay.tab == true"
   behavior:
     - on: gui.open
       do:

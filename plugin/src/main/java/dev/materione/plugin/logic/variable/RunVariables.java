@@ -16,8 +16,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
- * One run's {@link VariableBinding}: the live declarations, and the stores of the run's player, of the server and
- * of the run's item stack. Built per fired event by {@link VariableService#bind}, so a run reads the declarations
+ * One run's {@link VariableBinding}: the live declarations, and the stores of the run's player, of the server, of the
+ * run's view instance and of the run's item stack. Built per fired event by {@link VariableService#bind}, so a run reads the declarations
  * of the shadow it started with and the values of the player and the stack it belongs to.
  *
  * <p>A run with no player (an explosion) reaches the server scope and no player scope: its player reads are absent
@@ -33,6 +33,7 @@ final class RunVariables implements VariableBinding {
     private final StackVariableStore stackStore;
     private final StackRef stack;
     private final BiConsumer<VariableDeclaration, String> onStackMiss;
+    private final UUID view;
 
     RunVariables(
             Function<NamespacedId, Optional<VariableDeclaration>> declared,
@@ -48,12 +49,24 @@ final class RunVariables implements VariableBinding {
             StackVariableStore stackStore,
             StackRef stack,
             BiConsumer<VariableDeclaration, String> onStackMiss) {
+        this(declared, stores, player, stackStore, stack, onStackMiss, null);
+    }
+
+    RunVariables(
+            Function<NamespacedId, Optional<VariableDeclaration>> declared,
+            Map<VariableScope, VariableStore> stores,
+            UUID player,
+            StackVariableStore stackStore,
+            StackRef stack,
+            BiConsumer<VariableDeclaration, String> onStackMiss,
+            UUID view) {
         this.declared = declared;
         this.stores = stores;
         this.player = player;
         this.stackStore = stackStore;
         this.stack = stack;
         this.onStackMiss = onStackMiss;
+        this.view = view;
     }
 
     @Override
@@ -102,8 +115,16 @@ final class RunVariables implements VariableBinding {
                 : store.mutate(declaration, holderOf(declaration), operation, operand);
     }
 
-    /** The player a declaration is held by: the run's player for player scope, nobody for server scope. */
+    /**
+     * The holder a declaration is held by: the run's player for player scope, the run's view instance for session
+     * scope, nobody for server scope. No view instance means no holder, and the session store reads empty and refuses
+     * writes.
+     */
     private UUID holderOf(VariableDeclaration declaration) {
-        return declaration.scope() == VariableScope.PLAYER ? player : null;
+        return switch (declaration.scope()) {
+            case PLAYER -> player;
+            case SESSION -> view;
+            default -> null;
+        };
     }
 }

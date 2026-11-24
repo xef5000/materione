@@ -30,7 +30,7 @@ class GuiOpenerTest {
                     - mark: "opening ${view.id} category=${view.args.category}"
                 - on: gui.open
                   do:
-                    - mark: "open ${view.id} tab=${vars.session.tab}"
+                    - mark: "open ${view.id} tab=${vars.session.demo.tab}"
                 - on: gui.close
                   do:
                     - mark: "close-any reason?"
@@ -60,6 +60,7 @@ class GuiOpenerTest {
     @BeforeEach
     void setUp() {
         f = new GuiFixture();
+        f.declareSession("tab", "");
         f.gui(SHOP);
         f.gui(MAP);
     }
@@ -133,7 +134,7 @@ class GuiOpenerTest {
     @Test
     void openingAnotherGuiReplacesTheFirstFiresItsCloseAndRemembersIt() {
         ViewerRecord shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).record();
-        shop.sessionValue("tab", "weapons");
+        f.putSession(shop, "tab", "weapons");
         f.ran.clear();
 
         ViewerRecord map = open("map", Map.of(), OpenRequest.Cause.ACTION).record();
@@ -142,13 +143,14 @@ class GuiOpenerTest {
         assertThat(f.sessions.current(f.viewer.id())).containsSame(map);
         // the replaced GUI's close rules (any reason, and reason: replaced) ran, then the new GUI opened
         assertThat(f.ran).containsExactly("mark:close-any reason?", "mark:closed-replaced", "mark:open demo:map");
-        assertThat(f.sessions.history(f.viewer.id()).peek().orElseThrow().vars()).containsEntry("tab", "weapons");
+        assertThat(f.sessions.history(f.viewer.id()).peek().orElseThrow().vars())
+                .containsEntry(dev.materione.api.NamespacedId.of("demo", "tab"), "weapons");
     }
 
     @Test
     void goingBackRestoresTheArgumentsAndTheSessionVariables() {
         ViewerRecord shop = open("shop", Map.of("category", "tools"), OpenRequest.Cause.API).record();
-        shop.sessionValue("tab", "weapons");
+        f.putSession(shop, "tab", "weapons");
         open("map", Map.of(), OpenRequest.Cause.ACTION);
         f.ran.clear();
 
@@ -158,7 +160,7 @@ class GuiOpenerTest {
         assertThat(back).isNotSameAs(shop);
         assertThat(back.definition()).isEqualTo(GuiFixture.id("shop"));
         assertThat(back.args()).containsEntry("category", "tools");
-        assertThat(back.sessionValues()).containsEntry("tab", "weapons");
+        assertThat(f.session(back, "tab")).isEqualTo("weapons");
         // the restored variable is visible to the rules that open it
         assertThat(f.ran).contains("mark:open demo:shop tab=weapons");
         // going back does not push the window it leaves, so the stack is empty now

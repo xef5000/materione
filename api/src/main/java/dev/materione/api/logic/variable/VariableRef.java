@@ -10,7 +10,8 @@ import java.util.Set;
  * <pre>
  *   count            local (the M2 meaning, no declaration needed)
  *   local.count      local, explicitly
- *   session.page     the GUI session's variable (absent: the step fails)
+ *   session.page     declared session variable, held by the open view; pack = the resource's own pack
+ *   session.ui.page  the same, pack named
  *   player.coins     declared player variable, pack = the resource's own pack
  *   player.shop.coins   the same, pack named
  *   server.shop.season  declared server variable
@@ -20,19 +21,16 @@ import java.util.Set;
  * </pre>
  *
  * <p>A bare name is always local. Only a qualified spelling can reach a persistent variable, so a
- * typo in a bare name never creates a stored key. The five scope words are reserved and cannot be
+ * typo in a bare name never creates a stored key. The scope words are reserved and cannot be
  * local names.
  */
-public sealed interface VariableRef permits VariableRef.Local, VariableRef.Session, VariableRef.Persistent {
+public sealed interface VariableRef permits VariableRef.Local, VariableRef.Persistent {
 
     /** The words an expression or a reference reads as a scope, never as a local name. */
     Set<String> RESERVED = Set.of("local", "session", "player", "server", "item");
 
     /** A run-local variable. */
     record Local(String name) implements VariableRef {}
-
-    /** A variable of the open GUI session. */
-    record Session(String name) implements VariableRef {}
 
     /**
      * A declared persistent variable.
@@ -73,9 +71,6 @@ public sealed interface VariableRef permits VariableRef.Local, VariableRef.Sessi
         if ("local".equals(head) && segments.length == 2) {
             return local(segments[1]);
         }
-        if ("session".equals(head) && segments.length == 2) {
-            return session(segments[1]);
-        }
         throw new IllegalArgumentException("'" + trimmed + "' is not a variable name (a local name has no dots)");
     }
 
@@ -96,10 +91,6 @@ public sealed interface VariableRef permits VariableRef.Local, VariableRef.Sessi
 
     private static Local local(String name) {
         return new Local(checkedLocal(name));
-    }
-
-    private static Session session(String name) {
-        return new Session(checkedLocal(name));
     }
 
     private static String checkedLocal(String name) {

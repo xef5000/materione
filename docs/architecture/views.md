@@ -871,3 +871,146 @@ switch), `ViewerOwnerThreadTest` (the ban test), `ViewFacetSelfDescriptionTest`,
 `ViewReferenceValidationTest` (the `MTR-0126` and `MTR-0105` cases), webui `codemode-generate.spec.ts` (the facet, the union
 reference, a second kind with no generator change) and the Logic tab specs. QA catalog: `views.verbs.open-replace-back-close` and
 `views.placeholders.open-and-last` (`qa/catalog/views.mjs`, not yet run: they need the probe).
+
+---
+
+## 17. As built: row V1 (#456)
+
+Row V1 is built in three slices. This section records what each slice shipped and every decision it took beyond §3 to §9; the
+design above is unchanged. Slice 1 (session variables behind the store port, §17.1, §17.2), slice 2 (the reads index and the write
+observer, §17.5, §17.6) and slice 3 (the scheduler, `rerender:`, render on change and `/materione doctor`, §17.8 to §17.11) are
+recorded here.
+
+### 17.1 Session variables behind the store port (slice 1)
+
+| Part | As built |
+|---|---|
+| **Scope** | `VariableScope.SESSION` joins `player`, `server` and `item`. `scope: session` is a value of the `variable` type's `scope` parameter, so a declaration is typed, defaulted and described like any other, and the registry self-description, the editor snapshot and the generated SDK carry it (`p.variables.create(id, { scope: "session", ... })`). |
+| **Store** | `plugin.view.SessionVariableStore` implements the existing `VariableStore` port for the scope: the holder is the view instance (`ViewerRecord.instance()`, a UUID), not a player. `write` and `mutate` are `@ViewerMutator` and report to the owner-thread guard. `VariableService.sessionStore(store)` registers it as the scope's store; an observing decorator wraps it there, the way `SnapshotVariableStore` wraps the player store. `GuiStack` registers the registry's store at construction. |
+| **Lifetime** | `ViewRegistry.admit(record)` gives a record its guard and its instance before it is shown (the opener admits as soon as the record exists, so a restored snapshot and a `gui.opening` rule can already hold values); `begin` admits too. `ViewerRecord.end` drops the instance, so the values die with the view, with the replaced view, with a cancelled open and with a player who left (`ViewRegistry.forget`). A replaced view is a new record and so a new instance; `view.back` restores a snapshot's values into a new instance. |
+| **Bypass removed** | `ViewerRecord.sessionValue(s)`, `SessionVariables`, `VariableFacets.SESSION`, `ViewerSessionVariables` and the `SessionTarget` / `SessionSource` / `Session` shapes of `set_var`, `var` and `prompt` are gone: a session write is `VariableStore.write` or `mutate` on the port, through the run's `VariableBinding` (`VariableService.bind(player, stack, view)`). |
+| **Declaration** | `session.<key>` (the resource's own pack) and `session.<pack>.<key>` are references like `player.<key>`; an undeclared one in `set_var`, a `var` condition or a `prompt` answer is `MTR-0063` at load, a literal that does not fit the type is `MTR-0064`. An expression reads `vars.session.<pack>.<key>`; a never-written variable reads its declared default. |
+| **Studio** | The Logic tab's variable field flags a `session.<key>` the declarations do not back and offers "Declare it" (the form opens on the session scope with the key filled in); the template field does the same for a `${vars.session...}` read and, for a bare `vars.session.<key>`, rewrites the read to `vars.session.<pack>.<key>` once declared. A session declaration is offered in the pickers and in completion like any other. The webui has no dialog studio yet (dialogs are unbuilt), so the dialog half of §9 lands with the dialog kind. |
+
+### 17.2 Decisions beyond the design (slice 1)
+
+| # | Decision | Why |
+|---|---|---|
+| V1-1 | **A session variable is read as `vars.session.<pack>.<key>`, and written as `session.<key>` or `session.<pack>.<key>`.** The bare `vars.session.<key>` of V0 is gone, like every other scope's unqualified read. | §9 spells the read with the pack; one grammar for every declared scope (logic.md §20 decision 6) means one resolver, one reads-index key and one editor completion. |
+| V1-2 | **The session store is the existing `VariableStore` port, not a new one.** The holder (`UUID`) is the view instance; no `HolderRef` type is added. | The port already keys on a `UUID`; the item scope needed its own port only because a stack is not a UUID. A decorator written once for the port then covers every UUID-held scope, which is what the observer of slice 2 needs. |
+| V1-3 | **A run that is in no view reads a session variable as its default and cannot write it.** The write fails the step ("no open view holds this session variable"); `/materione var get` and `var set`, the placeholders and `api.logic().variables()` refuse a session variable with a message that says it lives in one open view, and `/materione var list` shows it as `per open view`. | A holder that is not a player or the server is reached from that view's rules only; refusing is honest, a guess is not. |
+| V1-4 | **`view.back` restores values by writing into the new instance's store directly, not through `write`.** | The restored instance has no render yet to notify; the observer of slice 2 must not fire for it. A write after the restore goes through the port. |
+| V1-5 | **The condition compiler reports a `ParseRejection` under its own code**, as the action compiler does: an undeclared name in a `var` condition is `MTR-0063`, not the `MTR-0057` it carried. | plugin.md §5 and the condition's own documentation said `MTR-0063`; the compiler dropped the code. It affects every scope and fixes the documented behavior. |
+| V1-6 | **An undeclared session name is `MTR-0063` at load wherever a GUI reads or writes one.** `set_var`, `var` and `prompt` (slice 1) and, with the reads extraction (V1-11), every session read of a GUI's layers: a `${vars.session.<pack>.<key>}` in an item layer's name, lore, amount, glint or item template, in a layer's or list's condition, in a list entry template, in an item or list source payload and in a title piece; a list's `search.var` and the content list source's `search`. A session path with fewer than four segments (`vars.session.tab`) is `MTR-0063` too: V1-1 retired that spelling. The check is the extraction's own, reported by the diagnose stage (V1-12). It is **not widened**: an undeclared `vars.player…` or `vars.server…` read stays empty at run time, a `${vars.session…}` inside a rule's action (a `mark`, a `run_command`) is a run-time read as before, and the studio's template lint (V1-9) still covers the authoring-time view. | Acceptance case 2 and owner answer Q9 ask for an undeclared session *read* to fail at load, and the extraction already walks every read a view makes, so the session check costs nothing and cannot drift from the index. The other scopes keep the shared rule (an undeclared read is empty; expression reads are run-time, codemode.md validation stages), because a view's index must not make persistent-scope reads load-time errors that a rule's identical read is not; widening is a one-line change in `ReadsCollector` once the owner wants it. The reads of rules' actions are not a view's reads, so they are outside the extraction. |
+| V1-7 | **A list's `search.var` and the content list source's `search` name a session variable by key; it is the one declared in the GUI's own pack.** | The author wrote a bare name before; the pack is the GUI's, found from `view.id`, so no schema field changed. |
+| V1-8 | **A `prompt` into a session variable coerces the answer to the declared type, and fails the step when it does not fit.** A prompt into a player, server or item variable stays `MTR-0082`. | The answer is text; a number-typed variable can still be answered. |
+| V1-9 | **The template lint is local and runs only once the declarations are loaded.** | A lint before the declarations load would flag every read. |
+
+### 17.3 Breaking changes made, by §7.1 row
+
+| §7.1 row | Changed here |
+|---|---|
+| undeclared session variables → declared (V1) | the built-in browser (`materione:search`), the `guilogic`, `overlay` and `showcase` fixture packs, the harness floor GUI (its variable is in the overlay pack), the Logic tab's variable and template fields |
+| session state in `GuiSession.vars()`, written past the store port → the `session` store (V1) | `ViewerRecord`, `ViewRegistry`, `GuiContexts`, `RunVariables`, `VariableService`, `set_var`, `var`, `prompt`, the list search |
+
+Goldens changed: the editor demo snapshot and the code-mode registry (`fixtures/golden/editor-demo-snapshot.json`,
+`fixtures/codemode/registry/*.json`: the `scope` choices, the action and condition descriptions, the `vars.session.*` context line)
+and the SDK declarations (`fixtures/golden/codemode/*.d.ts`).
+
+### 17.4 Tests (slice 1)
+
+`SessionVariableStoreTest` (read default, a decorator on the port sees `write` and `mutate`, the holder is the instance, type rules,
+replace, back, close, quit), `SessionVariablesGuiTest` (a rule writes, reads and compares a declared variable through the real GUI
+runtime; `MTR-0063` for an undeclared write and read; values die with the window), `SetVarActionTest.Session`, `VarConditionTest`,
+`PromptActionTest`, `VariableRefTest`, `MapLogicContextVariablesTest.SessionScope`, `VariablesTypeTest`, the owner-thread ban test (the
+store's mutators are marked), and webui `logic-session-variables.spec.ts` (the declaration reader, the spellings, the scope, the lint and its
+declare action). QA catalog: `views.session.declared-and-held-by-one-window` (`qa/catalog/views.mjs`; passed on the probe, run `run-2026-11-23T06-45-36`).
+
+### 17.5 The reads index and the write observer (slice 2)
+
+| Part | As built |
+|---|---|
+| **Extraction** | `plugin.view.ReadsCollector` walks one definition's compiled forms and produces its `ViewReads` (the declared variables it reads, each with its `ReadRole`, and whether anything is polled). It reads expression trees (`${...}` segments through the engine's template parser, condition leaves), compiled condition trees (a `var` condition is the variable it names; any other predicate is polled), and `%token%` placeholders and function calls (polled). `plugin.gui.GuiReads` feeds it a GUI: item-layer templates and conditions, the authored payloads of item and list sources, list filters and entry templates, and title pieces. |
+| **Classes** | A `vars.<scope>.<pack>.<key>` path is a notified read of that family. `player.*`, `server.*`, `%token%`s, function calls and non-`var` predicates mark the definition polled. A `vars.<scope>` path of fewer than four segments cannot be placed: polled, and `MTR-0127` (info) for the persistent scopes, `MTR-0063` for `session` (V1-6, V1-10). |
+| **Index** | `plugin.view.ReadsIndex` maps scope, then variable id, to an array of `(ViewRef, ReadRole)`; a miss is two map lookups. It is a shadow-swap view (`ReadsIndex.KEY`) built by `PipelineService` right after `RuntimeGuis`, from `GuiReads.of(RuntimeGuis, lookup)`, so a reload builds a new one and the swap publishes it with the registries. The observer reads it through the live registries supplier on every write. |
+| **Observer** | `VariableService.writeObserver(VariableWriteObserver)` installs the hook; each scope's store is wrapped in `ObservedVariableStore`, which calls it after a successful `write` and after a `mutate` whose outcome is `ok`. The player scope is wrapped around `SnapshotVariableStore`, the server scope around the server store, the session scope around `SessionVariableStore`. `plugin.view.ViewChanges` implements the hook and does the matching of §5.3, on the writer's thread, touching only dirty bits. |
+| **Dirty bit and wake** | `ViewDirty` (implemented by `ViewerRecord` and `ViewCandidate`) holds one `AtomicBoolean`; `markDirty` is a compare-and-set that returns true only for clean to dirty, and only that transition calls the `ViewWake` hook. `GuiStack` installs the scheduler of §17.8 as the hook. |
+| **Predicate kinds** | `ViewKind.predicate()` (default: the facet's rule is `PREDICATE`) selects the candidate path. `ViewRegistry.candidate(kind, player)` creates a `ViewCandidate`; `forget` drops it at quit. Matching for a predicate kind: a `player` write marks that player's candidate; a `server` write marks every candidate for a visibility read and the candidates of the attached viewers for a content read. |
+
+### 17.6 Decisions beyond the design (slice 2)
+
+| # | Decision | Why |
+|---|---|---|
+| V1-10 | **`MTR-0127` is the `MTR-V01` of §10.** Severity info; reported once per definition and path per reload, by the diagnose stage. "A computed id" cannot be written in an expression (paths have no indexing), so what is unplaceable in this grammar is a `vars.<scope>` path that stops short of `<pack>.<key>`; that is what the code reports. A session path that stops short is `MTR-0063` instead (V1-6): the session scope has no polled fallback to offer, because a session variable is only ever read as a declared name. | The design names the code a placeholder and leaves the case to the implementation; the code is documented in plugin.md §5 and pinned in `DiagnosticCodesTest`. Another player's variable "by name" is not an expression form today, so it needs no case. |
+| V1-11 | **The extraction runs over the compiled GUI (`RuntimeGuis.Live`) and the authored source payloads; `ViewKind.reads(NamespacedId)` is removed.** The pipeline calls `GuiReads` directly, one line per kind that feeds the index; the SPI keeps `predicate()`. The compiled item and list bindings are opaque lambdas, so a source's own variable parameters are read from its authored payload: any `${...}` in it, and from the source's self-description: a parameter drawn with the `variable` widget names a variable (reference kind `session`: a session variable by key, otherwise `pack:key` or a bare name of the GUI's pack), which is a notified read, and a list's `search.var` (V1-21). | A SPI method an instance of the kind implements cannot be called by the pipeline before the plugin boots its view runtime; the index must be a pure function of the shadow (D-1). The extraction compares no source id: a source's reads are what its description says (V1-21). |
+| V1-12 | **The load diagnostics come from the diagnose stage (`GuiRuleDiagnoser.checkLayers`), not from the index build.** One collector spans the whole GUI, so a read is reported once per definition. The problems carry no field target. | The index build runs after the diagnose stage on the same shadow and would report each problem twice; the diagnose stage is where the editor already collects layer problems. A target would need the extraction to carry the layer's authored position, which is not worth the plumbing for an info and a warning that name the path. |
+| V1-13 | **The player scope notifies on `write` only.** `SnapshotVariableStore` does not implement `mutate` (the port's default refuses), and `set_var` on a player variable reads, computes and writes through `write`. The server and session scopes notify on both paths. The item scope is not observed: it has its own port (`StackVariableStore`) and its match (a stack's holder id) belongs with the subject stack of §6.1. | The decorator wraps the port as it is. A player `mutate` that someone adds later is already covered. |
+| V1-14 | **The observer reads `ReadsIndex` through the live registries each call and returns on a null.** Before the first apply there is none. | A boot-time write (a server variable file loaded before content) must not fail. |
+| V1-15 | **A write to a `predicate` kind's content read with a `server` holder marks the candidates of the attached viewers, not a viewer record.** | Both roles of a predicate kind render through its candidate's wake (§5.3); an attached record is an implementation detail of the kind. |
+
+### 17.7 Tests (slice 2)
+
+`ViewReadsExtractionTest` (each read source: layer templates, expression and `var` conditions, item source template, list source,
+filter, search and entry; polled facts; the unplaced path once; `MTR-0063` for an undeclared session read in a template, a
+condition and a list search; the index built from a reload), `ViewChangesTest` (acceptance case 2's three write paths each mark exactly
+the matched viewers; a failed write marks nobody; an unread write marks nobody; 100 writes wake once; the predicate candidate of a
+player with no visible definition is marked, case 1's propagation half; a candidate ends at quit; a reload that adds a read), and the
+budgets `ViewReadsIndexTest` and `ViewFanOutPerfTest` (plugin.md §9). The wake and the re-attach half of case 1 are tested in §17.11; the observer on a running server is the QA catalog's (§17.11).
+
+### 17.8 The scheduler, `rerender:` and render on change (slice 3)
+
+| Part | As built |
+|---|---|
+| **Scheduler** | `plugin.view.ViewScheduler` is the `ViewWake` the write observer calls. `wake(target)` queues one one-shot on the target player's entity scheduler (`executeEntityLater`) at `max(1, lastAutomatic + minInterval - now)` ticks; an idle viewer has no task and there is no loop over viewers. The one-shot (on the owner thread) drops a record that is no longer open or no longer the player's current view of its kind, drops a candidate that is no longer the player's, does nothing when the bit is already clean, clears the bit, and then renders. A kind answers `ViewKind.renderAutomatic` with `RENDERED`, `FROZEN` or `STALE`; `FROZEN` sets the bit again and queues the next tick's wake, so the held-cursor freeze renders the latest state once the cursor clears. `lastAutomatic` (a `volatile long` on `ViewDirty`) is set only by an automatic render that applied. |
+| **Explicit refresh** | `refreshNow(record)` renders at once on the calling thread (the record's owner thread) through `ViewKind.render`, clearing the bit first, so a queued wake finds it clean; `refreshSoon(record)` queues one wake at the next tick that ignores `minInterval`. Neither counts against the interval. `view.refresh` is #457; the shipped `gui.refresh` clears the bit the same way (`GuiLiveRefresh.refresh`). |
+| **`rerender:`** | A top-level `rerender: on_change` or `off` of the `gui` type, an enum parameter with default `on_change` (self-described: the registry, the editor snapshot and the SDK carry it). `CompiledGui.rerender` holds it; the pipeline leaves a GUI that says `off` out of the `ReadsIndex` (`GuiReads.of(..., rerenders)`), so no write marks its viewers: the clock, an explicit refresh and a reload still render it. |
+| **GUI render** | `GuiLiveRefresh.automatic` runs the partial pass the clock runs (`WindowHost.advance`: dynamic layers and the dynamic title; `DynamicSlotsPerfTest`'s budget row is unchanged). `WindowHost.advance` now returns false when the window is held still by the cursor rule (the cursor carries an item and the title would change, or a held title is pending): nothing is applied. A definition whose window shape changed is `STALE` for an automatic render; the reload that changed it re-opens or rewrites the window. The wake is a scheduled task, never inline in a click (logic.md §21 decision 8), and `BukkitWindowHost` still defers a render that would meet an in-flight click by a tick. Click targets follow the last rendered frame as before (§4.2 item 6). |
+| **Predicate candidates** | A candidate's wake calls `ViewKind.evaluate(viewer, candidate)`; the default does nothing and a `predicate` kind (the HUD, #7) attaches the definitions that became visible and detaches the ones that stopped. No shipped kind is a predicate kind, so the mechanism is proved with a test kind (§17.11). |
+| **Doctor** | `ViewRenderStats` counts automatic renders per definition over a window of at most five minutes; `/materione doctor` prints the five with the highest rate as `re-renders: gui <id>: N/s (count)`. |
+
+### 17.9 Decisions beyond the design (slice 3)
+
+| # | Decision | Why |
+|---|---|---|
+| V1-16 | **`rerender: off` is applied when the index is built, not when a write is matched.** A GUI that says `off` has no entry in the `ReadsIndex`. | One decision per reload instead of a policy lookup on every write; the write's cost for an `off` GUI is the same single miss as for an unread variable. The extraction for load diagnostics (V1-12) is unaffected: `MTR-0063` and `MTR-0127` still report for an `off` GUI. |
+| V1-17 | **A bare `rerender: off` is `off`.** YAML 1.1 reads the unquoted word as the boolean false, so the compiler treats both the string and `false` as `off`; anything else is `on_change`. No new diagnostic for another value. | The word the design and the schema choice use must work as written. The studio's select writes the string. |
+| V1-18 | **The tick source is `System.nanoTime()` divided by 50 ms.** | No tick counter is reachable from the gateway on both Paper and Folia; the clock only decides `minInterval` waits longer than one tick, and a kind whose floor is one tick (the GUI) always waits the one tick the gateway gives. |
+| V1-19 | **A frozen automatic render retries every tick until the cursor clears; the host's own held-title retry runs alongside.** | Both read the latest state when they run; the retry is a bit test and a task per tick while the cursor holds an item, and stops on the first applied render. |
+| V1-20 | **No shipped fixture or built-in GUI needed `rerender: off`.** Every GUI that calls `gui.refresh` after a write (`browser`, the `guilogic` search, `overlay:tabs` and `ownership`, `showcase:players`, `settings`, `shop`, the floor GUI, the recipes) keeps the call: it is explicit and clears the bit, so no render doubles, and a list's entries are read again only by a full refresh. The GUIs with a `refresh:` clock keep it for animations and polled reads. No existing fixture file changed bytes for the policy; one fixture GUI and its variables were added (`guilogic:live`, no clock, no `gui.refresh`) for the QA entries. | The shipped behavior stays a subset of the new one; a quieter window is an author's choice, not a migration. |
+
+### 17.10 Breaking changes made, by §7.1 row
+
+| §7.1 row | Changed here |
+|---|---|
+| a GUI re-renders when a variable it reads is written (V1) | the container GUI: a window that shows a declared variable updates with no clock and no `gui.refresh`; `rerender: off` keeps the shipped behavior per file. `WindowHost.advance` returns a boolean. |
+
+Goldens changed: the code-mode registry (`fixtures/codemode/registry/*.json`: the `rerender` parameter), the editor demo snapshot
+(`fixtures/golden/editor-demo-snapshot.json`) and the SDK declarations (`fixtures/golden/codemode/*.d.ts`), regenerated with the
+repo's tasks (fixtures/README.md).
+
+### 17.11 Tests (slice 3) and acceptance status
+
+`ViewSchedulerTest` (virtual clock: a hundred writes in a tick are one render, an idle viewer has no task, a render is never
+inline in the write, `minInterval`, a window replaced before the wake is not rendered, a write during a render is shown by the next
+render, explicit refresh and a queued wake render once, an explicit refresh ignores the interval, a stale record's refresh renders
+nothing, a frozen frame leaves the bit set and renders after release, a server write renders every matched viewer once, and case
+1's mechanism: a write to a visibility read reaches a candidate with nothing visible, which is re-evaluated and attaches, while no
+write means no evaluation), `ViewFootprintTest`, `ViewRenderStatsTest`, `RerenderOnChangeTest` (a GUI showing a server variable
+updates after a write with no clock and no refresh, `rerender: off` does not until an explicit refresh, a session toggle
+re-renders its window, the held cursor, and the `guilogic:live` fixture), `GuiInputSlotsTest` (the compile of `rerender:`) and
+`GuiTypeTest` (the schema). QA catalog (`qa/catalog/views.mjs`; passed on the probe, run `run-2026-11-23T06-01-06`): `views.server-var.live-single`
+and `views.session-toggle.rerenders-window`.
+
+| Acceptance case | Status after V1 |
+|---|---|
+| 1. A player with no visible HUD shows their first one | The mechanism is built and tested with a test predicate kind: write, candidate marked, wake, evaluation, attach. The HUD kind that supplies the real `evaluate` is #7. |
+| 2. Every successful write path notifies the right reader | Done (§17.7); the three paths also render a GUI (`RerenderOnChangeTest`). |
+| 3. A wake updates the right window at the next eligible render | Done for the GUI: the interval, one automatic render per tick, clear-then-read, explicit-versus-queued, the replaced window and the held cursor. `view.refresh` on a stale record failing "no open view" is V2 (#457); the scheduler entry points it will call are built. |
+
+### 17.12 Review fixes (slice 3)
+
+| # | Decision | Why |
+|---|---|---|
+| V1-21 | **A list source's reads come from its self-description.** A parameter drawn with the `variable` widget names a variable (reference kind `session`: the key of a session variable of the GUI's pack; otherwise `pack:key`, or a bare name of the GUI's pack) and is a notified read of it; a scalar payload is read under the source's shorthand. `ListSourceDescription.announced` (default false, registry JSON `announced`) says the source reads nothing but those variables; a source that does not say so, or one that is not registered, marks the view polled. The built-ins `variable`, `static`, `pack_items` and `content` announce; `online_players` does not (a join is no write), so a GUI that lists players is polled. | D12 and D5: an addon source gets the same treatment as a built-in, and the `materione:variable` and `materione:content` id comparisons are gone. The declared hook is one boolean on the description, not an id list in the engine. |
+| V1-22 | **A scheduled wake that will not run its render leaves the bit clean.** When the entity scheduler retires the task (the player's thread is gone), when the viewer or the kind is missing as the wake runs, and when the wake itself throws, the record's bit is cleared; it is not rescheduled. A later write marks it again and wakes it again. | A set bit with no wake pending never transitions again, so the viewer would never re-render. The wake is not rescheduled because a retired task has no thread to run on and a missing viewer has nothing to show; the next write is the retry. |
+| V1-23 | **A write the store accepted returns its own result whatever the write observer does.** `ObservedVariableStore` catches a `RuntimeException` from the observer and reports it once through the `java.util.logging` logger; `ViewChanges` does the same for the wake, per target, so the other viewers of the write are still marked. | The write is already stored; an observer is a consumer of it, not part of it. |

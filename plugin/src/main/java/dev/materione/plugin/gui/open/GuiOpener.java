@@ -91,6 +91,7 @@ public final class GuiOpener {
         }
 
         var session = GuiViewerState.record(viewer.id(), viewer.name(), gui.id(), admission.args());
+        sessions.admit(session);
         if (gui.open() != null) {
             session.typedArgs(ArgParser.typed(gui.open(), admission.args())); // one schema, one result (logic.md §40)
         }
@@ -98,6 +99,7 @@ public final class GuiOpener {
             session.restore(request.restore());
         }
         if (events.opening(viewer, session, gui)) {
+            session.end(CloseReason.REMOVED);
             return OpenResult.refused(OpenResult.Outcome.CANCELLED, "a gui.opening rule cancelled the open");
         }
 

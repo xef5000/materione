@@ -54,6 +54,11 @@ class PromptActionTest {
         }
     };
 
+    private static final dev.materione.api.logic.variable.VariableDeclaration SEARCH =
+            new dev.materione.api.logic.variable.VariableDeclaration(NamespacedId.of("demo", "search"),
+                    dev.materione.api.logic.variable.VariableScope.SESSION,
+                    dev.materione.api.logic.variable.VariableType.STRING, "", "");
+
     private final List<String> messages = new ArrayList<>();
     private final PromptServiceTest.Gateway gateway = new PromptServiceTest.Gateway();
     private final PromptService service = new PromptService(PromptServiceTest.plugin(), gateway,
@@ -61,7 +66,9 @@ class PromptActionTest {
     private final PromptAction action = new PromptAction(methods, service);
 
     private PromptAction.Params parse(Map<String, Object> raw) {
-        return action.parse(ParamReader.of(raw));
+        return action.parse(ParamReader.of(raw, dev.materione.api.logic.ExpressionCompiler.LITERAL,
+                dev.materione.api.logic.variable.CompileEnvironment.of("demo",
+                        id -> id.equals(SEARCH.id()) ? Optional.of(SEARCH) : Optional.empty())));
     }
 
     private static Map<String, Object> prompt(Map<String, Object> extra) {
@@ -75,7 +82,7 @@ class PromptActionTest {
         PromptAction.Params params = parse(prompt(Map.of("method", "chat", "timeout", 30, "cancel_word", "stop")));
 
         assertThat(params.method()).isSameAs(chat);
-        assertThat(params.target()).isEqualTo(new PromptAction.Session("search"));
+        assertThat(params.target()).isEqualTo(new PromptAction.Session(SEARCH));
         assertThat(params.timeoutSeconds().literal()).isEqualTo(30);
         assertThat(params.cancelWord()).isEqualTo("stop");
     }
@@ -153,7 +160,7 @@ class PromptActionTest {
         CompletableFuture<ActionOutcome> outcome = action.executeResumable(
                 parse(prompt(Map.of())), context, ReadExecutor.INLINE).toCompletableFuture();
 
-        assertThat(outcome.join()).isEqualTo(ActionOutcome.failed("session.search: no open gui"));
+        assertThat(outcome.join()).isEqualTo(ActionOutcome.failed("session.search: no open view"));
         assertThat(gateway.pending(1)).isFalse();
     }
 
@@ -192,6 +199,33 @@ class PromptActionTest {
 
         assertThat(outcome.join()).isEqualTo(ActionOutcome.OK);
         assertThat(context.locals()).containsEntry("answer", "gem");
+    }
+
+    @Test
+    void anUndeclaredSessionVariableIsRejectedAsUndeclared() {
+        assertThatRejected(Map.of("text", "x", "var", "session.missing"), DiagnosticCodes.VARIABLE_UNDECLARED);
+    }
+
+    @Test
+    void aSessionAnswerIsWrittenThroughTheStorePortToTheViewThatAsked() {
+        Player player = PromptServiceTest.player(UUID.randomUUID(), messages);
+        var registry = new dev.materione.plugin.view.ViewRegistry();
+        var variables = new dev.materione.plugin.view.TestVariables(registry);
+        var search = variables.declare("demo", "search", "");
+        var record = dev.materione.plugin.gui.session.GuiViewerState.record(
+                UUID.randomUUID(), "Probe", NamespacedId.of("demo", "menu"), Map.of());
+        registry.admit(record);
+        var context = new MapLogicContext(Map.of()).with(Facets.PLAYER, player)
+                .with(dev.materione.plugin.view.ViewerRecord.FACET, record);
+        context.withVariables(variables.service().bind(UUID.randomUUID(), null, record.instance()));
+
+        CompletableFuture<ActionOutcome> outcome = action.executeResumable(
+                parse(prompt(Map.of())), context, ReadExecutor.INLINE).toCompletableFuture();
+        gateway.run(1);
+        ((PromptServiceTest.FakeMethod) chat).reply.answer("gem");
+
+        assertThat(outcome.join()).isEqualTo(ActionOutcome.OK);
+        assertThat(variables.get(record, search)).isEqualTo("gem");
     }
 
     private void assertThatRejected(Map<String, Object> raw, dev.materione.api.diagnostics.DiagnosticCode code) {

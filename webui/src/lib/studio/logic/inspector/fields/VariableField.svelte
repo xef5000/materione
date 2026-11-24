@@ -2,13 +2,14 @@
   /**
    * A variable parameter (logic.md section 3, 7.3, 31): `set_var`'s `var`, the `var` condition, `prompt`'s answer and
    * any parameter the self-description draws as a variable. The picker lists the declared player and server variables
-   * (written `pack:key`, so the scope comes from the declaration and a typo cannot create a second key), the session
-   * variables the GUI's flows use (`session.name`) and the run-local names written earlier in the flow. Typing a name
-   * that is none of these is allowed: a run-local or session variable needs no declaration. "Declare a new variable"
+   * (written `pack:key`, so the scope comes from the declaration and a typo cannot create a second key; session
+   * variables are declared too, and written `session.key`) and the run-local names written earlier in the flow. Typing a
+   * name that is none of these is allowed for a run-local variable; a session name no declaration backs is flagged with a
+   * shortcut that declares it (`MTR-0063`). "Declare a new variable"
    * writes a declaration into the pack's variables file through the authoring ops.
    */
   import Icon from '../../../../components/Icon.svelte';
-  import { describeDefault, type DeclaredVariable } from '../../../../logic/variables';
+  import { describeDefault, sessionDeclared, sessionNameOf, type DeclaredVariable } from '../../../../logic/variables';
   import type { NodeFlag } from '../../../../logic/verdicts';
   import { session } from '../../../../state.svelte';
   import { useInspector } from '../context';
@@ -45,16 +46,20 @@
 
   const current = $derived(typeof value === 'string' ? value : '');
   const scopeNames = $derived(inspector.scope.paths);
-  const sessionNames = $derived(
-    scopeNames.filter((entry) => entry.origin === 'session' && !entry.path.endsWith('*')).map((entry) => `session.${entry.path.slice('vars.session.'.length)}`),
-  );
   const localNames = $derived(scopeNames.filter((entry) => entry.origin === 'local').map((entry) => entry.path.slice('vars.'.length)));
   const needle = $derived(query.trim().toLowerCase());
   const declared = $derived(inspector.declared.filter((variable) => needle === '' || variable.id.toLowerCase().includes(needle)));
-  const sessions = $derived(sessionNames.filter((name) => needle === '' || name.includes(needle)));
   const locals = $derived(localNames.filter((name) => needle === '' || name.includes(needle)));
   const known = $derived(inspector.declared.find((variable) => variable.id === current));
-  const empty = $derived(declared.length + sessions.length + locals.length === 0);
+  const empty = $derived(declared.length + locals.length === 0);
+  // a session variable is declared like the others: one the field names that no declaration backs is `MTR-0063`, and
+  // the studio offers to declare it here, so the author never leaves it to fix the load error (views.md section 9)
+  const pack = $derived(inspector.canvas.gui.pack);
+  const sessionName = $derived(sessionNameOf(current));
+  const undeclaredSession = $derived(
+    sessionName !== null && inspector.declaredStatus === 'ready' && !sessionDeclared(sessionName, pack, inspector.declared) ? sessionName : null,
+  );
+  let declaringSession = $state(false);
 
   function choose(name: string): void {
     open = false;
@@ -117,6 +122,17 @@
   {#each flags as flag, index (index)}
     <p class="flag {flag.severity}" data-verdict><Icon name="triangle-alert" size={12} /> {flag.message}</p>
   {/each}
+  {#if undeclaredSession}
+    <p class="flag warn" data-testid="undeclared-session">
+      <Icon name="triangle-alert" size={12} /> {current} is not a declared session variable.
+      {#if undeclaredSession.pack === null || undeclaredSession.pack === pack}
+        <button type="button" class="inline" data-testid="declare-session" {disabled} onclick={() => (declaringSession = true)}>Declare it</button>
+      {/if}
+    </p>
+  {/if}
+  {#if declaringSession}
+    <DeclareVariable start={current} initialScope="session" ondone={() => (declaringSession = false)} oncancel={() => (declaringSession = false)} />
+  {/if}
 
   {#if open}
     <div class="popover" role="dialog" aria-label="Variables">
@@ -131,14 +147,6 @@
               <button type="button" role="option" aria-selected={variable.id === current} data-variable={variable.id} onclick={() => choose(variable.id)}>
                 <span class="name">{variable.id}</span>
                 <span class="meta">{variable.scope} {variable.type}</span>
-              </button>
-            {/each}
-          {/if}
-          {#if sessions.length > 0}
-            <h5>Session</h5>
-            {#each sessions as name (name)}
-              <button type="button" role="option" aria-selected={name === current} onclick={() => choose(name)}>
-                <span class="name">{name}</span>
               </button>
             {/each}
           {/if}
@@ -215,6 +223,15 @@
   }
   .flag.warn {
     color: var(--warn);
+  }
+  .flag .inline {
+    padding: 0 var(--space-1);
+    background: none;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-sm);
+    color: inherit;
+    font-size: inherit;
+    cursor: pointer;
   }
   .popover {
     position: absolute;

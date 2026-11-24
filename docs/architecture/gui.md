@@ -103,7 +103,8 @@ other slots fields) carries the same words.
 id, a template such as `${entry.item}`, or one named source such as `head: {player: "${player.name}"}`
 or `player_slot: main_hand`) or `frames: {every, items}` for an animation. Its `name` (the item's display
 name), `lore` with `lore_mode`, `amount` and `glint` are templates. A GUI may set `refresh: <ticks>`, the
-clock that re-renders its dynamic layers; `gui.refresh` and reloads always update the window. A layer
+clock that re-renders its dynamic layers; `rerender: off` (default `on_change`) stops a write to a variable the window
+reads from re-rendering it, leaving the clock, `gui.refresh` and reloads. `gui.refresh` and reloads always update the window. A layer
 with a condition, a template, a viewer-bound source or an animation is dynamic; the rest are resolved
 once per window. Unknown fields are preserved losslessly (master
 §5.6); an unknown `type` quarantines that one layer (`MTR-` code assigned by the

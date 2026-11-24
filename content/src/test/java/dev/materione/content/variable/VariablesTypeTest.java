@@ -45,7 +45,7 @@ class VariablesTypeTest {
             assertThat(parameters).extracting(p -> p.id())
                     .containsExactly("scope", "type", "default", "description");
             assertThat(parameters.get(0).required()).isTrue();
-            assertThat(parameters.get(0).allowedValues()).containsExactly("player", "server", "item");
+            assertThat(parameters.get(0).allowedValues()).containsExactly("player", "server", "item", "session");
             assertThat(parameters.get(1).allowedValues()).containsExactly("number", "string", "boolean");
             assertThat(parameters.get(2).type()).isEqualTo(ParameterType.RAW);
         }
@@ -72,6 +72,16 @@ class VariablesTypeTest {
                     id("level"), VariableScope.ITEM, VariableType.NUMBER, 1.0d, "Weapon level"));
             assertThat(type.describe().description()).contains("do not stack");
             assertThat(type.describe().parameters().get(0).description()).contains("do not stack");
+        }
+
+        @Test
+        void aSessionVariableIsTypedAndDefaultedLikeAnyOtherScope() {
+            var parsed = type.parse(id("tab"), definition(
+                    "scope", "session", "type", "string", "default", "all", "description", "Selected tab"), templates);
+
+            assertThat(parsed).contains(new VariableDeclaration(
+                    id("tab"), VariableScope.SESSION, VariableType.STRING, "all", "Selected tab"));
+            assertThat(type.describe().parameters().get(0).description()).contains("one open view");
         }
 
         @Test

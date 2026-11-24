@@ -1096,6 +1096,7 @@ public final class EditorContentOps {
             }
             json.add("entry", contextJson(source.description().entry()));
             json.addProperty("cached", source.description().cached());
+            json.addProperty("announced", source.description().announced());
             json.addProperty("registeredBy", source.registeredBy());
             listSources.add(json);
         }

@@ -452,6 +452,7 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                 "quarantined: " + Math.max(0, report.quarantinedCount()),
                 NamedTextColor.GRAY));
         escrowDoctor(sender);
+        viewDoctor(sender);
 
         sender.sendMessage(Component.text(
                 "diagnostics: " + report.errorCount() + " error, "
@@ -460,6 +461,17 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
         // Stable harness marker: doctor completed against an M0-empty system.
         plugin.getLogger().info("MATERIONE-DOCTOR-OK");
+    }
+
+    /** The definitions with the most automatic re-renders per second (views.md section 5.7). */
+    private void viewDoctor(CommandSender sender) {
+        var stack = plugin.guiStack();
+        if (stack == null) {
+            return;
+        }
+        for (String line : stack.renderStats().lines(5)) {
+            sender.sendMessage(Component.text("re-renders: " + line, NamedTextColor.GRAY));
+        }
     }
 
     /** The capability result of the crash-safe input slots (gui-input-durability.md section 5.8) and who is blocked. */

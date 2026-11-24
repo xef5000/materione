@@ -28,7 +28,8 @@ class ListSearchFilterTest {
 
     private static MapLogicContext session(Object search) {
         Map<String, Object> session = search == null ? Map.of() : Map.of("search", search);
-        return dev.materione.plugin.view.TestSessionValues.in(new MapLogicContext(Map.of()), session);
+        return dev.materione.plugin.view.TestSessionValues.in(
+                new MapLogicContext(Map.of("view", Map.of("id", GUI.toString()))), GUI.namespace(), session);
     }
 
     private List<Object> names(CompiledListLayer layer, MapLogicContext context) {
@@ -59,7 +60,8 @@ class ListSearchFilterTest {
     void aSearchReadsTheVariableItNames() {
         ListSearch search = new ListSearch("query", List.of("name"));
         var context = dev.materione.plugin.view.TestSessionValues.in(
-                new MapLogicContext(Map.of()), Map.of("search", "iron", "query", "gold"));
+                new MapLogicContext(Map.of("view", Map.of("id", GUI.toString()))), GUI.namespace(),
+                Map.of("search", "iron", "query", "gold"));
 
         assertThat(names(layer(search), context)).containsExactly("Gold ingot");
     }

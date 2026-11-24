@@ -18,8 +18,8 @@ import java.util.Optional;
  * and {@code view.back} reach it through. It holds no logic of its own; opening is {@link GuiOpener}, ending is
  * {@link GuiLifecycle}, rendering is {@link GuiLiveRefresh}, naming is {@link GuiLookup}.
  *
- * <p>Its viewers are {@code opened} (a verb attaches them), a change to what it reads re-renders it by default
- * (row V1 builds that), and the fewest ticks between two automatic renders of one viewer is 1.
+ * <p>Its viewers are {@code opened} (a verb attaches them), a write to a variable it reads marks them dirty by default,
+ * and the fewest ticks between two automatic renders of one viewer is 1.
  */
 public final class GuiViewKind implements ViewKind {
 
@@ -72,5 +72,10 @@ public final class GuiViewKind implements ViewKind {
     @Override
     public boolean render(Viewer viewer, ViewerRecord record) {
         return refresh.refresh(viewer, record);
+    }
+
+    @Override
+    public RenderOutcome renderAutomatic(Viewer viewer, ViewerRecord record) {
+        return refresh.automatic(viewer, record);
     }
 }

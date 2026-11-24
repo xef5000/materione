@@ -8,6 +8,7 @@ import dev.materione.plugin.gui.GuiRefreshPlan;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.open.GuiLifecycle;
+import dev.materione.plugin.view.ViewKind;
 import dev.materione.plugin.view.ViewerRecord;
 import dev.materione.plugin.view.ViewRegistry;
 import dev.materione.plugin.gui.tick.GuiTicker;
@@ -102,6 +103,7 @@ public final class GuiLiveRefresh {
         if (now.isEmpty() || windows.shape(viewer, session).isEmpty()) {
             return false;
         }
+        session.clearDirty(); // an explicit render takes the write a queued wake was made for (views.md section 5.4)
         refreshViewer(viewer, session, now, true);
         return true;
     }
@@ -120,6 +122,23 @@ public final class GuiLiveRefresh {
         }
         refreshViewer(viewer, session, now, false);
         return true;
+    }
+
+    /**
+     * The render a write asks for (views.md section 4.2): the dynamic layers and the dynamic title, as the refresh
+     * clock reads them. A definition whose window shape changed is left to the reload that changed it. Runs on the
+     * viewer's own thread, from the scheduler's wake and so never inside the player's own click.
+     */
+    public ViewKind.RenderOutcome automatic(Viewer viewer, ViewerRecord session) {
+        Optional<RuntimeGuis.Live> now = guis.find(session.definition());
+        Optional<WindowHost.Shape> shape = now.isEmpty() ? Optional.empty() : windows.shape(viewer, session);
+        if (shape.isEmpty() || GuiRefreshPlan.viewerAction(shape.get().title(), shape.get().container(), now)
+                != GuiRefreshPlan.Action.UPDATE_CONTENTS) {
+            return ViewKind.RenderOutcome.STALE;
+        }
+        boolean applied = windows.advance(viewer, session, now.orElseThrow());
+        ticker.ensure(viewer, session);
+        return applied ? ViewKind.RenderOutcome.RENDERED : ViewKind.RenderOutcome.FROZEN;
     }
 
     /** One viewer's window brought up to date, every layer read again. Runs on the viewer's own thread. */

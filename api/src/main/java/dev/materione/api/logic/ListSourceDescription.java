@@ -14,9 +14,13 @@ import java.util.Objects;
  *     autocomplete; a family ({@code entry.*}) when the fields are the author's own
  * @param cached true when reading the entries is expensive: the window reads them when it opens, on
  *     {@code gui.refresh} and on a reload, and keeps them between refresh-clock ticks and page changes
+ * @param announced true when the source reads nothing but the variables its parameters name (a parameter drawn with
+ *     the {@code variable} widget): a write to one of them is then every change the list can see, so a view needs no
+ *     polling for it. False, the default, says the source may read live state no write announces, and a view that
+ *     uses it is polled
  */
 public record ListSourceDescription(SelfDescription self, String shorthand, List<ContextVariable> entry,
-        boolean cached) {
+        boolean cached, boolean announced) {
 
     public ListSourceDescription {
         Objects.requireNonNull(self, "self");
@@ -24,6 +28,16 @@ public record ListSourceDescription(SelfDescription self, String shorthand, List
             throw new IllegalArgumentException("a shorthand is a non-blank parameter name or null");
         }
         entry = entry == null ? List.of() : List.copyOf(entry);
+    }
+
+    /** A source that does not say what it reads: its views are polled. */
+    public ListSourceDescription(SelfDescription self, String shorthand, List<ContextVariable> entry, boolean cached) {
+        this(self, shorthand, entry, cached, false);
+    }
+
+    /** This description for a source that reads only the variables its parameters name. */
+    public ListSourceDescription announcing() {
+        return new ListSourceDescription(self, shorthand, entry, cached, true);
     }
 
     /** A source whose entries are read on every render, with no shorthand. */

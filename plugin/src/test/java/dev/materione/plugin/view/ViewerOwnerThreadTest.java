@@ -78,6 +78,7 @@ class ViewerOwnerThreadTest {
     @BeforeEach
     void setUp() throws Exception {
         f = new GuiFixture();
+        f.declareSession("tab", "");
         f.sessions.guard((record, what) -> mutations.add(new Mutation(Thread.currentThread().getName(), what)));
         onOwner(() -> {
             f.gui(MENU);

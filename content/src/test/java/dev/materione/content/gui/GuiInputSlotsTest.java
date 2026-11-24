@@ -2,6 +2,7 @@ package dev.materione.content.gui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.materione.api.content.ViewFacet;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
@@ -76,6 +77,19 @@ class GuiInputSlotsTest {
         var locked = GuiTestSupport.definition(1);
         locked.put("player_inventory", "locked");
         assertThat(compile(locked).model().playerInventory()).isEqualTo(PlayerInventory.LOCKED);
+    }
+
+    @Test
+    void aWindowRerendersOnChangeUnlessItSaysOff() {
+        assertThat(compile(GuiTestSupport.definition(1)).model().rerender()).isEqualTo(ViewFacet.RerenderPolicy.ON_CHANGE);
+        for (Object off : new Object[] {"off", Boolean.FALSE}) { // YAML 1.1 reads a bare off as false
+            var quiet = GuiTestSupport.definition(1);
+            quiet.put("rerender", off);
+            assertThat(compile(quiet).model().rerender()).isEqualTo(ViewFacet.RerenderPolicy.OFF);
+        }
+        var explicit = GuiTestSupport.definition(1);
+        explicit.put("rerender", "on_change");
+        assertThat(compile(explicit).model().rerender()).isEqualTo(ViewFacet.RerenderPolicy.ON_CHANGE);
     }
 
     @Test

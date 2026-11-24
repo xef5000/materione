@@ -3,7 +3,8 @@
    * The "declare new variable" shortcut (logic.md section 3.2, 31). It writes the declaration into the pack's
    * `variables/` file through the ordinary authoring ops (creating `variables/<pack>.yml` first when the pack has none),
    * so the new variable is a file edit like any other, saved by the server and checked by the compiler. Nothing is kept in
-   * the editor. Only persistent variables are declared; a run-local or session variable needs no declaration.
+   * the editor. A run-local variable needs no declaration; a session variable is declared like the others, and the
+   * studio opens this form for it where a rule or template names one that is not.
    */
   import Icon from '../../../components/Icon.svelte';
   import { session } from '../../../state.svelte';
@@ -15,20 +16,29 @@
   interface Props {
     /** A hint for the key, taken from what the author had typed. */
     start?: string;
+    /** Where the variable is stored when the form opens (a session name starts it as a session variable). */
+    initialScope?: VariableScope;
     ondone: (made: DeclaredVariable) => void;
     oncancel: () => void;
   }
 
-  let { start = '', ondone, oncancel }: Props = $props();
+  let { start = '', initialScope = 'player', ondone, oncancel }: Props = $props();
 
   const inspector = useInspector();
   const pack = $derived(inspector.canvas.gui.pack);
   const uid = $props.id();
+  const SCOPE_LABELS: Record<VariableScope, string> = {
+    player: 'per player',
+    server: 'for the server',
+    item: 'on the item stack',
+    session: 'in one open window',
+  };
 
   // the hint seeds the field once; the author edits it from there
   // svelte-ignore state_referenced_locally
-  let key = $state(start.replace(/^[^:]*:/, '').replace(/^(player|server|item|session|local)\./, '').toLowerCase().replace(/[^a-z0-9_]/g, '_'));
-  let scope = $state<VariableScope>('player');
+  let key = $state((start.split(/[.:]/).pop() ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+  // svelte-ignore state_referenced_locally
+  let scope = $state<VariableScope>(initialScope);
   let type = $state<VariableType>('number');
   let initial = $state('');
   let description = $state('');
@@ -69,7 +79,7 @@
   <div class="row">
     <label for="{uid}-scope">Stored</label>
     <select id="{uid}-scope" bind:value={scope}>
-      {#each VARIABLE_SCOPES as option (option)}<option value={option}>{option === 'player' ? 'per player' : option === 'item' ? 'on the item stack' : 'for the server'}</option>{/each}
+      {#each VARIABLE_SCOPES as option (option)}<option value={option}>{SCOPE_LABELS[option]}</option>{/each}
     </select>
   </div>
   <div class="row">

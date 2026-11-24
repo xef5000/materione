@@ -22,7 +22,6 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -42,12 +41,13 @@ public final class VariableService implements AutoCloseable {
 
     private final Map<VariableScope, VariableStore> stores = new EnumMap<>(VariableScope.class);
     private final SnapshotVariableStore playerSnapshots;
+    private final VariableStore serverStorage;
+    private volatile VariableWriteObserver writeObserver = VariableWriteObserver.NONE;
     private final Supplier<RuntimeVariables> declarations;
     private final Consumer<Diagnostic> diagnostics;
     private final StackVariableStore stackStore;
     private final HeldStacks held;
-    private final LongSupplier clock;
-    private final Map<String, Long> stackMisses = new ConcurrentHashMap<>();
+    private final StackMissReports stackMisses;
     private final VariablesApi api = new Api();
     private volatile ViewPort views = ViewPort.NONE;
     private volatile boolean closed;
@@ -94,13 +94,14 @@ public final class VariableService implements AutoCloseable {
             throw new IllegalArgumentException("each store must hold its own scope");
         }
         playerSnapshots = new SnapshotVariableStore(playerStorage);
-        stores.put(VariableScope.PLAYER, playerSnapshots);
-        stores.put(VariableScope.SERVER, serverStorage);
+        stores.put(VariableScope.PLAYER, observed(playerSnapshots));
+        this.serverStorage = serverStorage;
+        stores.put(VariableScope.SERVER, observed(serverStorage));
         this.declarations = declarations;
         this.diagnostics = diagnostics;
         this.stackStore = stackStorage;
         this.held = held == null ? HeldStacks.NONE : held;
-        this.clock = clock;
+        this.stackMisses = new StackMissReports(clock, diagnostics);
     }
 
     /** The binding a run for {@code player} (null for a run with no player) reads and writes through. */
@@ -114,34 +115,20 @@ public final class VariableService implements AutoCloseable {
      * report it.
      */
     public VariableBinding bind(UUID player, StackRef stack) {
-        return new RunVariables(this::declaration, stores, player, stackStore, stack, this::stackMiss);
+        return bind(player, stack, null);
+    }
+
+    /**
+     * As {@link #bind(UUID, StackRef)}, for a run in the view instance {@code view}, whose session variables it reaches
+     * (views.md section 3.4); a null instance is a run in no view.
+     */
+    public VariableBinding bind(UUID player, StackRef stack, UUID view) {
+        return new RunVariables(this::declaration, stores, player, stackStore, stack, stackMisses::report, view);
     }
 
     /** Minimum milliseconds between two reports for the same variable of a run that has no stack. */
-    static final long MISS_INTERVAL_MS = 10_000;
+    static final long MISS_INTERVAL_MS = StackMissReports.INTERVAL_MS;
 
-    /**
-     * An item variable was read or written in a run with no stack: {@code MTR-0065}, once per variable per interval,
-     * because a hot trigger would otherwise report it on every event.
-     */
-    private void stackMiss(VariableDeclaration declaration, String what) {
-        long now = clock.getAsLong();
-        boolean[] emit = {false};
-        stackMisses.compute(declaration.id().toString(), (id, last) -> {
-            if (last == null || now - last >= MISS_INTERVAL_MS) {
-                emit[0] = true;
-                return now;
-            }
-            return last;
-        });
-        if (emit[0]) {
-            diagnostics.accept(new Diagnostic(DiagnosticCodes.VARIABLE_STORE_FAILED, Severity.WARN,
-                    "item variable " + declaration.id() + " was " + what + " in a run with no item stack",
-                    declaration.id(), null,
-                    "vars.item.* needs a trigger that is about an item stack (click, entity.hit, ...) and a non-empty"
-                            + " hand; the read is the default and the write is dropped. Repeated reports are rate-limited"));
-        }
-    }
 
     /** The live declaration of {@code id}, or empty. */
     public Optional<VariableDeclaration> declaration(NamespacedId id) {
@@ -168,7 +155,31 @@ public final class VariableService implements AutoCloseable {
         return views;
     }
 
-    /** The store of {@code scope}. */
+    /**
+     * Registers the {@code session} scope's store (the view runtime's). Called once at boot, before any run; a
+     * decorator that watches the port wraps the store here, as the player scope's snapshot store does.
+     */
+    public void sessionStore(VariableStore store) {
+        if (store.scope() != VariableScope.SESSION) {
+            throw new IllegalArgumentException("the session store must hold the session scope");
+        }
+        stores.put(VariableScope.SESSION, observed(store));
+    }
+
+    /**
+     * Registers who hears every successful write to a player, server or session variable, on both paths of the store
+     * port ({@code write} and {@code mutate}; views.md section 5.3). Replaces the previous observer; the stores
+     * consult the current one on each write. Item variables go through their own port and are not observed.
+     */
+    public void writeObserver(VariableWriteObserver observer) {
+        this.writeObserver = observer == null ? VariableWriteObserver.NONE : observer;
+    }
+
+    private VariableStore observed(VariableStore store) {
+        return new ObservedVariableStore(store, () -> writeObserver);
+    }
+
+    /** The store of {@code scope}; null for the session scope when no view runtime registered its store. */
     public VariableStore store(VariableScope scope) {
         return stores.get(scope);
     }
@@ -206,7 +217,7 @@ public final class VariableService implements AutoCloseable {
      * retried on the next tick, so nothing is lost while the disk recovers.
      */
     public void flushIfDirty() {
-        if (!(stores.get(VariableScope.SERVER) instanceof ServerVariableStore server)) {
+        if (!(serverStorage instanceof ServerVariableStore server)) {
             return;
         }
         try {
@@ -282,6 +293,7 @@ public final class VariableService implements AutoCloseable {
                 return ApiResult.fail(DiagnosticCodes.VARIABLE_UNDECLARED, id + " is not a declared variable");
             }
             VariableDeclaration declared = found.get();
+            if (declared.scope() == VariableScope.SESSION) { return sessionRefused(id); }
             if (declared.scope() == VariableScope.ITEM) {
                 return getItem(declared, player);
             }
@@ -295,6 +307,12 @@ public final class VariableService implements AutoCloseable {
                         .orElseGet(() -> ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
                                 id + " is unavailable: " + unavailable.getMessage()));
             }
+        }
+
+        /** A session variable has no holder outside an open view: the API names a player, not a view instance. */
+        private ApiResult<Object> sessionRefused(NamespacedId id) {
+            return ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                    id + " is a session variable: it lives in one open view and is reached from that view's rules");
         }
 
         /** An item variable of the stack the player holds in the main hand (logic.md §38); an empty hand reads the default. */
@@ -356,6 +374,7 @@ public final class VariableService implements AutoCloseable {
                 }
                 stored = coerced.get();
             }
+            if (declared.scope() == VariableScope.SESSION) { return sessionRefused(id); }
             if (declared.scope() == VariableScope.ITEM) {
                 return setItem(declared, id, player, stored);
             }

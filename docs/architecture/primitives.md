@@ -240,7 +240,7 @@ rules too (logic.md §37).
 | `local` | one run, in memory | P |
 | `player` | the player's PDC (`materione:var.<pack>.<key>`) | P as a *key choice* (the key is the player) |
 | `server` | `storage/variables.json` | P as a key choice (a constant key) |
-| `session` | `GuiSession.vars`, alive while one player's window is open | **F** |
+| `session` | the `session` store behind the port, keyed by the view instance (views.md §3.4; was `GuiSession.vars`, beside the port) | **F** until #333 step 2 restates it as a named key (views.md §8.2) |
 | `item` (added by #333 step 1, logic.md §38) | the stack's own PDC (`materione:var.<pack>.<key>`) behind `StackVariableStore` | P (the key is the stack a run is about) |
 
 **Finding.** `player` and `server` are *special cases of a keyed store* (the key is the player's id, or nothing), and `session`

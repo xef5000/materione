@@ -1,0 +1,38 @@
+# The live GUI of the guilogic fixture (views.md sections 4.2 and 5.5): it has no refresh clock and its rules never call
+# gui.refresh, so everything it changes on screen is a render the write asked for. Slot 11 is named after the server
+# variable `guilogic:wave` (`materione var set - guilogic:wave <text>` updates it with no click); slot 15 toggles the
+# window's own `shown` variable, which shows or hides the item in slot 13. The open and the toggle are announced on the
+# server console, which the QA catalog (qa/catalog/views.mjs) reads as markers.
+live:
+  title: Live
+  container: chest_3
+  layers:
+    - id: wave
+      type: item
+      slot: 11
+      item: minecraft:paper
+      name: "<yellow>Wave ${vars.server.guilogic.wave}"
+    - id: second
+      type: item
+      slot: 13
+      item: minecraft:diamond
+      name: "<aqua>Shown"
+      visible_if: "vars.session.guilogic.shown == true"
+    - id: toggle
+      type: item
+      slot: 15
+      item: minecraft:lever
+      name: "<green>Toggle"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-LIVE-OPEN"
+            as: console
+    - on: gui.click
+      layer: toggle
+      do:
+        - set_var: {var: session.shown, op: toggle}
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-LIVE-TOGGLED"
+            as: console

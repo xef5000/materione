@@ -6,7 +6,7 @@ type Capability = "assets" | "blocks" | "codemode" | "delivery" | "furniture" | 
 /** The content types this server registers. */
 type ContentTypeName = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "item" | "painting" | "recipe" | "rule" | "sound" | "variable";
 /** What a `Ref` can point at: a content type, or an asset kind a field names. */
-type RefKind = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "recipe" | "rule" | "sound" | "template" | "texture" | "variable";
+type RefKind = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "recipe" | "rule" | "session" | "sound" | "template" | "texture" | "variable";
 /** The action ids this server registers. */
 type ActionId = "actionbar" | "break_blocks" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "damage" | "drop_item" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.page" | "gui.refresh" | "gui.slot_item" | "heal" | "launch" | "message" | "particle" | "potion" | "prompt" | "run_command" | "set_block" | "set_var" | "sound" | "stack.edit" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title" | "velocity" | "view.back" | "view.close" | "view.open";
 /** The condition ids this server registers. */
@@ -460,6 +460,12 @@ interface GuiFields {
   player_inventory?: "free" | "locked";
   /** Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it. */
   refresh?: number;
+  /**
+   * Whether a write to a variable the window reads re-renders it: on_change (the default) updates the dynamic layers and the dynamic title on its own; off renders only on the refresh clock, an explicit refresh and a reload.
+   * @defaultValue on_change
+   * @example on_change
+   */
+  rerender?: "on_change" | "off";
   /** Ordered layers, bottom to top; each layer is one component instance. Raster layers may animate with materione:overlay_frames: {every: ticks, layers: [component-field patches]}. */
   layers?: GuiLayerEntry[];
   /** Named flows (id to steps), run from this resource's rules with call: <id>. */
@@ -697,11 +703,11 @@ interface SoundFields {
 interface SoundHandle extends ResourceHandle<"sound", SoundFields> {}
 
 /**
- * A declared persistent variable: stored per player, on the server or on an item stack, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together.
+ * A declared variable: stored per player, on the server, on an item stack or in one open view, typed, with a default. An item variable lives in the stack's own data: two stacks whose item variables differ do not stack together. A session variable belongs to one open view: private to that viewer, kept by view.back, gone when the view closes.
  * Content type `variable`, stored under `variables/`.
  */
 interface VariableFields {
-  /** Where the value is stored: player (per player), server (one for the server) or item (on the item stack the run is about; stacks whose values differ do not stack) */
+  /** Where the value is stored: player (per player), server (one for the server), item (on the item stack the run is about; stacks whose values differ do not stack) or session (one open view: private to that viewer, gone when the view closes) */
   scope: string;
   /** The value's type: number, string or boolean. */
   type: string;
@@ -3825,7 +3831,7 @@ interface PromptActionParams extends ActionOptions, GuardOptions {
    * Accepts an expression: `m.expr` or an `m.fn` result.
    */
   text: string | Expr;
-  /** Where the answer goes: a run-local name, or session.<name> for the open GUI. */
+  /** Where the answer goes: a run-local name, or session.<key> for a declared session variable of the open view. */
   var: string | Ref<"variable">;
   /**
    * Seconds the player has to answer, from 1 to 600; or a template that renders to them.
@@ -3880,7 +3886,7 @@ interface SetBlockActionParams extends ActionOptions {
 
 /** Parameters of `set_var`. */
 interface SetVarActionParams extends ActionOptions {
-  /** Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>. */
+  /** Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>. */
   var?: string | Ref<"variable">;
   /** Run-local variable name (the M2 spelling of var:) */
   name?: string;
@@ -4336,7 +4342,7 @@ interface ActionCatalog {
    */
   setBlock(params: SetBlockActionParams | string | Expr, options?: ActionOptions): ActionStep<"set_block">;
   /**
-   * Stores a value in a run-local, session or declared player, server or item variable.
+   * Stores a value in a run-local variable or a declared player, server, item or session variable.
    * @since 2.0.0
    * @registeredBy materione
    * @category data
@@ -4637,7 +4643,7 @@ interface SlotHasConditionParams {
 
 /** Parameters of the `var` condition. */
 interface VarConditionParams {
-  /** Variable: a local name, session.<name>, player.<key>, item.<key> or server.<pack>.<key>. */
+  /** Variable: a local name, session.<key>, player.<key>, item.<key> or server.<pack>.<key>. */
   var: string | Ref<"variable">;
   /**
    * How to compare.
@@ -4738,7 +4744,7 @@ interface ConditionCatalog {
    */
   slotHas(params: SlotHasConditionParams): Condition<"slot_has">;
   /**
-   * Compares a run-local, session or declared player, server or item variable with a value.
+   * Compares a run-local variable or a declared player, server, item or session variable with a value.
    * @since 2.0.0
    * @registeredBy materione
    * @category data
@@ -5327,7 +5333,7 @@ interface ContentListParams {
    */
   arg?: string;
   /** The session variable that holds a search; while it has text, every entry is listed flat. */
-  search?: string;
+  search?: string | Ref<"variable">;
 }
 
 /** The `entry.*` variables a row of the `content` list carries. */
@@ -5403,7 +5409,7 @@ interface StaticListEntry {
 /** Parameters of the `variable` list source. */
 interface VariableListParams {
   /** The declared variable, pack:key. */
-  var: string;
+  var: string | Ref<"variable">;
   /**
    * What separates the pieces.
    * @defaultValue ,
@@ -5449,7 +5455,7 @@ interface ListSourceCatalog {
    * @since 1.0.0
    * @registeredBy materione
    */
-  variable(params: VariableListParams | string): ListSourceSpec<"variable">;
+  variable(params: VariableListParams | string | Ref<"variable">): ListSourceSpec<"variable">;
 }
 
 /** The properties every GUI layer carries, whatever its component. */
@@ -5613,7 +5619,7 @@ interface ListLayerParams extends GuiLayerCommon {
    */
   sort?: JsonValue;
   /**
-   * Which entries a search keeps: { fields: [name] }, matched against the text in vars.session.search (or var:), ignoring case.
+   * Which entries a search keeps: { fields: [name] }, matched against the text in the session variable search of the GUI's pack (or var:), ignoring case.
    * @example {fields: [name]}
    */
   search?: JsonValue;

@@ -20,7 +20,10 @@ class VariableRefTest {
 
         @Test
         void sessionNamesAreTheSessionScope() {
-            assertThat(VariableRef.parse("session.page", "shop")).isEqualTo(new VariableRef.Session("page"));
+            assertThat(VariableRef.parse("session.page", "shop"))
+                    .isEqualTo(new VariableRef.Persistent(VariableScope.SESSION, NamespacedId.of("shop", "page")));
+            assertThat(VariableRef.parse("session.ui.page", "shop"))
+                    .isEqualTo(new VariableRef.Persistent(VariableScope.SESSION, NamespacedId.of("ui", "page")));
         }
 
         @Test

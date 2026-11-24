@@ -1,4 +1,4 @@
-# Declared variables of the showcase (logic.md §3.2, §34). show_tips is a player boolean the settings GUI flips and
+# Declared variables of the showcase (logic.md §3.2, §34; views.md §3.4 for the session scope). show_tips is a player boolean the settings GUI flips and
 # the shop reads; stock is a server number the shop decrements on every purchase (a server variable is shared).
 show_tips:
   scope: player
@@ -10,3 +10,8 @@ stock:
   type: number
   default: 3
   description: "Emeralds left in the showcase shop"
+search:
+  scope: session
+  type: string
+  default: ""
+  description: "The players window's search text, private to one open window"

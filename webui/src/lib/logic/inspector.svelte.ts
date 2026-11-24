@@ -46,7 +46,10 @@ export class InspectorState {
   constructor(canvas: LogicCanvasState) {
     this.canvas = canvas;
     this.scope = $derived(
-      scopeFor(canvas.graph, canvas.block, canvas.selected, canvas.vocabulary, this.declared, canvas.host, canvas.gui.doc.layers as never),
+      scopeFor(
+        canvas.graph, canvas.block, canvas.selected, canvas.vocabulary, this.declared, canvas.host,
+        canvas.gui.doc.layers as never, this.declaredStatus === 'ready' ? canvas.gui.pack : null,
+      ),
     );
   }
 

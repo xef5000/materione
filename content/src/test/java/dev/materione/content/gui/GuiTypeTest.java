@@ -353,8 +353,9 @@ class GuiTypeTest {
     void describeDeclaresTheCommonLayerFieldsForTheStudio() {
         SelfDescription description = new GuiType(components()).describe();
         assertThat(description.parameters()).extracting(ParameterSchema::id)
-                .containsExactly("title", "container", "player_inventory", "refresh", "layers", "behavior", "flows", "open");
-        ParameterSchema layers = description.parameters().get(4);
+                .containsExactly("title", "container", "player_inventory", "refresh", "rerender", "layers", "behavior", "flows",
+                        "open");
+        ParameterSchema layers = description.parameters().get(5);
         assertThat(layers.nested()).extracting(ParameterSchema::id)
                 .containsExactly("id", "type", "name", "visible", "locked", "opacity", "visible_if",
                         "materione:overlay_frames");

@@ -127,7 +127,8 @@ class VariableOpsTest {
         @Test
         void scopesAreParsedByTheirAuthoredWord() {
             assertThat(VariableScope.of("server")).contains(VariableScope.SERVER);
-            assertThat(VariableScope.of("session")).isEqualTo(Optional.empty());
+            assertThat(VariableScope.of("session")).contains(VariableScope.SESSION);
+            assertThat(VariableScope.of("local")).isEqualTo(Optional.empty());
         }
     }
 

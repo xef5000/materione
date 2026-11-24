@@ -263,7 +263,7 @@ within the resource's own pack.
 - **Actions.** `set_var: {var, op, value}`, where `op` is one of `set`, `add`, `subtract`,
   `multiply`, `toggle`, `remove` or `reset`. `value` is a template. Arithmetic on a non-number is a
   failed action, not a crash.
-- **Expressions.** `vars.local.x`, `vars.session.x`, `vars.player.shop.coins`,
+- **Expressions.** `vars.local.x`, `vars.session.shop.page`, `vars.player.shop.coins`,
   `vars.server.shop.season` and `vars.item.rpg.level` (the item stack the run is about, §38). Bare `vars.x` keeps meaning local, so M2 behaviour is unchanged.
 - **PlaceholderAPI.** The expansion provides `%materione_var_<pack>_<key>%`,
   `%materione_var_<pack>_<key>_<player>%`, `%materione_gui_open%` and `%materione_gui_last%`.
@@ -546,7 +546,9 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
   raster layers opt in with `materione:overlay_frames: {every: <ticks>, layers: [component-field patches...]}` (§6.4).
 - **Dynamic detection.** A layer is *dynamic* when it has `visible_if`, a template, a templated
   source or `frames`. The compiler records this, and refresh re-evaluates **only** dynamic layers.
-- **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render).
+- **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render). A write to a declared variable a
+  dynamic layer or the dynamic title reads re-renders the window on its own, at the next tick, unless the file says
+  `rerender: off` (views.md §4.2, §5.5, §17.8): the clock is then needed only for polled reads and animations.
 - **The render model.** `SlotRenderer` produces the session's `RenderedSlots`. `RenderDiff` writes
   only changed slots, which keeps a 54-slot, 20-tick refresh within budget.
 
@@ -889,7 +891,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41); #467 took `MTR-0125` (§40); #455 took `MTR-0126` (views.md §16, V0-3).
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`; #331 took none (§39); #329 took `MTR-0118` and `MTR-0119`, after the block `MTR-0106` to `MTR-0117` that the HUD and frame-cycling designs reserve (§41); #467 took `MTR-0125` (§40); #455 took `MTR-0126` (views.md §16, V0-3); #456 took `MTR-0127` (views.md §17, V1-10).
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -1838,8 +1840,8 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
 3. **Four words are reserved as scopes.** `local`, `session`, `player` and `server` cannot be run-local names,
    so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error). *(§38 adds a fifth
    reserved word, `item`, for the stack holder, and designs the open key that restates all of them.)*
-4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.x` is the GUI
-   session's variable, read through the `VariableFacets.SESSION` facet (absent: empty). `vars.player.<pack>.<key>`
+4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.<pack>.<key>` is a declared variable
+   held by the open view and read through the session store (views.md §3.4; it was a free-form `VariableFacets.SESSION` map before). `vars.player.<pack>.<key>`
    and `vars.server.<pack>.<key>` read a declared variable: the stored value, or the default when nothing is
    stored. A scope that does not match the declaration, or an undeclared name, reads as absent (`null`).
 5. **Writes.** A `set_var` names its target with the same path as the read, without the `vars.` root: `count`
@@ -2836,7 +2838,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
    author's name against it. A late registration takes effect on the next reload, as for item sources.
 5. **`ListSourceDescription` carries the entry schema and the `cached` flag.** `entry` is the list of `entry.*`
    variables the entries carry, with types, so the editor can offer them; a source whose fields are the author's own
-   declares the family `entry.*`. `cached` says the entries are expensive to read (decision 12). The description
+   declares the family `entry.*`. `cached` says the entries are expensive to read (decision 12); `announced` says the source reads only the variables its `variable`-widget parameters name (views.md §17, V1-21). The description
    is in the registry, so the editor reads it from there. **Deferred:** the vocabulary does not yet carry list sources,
    so the Logic tab cannot autocomplete `entry.*` from it. This is the same gap item sources have (§26), and it is
    closed with the node inspector (#224), not here. *Closed in §31 (decisions 9 and 17).*
@@ -3232,8 +3234,8 @@ Each decision is reversible by the owner.
 **The template field**
 
 9. **`${` completes from one scope.** `scopeFor` collects, at the selected node: the trigger's context schema filtered to the
-   host (§2.6), the declared variables as `vars.<scope>.<pack>.<key>` (§20 decision 4), the run-local and session names the
-   rule's `set_var` and `prompt` steps write (`vars.name`, `vars.session.name`), `args.*` and the `with:` keys of the calls
+   host (§2.6), the declared variables as `vars.<scope>.<pack>.<key>` (§20 decision 4), the run-local names the
+   rule's `set_var` and `prompt` steps write (`vars.name`; a session variable is a declared one, offered as `vars.session.<pack>.<key>`, and a name no declaration backs is flagged with a shortcut to declare it, views.md §17), `args.*` and the `with:` keys of the calls
    in a named flow (whose context is that of the rules that call it), and, for a rule on a list layer, the concrete
    `entry.<field>` paths the list source declares (§28.5). Completion offers the next path segment, with the value's type,
    and the expression functions with their signature and return type (`contains(text, part)`, from the vocabulary).
