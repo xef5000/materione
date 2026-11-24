@@ -55,7 +55,7 @@ settings:
             - message: "<green>Tips are on."
           else:
             - message: "<red>Tips are off."
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: tips_off
       click: left
@@ -67,7 +67,7 @@ settings:
             - message: "<green>Tips are on."
           else:
             - message: "<red>Tips are off."
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: tips_on
       click: right

@@ -77,12 +77,12 @@ players:
         - prompt: { text: "Type a player name to search, or cancel", var: session.search, timeout: 60 }
           else:
             - message: "<gray>Search cancelled."
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: clear
       do:
         - set_var: { var: session.search, value: "" }
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: back
       do:

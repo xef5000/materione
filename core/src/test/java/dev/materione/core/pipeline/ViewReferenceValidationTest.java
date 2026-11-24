@@ -32,8 +32,8 @@ class ViewReferenceValidationTest {
             "dialog", new ViewFacet(ViewFacet.ViewerRule.OPENED, ViewFacet.RerenderPolicy.OFF, false, false),
             "hud", new ViewFacet(ViewFacet.ViewerRule.PREDICATE, ViewFacet.RerenderPolicy.ON_CHANGE, false, false));
 
-    /** {@code view.open} and {@code view.close} name a view: their {@code view} is a reference of kind {@code view}. */
-    private static final LogicVocabulary VOCABULARY = key -> "view.open".equals(key) || "view.close".equals(key)
+    /** {@code view.open}, {@code view.close}, {@code view.refresh} and {@code in_view} name a view: their {@code view} is a reference of kind {@code view}. */
+    private static final LogicVocabulary VOCABULARY = key -> java.util.Set.of("view.open", "view.close", "view.refresh", "in_view").contains(key)
             ? Optional.of(new LogicVocabulary.Entry(true, Map.of("view", StaticReferences.VIEW), "view"))
             : Optional.empty();
 
@@ -125,6 +125,17 @@ class ViewReferenceValidationTest {
                 .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
         assertThat(validateKind("x", "banana", sharedGuiAndHud)).extracting(Diagnostic::code)
                 .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
+    }
+
+    @Test
+    void viewRefreshAndInViewNameAnyViewKindAndAreNotJudgedOpenable() {
+        for (String verb : List.of("view.refresh", "in_view")) {
+            assertThat(validate(KINDS, verb, "demo:shop")).as(verb).isEmpty();
+            assertThat(validate(KINDS, verb, "ask")).as(verb).isEmpty();
+            assertThat(validate(KINDS, verb, "demo:mana")).as(verb + " of a HUD refreshes its viewers").isEmpty();
+            assertThat(validate(KINDS, verb, "demo:ghost")).as(verb).extracting(Diagnostic::code)
+                    .containsExactly(DiagnosticCodes.RULE_STEP_REFERENCE_UNRESOLVED);
+        }
     }
 
     @Test

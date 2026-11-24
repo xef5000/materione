@@ -22,7 +22,7 @@ import java.util.Optional;
 /**
  * {@code gui.page: {list: players, to: next}}: moves a list of the open GUI to another page (logic.md §6.7). {@code to}
  * is {@code next}, {@code previous}, {@code first}, {@code last}, a page number, or a template that renders one of
- * those. The run must belong to the open window, as for {@code gui.refresh}. The window shows the new page and
+ * those. The run must belong to the open window, as for {@code view.close}. The window shows the new page and
  * {@code gui.page} runs; a page outside the list is clamped, not refused.
  */
 public final class PageGuiAction implements ActionType<PageGuiAction.Params> {

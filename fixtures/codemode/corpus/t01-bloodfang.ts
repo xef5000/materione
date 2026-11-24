@@ -51,7 +51,7 @@ menu.rules.add(m.triggers.guiClick({ layer: "upgrade" }), () => ({
       else: [m.actions.message("<red>You need 500 coins.")],
     }),
     m.actions.setVar({ var: level, op: "add", value: "1" }),
-    m.actions.guiRefresh(),
+    m.actions.viewRefresh(),
   ],
 }));
 

@@ -176,7 +176,7 @@ class OwnershipRefreshTransactionTest {
                           visible_if: "vars.session.demo.cover == true"
                       behavior:
                         - on: gui.slot_change
-                          do: [gui.refresh]
+                          do: [view.refresh]
                     """;
             if (dynamic) {
                 yaml = yaml.replace("  behavior:", "    - id: label\n"

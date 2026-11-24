@@ -5,7 +5,7 @@ import dev.materione.plugin.view.ViewerRecord;
 
 /**
  * The port {@code slot_has} reads (logic.md §25): the item an input slot of a GUI session's window holds. It is
- * the same shape as {@link OpenGuis}: {@code BuiltinLogic} backs it with the GUI runtime through the
+ * the same shape as {@link OpenViews}: {@code BuiltinLogic} backs it with the GUI runtime through the
  * {@code GuiBridge}, and {@link #none()} answers "empty" for tests and hosts without that runtime, so the
  * condition is false and never throws.
  *

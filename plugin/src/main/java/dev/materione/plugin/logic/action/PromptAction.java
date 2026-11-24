@@ -39,7 +39,7 @@ import org.bukkit.entity.Player;
  * - prompt: { method: chat, text: "Search for an item", var: session.search, timeout: 60, cancel_word: cancel }
  *   else:
  *     - message: "No search."
- * - gui.refresh
+ * - view.refresh
  * }</pre>
  *
  * <p>The step parks the run until the answer comes, and counts against the player's parked-run budget. The answer is

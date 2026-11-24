@@ -145,7 +145,7 @@ test.describe('deleting a layer that has rules', () => {
     expect(file.layers.map((layer) => layer.id)).not.toContain('buy');
     expect(file.behavior).toEqual([
       { on: 'gui.click', layer: 'sword', do: [{ sound: '' }] },
-      { on: 'gui.click', layer: ['apple', 'coin'], do: ['gui.refresh'] },
+      { on: 'gui.click', layer: ['apple', 'coin'], do: ['view.refresh'] },
     ]);
     const sent = await writes(page);
     expect(sent.filter((write) => write.op === 'logic.edit').flatMap((write) => (write.payload.edits as { op: string }[]).map((edit) => edit.op))).toEqual(['removeRules']);
@@ -169,7 +169,7 @@ test.describe('deleting a layer that has rules', () => {
     expect((await saved(page)).behavior).toEqual([
       { on: 'gui.click', layer: 'buy', do: [{ message: 'hello' }] },
       { on: 'gui.click', do: [{ sound: '' }] }, // detached: no layer filter any more
-      { on: 'gui.click', layer: ['coin'], do: ['gui.refresh'] },
+      { on: 'gui.click', layer: ['coin'], do: ['view.refresh'] },
     ]);
   });
 

@@ -17,7 +17,7 @@ import java.util.Map;
 /**
  * {@code pack_items}: every live item of one pack, as {@code item} (its id), in the registry's order. Shorthand:
  * {@code pack_items: shop} lists the items of the {@code shop} pack. The read walks the whole item registry, so the
- * source is {@code cached}: a window reads it when it opens and on {@code gui.refresh}, not on every tick.
+ * source is {@code cached}: a window reads it when it opens and on {@code view.refresh}, not on every tick.
  */
 public final class PackItemsSource implements ListSource<PackItemsSource.Params> {
 

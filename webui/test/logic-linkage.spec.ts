@@ -18,7 +18,7 @@ import type { NodeFlag } from '../src/lib/logic/verdicts';
 const BLOCK: LogicBlock = {
   behavior: [
     { on: 'gui.click', layer: 'buy', do: [{ message: 'hi' }] },
-    { on: 'gui.open', do: ['gui.refresh'] },
+    { on: 'gui.open', do: ['view.refresh'] },
     { on: 'gui.click', layer: ['apple', 'coin'], do: ['view.close'] },
     { on: 'gui.click', layer: 'buy', do: [] },
     { on: 'gui.click', layer: ' sword ', do: [] },
@@ -124,7 +124,7 @@ describe('deleting layers that have rules', () => {
     const edits = planLayerDeletion(BLOCK, ['buy', 'apple'], 'delete');
     const after = applyEdits(BLOCK, edits).behavior!;
     expect(after).toEqual([
-      { on: 'gui.open', do: ['gui.refresh'] },
+      { on: 'gui.open', do: ['view.refresh'] },
       { on: 'gui.click', layer: ['coin'], do: ['view.close'] },
       { on: 'gui.click', layer: ' sword ', do: [] },
     ]);
@@ -135,7 +135,7 @@ describe('deleting layers that have rules', () => {
     const after = applyEdits(BLOCK, edits).behavior!;
     expect(after).toEqual([
       { on: 'gui.click', do: [{ message: 'hi' }] },
-      { on: 'gui.open', do: ['gui.refresh'] },
+      { on: 'gui.open', do: ['view.refresh'] },
       { on: 'gui.click', layer: ['coin'], do: ['view.close'] },
       { on: 'gui.click', do: [] },
       { on: 'gui.click', layer: ' sword ', do: [] },

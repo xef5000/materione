@@ -61,7 +61,7 @@ class GuiRulesCompileTest {
                         - view.close
                     - on: gui.open
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """)).isEmpty();
     }
 
@@ -76,21 +76,21 @@ class GuiRulesCompileTest {
                       layer: [buy, ghost]
                       click: left
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.click
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.open
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.tick
                       every: 40
                       do:
-                        - gui.refresh
+                        - view.refresh
                     - on: gui.tick
                       every: 60
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """);
         GuiRuleSet rules = f.guis.find(GuiFixture.id("shop")).orElseThrow().logic();
 
@@ -193,13 +193,13 @@ class GuiRulesCompileTest {
         assertThat(check(HEAD + """
                     - on: gui.tick
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """)).anySatisfy(problem -> assertThat(problem.message()).contains("needs 'every:'"));
         assertThat(check(HEAD + """
                     - on: gui.tick
                       every: 0
                       do:
-                        - gui.refresh
+                        - view.refresh
                 """)).anySatisfy(problem -> assertThat(problem.message()).contains("at least 1"));
     }
 
@@ -233,10 +233,24 @@ class GuiRulesCompileTest {
                         - call: missing
                   flows:
                     greet:
-                      - gui.refresh
+                      - view.refresh
                 """);
 
         assertThat(problems).hasSize(1);
         assertThat(problems.get(0).code()).isEqualTo(DiagnosticCodes.FLOW_CALL_INVALID);
+    }
+
+    @Test
+    void everyViewRefreshSelectorFormCompilesThroughTheFlowCompiler() {
+        f.variables.declare(GuiFixture.PACK, "coins", dev.materione.api.logic.variable.VariableScope.PLAYER, 0d);
+        f.variables.declare(GuiFixture.PACK, "season", dev.materione.api.logic.variable.VariableScope.SERVER, 1d);
+        f.declareSession("tab", "a");
+        for (String step : List.of("view.refresh", "view.refresh: {view: shop}", "view.refresh: {view: shop, kind: gui}",
+                "view.refresh: {var: player.coins}", "view.refresh: {var: player.coins, holder: Bob}",
+                "view.refresh: {var: player.coins, holder: \"{player.name}\"}",
+                "view.refresh: {var: server." + GuiFixture.PACK + ".season}", "view.refresh: {var: session.tab}")) {
+            assertThat(check(HEAD + "    - on: gui.open\n      do:\n        - " + step + "\n"))
+                    .as(step).isEmpty();
+        }
     }
 }

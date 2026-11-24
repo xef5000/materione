@@ -13,7 +13,7 @@ import java.util.Objects;
  * @param entry the entry schema: the {@code entry.*} variables its entries carry, for the editor's
  *     autocomplete; a family ({@code entry.*}) when the fields are the author's own
  * @param cached true when reading the entries is expensive: the window reads them when it opens, on
- *     {@code gui.refresh} and on a reload, and keeps them between refresh-clock ticks and page changes
+ *     {@code view.refresh} and on a reload, and keeps them between refresh-clock ticks and page changes
  * @param announced true when the source reads nothing but the variables its parameters name (a parameter drawn with
  *     the {@code variable} widget): a write to one of them is then every change the list can see, so a view needs no
  *     polling for it. False, the default, says the source may read live state no write announces, and a view that

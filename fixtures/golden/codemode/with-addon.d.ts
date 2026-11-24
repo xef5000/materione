@@ -8,9 +8,9 @@ type ContentTypeName = "block" | "command" | "currency" | "effect" | "furniture"
 /** What a `Ref` can point at: a content type, or an asset kind a field names. */
 type RefKind = "block" | "command" | "currency" | "effect" | "furniture" | "glyph" | "gui" | "gui-component" | "item" | "item-source" | "list-source" | "mechanic" | "model" | "pack-item" | "painting" | "quest" | "recipe" | "rule" | "session" | "sound" | "template" | "texture" | "variable";
 /** The action ids this server registers. */
-type ActionId = "actionbar" | "break_blocks" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "damage" | "drop_item" | "example:greet" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.page" | "gui.refresh" | "gui.slot_item" | "heal" | "launch" | "message" | "particle" | "potion" | "prompt" | "run_command" | "set_block" | "set_var" | "sound" | "stack.edit" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title" | "velocity" | "view.back" | "view.close" | "view.open";
+type ActionId = "actionbar" | "break_blocks" | "broadcast" | "cancel" | "chat" | "connect" | "custody.consume" | "damage" | "drop_item" | "example:greet" | "give_exp" | "give_item" | "give_money" | "give_permission" | "gui.page" | "gui.slot_item" | "heal" | "launch" | "message" | "particle" | "potion" | "prompt" | "run_command" | "set_block" | "set_var" | "sound" | "stack.edit" | "stop_sound" | "take_exp" | "take_item" | "take_money" | "take_permission" | "teleport" | "title" | "velocity" | "view.back" | "view.close" | "view.open" | "view.refresh";
 /** The condition ids this server registers. */
-type ConditionId = "can_break" | "can_build" | "can_interact" | "has_exp" | "has_item" | "has_item_space" | "has_money" | "has_permission" | "in_gui" | "in_world" | "is_near" | "slot_has" | "var";
+type ConditionId = "can_break" | "can_build" | "can_interact" | "has_exp" | "has_item" | "has_item_space" | "has_money" | "has_permission" | "in_view" | "in_world" | "is_near" | "slot_has" | "var";
 /** The mechanic ids this server registers. */
 type MechanicId = "materione:backpack" | "materione:commands" | "materione:durability" | "materione:food" | "materione:soulbound";
 /** The trigger ids this server registers. */
@@ -458,7 +458,7 @@ interface GuiFields {
    * @example free
    */
   player_inventory?: "free" | "locked";
-  /** Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it. */
+  /** Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; view.refresh and reloads always update it. */
   refresh?: number;
   /**
    * Whether a write to a variable the window reads re-renders it: on_change (the default) updates the dynamic layers and the dynamic title on its own; off renders only on the refresh clock, an explicit refresh and a reload.
@@ -3745,10 +3745,6 @@ interface GuiPageActionParams extends ActionOptions {
   to: string | Expr;
 }
 
-/** Parameters of `gui.refresh`. */
-interface GuiRefreshActionParams extends ActionOptions {
-}
-
 /** Parameters of `gui.slot_item`. */
 interface GuiSlotItemActionParams extends ActionOptions {
   /**
@@ -4236,6 +4232,21 @@ interface ViewOpenActionParams extends ActionOptions {
   args?: JsonValue;
 }
 
+/** Parameters of `view.refresh`. */
+interface ViewRefreshActionParams extends ActionOptions {
+  /** Refresh every viewer of this view: pack:id, or a name in this view's pack. */
+  view?: Ref<"gui">;
+  /** The view kind (gui, dialog) when the id is shared by two kinds. */
+  kind?: string;
+  /** Refresh the viewers whose view reads this declared variable: player.<key>, server.<pack>.<key> or session.<key>. */
+  var?: string | Ref<"variable">;
+  /**
+   * With a player variable: whose viewers, a player name or UUID; the flow's own player when omitted.
+   * Accepts an expression: `m.expr` or an `m.fn` result.
+   */
+  holder?: string | Expr;
+}
+
 interface ActionCatalog {
   /**
    * Shows text above the player's hotbar.
@@ -4345,13 +4356,6 @@ interface ActionCatalog {
    * @category gui
    */
   guiPage(params: GuiPageActionParams): ActionStep<"gui.page">;
-  /**
-   * Re-renders the open GUI in place.
-   * @since 1.0.0
-   * @registeredBy materione
-   * @category gui
-   */
-  guiRefresh(params?: GuiRefreshActionParams): ActionStep<"gui.refresh">;
   /**
    * Clears, takes, resizes, repairs or enchants the item in an input slot of this GUI.
    * @since 1.0.0
@@ -4515,6 +4519,13 @@ interface ActionCatalog {
    * @category gui
    */
   viewOpen(params: ViewOpenActionParams | Ref<"gui">, options?: ActionOptions): ActionStep<"view.open">;
+  /**
+   * Re-renders the viewers it selects: this flow's own view with no selector, every viewer of a view with view:, or the viewers whose view reads a variable with var:
+   * @since 1.0.0
+   * @registeredBy materione
+   * @category gui
+   */
+  viewRefresh(params?: ViewRefreshActionParams | Ref<"gui">, options?: ActionOptions): ActionStep<"view.refresh">;
 }
 
 /** Parameters of the `can_break` condition. */
@@ -4662,10 +4673,12 @@ interface HasPermissionConditionParams {
   min?: number | Expr;
 }
 
-/** Parameters of the `in_gui` condition. */
-interface InGuiConditionParams {
-  /** GUI id, e.g. shop:menu; any open GUI when omitted. */
-  id?: string | Ref<"gui">;
+/** Parameters of the `in_view` condition. */
+interface InViewConditionParams {
+  /** View id, e.g. shop:menu, or a name in this resource's pack; any open view when omitted. */
+  view?: Ref<"gui">;
+  /** The view kind (gui, dialog): only a view of this kind counts. */
+  kind?: string;
 }
 
 /** Parameters of the `in_world` condition. */
@@ -4791,12 +4804,12 @@ interface ConditionCatalog {
    */
   hasPermission(params?: HasPermissionConditionParams | string): Condition<"has_permission">;
   /**
-   * True when the player has a Materione GUI open, or the GUI with this id.
-   * @since 2.0.0
+   * True when the player has a view open, or the view with this id, or a view of this kind.
+   * @since 1.0.0
    * @registeredBy materione
    * @category gui
    */
-  inGui(params?: InGuiConditionParams | string | Ref<"gui">): Condition<"in_gui">;
+  inView(params?: InViewConditionParams | Ref<"gui">): Condition<"in_view">;
   /**
    * True when the player is in one of the named worlds.
    * @since 2.0.0

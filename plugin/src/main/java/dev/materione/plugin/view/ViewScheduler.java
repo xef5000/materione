@@ -20,6 +20,8 @@ import java.util.function.LongSupplier;
  *       does, leaves the bit clean, so the next write marks the record dirty and wakes it again;</li>
  *   <li>a bit already clean is a no-op (an explicit refresh got there first);</li>
  *   <li>the bit is cleared before the kind reads state, so a write during the render marks it again and wakes again;</li>
+ *   <li>a kind that finds nothing new to deliver ({@link ViewKind.RenderOutcome#UNCHANGED}) leaves the viewer as it is and
+ *       does not start the interval;</li>
  *   <li>a kind that holds its frame still ({@link ViewKind.RenderOutcome#FROZEN}) leaves the bit set and is tried again
  *       on the next tick.</li>
  * </ul>
@@ -101,7 +103,7 @@ public final class ViewScheduler implements ViewWake {
                     wake(target);
                 }
             }
-            case STALE -> { }
+            case UNCHANGED, STALE -> { }
         }
     }
 
@@ -122,10 +124,12 @@ public final class ViewScheduler implements ViewWake {
     }
 
     /**
-     * Schedules an explicit refresh from a thread that is not the record's owner: one wake at the next tick that
-     * ignores the kind's interval.
+     * Schedules an explicit refresh from a thread that is not the record's owner: one render at the next tick that
+     * ignores the kind's interval. The bit is cleared now, so a wake queued earlier finds it clean and the refresh is
+     * the only render; a write after this call marks the bit again and wakes again.
      */
     public void refreshSoon(ViewerRecord record) {
+        record.clearDirty();
         later.run(record.player(), 1, () -> refreshNow(record), () -> { });
     }
 

@@ -85,13 +85,24 @@ public interface ViewKind {
         RENDERED,
         /** The kind holds its frame still (the GUI's held cursor, views.md section 4.2 item 5); the dirty bit stays set. */
         FROZEN,
+        /**
+         * The render found nothing to show that the viewer does not already have (a dialog whose rendered form and
+         * submission snapshot are both the ones it was sent), so nothing was delivered. The viewer keeps what it
+         * holds, including a dialog's token, and the render does not start the kind's interval.
+         */
+        UNCHANGED,
         /** The record is stale or its definition is gone; nothing was rendered. */
         STALE
     }
 
     /**
      * Renders in answer to a write (views.md section 5.4). The default is {@link #render}; a kind that can hold its
-     * frame still (the GUI's held cursor) reports {@link RenderOutcome#FROZEN} instead of applying.
+     * frame still (the GUI's held cursor) reports {@link RenderOutcome#FROZEN} instead of applying, and a kind whose
+     * delivery is not free to repeat (a dialog re-send resets what the player typed) reports
+     * {@link RenderOutcome#UNCHANGED} when the frame it built is the one the viewer has.
+     *
+     * <p>{@link #render} is the explicit path ({@code view.refresh}): it delivers whether or not anything changed, because
+     * the author asked for it (views.md section 4.3).
      */
     default RenderOutcome renderAutomatic(Viewer viewer, ViewerRecord record) {
         return render(viewer, record) ? RenderOutcome.RENDERED : RenderOutcome.STALE;

@@ -36,4 +36,4 @@ rules:
           - give_item: { item: "{{item}}", amount: "{{amount}}" }
         else:
           - message: "{{message}}"
-      - gui.refresh
+      - view.refresh

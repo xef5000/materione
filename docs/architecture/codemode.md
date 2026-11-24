@@ -1435,7 +1435,7 @@ declare it, so the walker cannot see it):
 | `give_item.item`, `take_item.item`, `has_item.item` | item | yes (`item` widget) | `minecraft:` form only | **yes** | rest at run time; templates are expressions |
 | `has_item_space.item`, `slot_has.item` | item | yes (`item` widget, #355) | none | **yes** | rest at run time |
 | `view.open.view` | view (any kind) | yes (`REFERENCE`, kind `view`, #455; was `gui.open.gui`, #363) | none | **yes** | run time (`no live view matches`) |
-| `in_gui.id` | GUI | declared for the SDK (`reference` widget, kind `gui`, #355); still a `STRING`, so the level-3 walker does not read it | id format | no | run time |
+| `in_view.view`, `view.refresh.view` | view (any kind) | yes (`REFERENCE`, kind `view`; was `in_gui.id`, #355) | none | **yes** (`MTR-0105` for a static id no pack declares) | run time (`no live view matches`) |
 | `give_money.currency`, `take_money.currency`, `has_money.currency` | currency | declared for the SDK (`reference` widget, kind `currency`, #355); the validator resolves no `currency` kind yet | none | no | run time (`unknown currency`) |
 | `sound.sound`, `stop_sound.sound` | sound | yes (`sound` widget) | none | no: a key may name a resource-pack event no pack declares; not decided (see below) | run time |
 | `set_var.var`, `var.var`, `prompt.var` | variable | yes (`variable` widget) | **yes** (`MTR-0063`; the dry run resolves it against the staged pack, #378) | at load | run time for a templated name |
@@ -1445,7 +1445,7 @@ declare it, so the walker cannot see it):
 | `materione:item` item source's `item`, a variable list source's `var` | item, variable | **gap** | none | no | run time (`MTR-0072`) |
 
 **What #355 closed and what remains.** `has_item_space.item` and `slot_has.item` carry the `item` widget and are checked at
-level 3 like `give_item.item`; the `materione:item` source's `item` carries it too. `in_gui.id` and the three `currency`
+level 3 like `give_item.item`; the `materione:item` source's `item` carries it too. `in_view.view` (now a checked view reference, views.md row V2) and the three `currency`
 parameters declare their kind, which types them in the SDK (`string | Ref<"gui">`, `string | Ref<"currency">`) and changes no
 validation. Still gaps: `page_gui.list` (it names a layer of the same GUI, not content: no reference kind fits), the variable
 list source's `var`, level-3 resolution of the `currency` and STRING-typed `gui` kinds, and `sound`, which is declared but not

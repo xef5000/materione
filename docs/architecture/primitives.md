@@ -100,7 +100,7 @@ shipped:
 |---|---|---|---|---|
 | 1 | A command with typed arguments, a permission and a requirement | **Command as content**: names, typed args, gate, a flow | `open.commands`, `open.args` (type `player` included), `open.permission` and `open.requirement` exist (logic.md §6.1, §23), but only as the `open:` block of a `gui` resource. A command that opens nothing, or that runs a flow before any window, has no home. | P+ |
 | 2 | State shared by two players (both offers, both confirm flags, the expiry) | **Keyed state with a TTL**: variables scoped by an arbitrary key | The scopes are the four reserved words `local`, `session`, `player`, `server` (logic.md §3.1, §20 decision 3). `session` is `GuiSession.vars`, a map owned by one player's window. There is no key scope, no TTL and no expiry hook. | G |
-| 3 | A window both players see, that updates when either changes something | **A view over state**, rendered for any number of viewers | One `GuiSession` per (player, GUI) (`plugin/gui/session/GuiSession`); `refresh:` and `gui.refresh` re-render that viewer's own window. Nothing renders "every viewer of key K". | P+ |
+| 3 | A window both players see, that updates when either changes something | **A view over state**, rendered for any number of viewers | One `GuiSession` per (player, GUI) (`plugin/gui/session/GuiSession`); `refresh:` and `view.refresh` re-render that viewer's own window. Nothing renders "every viewer of key K". | P+ |
 | 4 | Items each player offers, held safely | **Item custody** | The escrow of #247: an account inside the player's own data and `storage/escrow/<uuid>.ledger` (gui-input-durability.md §5). It is reachable only through a `slots` layer with `input: true` and `durable: required`, plus the GUI's close and death paths. | P+ |
 | 5 | The swap is atomic and crash-safe | **Atomic transfer between holders** | The ledger's record kinds are `CONSUME = 1` and `HAND_OFF = 2` (`HAND_OFF` reserved; gui-input-durability.md §5.1 *Exit*, §12 ambiguity 1). Recovery is per player. | G |
 | 6 | An unanswered request expires; a disconnect cancels | State TTL, `gui.close` with `reason: quit`, and a trigger on expiry | Close reasons exist (logic.md §6.2). There is no expiry trigger; `wait` parks a run per player (budget 64, logic.md §5.3). | G |
@@ -215,7 +215,7 @@ rules too (logic.md §37).
 | Input | `prompt` (with the input-method registry) | P |
 | Custody | `custody.consume` (#248; logic.md §36): consume what custody holds at a slot, atomically, optionally until a saved snapshot proves it | P (passes U1 to U5, logic.md §36). The trash slot is the recipe `trash_slot` over it |
 | Providers | `give_money`, `take_money`, `give_permission`, `take_permission`, `connect` | P (each reaches a provider SPI, §4.11) |
-| View | `view.open`, `view.close`, `view.back` (views.md row V0, #455: one verb set for every opened kind); `gui.refresh` (to `view.refresh`, row V2), `gui.page`, `gui.slot_item` (component verbs, they stay) | **P** for the first three (they act on a view, whatever its kind); **P+** for `gui.refresh`, `gui.page` and `gui.slot_item`, which act on "the run's own GUI" implicitly |
+| View | `view.open`, `view.close`, `view.back` (views.md row V0, #455: one verb set for every opened kind); `view.refresh` (views.md row V2, #457: replaces `gui.refresh`), `gui.page`, `gui.slot_item` (component verbs, they stay) | **P** for the first three (they act on a view, whatever its kind); **P** for `view.refresh` (it selects viewers by view or variable, or acts on the run's own view), **P+** for `gui.page` and `gui.slot_item`, which act on "the run's own GUI" implicitly |
 
 | Finding | Class | Direction |
 |---|---|---|
@@ -227,7 +227,7 @@ rules too (logic.md §37).
 
 | Surface | Class | Notes |
 |---|---|---|
-| 10 conditions (`has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has`) | P, with `in_gui` and `slot_has` view-shaped | Fine. `slot_has` reads an input slot of the run's GUI; it stays a view condition (§5.3). |
+| 10 conditions (`has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_view`, `var`, `slot_has`) | P, with `in_view` and `slot_has` view-shaped | Fine. `slot_has` reads an input slot of the run's GUI; it stays a view condition (§5.3). |
 | 23 expression functions (`contains`, `matches`, `round`, `random`, `format_number`, and since #328 the clock: `now`, `today`, `format_duration`) plus the currency pair `balance` and `format_currency` | P | The expression engine is the universal glue (D4). The clock is a primitive for U5: it is injected (a `java.time.Clock`), so a test runs a fixed one (logic.md §15). |
 
 ### 4.6 Variables and scopes

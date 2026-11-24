@@ -15,11 +15,12 @@ import java.util.Optional;
 public final class ViewBridge {
 
     /** The collaborators a view verb needs. */
-    public record Services(ViewRegistry views, ViewKinds kinds) {
+    public record Services(ViewRegistry views, ViewKinds kinds, ViewRefresher refresher) {
 
         public Services {
             Objects.requireNonNull(views, "views");
             Objects.requireNonNull(kinds, "kinds");
+            Objects.requireNonNull(refresher, "refresher");
         }
     }
 

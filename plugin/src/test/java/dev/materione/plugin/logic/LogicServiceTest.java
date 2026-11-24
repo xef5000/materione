@@ -69,7 +69,7 @@ class LogicServiceTest {
         assertThat(greet.shorthand()).isEqualTo("text");
         assertThat(greet.description().displayName()).isEqualTo("Greet");
         assertThat(vocabulary.conditions()).extracting(BehaviorVocabulary.Condition::id)
-                .contains("example:is_night", "has_permission", "has_money", "in_gui", "slot_has");
+                .contains("example:is_night", "has_permission", "has_money", "in_view", "slot_has");
         // the built-ins are there beside them, registered the same way
         assertThat(vocabulary.actions()).extracting(BehaviorVocabulary.Action::id)
                 .contains("run_command", "message", "sound", "potion", "cancel", "set_var");

@@ -46,7 +46,7 @@ import java.util.function.Supplier;
  * <p>A partial render ({@code previous} given) re-reads only the dynamic layers and reuses the resolved
  * appearance of the others, so a 20-tick refresh does not rebuild the static items. A list is always dynamic, but a
  * {@code cached} source keeps the entries it read when the window opened and reads them again only on a full render.
- * A full render ({@code previous} null) re-reads everything, which is what a reload or {@code gui.refresh} needs. The
+ * A full render ({@code previous} null) re-reads everything, which is what a reload or {@code view.refresh} needs. The
  * renderer keeps no state of its own: one instance serves every window, on any region thread.
  */
 public final class SlotRenderer {

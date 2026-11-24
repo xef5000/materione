@@ -20,7 +20,7 @@
 > **`vars.session.*`**; `GuiSession`, `GuiSessions` and `SessionHistory` are **`ViewerRecord` (with `GuiViewerState`),
 > `ViewRegistry` and `ViewHistory`** in `plugin.view`; `GuiSessionPort` is `ViewPort`; `%materione_gui_open%` and
 > `%materione_gui_last%` are `%materione_view_open%` and `%materione_view_last%`. The triggers (`gui.opening`, `gui.open`,
-> `gui.close`, `gui.click`, ...), `gui.refresh`, `in_gui`, `gui.page` and `gui.slot_item` keep their names. A decision below that
+> `gui.close`, `gui.click`, ...), `gui.page` and `gui.slot_item` keep their names. **Row V2 (#457)**: `gui.refresh` is **`view.refresh`** (selectors none, `view:`, `var:` with `holder:`; threading `ANY`) and `in_gui` is **`in_view`** (`view:`, `kind:`); `OpenGuis` is `OpenViews`. A decision below that
 > says "session" means the viewer record's binding, session values and GUI payload.
 >
 > **Traceability.**
@@ -63,7 +63,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Actions: commands | `[player]`, `[console]`, `[commandevent]`, `[chat]` | `[console]`, `[chat]`, `[grant]` | `run_command` with `as: player\|console\|op`, plus `chat`. |
 | Actions: messages | `[message]`, `[minimessage]`, `[broadcast]`, `[json]` … | `[msg]` | `message`, `broadcast` (scoped), `actionbar` and `title`, all in Materione rich text. |
 | Actions: sound | `[sound]`, `[broadcastsound]`, `[broadcastsoundworld]` | `[sound]`, `[stopsound]` | `sound` (scope: player, world or server) and `stop_sound`. |
-| Actions: GUI | `[openguimenu]`, `[close]`, `[refresh]` | `[open]`, `[close]`, `[refresh]`, `[previous]`, `[itemaction]` | `gui.open`, `gui.close`, `gui.refresh`, `gui.back`, `gui.set_slot` and `gui.slot_item` (§4.1). |
+| Actions: GUI | `[openguimenu]`, `[close]`, `[refresh]` | `[open]`, `[close]`, `[refresh]`, `[previous]`, `[itemaction]` | `gui.open`, `gui.close`, `view.refresh`, `gui.back`, `gui.set_slot` and `gui.slot_item` (§4.1). |
 | Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money` against a named currency (`currencies/`, §18: Vault, the XP integration, or a command pair), `give_exp`/`take_exp` (an XP currency), and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
 | Actions: world | `[connect]` | `[server]`, `[teleport]`, `[give]` | `connect`, `teleport`, `give_item`, `take_item` and `potion`. |
 | Delay and chance | `<delay=>`, `<chance=>` | `[delay]` (nested block) | Kept as action options (`delay:` and `chance:`), plus the `wait` step (§2.2). |
@@ -107,7 +107,7 @@ an explicit **gap**. A gap is not covered by any client run; the reason is given
 | Actions: commands | `run_command` with `as: console` on every marker. | Covered for `console`. `as: player` and `as: op` have no client entry. **Gap.** |
 | Actions: messages | `message` throughout. | Covered. `broadcast`, `chat`, `actionbar`, `title`: `logic.messages-broadcast-chat` and `logic.title-actionbar` (existing). |
 | Actions: sound | Not in the showcase. | Covered by `guilogic.click-message-sound` (sound step) and `logic.sound-stop` (existing). |
-| Actions: GUI | `gui.open` (servers, players, settings, confirm), `gui.close`, `gui.refresh`, `gui.back`. | Covered for open, close, refresh and back. `gui.page` is authored on the list's arrows, but a one-page list never pages: `guilogic.roster-paged` (existing) covers it. `gui.slot_item` has no client entry. **Gap.** |
+| Actions: GUI | `gui.open` (servers, players, settings, confirm), `gui.close`, `view.refresh`, `gui.back`. | Covered for open, close, refresh and back. `gui.page` is authored on the list's arrows, but a one-page list never pages: `guilogic.roster-paged` (existing) covers it. `gui.slot_item` has no client entry. **Gap.** |
 | Actions: economy, exp, permissions | `take_money` and `give_item` (shop). | Partial. `give_money`: the currency reads in `logic.currency-live-read-surfaces` (existing), but no client run gives money. **Gap.** `take_exp` and `give_exp`: `logic.exp-give-take` (existing). `give_permission`: `logic.conditions-permission` (existing). |
 | Actions: world | `connect` (servers; the failure path, because the probe has no transfer). `give_item` (shop). | Partial. `teleport`: `logic.teleport` (existing). `take_item`: `logic.items-take-give` (existing). `potion`: **gap**. |
 | Delay and chance | Not in the showcase. | **Gap** (unit-tested). |
@@ -157,7 +157,7 @@ behavior:
         else:
           - message: "<red>You need $250."
           - sound: { sound: block.note_block.bass, pitch: 0.5 }
-      - gui.refresh
+      - view.refresh
 ```
 
 ### 2.2 Step kinds (engine-owned, closed set)
@@ -318,7 +318,7 @@ public interface ConditionType<P> {
 
 - **v1 built-ins.** `has_permission` (one, or many with `min:`), `has_money`, `has_exp` (points or
   levels), `has_item` (a matcher: item id or material, amount, name or lore contains, ignore case,
-  strict, armor or offhand, model), `has_item_space`, `is_near`, `in_world`, `in_gui`, `var` (typed
+  strict, armor or offhand, model), `has_item_space`, `is_near`, `in_world`, `in_view`, `var` (typed
   compare on a declared variable, so non-programmers avoid expressions) and `slot_has` (an input
   slot's contents, §6.5).
 - **Expression functions.** The engine gains calls. `contains`, `equals_ignore_case`,
@@ -546,7 +546,7 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
   raster layers opt in with `materione:overlay_frames: {every: <ticks>, layers: [component-field patches...]}` (§6.4).
 - **Dynamic detection.** A layer is *dynamic* when it has `visible_if`, a template, a templated
   source or `frames`. The compiler records this, and refresh re-evaluates **only** dynamic layers.
-- **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render). A write to a declared variable a
+- **`refresh: <ticks>`** on the GUI sets the clock (default off; `view.refresh` forces a render). A write to a declared variable a
   dynamic layer or the dynamic title reads re-renders the window on its own, at the next tick, unless the file says
   `rerender: off` (views.md §4.2, §5.5, §17.8): the clock is then needed only for polled reads and animations.
 - **The render model.** `SlotRenderer` produces the session's `RenderedSlots`. `RenderDiff` writes
@@ -666,7 +666,7 @@ As built (#220): the decisions, the diagnostics (`MTR-0081` to `MTR-0084`) and t
 - **Ordering.** Sources are filtered and sorted **before** paging, and page count is exposed for
   "Page 2/5" text.
 - **Large sources.** A source that is expensive (for example all items of all packs) declares
-  itself `cached`, and the session snapshots it on open and on `gui.refresh`, not on every tick.
+  itself `cached`, and the session snapshots it on open and on `view.refresh`, not on every tick.
 
 As built (#219): the decisions, the diagnostics (`MTR-0077` to `MTR-0080`) and the seams for search (#220) are
 in §28. The search key is built (#220, §29). The content browser (#8, §35) is a GUI built from a `list` over the
@@ -1277,7 +1277,7 @@ choice open, these are the choices. Each is reversible by the owner. The code is
    a registered condition with one of those ids would be shadowed. A leaf that throws makes the *whole*
    condition false (the interpreter contains it and reports `MTR-0023`), so `not: <broken>` is false, not
    true: a broken check never grants.
-6. **Step spellings.** A step is a mapping or a bare name (`- gui.refresh`, `- stop`). `stop` is `stop`,
+6. **Step spellings.** A step is a mapping or a bare name (`- view.refresh`, `- stop`). `stop` is `stop`,
    `stop: true` or `stop: {cancel, cancel_session_runs}`. `wait` is `wait: n` or `wait: {ticks}` with `0 <= n
    <= 1,728,000` (24 hours). `call` is `call: id`, `call: {flow, with}` or `call: id` with a sibling `with:`.
    `node: {x, y}` is accepted on rules and steps, ignored and never stored; the compiler only reads its
@@ -2093,13 +2093,13 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 **Actions and runs**
 
 16. **The four actions** are `gui.open` (a GUI and optional `args`, templated), `gui.close`, `gui.back` and
-    `gui.refresh`, one class each in `plugin.logic.action.gui`, all `PLAYER_REGION`, and they reach the
+    `view.refresh`, one class each in `plugin.logic.action.gui`, all `PLAYER_REGION`, and they reach the
     runtime through a `GuiBridge` the runtime binds into (the actions register at boot, before the runtime
     exists; unbound they fail soft). `gui.open` needs only a player, so it works from an item or a block rule
     and from a run whose window already closed; a bare name means the GUI of that name in the running GUI's
     pack, else the only live GUI of that name. The other three need the run's own session, still open and still
     the player's current one, and fail with `"no open gui"` otherwise (§5.2). `gui.back` with nothing behind
-    fails with "nothing to go back to"; `gui.refresh` rewrites the open window in place, and is where the
+    fails with "nothing to go back to"; `view.refresh` rewrites the open window in place, and is where the
     dynamic-slot work re-renders. A click's runs belong to the player and survive the close; only
     `stop: {cancel_session_runs: true}` ends them.
 17. **A reload keeps the session.** `GuiLiveRefresh` (the refresh of gui.md §5, now session-aware) rewrites a
@@ -2144,7 +2144,7 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 | Issue | Where it plugs in |
 |---|---|
 | #215 open commands | `GuiOpener.gate(OpenGate)` for permission, typed args, requirement, deny and bypass; `OpenSpec` beside `GuiRules` in `content.gui.logic`; `GuiRuntime` and the command already pass the arguments through. |
-| #216 dynamic slots | `LayerVisibility` (the router already asks it); `WindowRenderer` becomes the per-session renderer, and `gui.refresh` re-renders through it; the click map keeps conditional layers in and asks per click. |
+| #216 dynamic slots | `LayerVisibility` (the router already asks it); `WindowRenderer` becomes the per-session renderer, and `view.refresh` re-renders through it; the click map keeps conditional layers in and asks per click. |
 | #217 overlays | The title is assembled per render; the pinned platform transport resends a changed title to the existing server menu (§6.4). |
 | #218 input slots | The `GuiListener.route` policy table gains its rows; `GuiInput.click` is where `gui.slot_change` and `gui.click_inventory` fire from; `GuiEvents` fires them. |
 | #211 variables | `GuiSession.vars()` is a live, concurrent map the session scope can write through and back a session facet with, and `GuiSessions.current(player)` / `SessionHistory` are what `%materione_gui_open%` and `%materione_gui_last%` read; nothing here depends on the variables work. |
@@ -2179,7 +2179,7 @@ Where §4.2 and §9 left a choice open, these are the choices. Each is reversibl
 | `has_item_space` | player | **`slots`** (free storage slots, 0 to 36), or `item` with `amount` (room for that many) | the room is short; the item does not resolve; no player |
 | `is_near` | world | `world` (default: the player's world), `x`, `y`, `z`, `distance` (templates allowed) | the player is outside the radius or in another world; a template does not render to a number in range |
 | `in_world` | world | **`worlds`** (one name, or a list) | the player is in none of the worlds |
-| `in_gui` | gui | **`id`** (a GUI id, such as `shop:menu`), or none for any GUI | no GUI is open, or not the one named |
+| `in_view` | gui | **`view`** (a view id, such as `shop:menu`; a bare name is that name in the condition's own pack) and **`kind`** (`gui`, `dialog`), or none for any view | no view is open, or none that matches |
 | `var` | data | **`var`** (named as `set_var` names it), `op` (`==`, `!=`, `>`, `>=`, `<`, `<=`; default `==`), `value` (template allowed) | the comparison fails; an ordering between values that are not both numbers; a session variable outside a GUI |
 
 1. **Eight built-ins, `var` and `slot_has` left out.** `var` needs the variables API (#211), which is not on main,
@@ -2244,13 +2244,13 @@ Where §4.2 and §9 left a choice open, these are the choices. Each is reversibl
 9. **`in_world` matches exact names.** Bukkit keeps world names case-sensitively, so `in_world: World` does not match
    `world`. A scalar and a list read the same way, and an empty list is rejected at load.
 
-10. **`in_gui` reads a port, not a session.** `OpenGuis` (in `plugin.logic.support`) is the seam: one method,
-    `openGui(Player)`, answering the id of the GUI the player has open. `BuiltinLogic.register` backs it with the
-    player's current open session, read through the `GuiBridge` the `gui.*` actions use (§21), so
+10. **`in_view` reads a port, not a session.** `OpenViews` (in `plugin.logic.support`) is the seam: one method,
+    `openViews(Player)`, answering the views (kind and definition) the player has open. `BuiltinLogic.register` backs it with the
+    player's open viewer records, read through the `GuiBridge` the `gui.*` actions use (§21), so
     `plugin.logic.condition` never depends on `plugin.gui`. Before the runtime binds, and in tests,
-    `OpenGuis.none()` answers "nothing open", so the condition is false and never throws. It reads the session store
-    rather than the `GuiSession` facet so that it answers from any trigger, not only inside a GUI's own rules. An id names a pack's GUI, so it is written qualified (`shop:menu`); a bare id means
-    `materione:`, as for every Materione name.
+    `OpenViews.none()` answers "nothing open", so the condition is false and never throws. It reads the session store
+    rather than the `GuiSession` facet so that it answers from any trigger, not only inside a GUI's own rules. An id names a pack's view, so it is written qualified (`shop:menu`); a bare name means that name in the pack of the resource that wrote the condition (V2-3, views.md §18.2); `kind:` narrows by view kind, so a GUI and a dialog over it are both "in a view" and either satisfies the condition. (The old rule was a bare id meaning
+    `materione:`, as for every Materione name.)
 
 11. **Conditions run on the player's thread, and none declares a thread.** A predicate reads live player and world
     state, so the interpreter hops to the player's region before it tests one (§16 decision 17). That is correct for
@@ -2410,7 +2410,7 @@ this PR; the surface is in [`plugin.md`](plugin.md) §5.
 ## 24. Decisions taken in #216 (G3: dynamic slots, item sources, the refresh clock and the render diff)
 
 #216 makes a GUI's item slots depend on the viewer and the clock. It builds on the G1 seams (§21): the
-`LayerVisibility` the router asks, the per-session renderer that `WindowRenderer` became, `gui.refresh`, and the
+`LayerVisibility` the router asks, the per-session renderer that `WindowRenderer` became, `view.refresh`, and the
 ticker. Where the design left a choice open, these are the choices. Each is reversible by the owner. The code is in
 `content.gui` (the item layer and its compile), `api.logic` (the SPI), `behavior` (the condition entry point),
 `plugin.gui.dynamic`, `plugin.gui.render`, `plugin.logic.item` and `integrations.items`.
@@ -2438,13 +2438,13 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
    kept as text. `name` is text. `lore` is text or a list, with `lore_mode` (`replace`, `append`, `prepend`; it needs
    `lore`). `glint` is `true`, `false` or a template. Templates use the engine's `${...}` and `%token%` syntax.
 6. **`refresh: <ticks>` is the GUI's clock**, a whole number of at least 1. An invalid value is reported (`MTR-0071`)
-   and the GUI has no clock; `gui.refresh` and reloads still update it.
+   and the GUI has no clock; `view.refresh` and reloads still update it.
 
 **Dynamic analysis**
 
 7. **A layer is dynamic when** it has a `visible_if`, a templated override, a templated source, the `player_slot`
    source (the viewer's own item), or `frames`. The refresh clock re-reads only dynamic layers. A static layer keeps the
-   item it resolved when the window was built: a fixed `head: {player: Notch}` is resolved on open, on `gui.refresh`
+   item it resolved when the window was built: a fixed `head: {player: Notch}` is resolved on open, on `view.refresh`
    and on a reload, not on the clock.
 8. **A slot is static or per-viewer, as a whole.** A slot whose every layer is a plain id with no override and no
    condition is a static slot (`CompiledGui.slots`), resolved at apply time as before, and two static layers in one
@@ -2488,7 +2488,7 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
     `LayerVisibility.RENDERED` answers from the layers that render hid. A click therefore follows the window, not the
     authored file. The router and the click policy (G5, #218) are otherwise unchanged.
 15. **A partial render re-reads only the dynamic layers** and keeps the resolved appearance of the others. A full
-    render re-reads everything, which is what a reload and `gui.refresh` need.
+    render re-reads everything, which is what a reload and `view.refresh` need.
 16. **The refresh clock is a second chain on the window's ticker.** Its period is the greatest common divisor of
     `refresh:` and every animation's frame rate. Each link re-reads the live GUI and the window, so a reload that
     changes the clock is followed, and the chain stops with the window. Animations run on the window's own clock, so
@@ -2651,7 +2651,7 @@ capability check, `MTR-0100`), documented in plugin.md §5. The next free code i
 **Seams this leaves for later issues.** `GuiStack.inputClicks()` is the input collaborator the router consults;
 `GuiBridge.Services.inputs()` is the port `gui.slot_item` reaches the window through (`InputSlotPort`). `slot_has` (a
 condition, in `BuiltinLogic.conditions`, §22's convention) reads the window through the `SlotPeek` port
-(`plugin.logic.support`), which `BuiltinLogic.register` builds from the same bridge, as `in_gui` builds `OpenGuis`.
+(`plugin.logic.support`), which `BuiltinLogic.register` builds from the same bridge, as `in_view` builds `OpenViews`.
 The trash recipe (#222) was the one place expected to extend it; since #248 it is a composition over `custody.consume`, which
 reaches the window through the same port (`InputSlotPort#consume`, §36).
 
@@ -2877,7 +2877,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
     input slot, as §25 requires.
 12. **A cached source is read on a full render, and kept between partial renders.** The rendered window keeps the
     entries each list read (`Rendered.lists().entries()`). A cached list reuses them on the refresh clock and on a page
-    change, and reads its source again only when the window opens or `gui.refresh` or a reload rewrites it. `pack_items`
+    change, and reads its source again only when the window opens or `view.refresh` or a reload rewrites it. `pack_items`
     is cached; `online_players`, `variable` and `static` are read on every render, which is cheap for them.
 13. **A click on a list slot runs the list's rules with that entry, and an empty slot runs none.** The router asks the
     window what it shows (`Rendered.lists().shownAt(slot)`, §21 decision 14), so the entry is the one the player
@@ -2892,7 +2892,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
 
 15. **`gui.page: {list, to}` is one action, one class (`PageGuiAction`).** `to` is `next`, `previous`, `first`, `last`, a
     page number, or a template that renders one of those (an unknown word is a load-time refusal, `MTR-0057`). It runs
-    in the window's own session, as `gui.refresh` does (`no open gui` otherwise), and it goes through `GuiPages`, the one
+    in the window's own session, as `view.refresh` does (`no open gui` otherwise), and it goes through `GuiPages`, the one
     service: it stores the new page, repaints the window partially (so a cached list keeps its snapshot), and then
     fires `gui.page` with the page the window now shows.
 16. **`gui.page` fires only when the page changes.** A step past the last page, or before the first, moves nothing and
@@ -2977,7 +2977,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
    close that the hide causes is ignored by `windowClosed` while the session is prompting, so it does not end the session.
    **Deviation from the §21 seam note**, which named `GuiOpener` with a restore. A re-open through the opener makes a new
    session, and the run that is waiting holds the old one in its context, so every GUI action after the prompt
-   (`gui.refresh`, `set_var` into the session) would fail with `no open gui`. The search recipe depends on exactly those
+   (`view.refresh`, `set_var` into the session) would fail with `no open gui`. The search recipe depends on exactly those
    actions. The window returns through `WindowHost.open` for the same session (`GuiLifecycle.showAfterPrompt`), with the
    GUI as it is now; a GUI that is gone ends its session as `removed`.
 9. **The window comes back when the player has not moved on.** The return is skipped when the player's current session is
@@ -3094,12 +3094,12 @@ template form is `api.logic.RecipeTemplate`, the expansion is `behavior.logic.re
 
    | Recipe | Trigger | Expands to | Parameters (default in brackets) |
    |---|---|---|---|
-   | `pay_to_receive` | `gui.click` on `layer` | `require`: `take_money`, then `give_item`; `else`: a message; then `gui.refresh` | `layer`, `price` (≥ 0.01), `currency` (blank: default), `item`, `amount` (1), `message` |
+   | `pay_to_receive` | `gui.click` on `layer` | `require`: `take_money`, then `give_item`; `else`: a message; then `view.refresh` | `layer`, `price` (≥ 0.01), `currency` (blank: default), `item`, `amount` (1), `message` |
    | `close_button` | `gui.click` on `layer` | `gui.close` | `layer` |
    | `welcome_message` | `gui.open` | a message | `text` |
    | `confirm_dialog` | `gui.click` on `layer` | `gui.open` of `dialog` with a `question` argument | `layer`, `dialog`, `question` (*Are you sure?*) |
    | `paged_player_list` | two `gui.click` rules | `gui.page` to `previous` and to `next` of `list` | `list`, `previous`, `next` |
-   | `toggle_setting` | `gui.click` on `layer` | `set_var … toggle`; `if` the variable is `true`, a message; `gui.refresh` | `layer`, `variable` (a declared player boolean), `on_message`, `off_message` |
+   | `toggle_setting` | `gui.click` on `layer` | `set_var … toggle`; `if` the variable is `true`, a message; `view.refresh` | `layer`, `variable` (a declared player boolean), `on_message`, `off_message` |
    | `server_selector` | `gui.click` on `layer` | a message, then `connect` to `server` | `layer`, `server` |
    | `back_button` | `gui.click` on `layer` | `gui.back` | `layer` |
    | `cooldown_gate` (#328) | `on` (default `gui.click`), on `layer` (blank: any) | a `var` condition `variable > now() - seconds` then a message and `stop`; `set_var variable = now()` | `on`, `layer`, `variable` (a declared player number), `seconds` (≥ 1), `message` |

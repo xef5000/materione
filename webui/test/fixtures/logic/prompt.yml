@@ -11,4 +11,4 @@ ask:
             timeout: 30
           else:
             - message: "<red>No search, then."
-        - gui.refresh
+        - view.refresh

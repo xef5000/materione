@@ -357,7 +357,7 @@ public final class DiagnosticCodes {
 
     /**
      * A GUI's {@code refresh:} clock is not a whole number of ticks of at least 1 (logic.md §6.3). The
-     * GUI does not refresh on a clock; {@code gui.refresh} and reloads still update it.
+     * GUI does not refresh on a clock; {@code view.refresh} and reloads still update it.
      */
     public static final DiagnosticCode GUI_REFRESH_INVALID =
             new DiagnosticCode("MTR-0071", Severity.WARN, "GUI refresh clock invalid; the clock is off");

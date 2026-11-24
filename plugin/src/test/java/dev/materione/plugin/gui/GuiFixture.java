@@ -57,6 +57,9 @@ import org.bukkit.plugin.Plugin;
 import org.yaml.snakeyaml.Yaml;
 import dev.materione.plugin.gui.session.GuiViewerState;
 import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ReadsIndex;
+import dev.materione.plugin.view.ViewRefresher;
+import dev.materione.plugin.view.ViewScheduler;
 
 /**
  * The whole GUI runtime without a server: real sessions, opener, lifecycle, router, ticker and rule
@@ -101,6 +104,14 @@ public final class GuiFixture {
     private final AtomicReference<RuntimeGuis> view = new AtomicReference<>(RuntimeGuis.empty());
     public LayerVisibility visibility = LayerVisibility.ALL;
     public final FakeInputs inputPort = new FakeInputs();
+    /** The reads index the refresher selects by variable with; replaced by a test that needs one. */
+    public ReadsIndex reads = ReadsIndex.empty();
+    /** What the stand-in gateway has queued for the player's thread: an immediate wake waits here until {@link #runWakes}. */
+    public final List<Runnable> wakes = new ArrayList<>();
+    /** Whether the calling thread owns the player: true renders an explicit refresh at once, false queues a wake. */
+    public boolean ownerThread = true;
+    public final ViewScheduler scheduler;
+    public final ViewRefresher refresher;
 
     /** The pack a GUI written as YAML belongs to; {@link #PACK} unless the test names another. */
     private final String pack;
@@ -142,8 +153,19 @@ public final class GuiFixture {
         opener = new GuiOpener(guis, sessions, events, windows, ticker, Logger.getAnonymousLogger());
         refresh = new GuiLiveRefresh(plugin(), null, guis, sessions, windows, lifecycle, ticker);
         kinds.register(new GuiViewKind(guis, opener, lifecycle, refresh));
+        scheduler = new ViewScheduler(sessions, kinds, () -> 0L,
+                (id, delay, task, retired) -> wakes.add(task),
+                id -> id.equals(viewer.id()) ? viewer : null, ViewScheduler.RenderCounter.NONE);
+        refresher = new ViewRefresher(sessions, () -> reads, scheduler, id -> ownerThread);
         bridge.bind(new GuiBridge.Services(guis, sessions, kinds, opener, lifecycle, refresh, inputPort,
-                new dev.materione.plugin.gui.list.GuiPages(events, refresh)));
+                new dev.materione.plugin.gui.list.GuiPages(events, refresh), refresher));
+    }
+
+    /** Runs what the stand-in gateway queued for the player's thread, as the next tick would. */
+    public void runWakes() {
+        List<Runnable> due = List.copyOf(wakes);
+        wakes.clear();
+        due.forEach(Runnable::run);
     }
 
     private GuiLookup lookup() {

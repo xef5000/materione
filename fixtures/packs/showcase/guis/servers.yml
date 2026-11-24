@@ -31,7 +31,7 @@ servers:
     - on: gui.tick
       every: 100
       do:
-        - gui.refresh
+        - view.refresh
     - on: gui.click
       layer: lobby
       do:

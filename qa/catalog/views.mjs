@@ -5,6 +5,11 @@
 // announce every open and close on the server console (`say MATERIONE-GUILOGIC-...`, whose open marker prints
 // ${view.id} and ${view.args.*}), which these tests read as markers beside what the client shows.
 //
+// Row V2 (issue 457) adds view.refresh (replacing gui.refresh) and in_view (replacing in_gui): `views.refresh.polled`
+// drives the guilogic:manual window, whose reads no write announces. The runner has one real client, so
+// `views.server-var.live` shows the click-written variable in that client's window; that every other open window of the
+// GUI shows it too is proved with two fake-connection players by PaperViewIT (harness ViewRefreshRunner).
+//
 // Not run when written (needs the probe); the entries are auto assertions blessed on main.
 
 import { test } from './_lib.mjs';
@@ -118,7 +123,7 @@ export default [
 
   test({
     id: 'views.server-var.live-single',
-    title: 'guilogic:live has no refresh clock and no gui.refresh rule: with it open, slot 11 reads "Wave calm"; the console command `materione var set - guilogic:wave storm` changes slot 11 to "Wave storm" with no click and no reopen (the open marker prints once); resetting the variable changes it back',
+    title: 'guilogic:live has no refresh clock and no view.refresh rule: with it open, slot 11 reads "Wave calm"; the console command `materione var set - guilogic:wave storm` changes slot 11 to "Wave storm" with no click and no reopen (the open marker prints once); resetting the variable changes it back',
     covers: [...COVERS, 'fixtures/packs/guilogic/**'],
     dependsOn: ['guilogic.open-and-back'],
     timeoutMs: 180_000,
@@ -150,7 +155,7 @@ export default [
 
   test({
     id: 'views.session-toggle.rerenders-window',
-    title: 'guilogic:live: slot 13 is empty at first; a click on the lever (slot 15) toggles the window\'s own session variable (the toggle marker prints once) and the diamond appears in slot 13 with no gui.refresh in the rule; a second click hides it again',
+    title: 'guilogic:live: slot 13 is empty at first; a click on the lever (slot 15) toggles the window\'s own session variable (the toggle marker prints once) and the diamond appears in slot 13 with no view.refresh in the rule; a second click hides it again',
     covers: [...COVERS, 'fixtures/packs/guilogic/**'],
     dependsOn: ['guilogic.open-and-back'],
     timeoutMs: 180_000,
@@ -212,6 +217,84 @@ export default [
       }
       await ctx.sleep(600);
       ctx.expect((await ctx.rcon('papi parse Probe %materione_view_open%')).trim()).not.toContain('gui:');
+    },
+  }),
+
+  test({
+    id: 'views.server-var.live',
+    title: 'guilogic:live: a click on the surge lever (slot 17) writes the server variable guilogic:wave from a rule, and the emerald in slot 14 and the name in slot 11 ("Wave surge") appear in the window with no view.refresh in the rule; the same click is shown to every other window that has the GUI open, which the harness proves with two players (PaperViewIT) because the runner has one real client',
+    covers: [...COVERS, 'fixtures/packs/guilogic/**', 'harness/src/main/java/dev/materione/harness/ViewRefreshRunner.java'],
+    dependsOn: ['guilogic.open-and-back'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione var set - guilogic:wave calm');
+        await ctx.rcon('materione gui open guilogic:live Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-LIVE-OPEN/);
+        await ctx.sleep(600);
+        ctx.expect(await slotName(ctx, 11)).toBe('Wave calm');
+        ctx.expect(await slotName(ctx, 14)).toBe('empty');
+
+        await click(ctx, 17);
+        let name = await slotName(ctx, 11);
+        for (let attempt = 0; attempt < 20 && name !== 'Wave surge'; attempt++) {
+          await ctx.sleep(150);
+          name = await slotName(ctx, 11);
+        }
+        ctx.expect(name).toBe('Wave surge');
+        ctx.expect(await slotName(ctx, 14)).toBe('Surging');
+        ctx.expect(await containerOpen(ctx)).toBe(true);
+      } finally {
+        await ctx.rcon('materione var set - guilogic:wave calm');
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'views.refresh.polled',
+    title: 'guilogic:manual says rerender: off and shows a diamond in slot 13 while the player has 5 levels (a polled fact no write announces): `xp set Probe 7 levels` leaves slot 13 empty; the refresh-by-variable lever (slot 17) leaves it empty (an off window is not in the reads index); the refresh-this-window lever (slot 15) shows "Experienced"; and after the levels drop to 0, the refresh-the-view lever (slot 16) empties it again',
+    covers: [...COVERS, 'fixtures/packs/guilogic/**'],
+    dependsOn: ['guilogic.open-and-back'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      /** Reads slot 13 until it is `want` or the wait runs out; returns what it last read. */
+      const settled = async (want) => {
+        let name = await slotName(ctx, 13);
+        for (let attempt = 0; attempt < 20 && name !== want; attempt++) {
+          await ctx.sleep(150);
+          name = await slotName(ctx, 13);
+        }
+        return name;
+      };
+      try {
+        await ctx.reset();
+        await ctx.rcon('xp set Probe 0 levels');
+        await ctx.rcon('materione gui open guilogic:manual Probe');
+        await ctx.sleep(800);
+        ctx.expect(await slotName(ctx, 13)).toBe('empty');
+
+        await ctx.rcon('xp set Probe 7 levels');
+        await ctx.sleep(800);
+        ctx.expect(await slotName(ctx, 13)).toBe('empty');
+
+        await click(ctx, 17); // view.refresh: {var: server.guilogic.wave}: nobody reads it with rerender on
+        await ctx.sleep(800);
+        ctx.expect(await slotName(ctx, 13)).toBe('empty');
+
+        await click(ctx, 15); // view.refresh with no selector
+        ctx.expect(await settled('Experienced')).toBe('Experienced');
+
+        await ctx.rcon('xp set Probe 0 levels');
+        await ctx.sleep(800);
+        ctx.expect(await slotName(ctx, 13)).toBe('Experienced');
+        await click(ctx, 16); // view.refresh: {view: guilogic:manual}
+        ctx.expect(await settled('empty')).toBe('empty');
+      } finally {
+        await ctx.rcon('xp set Probe 0 levels');
+        await closeWindow(ctx);
+      }
     },
   }),
 ];

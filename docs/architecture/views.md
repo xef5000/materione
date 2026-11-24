@@ -1,6 +1,6 @@
 # Views over state: many viewers; the GUI, the dialog and the HUD as view kinds (#335) — design
 
-> **Status.** Design, for review on the PR that adds it (`Refs #335`). **Row V0 is built (#455, §16); rows V1 to V6 are not.** The owner decided on 2026-11-19
+> **Status.** Design, for review on the PR that adds it (`Refs #335`). **Rows V0 (#455, §16), V1 (#456, §17) and V2 (#457, §18) are built; rows V3 to V6 are not.** The owner decided on 2026-11-19
 > (dialogs design, PR #451, answer Q7) that this document is written **before** dialogs (#6) and the HUD (#7) are built, so
 > that both are built to it once and not twice. The document is therefore pulled forward from M7; dialogs and the HUD stay M6.
 > The parts that need keyed state (#333 step 2) stay M7 and are marked as such (§6, §13). **The owner answered every question
@@ -734,7 +734,7 @@ Haiku). The milestone column is the owner's answer to Q6.
 |---|---|---|---|---|---|
 | **V0** ([#455](https://github.com/xef5000/materione/issues/455), **built**, §16) | `plugin/view`: the kind SPI (§3.2), `ViewRegistry`, the generic `ViewerRecord` with kind payloads replacing `GuiSession`/`GuiSessions`/`SessionHistory` (§3.8); `view.open`, `view.close`, `view.back` with the per-player view history across kinds, replacing `gui.open`/`gui.close`/`gui.back`; `view.*` as the one view root, replacing `gui.id`/`gui.args`/`gui.page`/`gui.session` (§3.7); `%materione_view_open%`/`_last%`; the view facet in self-descriptions (`gui` declares it); the built-in browser, recipes, showcase, fixtures, QA catalog and SDK goldens updated in the same PR (§7.1) | #6 row G (the `OpenGate` extraction from `GuiOpener`) merged first, or folded into the same PR | M6 | M | Sonnet, high |
 | **V1** ([#456](https://github.com/xef5000/materione/issues/456)) | Read extraction and `ReadsIndex` built at the shadow swap (with visibility/content roles); the `session` store behind the port (declared `scope: session`, typed and defaulted, owner Q9; `MTR-0063` for an undeclared name), removing the `GuiSessionVariables.put` bypass; the observer on `write` and `mutate` for `player`, `server`, `session`; `predicate` candidates; matching (§5.3); `ViewScheduler` (dirty bit, one-shot wakes, `minInterval`); the GUI's partial render on change under `rerender:` (schema field, default `on_change`); shipped fixtures and built-in GUIs that relied on no automatic re-render updated in the same PR; acceptance cases 1 to 3 of §11.1; `MTR-V01`; the §5.7 rows; doctor listing | V0 | M6 | L | Sonnet, high |
-| **V2** ([#457](https://github.com/xef5000/materione/issues/457)) | `view.refresh` (selectors none / `view` / `var`+`holder`), replacing `gui.refresh`; `in_view` replacing `in_gui`; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
+| **V2** ([#457](https://github.com/xef5000/materione/issues/457), **built**, §18) | `view.refresh` (selectors none / `view` / `var`+`holder`), replacing `gui.refresh`; `in_view` replacing `in_gui`; action self-description; `PaperViewIT`; QA `view.server-var.live`, `view.refresh.polled` | V1 | M6 | S | Haiku |
 | #6 row S | `DialogOpener` and the dialog payload as the dialog kind on V0, reached through `view.open`/`view.close`; `rerender:` on dialogs via V1, V2; `MTR-V03` | V0 (V1, V2 for `on_change`) | M6 | (dialogs.md) | (dialogs.md) |
 | #7 row V | `HudViewer` as the HUD kind on V0, V1 | V0, V1 | M6 | (hud.md) | (hud.md) |
 | **V3** | `item` scope matching by subject stack (§5.3) | V1, #333 step 1 (or #304's P-A) | M6.5 | S | Haiku |
@@ -841,7 +841,7 @@ Taken by the owner's principles (allow more, X and Y with a switch, annoyance is
 | V0-4 | **The reference kind `view` names the union of the view kinds.** The editor's reference field offers the resources of every type that declares the facet; the SDK types `view` as the union of `Ref<"gui">`, `Ref<"dialog">` and the rest, and a type that declares the facet gets a sentence in its generated doc comment. | The facet is the only list of kinds (D5). |
 | V0-5 | **The view verbs stay in the `gui` palette category** until a second kind exists. | A new category is a registry entry that recolours the palette and moves goldens for no author benefit. |
 | V0-6 | **`window` and the prompt hold are on the generic record**, not on the GUI payload. | Every opened kind has a screen that a record shows and a prompt can hide (dialogs.md §7.3). |
-| V0-7 | **`in_gui`, `gui.refresh` and the `gui.opening`, `gui.open`, `gui.close`, `gui.page`, `gui.click…` triggers stay.** `in_gui` and `gui.refresh` are row V2; the triggers name GUI events (§3.7), and `gui.page` and `gui.slot_item` are component verbs (§14.2 D-12). | As the design. |
+| V0-7 | **`in_gui`, `gui.refresh` (until row V2, now `in_view` and `view.refresh`, §18) and the `gui.opening`, `gui.open`, `gui.close`, `gui.page`, `gui.click…` triggers stay.** `in_gui` and `gui.refresh` are row V2; the triggers name GUI events (§3.7), and `gui.page` and `gui.slot_item` are component verbs (§14.2 D-12). | As the design. |
 | V0-8 | **The facet's `rerenderDefault` and the `rerender:` field.** `gui` already declares `on_change`, which is the kind's contract, but the behavior (automatic re-render) and the schema field are row V1; until then a GUI re-renders as it did. | Declaring the contract now keeps the self-description from changing again in V1. |
 | V0-9 | **One diagnostic code is allocated: `MTR-0126`** (V0-3). `MTR-0057`, `MTR-0060`, `MTR-0063` and `MTR-0105` keep their meanings; `MTR-V01` to `MTR-V04` belong to later rows. | Codes are API (plugin.md §5). |
 | V0-12 | **The level-3 check reads the step's `kind:`.** A `view.open` that names `kind:` is judged against the views of that kind only: `{view: x, kind: hud}` beside a GUI `x` is `MTR-0126`; `{view: x, kind: gui}` with only a HUD `x` is the unresolved reference (`MTR-0105`, "no pack declares"). A `kind:` that is none of the host's view kinds names no view, so it is `MTR-0105` too (the run-time resolver says "no view kind"). | Static and run-time resolution agree; `MTR-0105` is the existing meaning of "this id names nothing here", so no new code. |
@@ -870,7 +870,7 @@ operation lists of T09, T19 and T23 (`fixtures/golden/codemode/ops/`: `view.clos
 switch), `ViewerOwnerThreadTest` (the ban test), `ViewFacetSelfDescriptionTest`, `OpenGateParityTest`, core
 `ViewReferenceValidationTest` (the `MTR-0126` and `MTR-0105` cases), webui `codemode-generate.spec.ts` (the facet, the union
 reference, a second kind with no generator change) and the Logic tab specs. QA catalog: `views.verbs.open-replace-back-close` and
-`views.placeholders.open-and-last` (`qa/catalog/views.mjs`, not yet run: they need the probe).
+`views.placeholders.open-and-last` (`qa/catalog/views.mjs`; passed on the probe, run `run-2026-11-23T06-54-10`).
 
 ---
 
@@ -962,7 +962,7 @@ budgets `ViewReadsIndexTest` and `ViewFanOutPerfTest` (plugin.md §9). The wake 
 | Part | As built |
 |---|---|
 | **Scheduler** | `plugin.view.ViewScheduler` is the `ViewWake` the write observer calls. `wake(target)` queues one one-shot on the target player's entity scheduler (`executeEntityLater`) at `max(1, lastAutomatic + minInterval - now)` ticks; an idle viewer has no task and there is no loop over viewers. The one-shot (on the owner thread) drops a record that is no longer open or no longer the player's current view of its kind, drops a candidate that is no longer the player's, does nothing when the bit is already clean, clears the bit, and then renders. A kind answers `ViewKind.renderAutomatic` with `RENDERED`, `FROZEN` or `STALE`; `FROZEN` sets the bit again and queues the next tick's wake, so the held-cursor freeze renders the latest state once the cursor clears. `lastAutomatic` (a `volatile long` on `ViewDirty`) is set only by an automatic render that applied. |
-| **Explicit refresh** | `refreshNow(record)` renders at once on the calling thread (the record's owner thread) through `ViewKind.render`, clearing the bit first, so a queued wake finds it clean; `refreshSoon(record)` queues one wake at the next tick that ignores `minInterval`. Neither counts against the interval. `view.refresh` is #457; the shipped `gui.refresh` clears the bit the same way (`GuiLiveRefresh.refresh`). |
+| **Explicit refresh** | `refreshNow(record)` renders at once on the calling thread (the record's owner thread) through `ViewKind.render`, clearing the bit first, so a queued wake finds it clean; `refreshSoon(record)` queues one wake at the next tick that ignores `minInterval`. Neither counts against the interval. `view.refresh` (§18) calls them; the shipped `gui.refresh` cleared the bit the same way (`GuiLiveRefresh.refresh`). |
 | **`rerender:`** | A top-level `rerender: on_change` or `off` of the `gui` type, an enum parameter with default `on_change` (self-described: the registry, the editor snapshot and the SDK carry it). `CompiledGui.rerender` holds it; the pipeline leaves a GUI that says `off` out of the `ReadsIndex` (`GuiReads.of(..., rerenders)`), so no write marks its viewers: the clock, an explicit refresh and a reload still render it. |
 | **GUI render** | `GuiLiveRefresh.automatic` runs the partial pass the clock runs (`WindowHost.advance`: dynamic layers and the dynamic title; `DynamicSlotsPerfTest`'s budget row is unchanged). `WindowHost.advance` now returns false when the window is held still by the cursor rule (the cursor carries an item and the title would change, or a held title is pending): nothing is applied. A definition whose window shape changed is `STALE` for an automatic render; the reload that changed it re-opens or rewrites the window. The wake is a scheduled task, never inline in a click (logic.md §21 decision 8), and `BukkitWindowHost` still defers a render that would meet an in-flight click by a tick. Click targets follow the last rendered frame as before (§4.2 item 6). |
 | **Predicate candidates** | A candidate's wake calls `ViewKind.evaluate(viewer, candidate)`; the default does nothing and a `predicate` kind (the HUD, #7) attaches the definitions that became visible and detaches the ones that stopped. No shipped kind is a predicate kind, so the mechanism is proved with a test kind (§17.11). |
@@ -1005,7 +1005,7 @@ and `views.session-toggle.rerenders-window`.
 |---|---|
 | 1. A player with no visible HUD shows their first one | The mechanism is built and tested with a test predicate kind: write, candidate marked, wake, evaluation, attach. The HUD kind that supplies the real `evaluate` is #7. |
 | 2. Every successful write path notifies the right reader | Done (§17.7); the three paths also render a GUI (`RerenderOnChangeTest`). |
-| 3. A wake updates the right window at the next eligible render | Done for the GUI: the interval, one automatic render per tick, clear-then-read, explicit-versus-queued, the replaced window and the held cursor. `view.refresh` on a stale record failing "no open view" is V2 (#457); the scheduler entry points it will call are built. |
+| 3. A wake updates the right window at the next eligible render | Done for the GUI: the interval, one automatic render per tick, clear-then-read, explicit-versus-queued, the replaced window and the held cursor. `view.refresh` on a stale record failing "no open view" is V2 (§18.5). |
 
 ### 17.12 Review fixes (slice 3)
 
@@ -1014,3 +1014,65 @@ and `views.session-toggle.rerenders-window`.
 | V1-21 | **A list source's reads come from its self-description.** A parameter drawn with the `variable` widget names a variable (reference kind `session`: the key of a session variable of the GUI's pack; otherwise `pack:key`, or a bare name of the GUI's pack) and is a notified read of it; a scalar payload is read under the source's shorthand. `ListSourceDescription.announced` (default false, registry JSON `announced`) says the source reads nothing but those variables; a source that does not say so, or one that is not registered, marks the view polled. The built-ins `variable`, `static`, `pack_items` and `content` announce; `online_players` does not (a join is no write), so a GUI that lists players is polled. | D12 and D5: an addon source gets the same treatment as a built-in, and the `materione:variable` and `materione:content` id comparisons are gone. The declared hook is one boolean on the description, not an id list in the engine. |
 | V1-22 | **A scheduled wake that will not run its render leaves the bit clean.** When the entity scheduler retires the task (the player's thread is gone), when the viewer or the kind is missing as the wake runs, and when the wake itself throws, the record's bit is cleared; it is not rescheduled. A later write marks it again and wakes it again. | A set bit with no wake pending never transitions again, so the viewer would never re-render. The wake is not rescheduled because a retired task has no thread to run on and a missing viewer has nothing to show; the next write is the retry. |
 | V1-23 | **A write the store accepted returns its own result whatever the write observer does.** `ObservedVariableStore` catches a `RuntimeException` from the observer and reports it once through the `java.util.logging` logger; `ViewChanges` does the same for the wake, per target, so the other viewers of the write are still marked. | The write is already stored; an observer is a consumer of it, not part of it. |
+
+---
+
+## 18. As built: row V2 (#457)
+
+Row V2 is built. `view.refresh` replaces `gui.refresh` and `in_view` replaces `in_gui`, with no alias of either; the kind contract
+gains what a dialog kind needs for explicit and automatic renders. This section records what shipped and every decision beyond
+§3 to §9; the design above is unchanged.
+
+### 18.1 What shipped
+
+| Part | As built |
+|---|---|
+| **`view.refresh`** | `plugin.logic.action.view.RefreshViewAction`, threading `ANY`, category `gui`, shorthand `view`. Parameters `view` (a `REFERENCE`, widget `reference`/`view`, so it is the union of the types that declare the view facet in the SDK and a static id no pack declares is `MTR-0105`), `kind`, `var` (the `variable` widget) and `holder`. With no selector it renders the run's own viewer in full; `view:` renders every viewer of the definition; `var:` renders the viewers whose definitions read that declared variable. |
+| **Explicit render path** | `plugin.view.ViewRefresher` selects the viewers and renders each through `ViewScheduler.refreshNow` when the calling thread owns the viewer's player (`Bukkit.isOwnedByCurrentRegion`; always true on Paper's main thread) and through `refreshSoon` otherwise. Both ignore `minInterval`, clear the dirty bit first, and leave a queued wake a no-op (§5.4). `ViewBridge.Services` carries the refresher; `GuiStack` builds it over the live `ReadsIndex`. |
+| **`in_view`** | `plugin.logic.condition.InViewCondition` over the port `plugin.logic.support.OpenViews` (`openViews(Player)`, the player's open viewer records as `ViewRef`s; `ViewRegistry.open(UUID)` backs it). Parameters `view` (a `REFERENCE`, same widget) and `kind`; shorthand `view`; none means any open view. |
+| **Kind SPI** | `ViewKind.RenderOutcome.UNCHANGED`: a kind's automatic render that found nothing new to deliver. The scheduler clears the bit, delivers nothing and does not start the interval. `render` is documented as the explicit path (always delivers); `renderAutomatic` may compare and report `UNCHANGED`. The dialog kind (#6) implements both as §4.3 describes; no shipped kind reports `UNCHANGED`. |
+| **Removed** | `gui.refresh`, `RefreshGuiAction`, `in_gui`, `InGuiCondition`, `OpenGuis`. Every built-in GUI, recipe, fixture pack, harness floor GUI, webui fixture, code-mode corpus program and golden that used them was updated in this branch. |
+| **Fixtures** | `guilogic:manual` (a GUI that says `rerender: off`, with one lever per selector) and, in `guilogic:live`, a lever that writes the server variable from a click. |
+
+### 18.2 Decisions beyond the design
+
+| # | Decision | Why |
+|---|---|---|
+| V2-1 | **`key:` is not a parameter yet; writing it is a load error** ("key: is not available yet; select by view: or var:"). | §3.6 reserves it for row V5. Ignoring an unknown key would let a flow believe it selected something. |
+| V2-2 | **The selector rules are checked at load.** At most one of `view:` and `var:`; `kind:` only with `view:`; `holder:` only with `var:`, and only for a `player` variable (a `server` variable has no holder, a `session` variable is the run's own view's); an `item` variable is not view state; `var:` names a declared player, server or session variable (`MTR-0063` when undeclared, the same code and wording as `set_var`; a run-local name is refused). | A bad selector is `FAILED` in the design; a bad selector the compiler can see is better reported once, at load, than on every run. The step is skipped with the diagnostic, as every refused step is. |
+| V2-3 | **In `in_view`, a bare `view:` name is that name in the pack of the resource that wrote the condition** (`materione` when the condition has no pack). `in_gui`'s bare id meant `materione:`. | It is what `view:` means everywhere else (§3.6) and what the static check resolves (`MTR-0105`); a condition has no "view beside it" to resolve against, so the resource's pack is the only context it has. |
+| V2-4 | **`var:` selects through the live `ReadsIndex`, so it honours `rerender`.** A definition that says `rerender: off` (and, for the dialog kind, the default `off`) is not in the index and is not selected by `var:`; `view:` and no selector render it whatever the index says. A `predicate` kind's viewers here are its attached records; re-evaluating its candidates is the kind's own. | One matching code for the write observer and the explicit selector (not duplicated); §4.3 says a `var:`-selected refresh does not re-send a dialog unless the document says `rerender: on_change`. |
+| V2-5 | **`holder:` is a player name (case-insensitive) or a UUID; omitted, it is the run's own player. A name no open view belongs to selects nobody and is `OK`.** A `player` variable with no `holder:` in a run with no player is `FAILED` ("event has no player; name one with holder:"). A `session` variable selects the run's own view; a run in no view is `FAILED` ("no open view holds this session variable", as `set_var` says). | "Zero viewers is `OK`": a player with no window has no viewer, and the registry's records are all a by-name selection can reach (`ViewRegistry.playerNamed`). The two `FAILED` cases are selectors that cannot be resolved at all. |
+| V2-6 | **With no selector, a render that does not apply (the window is not showing this view) is `FAILED` "the window is not showing this view"; a stale or closed record is `FAILED` "no open view".** Called from another thread the refresh is an immediate wake and reports `OK`; the wake drops a record that has gone stale. | The old `gui.refresh` had both failures, with other words. The first needs the render to run, which another thread cannot do inline. |
+| V2-7 | **The action is `ANY`, and the ownership test is the one place that decides now versus soon.** | §5.6: each viewer renders on its own owner thread; a flow running on that thread (a GUI click) renders inline, which is what `gui.refresh` did. |
+| V2-8 | **The QA ids are `views.server-var.live` and `views.refresh.polled`** (the issue spells them `view.…`): the catalog's suite is `views` and V1's entries are `views.…`. | The runner requires the id to match the suite. |
+| V2-9 | **The runner has one real client, so `views.server-var.live` shows the click-written variable in that client's window; the two-window half is `PaperViewIT`,** with two fake-connection players (`ViewRefreshRunner`). | A second real client is not something the probe agent can launch. The harness proves what the observer and scheduler do for two viewers on a real Paper server; the QA entry proves what a client shows. |
+| V2-10 | **`holder:` is declared `acceptingExpression()`; `refreshSoon` clears the dirty bit when it queues.** | `parse` binds `holder` as a template, which the flow compiler requires the description to declare; a cross-thread refresh must absorb a wake queued earlier, as §5.4 says, so a dialog's token is sent once (a write after the call marks the bit again and wakes again). |
+
+### 18.3 Breaking changes made, by §7.1 row
+
+| §7.1 row | Changed here |
+|---|---|
+| `gui.refresh` to `view.refresh` (V2) | the built-in browser (`materione:browser`), the `pay_to_receive` and `toggle_setting` recipes, the `guilogic`, `overlay` and `showcase` fixture packs, the harness floor GUI, the webui fixtures and browser specs, the code-mode corpus programs (`m.actions.viewRefresh()`) and the chat script |
+| `in_gui` to `in_view` (V2) | the registry self-description, the SDK, and `logic.md` §22 |
+
+Goldens changed: `fixtures/codemode/registry/*.json`, `fixtures/golden/editor-demo-snapshot.json`, `fixtures/golden/recipes/*.json`,
+`fixtures/golden/codemode/*.d.ts` and `fixtures/golden/codemode/ops/*.json`, regenerated with the repo's tasks (fixtures/README.md).
+
+### 18.4 Tests
+
+`RefreshViewActionTest` (the three selectors against the real GUI runtime, the stale record failing "no open view", bad selectors
+at load, the thread rule), `GuiActionsTest` (the former `gui.refresh` tests, ported), `ViewRefresherTest` (selection by definition
+and by player, server and session variable; `var:` honouring `rerender`; an explicit selection re-sending a test dialog kind that
+compares what it would send; an unchanged automatic wake keeping the token and sending nothing without starting the interval; an
+explicit refresh while a wake is queued rendering once), `PlaceAndGuiConditionsTest` (`in_view`), `ViewReferenceValidationTest`
+(`MTR-0105` and the kind narrowing for `view.refresh` and `in_view`), and `PaperViewIT` on the 1.21.4 harness (a window that says
+`rerender: off` against all three selectors, driven by real container clicks; then two players with `guilogic:live` open, one
+clicks the lever that writes the server variable, and both windows show it). QA catalog (`qa/catalog/views.mjs`; passed on the probe,
+run `run-2026-11-23T06-54-10`): `views.server-var.live` and `views.refresh.polled`.
+
+### 18.5 Acceptance status
+
+| Acceptance case | Status after V2 |
+|---|---|
+| 3. A wake updates the right window at the next eligible render | Done, explicit half included: an explicit refresh while a wake is queued renders once and the wake is a no-op (`ViewSchedulerTest`, `RefreshViewActionTest`); `view.refresh` on a stale record fails "no open view"; the former `gui.refresh` tests run against `view.refresh`. |
