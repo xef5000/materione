@@ -3,14 +3,14 @@ const p = m.pack("bench");
 p.guis.create("vault", {
   container: "chest_6",
   title: "Vault",
-  open: { commands: ["pv"], args: { n: { type: "integer", min: 1, max: 3 } }, permission: "vaults.use" },
+  open: { commands: ["pv"], args: [{ name: "n", type: "int", min: 1, max: 3 }], permission: "vaults.use" },
   layers: [
     m.guiComponents.slots({
       id: "vault_slots",
       region: "container",
       input: true,
       durable: "required",
-      keep: { holder: "vault:${player.uuid}:${view.args.n}" },
+      holder: { kind: "keyed", key: "vault:${player.uuid}:${view.args.n}" },
     }),
   ],
 });

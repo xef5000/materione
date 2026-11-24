@@ -102,7 +102,7 @@ shipped:
 | 2 | State shared by two players (both offers, both confirm flags, the expiry) | **Keyed state with a TTL**: variables scoped by an arbitrary key | The scopes are the four reserved words `local`, `session`, `player`, `server` (logic.md §3.1, §20 decision 3). `session` is `GuiSession.vars`, a map owned by one player's window. There is no key scope, no TTL and no expiry hook. | G |
 | 3 | A window both players see, that updates when either changes something | **A view over state**, rendered for any number of viewers | One `GuiSession` per (player, GUI) (`plugin/gui/session/GuiSession`); `refresh:` and `gui.refresh` re-render that viewer's own window. Nothing renders "every viewer of key K". | P+ |
 | 4 | Items each player offers, held safely | **Item custody** | The escrow of #247: an account inside the player's own data and `storage/escrow/<uuid>.ledger` (gui-input-durability.md §5). It is reachable only through a `slots` layer with `input: true` and `durable: required`, plus the GUI's close and death paths. | P+ |
-| 5 | The swap is atomic and crash-safe | **Atomic transfer between holders** | The ledger's record kinds are `CONSUME = 1` and `HAND_OFF = 2` (`HAND_OFF` reserved; gui-input-durability.md §5.1 *Exit*, §12 ambiguity 1). Recovery is per player. | G |
+| 5 | The swap is atomic and crash-safe | **Atomic transfer between holders** | Built by #334: one shared `TransferIntent` after both player-PDC reservations are checkpointed; idempotent owner commits and recovery finish either side. Stack hand-off is refused. | P |
 | 6 | An unanswered request expires; a disconnect cancels | State TTL, `gui.close` with `reason: quit`, and a trigger on expiry | Close reasons exist (logic.md §6.2). There is no expiry trigger; `wait` parks a run per player (budget 64, logic.md §5.3). | G |
 | 7 | "Tell the other player", "give to the other player" | **Target addressing** in actions: act on another player or holder by reference | `message` took `target: player\|actionbar\|broadcast` only (`MessageAction`); `give_item`, `teleport` and the rest acted on the run's own player. **Built by #331** (§5.6, logic.md §39). | G |
 | 8 | A request and accept handshake | A second command with a `player` argument, plus 2 and 6 | Follows from 1, 2 and 6. | Composition |
@@ -272,7 +272,7 @@ player's PDC), the ledger (`storage/escrow/<uuid>.ledger`, `INTENT`/`DONE`), rec
 |---|---|---|
 | The mechanism: items held on someone's behalf, in the holder's own snapshot, with a durable decision log and recovery | **P** | General by construction; nothing in the protocol needs a window. |
 | The surface: the account key is `gui_escrow`, the entries carry a GUI origin, the only way in is a strict `slots` layer, and `claim` is a hard-coded subcommand | **P+** | GUI-shaped naming and entry points over a general mechanism. |
-| `HAND_OFF` (reserved) | **G** | The atomic transfer of §3 need 5. |
+| `custody.transfer` (`HAND_OFF`) | **P** | The one-joint-record atomic transfer of §3 need 5; stack holders are an explicit unsupported combination. |
 | `custody.consume` (#248) | P | The exit verb, built: the tier-2 exit as an action, with `await: saved` for an effect behind the barrier. The trash slot is the recipe `trash_slot` over it (#222), with no engine code of its own. `gui.slot_item clear` and `set_amount 0` on a required layer are the same consume without a wait. |
 | `/materione claim` | **F** | A hard-coded command (`MaterioneCommand`) for what a content command could do over a `claim` verb (§5.4). |
 
@@ -338,6 +338,14 @@ an item stack (the backpack's store), a keyed state (a trade offer), later a blo
 migration, in the persisted key (`gui_escrow`) only after (1); (4) make input slots *one place* custody can sit, not the thing the
 mechanism is named after; (5) a `claim` verb reachable from content. The atomic **transfer between holders** (`HAND_OFF`, §3 #5)
 is the part with an open design problem (the joint decision across two snapshots). Re-scopes #247, #248, #304.
+
+**Built by #334.** A strict `slots` layer resolves a player (the omission-compatible
+account), a canonical keyed PDC account, or the opening view's stable stack PDC. Keyed
+accounts outlive the window; stack accounts follow the item and reject a stale handle.
+`custody.transfer` is one shared, CRC-protected joint INTENT after both reservations are
+checkpointed, with idempotent commits and recovery. Stack PDC intentionally refuses
+consume and HAND_OFF because it has no acknowledged surrounding snapshot. The full
+protocol and the alternatives table are in `gui-input-durability.md` §15.
 
 ### 5.2 Keyed state with a TTL
 
@@ -435,7 +443,7 @@ a re-title if the owner agrees.
 | Issue | Today | Proposed re-scope |
 |---|---|---|
 | #247, #311, #312, #313, #314 | Input slots: crash-safe ownership | The custody primitive's proof (§5.1). Work and rows proceed unchanged; the vocabulary generalizes after row H. |
-| #248 | Custody exit primitive | **Built as `custody.consume`** (logic.md §36): the exit verb of custody; with `HAND_OFF`, the `transfer` verb is still to come (§5.1). The trash slot is the recipe `trash_slot` over it. |
+| #248 | Custody exit primitive | **Built as `custody.consume`** (logic.md §36): the exit verb of custody. `custody.transfer` shipped by #334; the trash slot remains a recipe. |
 | #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). Design: [`backpack-preset.md`](backpack-preset.md). |
 | #162 | Item modules: parameter-level modules | The editor surface presets plug into: a preset parameter is a module; derivation stays registry-driven. |
 | #6 | Server-side dialogs | A **view kind** over state with `dialog.submit` as a trigger (§5.3), not a separate dialog system. |

@@ -376,6 +376,10 @@ Exposes live, shadow-swapped content definitions and world interactions (current
     the arguments. Every open, with or without arguments, goes through the GUI runtime's one open path
     (logic.md §21), which also creates the player's session
   - `onlineName(UUID)` — the player's name when online, empty otherwise (the editor's preview state)
+  - strict input ownership is reached through the same GUI runtime: `CustodyHolder`
+    (`dev.materione.api.custody`) is the resolved player/keyed/stack address. The
+    self-described `custody.consume` and `custody.transfer` actions are the only
+    content-callable exits; no command or editor bypass applies PDC/account changes.
 
 ### 3.8 `AdminApi` (`dev.materione.api.admin`)
 

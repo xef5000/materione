@@ -57,4 +57,50 @@ public sealed interface LedgerRecord {
             }
         }
     }
+
+    /**
+     * One joint transfer decision. It is the only ownership decision between {@code source} and
+     * {@code destination}; no consume records are created for either side.
+     */
+    record TransferIntent(
+            Id128 txn,
+            TransferHolder source,
+            Id128 sourceEntry,
+            long sourceGen,
+            TransferHolder destination,
+            Id128 destinationReservation,
+            long destinationGen,
+            Id128 stackHash,
+            long amount,
+            long atMillis)
+            implements LedgerRecord {
+
+        public TransferIntent {
+            Objects.requireNonNull(txn, "txn");
+            Objects.requireNonNull(source, "source");
+            Objects.requireNonNull(sourceEntry, "sourceEntry");
+            Objects.requireNonNull(destination, "destination");
+            Objects.requireNonNull(destinationReservation, "destinationReservation");
+            Objects.requireNonNull(stackHash, "stackHash");
+            if (txn.isZero() || sourceEntry.isZero() || destinationReservation.isZero()) {
+                throw new IllegalArgumentException("a transfer intent needs a transaction and non-zero entry ids");
+            }
+            if (amount < 0 || amount > U32_MAX) {
+                throw new IllegalArgumentException("amount out of range: " + amount);
+            }
+            if (source.equals(destination) && sourceEntry.equals(destinationReservation)) {
+                throw new IllegalArgumentException("a transfer needs two distinct sides");
+            }
+        }
+    }
+
+    /** Both committed snapshots were read back; the transfer pair may enter normal compaction retention. */
+    record TransferDone(Id128 txn) implements LedgerRecord {
+        public TransferDone {
+            Objects.requireNonNull(txn, "txn");
+            if (txn.isZero()) {
+                throw new IllegalArgumentException("a transfer DONE needs a transaction");
+            }
+        }
+    }
 }

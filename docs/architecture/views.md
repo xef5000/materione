@@ -504,7 +504,7 @@ gives two viewers whose renders read the same keyed values. The owner confirmed 
 
 ### 6.3 Walk-through: T02's shared window
 
-agent-benchmark.md T02, with #330 (commands), #331 (target), #333 step 2 (keyed state) and #334 (custody) assumed. Shape, not
+agent-benchmark.md T02, with #330 (commands), #331 (target), #333 step 2 (keyed state) and shipped #334 (custody) assumed. Shape, not
 syntax (primitives.md §3's table, made concrete):
 
 ```yaml
@@ -546,9 +546,10 @@ Three rules make the composition correct, and none is trade-specific:
    handled on two regions can both read both flags as true. Exactly-once belongs to the atomic transfer between holders, its
    joint decision record and its recovery (#334, primitives.md §3 the honest unknown), not to views.
 
-**What #335 does not supply.** Moving items in the *other* player's offer region, the atomic swap and its recovery are #334's
-(primitives.md §3 needs 4 and 5). Until #334, each player edits only their own custody, and the other's offer is shown
-read-only from state. The exit criterion of #335 says exactly this much: "T02's shared window renders for both players".
+**What #335 does not supply.** Moving items in the *other* player's offer region is a
+view/content concern; the atomic swap and its recovery shipped in #334. Views still owns
+the two viewers and shared state, which is why T02 remains failing until V5 even though
+the custody step and recovery already pass.
 
 ### 6.4 Across servers
 

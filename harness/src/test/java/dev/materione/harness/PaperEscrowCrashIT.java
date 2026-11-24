@@ -77,4 +77,18 @@ class PaperEscrowCrashIT {
         HarnessResult result = new EscrowCrashRunner().barrier(HarnessOptions.fromProperties());
         assertThat(result.ok()).as(result.summary()).isTrue();
     }
+
+    @Test
+    @EnabledIfSystemProperty(named = "harness.inputDurability", matches = "true")
+    void jointTransferBeforeAndAfterItsOnlyDecision() {
+        HarnessResult result = new EscrowCrashRunner().transfers(HarnessOptions.fromProperties());
+        assertThat(result.ok()).as(result.summary()).isTrue();
+    }
+
+    @Test
+    @EnabledIfSystemProperty(named = "harness.inputDurability", matches = "true")
+    void keyedAndStackHolderPersistence() {
+        HarnessResult result = new EscrowCrashRunner().holders(HarnessOptions.fromProperties());
+        assertThat(result.ok()).as(result.summary()).isTrue();
+    }
 }

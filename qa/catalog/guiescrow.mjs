@@ -22,7 +22,10 @@ const COVERS = [
   'fixtures/packs/guilogic/guis/escrow.yml',
   'fixtures/packs/guilogic/guis/trash.yml',
   'fixtures/packs/guilogic/guis/consume.yml',
+  'fixtures/packs/guilogic/guis/vault.yml',
+  'fixtures/packs/guilogic/guis/transfer.yml',
   'plugin/src/main/java/dev/materione/plugin/logic/action/ConsumeCustodyAction.java',
+  'plugin/src/main/java/dev/materione/plugin/logic/action/CustodyTransferAction.java',
   'plugin/src/main/resources/recipes/trash_slot.yml',
   'qa/catalog/guiescrow.mjs',
   'scripts/probe/probe.mjs',
@@ -349,6 +352,69 @@ export default [
       await ctx.rejoin();
       await ctx.sleep(1500);
       ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+    },
+  }),
+
+  test({
+    id: 'guiescrow.keyed-holder-persists',
+    title: 'a durable keyed holder keeps its items on close/reopen and after a server restart; no items return to the player account',
+    covers: COVERS,
+    timeoutMs: 600_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give corpus:gem_red Probe 3');
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      await click(ctx, 36);
+      await click(ctx, 0);
+      await ctx.sleep(400);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      await closeWindow(ctx);
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      await closeWindow(ctx);
+      await ctx.rcon('save-all flush');
+      await ctx.crashRestart();
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      await closeWindow(ctx);
+    },
+  }),
+
+  test({
+    id: 'guiescrow.atomic-transfer',
+    title: 'custody.transfer moves a held stack from the player account to a keyed holder with one joint decision; crash replay neither duplicates nor loses it',
+    covers: COVERS,
+    timeoutMs: 600_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give corpus:gem_red Probe 3');
+      await openGui(ctx, 'guilogic:transfer', /MATERIONE-GUI-OPENED id=guilogic:transfer/);
+      await click(ctx, 36);
+      await click(ctx, 0);
+      await ctx.sleep(400);
+      await click(ctx, 8);
+      await ctx.waitForServerLog(/MATERIONE-GUITRANSFER-START/, { timeoutMs: 10_000 });
+      // Paper 26.1's player.saveData() seam does not create a file in this local offline probe, but save-all is the
+      // real server snapshot. It lands after both reservations, and once more after the two owner commits.
+      await ctx.sleep(1_500);
+      await ctx.rcon('save-all flush');
+      await ctx.sleep(6_500);
+      await ctx.rcon('save-all flush');
+      await ctx.waitForServerLog(/MATERIONE-GUITRANSFER-DONE/, { timeoutMs: 45_000 });
+      ctx.expect(await slotStack(ctx, 0)).toBe('empty');
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      await closeWindow(ctx);
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      await closeWindow(ctx);
+      await ctx.rcon('save-all flush');
+      await ctx.crashRestart();
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      await closeWindow(ctx);
     },
   }),
 ];

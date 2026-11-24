@@ -615,8 +615,13 @@ The decisions taken in #217 are recorded in §27.
   place, pickup, swap, number key, offhand swap, shift, drag, double-click collect; a pickup lifts the stack to the cursor
   as in vanilla and the account loses it in the same step), and nothing is ever dropped in the world for it (what does not
   fit is *owed*, `/materione claim`). On a server that cannot support it (player-data saving off, `storage/escrow/` not
-  writable, no ledger) the layer renders and its slots accept nothing (`MTR-0100`). It is **not yet verified by the
-  kill-boundary tests** (row H; the tier-3 barrier, row B, is built), so nothing calls it crash-safe. `best_effort` is the journal of §25.12, unchanged.
+  writable, no ledger) the layer renders and its slots accept nothing (`MTR-0100`). The
+  player path is verified by K1–K23, and keyed/stack persistence plus joint transfer have
+  their own holder gates; `best_effort` remains the §25.12 journal, unchanged.
+  A strict layer can also name `holder:`. Omitted/`player` is exactly the account above;
+  `keyed` parks entries in a canonical player-PDC account that outlives the window; and
+  `stack` parks them in the opening view's stable stack PDC while the `StackRef` is live.
+  Stack consume/HAND_OFF is refused: stack PDC has no acknowledged surrounding save.
 - **Returning items.** On close, items left in input slots go back to the player; for a `best_effort` layer what does not
   fit drops at the player's feet, for a `durable: required` layer it stays owed in the player's account and is claimed with
   `/materione claim` (on join and on the next close too). Nothing is ever deleted unless a flow says so
@@ -3739,7 +3744,7 @@ Each decision is reversible by the owner. The durability side (what runs, the ki
    | Test | How it passes |
    |---|---|
    | U1 name | `custody.consume` names a capability (consume) of a holder (custody), not a use case: the same step trashes, redeems a voucher, spends a ticket, pays out a crafted item |
-   | U2 generality | any slot of any GUI that has a `durable: required` layer, any flow (a click, a close, a command-opened GUI); the slot is a template. The one honest limit: custody has one holder today, the player's account, addressed by window slot (primitives.md §5.1); other holders (a stack, a keyed state) will address the same verb through an additive key, so the verb does not change |
+   | U2 generality | any slot of any GUI held by the player or a keyed PDC holder; the slot is a template. A stack holder is the explicit limit: its PDC has no acknowledged save, so consume/HAND_OFF refuses |
    | U3 composition | proved by `trash_slot`, which is YAML only; a voucher or ticket is `custody.consume` then `give_item` or `run_command`, in a flow, with no Java |
    | U4 self-description | an `ActionType` in the actions registry with a typed schema (`slot`, `await` with its allowed values) and `takesElse` in the vocabulary, so the editor draws the `else` branch and an agent sees it |
    | U5 safety | fails soft with a reason and a visible refusal; offline: `parse` rejects a bad slot or `await` at load; it never runs outside a flow; its crash semantics are tier 2 and the barrier, proved by K10 to K14, K17 and K23 against a real kill |
@@ -3798,8 +3803,8 @@ Each decision is reversible by the owner. The durability side (what runs, the ki
 10. **The recipe is listed in the Recipes panel** (§7.5, §33 decision 19 no longer excludes it) and ships a golden expansion
     (`fixtures/golden/recipes/trash_slot.json`).
 
-**Not built, on purpose.** A partial consume (`amount:`), consuming every slot of a layer (`layer:`), a `holder:` key and the atomic transfer
-(`HAND_OFF`, primitives.md §5.1): each is additive and none has a caller. A `Tier1.beginExit` caller (an incoming stack straight from the
+**Not built, on purpose.** A partial consume (`amount:`), consuming every slot of a layer (`layer:`) and a
+`Tier1.beginExit` caller (an incoming stack straight from the
 cursor): the trash is placed first, then consumed.
 
 **Verification.** `CustodyConsumeTest`, `ConsumeCustodyActionTest`, `BuiltinRecipesTest`, `VocabularySourcesTest` (the `takesElse` list), the
@@ -5386,3 +5391,28 @@ to pass; T20 keeps only VIEW, while F5 keeps its item-held context gap.
 **Not built, on purpose.** Item or while-held timers; they need keyed state and an item subject from another rule host, so
 `equip` and #333 remain their home. A `tick` trigger, per-player wall schedules, cross-time-zone schedules and timer persistence
 across restart/reload are not part of this primitive. Rebuilding from the live clock is intentional.
+
+---
+
+## 45. Decisions taken in #334 (custody holders and atomic transfer)
+
+`holder:` is an input-layer parameter, not a view or feature. Omitting it compiles to the
+player holder and preserves existing bytes and runtime behavior. Keyed holders use the
+rendered canonical key in the player's own PDC; stack holders use the #333 `StackRef`'s
+stable id and account bytes, reject stale replacements, and restore only while the handle
+is live. `best_effort` does not admit a holder: that request is skipped at load so a
+crash-safe setting cannot silently become the journal.
+
+`custody.transfer` is registered as a guarding action with either an exact
+`source: {holder, entry}` or `source: {slot}`, plus `destination: {holder, slot}`. It
+prepares `TRANSFERRING` + `RESERVED`, checkpoints each owner's compound, appends one
+`TransferIntent`, commits both owners on their threads, checkpoints both commits and
+appends `TransferDone`. `await: decided|saved` gates the following effect at the same
+boundary as `custody.consume`. Reusing an id is idempotent. It never implements transfer
+as two consumes. Stack sources/destinations are refused explicitly; stack PDC has no
+acknowledged save.
+
+The primitive passes U1–U5: names capability, works for player/keyed addresses, composes
+in ordinary flow content, is generated into the editor/SDK by self-description, and has
+model, codec, property, Paper kill-gate and QA coverage. The complete safety fact,
+state table and alternatives are `gui-input-durability.md` §15.

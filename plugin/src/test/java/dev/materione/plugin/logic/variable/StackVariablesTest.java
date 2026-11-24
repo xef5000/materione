@@ -30,6 +30,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import dev.materione.plugin.escrow.model.Account;
+import dev.materione.plugin.escrow.model.AccountCodec;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -147,6 +149,28 @@ class StackVariablesTest {
 
             assertThat(store.read(LEVEL_DECL, first.ref(STEVE))).contains(5.0);
             assertThat(store.read(LEVEL_DECL, second.ref(STEVE))).contains(2.0);
+        }
+
+        @Test
+        void custodyIdentityAndAccountLiveOnlyInTheStableStackPdc() {
+            FakeStack original = new FakeStack("corpus:sword");
+            AtomicReference<StackPdc> slot = new AtomicReference<>(original);
+            BukkitStackRef ref = new BukkitStackRef(STEVE,
+                    () -> slot.get(), original.identity);
+            UUID custody = UUID.fromString("00000000-0000-0000-0000-000000003334");
+
+            assertThat(ref.custodyId()).isEmpty();
+            assertThat(ref.assignCustodyId(custody)).isTrue();
+            assertThat(ref.custodyId()).contains(custody);
+            byte[] account = AccountCodec.encode(new Account(7, List.of()));
+            assertThat(ref.writeCustodyAccount(account)).isTrue();
+            assertThat(ref.custodyAccount()).isEqualTo(account);
+
+            FakeStack replacement = new FakeStack("corpus:sword", new Object());
+            slot.set(replacement);
+            assertThat(ref.isLive()).isFalse();
+            assertThat(ref.writeCustodyAccount(new byte[] {1})).isFalse();
+            assertThat(new BukkitStackRef(STEVE, replacement).custodyId()).isEmpty();
         }
 
         @Test

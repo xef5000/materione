@@ -355,6 +355,71 @@
           "available": true,
           "category": "player",
           "deferred": false,
+          "description": "Atomically moves one held custody entry from source to destination with one joint durable decision. Source is {holder, entry} or a GUI {slot}; destination is {holder, slot}. Stack holders are refused because stack PDC has no acknowledged save barrier",
+          "displayName": "Transfer held items",
+          "id": "custody.transfer",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "A {holder, entry} exact address, or {slot} of the run's open GUI",
+              "id": "source",
+              "label": "Source",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": true,
+              "description": "A {holder, slot}; holder is player or {kind: keyed, key, player?}",
+              "id": "destination",
+              "label": "Destination",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "description": "Optional stable 32-digit transaction id; reuse observes the idempotent result",
+              "expression": true,
+              "id": "id",
+              "label": "Id",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "decided",
+                "saved"
+              ],
+              "default": "decided",
+              "description": "decided after both owner commits, saved after both committed snapshots are acknowledged",
+              "id": "await",
+              "label": "Await",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "source",
+          "sinceVersion": "1.0.0",
+          "takesElse": true,
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
           "description": "Hurts the player, or another entity given as a target; attributed to the run's player when there is one",
           "displayName": "Damage",
           "id": "damage",
@@ -10959,6 +11024,17 @@
             "uiHint": "advanced"
           },
           {
+            "advanced": true,
+            "description": "Input slots only: custody holder. Omit or use player for the existing player account; stack uses the opening view's live StackRef; {kind: keyed, key: <template>} uses a canonical keyed account in the player's durable snapshot",
+            "id": "holder",
+            "label": "Holder",
+            "order": 36,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
+          },
+          {
             "advanced": false,
             "allowedValues": [
               "best_effort",
@@ -10976,7 +11052,7 @@
                 "value": "best_effort"
               },
               {
-                "description": "Items in these slots are tracked in the player's saved data in the same step as every click and are never dropped in the world; what does not fit is owed (/materione claim). The slots accept nothing on a server that cannot support it. Not yet verified by the crash tests.",
+                "description": "Items in these slots are tracked in the player's saved data in the same step as every click and are never dropped in the world; what does not fit is owed (/materione claim). The slots accept nothing on a server that cannot support it. Holder persistence and transfer limits are in the custody design.",
                 "label": "Required",
                 "value": "required"
               }
@@ -10989,7 +11065,7 @@
           }
         ],
         "registeredBy": "materione",
-        "sinceVersion": "1.3.0",
+        "sinceVersion": "1.4.0",
         "target": "raster"
       },
       {

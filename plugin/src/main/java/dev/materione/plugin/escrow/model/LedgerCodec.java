@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.CRC32;
+import java.nio.charset.StandardCharsets;
 
 /**
  * The ledger's wire format, v1 (gui-input-durability.md §5.3), big-endian:
@@ -34,7 +35,7 @@ public final class LedgerCodec {
     public static final byte[] MAGIC = {'M', 'T', 'R', 'L'};
 
     /** The version this code writes. */
-    public static final int VERSION = 1;
+    public static final int VERSION = 2;
 
     /** The oldest version this code reads. */
     public static final int MIN_READABLE_VERSION = 1;
@@ -42,11 +43,13 @@ public final class LedgerCodec {
     /** Header length: magic and version. */
     public static final int HEADER_LENGTH = 6;
 
-    /** Largest record body (type + payload) a reader accepts; the largest real one is 62 bytes. */
-    public static final int MAX_BODY = 256;
+    /** Largest record body (type + payload) a reader accepts. */
+    public static final int MAX_BODY = 1024;
 
     static final int TYPE_INTENT = 1;
     static final int TYPE_DONE = 2;
+    static final int TYPE_TRANSFER_INTENT = 3;
+    static final int TYPE_TRANSFER_DONE = 4;
 
     private static final int RECORD_HEAD = 8;
     private static final int INTENT_PAYLOAD = 16 + 16 + 1 + 16 + 4 + 8;
@@ -56,7 +59,13 @@ public final class LedgerCodec {
 
     /** The six header bytes of a new file. */
     public static byte[] header() {
-        return ByteBuffer.allocate(HEADER_LENGTH).put(MAGIC).putShort((short) VERSION).array();
+        return header(1);
+    }
+
+    /** Header chosen from the first record type; the consume-only v1 stream remains byte-identical. */
+    public static byte[] headerFor(LedgerRecord record) {
+        return record instanceof LedgerRecord.TransferIntent || record instanceof LedgerRecord.TransferDone
+                ? header(VERSION) : header();
     }
 
     /** The bytes one append writes. */
@@ -73,6 +82,30 @@ public final class LedgerCodec {
             }
             case LedgerRecord.Done done -> {
                 ByteBuffer b = ByteBuffer.allocate(1 + DONE_PAYLOAD).put((byte) TYPE_DONE);
+                done.txn().write(b);
+                yield b;
+            }
+            case LedgerRecord.TransferIntent intent -> {
+                byte[] sourceKey = intent.source().keyBytes();
+                byte[] destinationKey = intent.destination().keyBytes();
+                int size = 1 + 16
+                        + holderBytes(sourceKey.length) + 16 + 8
+                        + holderBytes(destinationKey.length) + 16 + 8
+                        + 16 + 4 + 8;
+                ByteBuffer b = ByteBuffer.allocate(size).put((byte) TYPE_TRANSFER_INTENT);
+                intent.txn().write(b);
+                writeHolder(b, intent.source(), sourceKey);
+                intent.sourceEntry().write(b);
+                b.putLong(intent.sourceGen());
+                writeHolder(b, intent.destination(), destinationKey);
+                intent.destinationReservation().write(b);
+                b.putLong(intent.destinationGen());
+                intent.stackHash().write(b);
+                b.putInt((int) intent.amount()).putLong(intent.atMillis());
+                yield b;
+            }
+            case LedgerRecord.TransferDone done -> {
+                ByteBuffer b = ByteBuffer.allocate(1 + DONE_PAYLOAD).put((byte) TYPE_TRANSFER_DONE);
                 done.txn().write(b);
                 yield b;
             }
@@ -96,7 +129,10 @@ public final class LedgerCodec {
             parts.add(part);
             size += part.length;
         }
-        ByteBuffer out = ByteBuffer.allocate(size).put(header());
+        int version = ledger.records().stream().anyMatch(record ->
+                record instanceof LedgerRecord.TransferIntent || record instanceof LedgerRecord.TransferDone)
+                ? VERSION : 1;
+        ByteBuffer out = ByteBuffer.allocate(size).put(header(version));
         parts.forEach(out::put);
         return out.array();
     }
@@ -155,7 +191,7 @@ public final class LedgerCodec {
                 }
                 return new LedgerRead.Corrupt(pos, "record checksum");
             }
-            LedgerRecord record = parse(file, bodyStart, (int) length);
+            LedgerRecord record = parse(file, bodyStart, (int) length, version);
             if (record == null) {
                 return new LedgerRead.Corrupt(pos, "malformed record");
             }
@@ -179,7 +215,7 @@ public final class LedgerCodec {
     }
 
     /** One record from a body whose CRC held; {@code null} when its type, size or content is not v1's. */
-    private static LedgerRecord parse(byte[] file, int start, int length) {
+    private static LedgerRecord parse(byte[] file, int start, int length, int version) {
         ByteBuffer body = ByteBuffer.wrap(file, start, length);
         try {
             int type = body.get() & 0xFF;
@@ -195,9 +231,55 @@ public final class LedgerCodec {
             if (type == TYPE_DONE && length == 1 + DONE_PAYLOAD) {
                 return new LedgerRecord.Done(Id128.read(body));
             }
+            if (version >= 2 && type == TYPE_TRANSFER_INTENT) {
+                Id128 txn = Id128.read(body);
+                TransferHolder source = readHolder(body);
+                Id128 sourceEntry = Id128.read(body);
+                long sourceGen = body.getLong();
+                TransferHolder destination = readHolder(body);
+                Id128 destinationReservation = Id128.read(body);
+                long destinationGen = body.getLong();
+                Id128 hash = Id128.read(body);
+                long amount = body.getInt() & 0xFFFFFFFFL;
+                long at = body.getLong();
+                if (body.hasRemaining()) {
+                    return null;
+                }
+                return new LedgerRecord.TransferIntent(txn, source, sourceEntry, sourceGen,
+                        destination, destinationReservation, destinationGen, hash, amount, at);
+            }
+            if (version >= 2 && type == TYPE_TRANSFER_DONE && length == 1 + DONE_PAYLOAD) {
+                return new LedgerRecord.TransferDone(Id128.read(body));
+            }
             return null;
         } catch (BufferUnderflowException | IllegalArgumentException malformed) {
             return null;
         }
+    }
+
+    private static int holderBytes(int keyLength) {
+        return 16 + 1 + 2 + keyLength;
+    }
+
+    private static byte[] header(int version) {
+        return ByteBuffer.allocate(HEADER_LENGTH).put(MAGIC).putShort((short) version).array();
+    }
+
+    private static void writeHolder(ByteBuffer out, TransferHolder holder, byte[] key) {
+        holder.owner().write(out);
+        out.put((byte) holder.kind().code()).putShort((short) key.length).put(key);
+    }
+
+    private static TransferHolder readHolder(ByteBuffer in) {
+        Id128 owner = Id128.read(in);
+        TransferHolder.Kind kind = TransferHolder.Kind.ofCode(in.get() & 0xFF);
+        int length = in.getShort() & 0xFFFF;
+        if (kind == null || length > TransferHolder.MAX_KEY_BYTES || length > in.remaining()) {
+            throw new IllegalArgumentException("invalid transfer holder");
+        }
+        byte[] key = new byte[length];
+        in.get(key);
+        String text = new String(key, StandardCharsets.UTF_8);
+        return new TransferHolder(owner, kind, text);
     }
 }

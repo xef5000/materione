@@ -8,7 +8,11 @@ public enum EntryState {
     /** To be returned to the player; there was no room yet. */
     OWED(2),
     /** Frozen: a consume decision is being made ({@code txn} set); release, close and quit do not return it. */
-    EXITING(3);
+    EXITING(3),
+    /** A destination reservation: not owned and not visible before the joint decision. */
+    RESERVED(4),
+    /** The source side of a two-holder transfer, distinct from a consume EXITING. */
+    TRANSFERRING(5);
 
     private final int code;
 

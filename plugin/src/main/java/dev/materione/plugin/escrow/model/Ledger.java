@@ -19,6 +19,8 @@ public final class Ledger {
     private final Set<Id128> intentEntries = new HashSet<>();
     private final Set<Id128> intentTxns = new HashSet<>();
     private final Set<Id128> doneTxns = new HashSet<>();
+    private final Set<Id128> transferTxns = new HashSet<>();
+    private final Set<Id128> transferDoneTxns = new HashSet<>();
 
     /** A ledger of these records. */
     public Ledger(List<LedgerRecord> records) {
@@ -30,6 +32,8 @@ public final class Ledger {
                     intentTxns.add(intent.txn());
                 }
                 case LedgerRecord.Done done -> doneTxns.add(done.txn());
+                case LedgerRecord.TransferIntent intent -> transferTxns.add(intent.txn());
+                case LedgerRecord.TransferDone done -> transferDoneTxns.add(done.txn());
             }
         }
     }
@@ -52,6 +56,25 @@ public final class Ledger {
     /** The transaction's DONE is durable. */
     public boolean isDone(Id128 txn) {
         return doneTxns.contains(txn);
+    }
+
+    /** The joint decision of this transfer is durable. */
+    public boolean isTransferDecided(Id128 txn) {
+        return transferTxns.contains(txn);
+    }
+
+    /** The committed transfer snapshots were acknowledged. */
+    public boolean isTransferDone(Id128 txn) {
+        return transferDoneTxns.contains(txn);
+    }
+
+    /** The joint decision, if present. */
+    public Optional<LedgerRecord.TransferIntent> transfer(Id128 txn) {
+        return records.stream()
+                .filter(LedgerRecord.TransferIntent.class::isInstance)
+                .map(LedgerRecord.TransferIntent.class::cast)
+                .filter(intent -> intent.txn().equals(txn))
+                .findFirst();
     }
 
     /** The INTENT of this entry. */

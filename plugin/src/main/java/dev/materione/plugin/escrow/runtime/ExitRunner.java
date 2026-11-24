@@ -56,13 +56,14 @@ public final class ExitRunner<T> {
             AppendResult outcome = failure != null
                     ? new AppendResult.Refused(AppendResult.Reason.WRITE_FAILED, String.valueOf(failure))
                     : result;
-            owner.run(() -> afterAppend(owner, begun, outcome, callbacks), () -> gone(player, begun, outcome, callbacks));
+            owner.run(() -> afterAppend(owner, begun, outcome, callbacks),
+                    () -> gone(player, owner.accountKey(), begun, outcome, callbacks));
         });
     }
 
     /** Step 3 (the append is durable) or the abort (it was refused), on the player's own thread. */
     private void afterAppend(Owner<T> owner, Tier1.Begun begun, AppendResult outcome, ExitCallbacks callbacks) {
-        PlayerEscrow escrow = owner.escrow();
+        CustodyAccount escrow = owner.escrow();
         Ledger decided = null;
         if (outcome instanceof AppendResult.Durable durable) {
             decided = durable.ledger();
@@ -82,10 +83,10 @@ public final class ExitRunner<T> {
     }
 
     /** The player was removed before the continuation could run. */
-    private void gone(UUID player, Tier1.Begun begun, AppendResult outcome, ExitCallbacks callbacks) {
+    private void gone(UUID player, String accountKey, Tier1.Begun begun, AppendResult outcome, ExitCallbacks callbacks) {
         callbacks.abandoned(ExitCallbacks.Abandoned.PLAYER_LEFT);
         if (outcome instanceof AppendResult.Durable) {
-            barrier.orphan(player, begun.intent(), begun.exitGen());
+            barrier.orphan(player, accountKey, begun.intent(), begun.exitGen());
         }
         // a refused append decided nothing: the frozen entry is in the saved account without an INTENT, which recovery returns
     }

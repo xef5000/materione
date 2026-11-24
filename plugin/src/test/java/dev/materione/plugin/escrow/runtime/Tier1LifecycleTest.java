@@ -301,7 +301,7 @@ class Tier1LifecycleTest {
                 ready(Ledger.EMPTY), List.of());
         assertThat(result).isInstanceOf(Tier1.Blocked.class);
         assertThat(((Tier1.Blocked) result).cause()).isEqualTo(Recovery.Cause.ACCOUNT);
-        assertThat(joined.escrow.gate()).isEqualTo(PlayerEscrow.Gate.UNRECOVERABLE);
+        assertThat(joined.escrow.gate()).isEqualTo(CustodyAccount.Gate.UNRECOVERABLE);
         assertThat(joined.written).isEmpty();
         assertThat(joined.world.bagCount("gem")).isZero();
         // and a strict click is refused while it is unresolved

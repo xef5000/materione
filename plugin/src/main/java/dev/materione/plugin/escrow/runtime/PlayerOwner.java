@@ -23,19 +23,26 @@ public final class PlayerOwner implements Owner<ItemStack> {
     private final Plugin plugin;
     private final SchedulingGateway scheduling;
     private final Player player;
-    private final PlayerEscrow escrow;
+    private final CustodyAccount escrow;
+    private final String accountKey;
     private final Supplier<Inventory> window;
 
     /**
      * @param window the player's open window's own inventory, asked when a step needs the live state; null result when
      *     none is open
      */
-    public PlayerOwner(Plugin plugin, SchedulingGateway scheduling, Player player, PlayerEscrow escrow,
+    public PlayerOwner(Plugin plugin, SchedulingGateway scheduling, Player player, CustodyAccount escrow,
             Supplier<Inventory> window) {
+        this(plugin, scheduling, player, escrow, "materione:" + EscrowRuntime.ACCOUNT_KEY, window);
+    }
+
+    public PlayerOwner(Plugin plugin, SchedulingGateway scheduling, Player player, CustodyAccount escrow,
+            String accountKey, Supplier<Inventory> window) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.player = player;
         this.escrow = escrow;
+        this.accountKey = accountKey;
         this.window = window;
     }
 
@@ -45,8 +52,13 @@ public final class PlayerOwner implements Owner<ItemStack> {
     }
 
     @Override
-    public PlayerEscrow escrow() {
+    public CustodyAccount escrow() {
         return escrow;
+    }
+
+    @Override
+    public String accountKey() {
+        return accountKey;
     }
 
     @Override

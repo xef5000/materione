@@ -61,6 +61,13 @@ public final class CrashGate {
         String LEDGER_AFTER_APPEND = "ledger-after-append";
         /** The barrier's {@code Player.saveData()} returned; the read-back that would acknowledge it has not started. Owner thread. */
         String BARRIER_SAVED = "barrier-saved";
+        String TRANSFER_SOURCE_PREPARED = "transfer-source-prepared";
+        String TRANSFER_DESTINATION_RESERVED = "transfer-destination-reserved";
+        String TRANSFER_CHECKPOINTED = "transfer-checkpointed";
+        String TRANSFER_INTENT = "transfer-intent";
+        String TRANSFER_SOURCE_COMMITTED = "transfer-source-committed";
+        String TRANSFER_DESTINATION_COMMITTED = "transfer-destination-committed";
+        String TRANSFER_ACKNOWLEDGED = "transfer-acknowledged";
     }
 
     private static final boolean ENABLED = System.getProperty(PROPERTY) != null;

@@ -34,6 +34,15 @@ public record Id128(long hi, long lo) {
         out.putLong(hi).putLong(lo);
     }
 
+    /** Parses the exact canonical 32-digit lower-case spelling. */
+    public static Id128 parse(String text) {
+        if (text == null || !text.matches("[0-9a-f]{32}")) {
+            throw new IllegalArgumentException("id must be 32 lower-case hexadecimal digits");
+        }
+        return new Id128(Long.parseUnsignedLong(text.substring(0, 16), 16),
+                Long.parseUnsignedLong(text.substring(16), 16));
+    }
+
     /** The 32-digit lower-case hex form. */
     @Override
     public String toString() {

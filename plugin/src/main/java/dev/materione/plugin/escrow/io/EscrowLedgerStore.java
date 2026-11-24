@@ -373,7 +373,7 @@ public final class EscrowLedgerStore implements AutoCloseable {
             try {
                 hooks.beforeAppend.accept(slot.player);
                 CrashGate.at(CrashGate.Gates.LEDGER_BEFORE_APPEND); // test-only, inert in production
-                byte[] header = slot.validLength == 0 ? LedgerCodec.header() : null;
+                byte[] header = slot.validLength == 0 ? LedgerCodec.headerFor(record) : null;
                 slot.fileLength = LedgerFiles.append(slot.file, slot.fileLength, slot.validLength, header,
                         LedgerCodec.encodeRecord(record), options.fsync(), hooks.afterWrite, hooks.afterForce);
                 slot.validLength = (int) slot.fileLength;

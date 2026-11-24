@@ -59,7 +59,7 @@ public final class EscrowTransfer {
         }
         Entry entry = found.get();
         if (entry.state() != EntryState.HELD) {
-            return refused(entry.state() == EntryState.EXITING ? Refusal.BUSY : Refusal.STALE);
+            return refused(transactional(entry.state()) ? Refusal.BUSY : Refusal.STALE);
         }
         return shrunk(account.removed(entryId), List.of(entry.stack()), List.of(), List.of(), List.of());
     }
@@ -75,7 +75,7 @@ public final class EscrowTransfer {
         }
         Entry out = found.get();
         if (out.state() != EntryState.HELD) {
-            return refused(out.state() == EntryState.EXITING ? Refusal.BUSY : Refusal.STALE);
+            return refused(transactional(out.state()) ? Refusal.BUSY : Refusal.STALE);
         }
         if (replacement.state() != EntryState.HELD
                 || (!replacement.id().equals(slotEntryId) && account.find(replacement.id()).isPresent())) {
@@ -99,7 +99,7 @@ public final class EscrowTransfer {
             return refused(Refusal.STALE);
         }
         Entry entry = found.get();
-        if (entry.state() == EntryState.EXITING) {
+        if (transactional(entry.state())) {
             return refused(Refusal.BUSY);
         }
         if (inventory.tryAdd(entry.stack())) {
@@ -118,7 +118,7 @@ public final class EscrowTransfer {
             return refused(Refusal.STALE);
         }
         if (found.get().state() != EntryState.HELD) {
-            return refused(found.get().state() == EntryState.EXITING ? Refusal.BUSY : Refusal.STALE);
+            return refused(transactional(found.get().state()) ? Refusal.BUSY : Refusal.STALE);
         }
         return finish(account.replaced(found.get().withStack(edited)), List.of(), List.of(), List.of(), List.of());
     }
@@ -218,6 +218,10 @@ public final class EscrowTransfer {
 
     static Step.Refused refused(Refusal reason) {
         return new Step.Refused(reason);
+    }
+
+    private static boolean transactional(EntryState state) {
+        return state == EntryState.EXITING || state == EntryState.TRANSFERRING || state == EntryState.RESERVED;
     }
 
     static Step applied(

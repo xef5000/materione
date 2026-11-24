@@ -61,11 +61,15 @@ public final class EscrowCrashRunner {
     static final String LEDGER_BEFORE_APPEND = "ledger-before-append";
     static final String LEDGER_AFTER_APPEND = "ledger-after-append";
     static final String BARRIER_SAVED = "barrier-saved";
+    static final String TRANSFER_CHECKPOINTED = "transfer-checkpointed";
+    static final String TRANSFER_INTENT = "transfer-intent";
+    static final String TRANSFER_DESTINATION_COMMITTED = "transfer-destination-committed";
 
     /** The GUIs of the {@code guilogic} pack the rows open: escrow (no flow), consume (buttons) and trash (the recipe). */
     static final String ESCROW_GUI = "guilogic:escrow";
     static final String CONSUME_GUI = "guilogic:consume";
     static final String TRASH_GUI = "guilogic:trash";
+    static final String VAULT_GUI = "guilogic:vault";
 
     /** The consume GUI's buttons: slot 7 consumes without an effect, slot 8 waits for the save and then runs one. */
     static final int PLAIN_BUTTON = 7;
@@ -76,7 +80,7 @@ public final class EscrowCrashRunner {
     private static final String FAST_BARRIER = "escrow_barrier_cooldown_seconds: 1\n";
 
     /** The escrow GUI's pack, and Paper's per-player autosave on every tick (K19 only). */
-    private static final Set<String> PACKS = Set.of("guilogic");
+    private static final Set<String> PACKS = Set.of("guilogic", "itemvars");
     private static final String AUTOSAVE_EVERY_TICK = """
             player-auto-save:
               rate: 1
@@ -165,6 +169,24 @@ public final class EscrowCrashRunner {
         rows.put("K23c the effect runs once, after the proof", Session::k23c);
         rows.put("K23d the disk recovers: the effect runs once, late", Session::k23d);
         return run(options, "escrow-crash-barrier", null, FAST_BARRIER, rows);
+    }
+
+    /** Opt-in: the shared two-holder hand-off, killed before and after its single joint intent. */
+    public HarnessResult transfers(HarnessOptions options) {
+        Map<String, Row> rows = new LinkedHashMap<>();
+        rows.put("H1 before the joint INTENT", Session::transferBeforeIntent);
+        rows.put("H2 after the joint INTENT, before owner commits", Session::transferAfterIntent);
+        rows.put("H3 after destination commit, before acknowledgment", Session::transferAfterCommit);
+        rows.put("H4 player-to-keyed transfer at the same joint INTENT", Session::transferToKeyed);
+        return run(options, "custody-transfer-crash", null, FAST_BARRIER, rows);
+    }
+
+    /** Opt-in: holder persistence beyond the live window. */
+    public HarnessResult holders(HarnessOptions options) {
+        Map<String, Row> rows = new LinkedHashMap<>();
+        rows.put("T18 keyed holder survives close, reopen and restart", Session::keyedHolder);
+        rows.put("stack holder survives close, reopen and restart on its stable StackRef", Session::stackHolder);
+        return run(options, "custody-holder-persistence", null, rows);
     }
 
     /** Opt-in: the cursor (K21, K22) and the kills inside the platform's save (K3, K4: file states). */
@@ -354,6 +376,15 @@ public final class EscrowCrashRunner {
             rig.probe("save", p);
         }
 
+        void transfer(String source, String destination) throws IOException, InterruptedException {
+            String line = rig.probe("transfer", source + " 0 " + destination);
+            problems.expect(line.contains("ok=true"), "the transfer started: " + line);
+        }
+
+        void close(String p) throws IOException, InterruptedException {
+            rig.probe("close", p);
+        }
+
         Snap inv(String p) throws IOException, InterruptedException {
             String line = rig.probe("inv", p);
             Matcher m = INV.matcher(line);
@@ -524,6 +555,21 @@ public final class EscrowCrashRunner {
             problems.expect(snap.entries() == 0, what + ": the account still holds an entry: " + snap);
             problems.expect(snap.count("APPLE") == 3, what + ": the bystander stack changed: " + snap);
             problems.expect(droppedItemsSafe() == 0, what + ": a stack was dropped in the world (G4)");
+        }
+
+        void expectTransferOnce(String source, String destination, String what)
+                throws IOException, InterruptedException {
+            login(source);
+            login(destination);
+            Snap a = inv(source);
+            Snap b = inv(destination);
+            problems.expect(a.count("DIAMOND") + b.count("DIAMOND") == 5,
+                    what + ": the diamonds must exist at exactly one holder: source=" + a + ", destination=" + b);
+            problems.expect(a.entries() + b.entries() == 0,
+                    what + ": no prepared reservation survived recovery: source=" + a + ", destination=" + b);
+            problems.expect(a.count("APPLE") == 3 && b.count("APPLE") == 0,
+                    what + ": a transfer changed unrelated state");
+            problems.expect(droppedItemsSafe() == 0, what + ": transfer wrote an item to the world");
         }
 
         private int droppedItemsSafe() throws IOException, InterruptedException {
@@ -866,6 +912,89 @@ public final class EscrowCrashRunner {
                     + EscrowFiles.ledgerOf(rig, p));
             reboot();
             expectReturnedOnce(p, "an INTENT for an entry the snapshot never held (a rollback, not a duplicate)");
+        }
+
+        void transferBeforeIntent() throws Exception {
+            transferCrash("H1s", "H1d", TRANSFER_CHECKPOINTED);
+        }
+
+        void transferAfterIntent() throws Exception {
+            transferCrash("H2s", "H2d", TRANSFER_INTENT);
+        }
+
+        void transferAfterCommit() throws Exception {
+            transferCrash("H3s", "H3d", TRANSFER_DESTINATION_COMMITTED);
+        }
+
+        private void transferCrash(String source, String destination, String gate) throws Exception {
+            heldAndSaved(source);
+            login(destination);
+            save(destination);
+            crash(gate, "dprobe transfer " + source + " 0 " + destination);
+            reboot();
+            expectTransferOnce(source, destination, "joint transfer at " + gate);
+        }
+
+        void transferToKeyed() throws Exception {
+            String p = "H4Keyed";
+            heldAndSaved(p);
+            crash(TRANSFER_INTENT, "dprobe keytransfer " + p + " 0 ignored");
+            reboot();
+            login(p);
+            open(p, VAULT_GUI);
+            problems.expect(awaitInv(p, Duration.ofSeconds(10), snap ->
+                            "DIAMOND*5".equals(snap.window().get(0))),
+                    "the keyed destination did not recover the joint transfer");
+        }
+
+        void keyedHolder() throws Exception {
+            String p = "KeyedHolderBot";
+            seed(p, VAULT_GUI);
+            click(p, 36, "PICKUP");
+            click(p, 0, "PICKUP");
+            problems.expect("DIAMOND*5".equals(inv(p).window().get(0)),
+                    "the item did not enter the keyed holder");
+            close(p);
+            Snap closed = inv(p);
+            problems.expect(closed.count("DIAMOND") == 0 && closed.window().isEmpty(),
+                    "a keyed holder stays owned after close: " + closed);
+            open(p, VAULT_GUI);
+            problems.expect(awaitInv(p, Duration.ofSeconds(5), snap ->
+                            "DIAMOND*5".equals(snap.window().get(0))), "the keyed entry did not re-open");
+            close(p);
+            save(p);
+            quiet(p);
+            reboot();
+            login(p);
+            open(p, VAULT_GUI);
+            problems.expect(awaitInv(p, Duration.ofSeconds(5), snap ->
+                            "DIAMOND*5".equals(snap.window().get(0))), "the keyed entry did not survive restart");
+        }
+
+        void stackHolder() throws Exception {
+            String p = "StackHolderBot";
+            login(p);
+            set(p, 1, "DIAMOND", 5);
+            set(p, 2, "APPLE", 3);
+            rig.command("materione give itemvars:custody_bag " + p, "MATERIONE-GIVE-OK");
+            rig.probe("use", p);
+            click(p, 37, "PICKUP");
+            click(p, 0, "PICKUP");
+            Snap first = inv(p);
+            problems.expect("DIAMOND*5".equals(first.window().get(0)),
+                    "the item did not enter the stack account: " + first);
+            close(p);
+            rig.probe("use", p);
+            problems.expect(awaitInv(p, Duration.ofSeconds(5), snap ->
+                            "DIAMOND*5".equals(snap.window().get(0))), "the stack entry did not re-open");
+            close(p);
+            save(p);
+            quiet(p);
+            reboot();
+            login(p);
+            rig.probe("use", p);
+            problems.expect(awaitInv(p, Duration.ofSeconds(5), snap ->
+                            "DIAMOND*5".equals(snap.window().get(0))), "the stack entry did not survive restart");
         }
 
         /** K12: step 3 ran (the owner thread parks right after it), no save since: S' holds E HELD, the INTENT is durable. */

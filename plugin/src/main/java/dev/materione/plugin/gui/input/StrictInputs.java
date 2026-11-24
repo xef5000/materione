@@ -1,9 +1,16 @@
 package dev.materione.plugin.gui.input;
 
 import dev.materione.plugin.escrow.runtime.BukkitLive;
+import dev.materione.api.custody.CustodyHolder;
+import dev.materione.plugin.escrow.model.EntryState;
+import dev.materione.plugin.escrow.runtime.CustodyAccount;
 import dev.materione.plugin.escrow.runtime.CustodyConsume;
 import dev.materione.plugin.escrow.runtime.Delta;
 import dev.materione.plugin.escrow.runtime.EscrowRuntime;
+import dev.materione.plugin.escrow.runtime.ItemStacks;
+import dev.materione.plugin.escrow.runtime.CustodyTransfer;
+import dev.materione.plugin.escrow.model.Id128;
+import dev.materione.plugin.escrow.model.TransferHolder;
 import dev.materione.plugin.escrow.runtime.Tier1;
 import dev.materione.plugin.gui.GuiMenu;
 import java.util.List;
@@ -30,9 +37,11 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
     public static final StrictInputs NONE = new StrictInputs(null);
 
     private final EscrowRuntime runtime;
+    private final InputHolders holders;
 
     public StrictInputs(EscrowRuntime runtime) {
         this.runtime = runtime;
+        this.holders = new InputHolders(runtime);
     }
 
     /** Whether the window has any required slot. */
@@ -52,7 +61,10 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
 
     /** Whether a click may touch {@code slot}: it is not a required slot, or required slots are served. */
     public boolean usable(Player player, GuiMenu menu, int slot) {
-        return !escrowed(menu, slot) || standing(player) == EscrowRuntime.Standing.SERVED;
+        if (!escrowed(menu, slot)) {
+            return true;
+        }
+        return holders.resolve(player, menu, slot).filter(InputHolders.Resolved::open).isPresent();
     }
 
     /** One refusal: the actionbar line, and the reason logged once a minute with its code (§7). */
@@ -74,8 +86,15 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             plain(player, menu, delta);
             return true;
         }
-        Tier1.Result<ItemStack> result = runtime.tier1().apply(runtime.of(player), live(player, menu),
-                menu.guiId().toString(), slot -> escrowed(menu, slot), delta);
+        var groups = holders.strictGroups(player, menu, delta, menu.durableSlots());
+        if (groups.size() != 1) {
+            refuse(player, Tier1.Reason.UNAVAILABLE);
+            return false;
+        }
+        var entry = groups.entrySet().iterator().next();
+        CustodyAccount account = entry.getKey();
+        Tier1.Result<ItemStack> result = runtime.tier1().apply(account, live(player, menu),
+                menu.guiId().toString(), entry.getValue()::contains, delta);
         if (result instanceof Tier1.Denied<ItemStack> denied) {
             runtime.refuse(player, denied.reason());
             return false;
@@ -95,13 +114,17 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
 
     /** {@code take} on a required slot: the stack goes to the inventory or is owed. Empty on success, else the reason. */
     public Optional<String> take(Player player, GuiMenu menu, int slot) {
-        return outcome(player, runtime == null ? null : runtime.tier1().take(runtime.of(player), live(player, menu),
+        Optional<InputHolders.Resolved> resolved = holders.resolve(player, menu, slot);
+        return outcome(player, runtime == null || resolved.isEmpty() ? null : runtime.tier1().take(
+                resolved.get().account(), live(player, menu),
                 menu.guiId().toString(), slot));
     }
 
     /** {@code set_amount}, {@code repair} or {@code enchant} on a required slot: the entry becomes {@code edited}. */
     public Optional<String> edit(Player player, GuiMenu menu, int slot, ItemStack edited) {
-        return outcome(player, runtime == null ? null : runtime.tier1().edit(runtime.of(player), live(player, menu),
+        Optional<InputHolders.Resolved> resolved = holders.resolve(player, menu, slot);
+        return outcome(player, runtime == null || resolved.isEmpty() ? null : runtime.tier1().edit(
+                resolved.get().account(), live(player, menu),
                 menu.guiId().toString(), slot, edited));
     }
 
@@ -118,8 +141,13 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             refuse(player, Tier1.Reason.UNAVAILABLE);
             return CompletableFuture.completedFuture(Optional.of(UNAVAILABLE));
         }
+        Optional<InputHolders.Resolved> resolved = holders.resolve(player, menu, slot);
+        if (resolved.isEmpty() || resolved.get().holder() instanceof CustodyHolder.Stack) {
+            return CompletableFuture.completedFuture(Optional.of(
+                    "custody exits are unsupported for a stack holder"));
+        }
         Optional<CustodyConsume.Started<ItemStack>> started = runtime == null ? Optional.empty()
-                : runtime.consume(player, menu.guiId().toString(), slot, reach);
+                : runtime.consume(player, resolved.get().holder(), menu.guiId().toString(), slot, reach);
         if (started.isEmpty()) {
             return CompletableFuture.completedFuture(Optional.of(UNAVAILABLE));
         }
@@ -127,6 +155,61 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             return CompletableFuture.completedFuture(Optional.of(reasonText(declined.reason())));
         }
         return ((CustodyConsume.Running<ItemStack>) started.get()).outcome().thenApply(StrictInputs::reasonOf);
+    }
+
+    /** Resolves a slot into an exact source and starts the one-joint-decision transfer. */
+    public CompletionStage<Optional<String>> transfer(Player player, GuiMenu menu, InputSlotPort.Transfer transfer) {
+        if (runtime == null) {
+            return CompletableFuture.completedFuture(Optional.of("custody transfer is unavailable"));
+        }
+        TransferHolder sourceHolder = transfer.sourceHolder();
+        Id128 sourceEntry = transfer.sourceEntry();
+        if (transfer.sourceSlot() != null) {
+            int slot = transfer.sourceSlot();
+            Optional<InputHolders.Resolved> source = holders.resolve(player, menu, slot);
+            if (source.isEmpty() || !source.get().open()) {
+                return CompletableFuture.completedFuture(Optional.of("the source slot is not held in custody"));
+            }
+            try {
+                CustodyHolder held = source.get().holder();
+                Id128 owner = new Id128(held.owner().getMostSignificantBits(), held.owner().getLeastSignificantBits());
+                sourceHolder = switch (held) {
+                    case CustodyHolder.Player ignored -> new TransferHolder(owner, TransferHolder.Kind.PLAYER, "");
+                    case CustodyHolder.Keyed keyed -> new TransferHolder(owner, TransferHolder.Kind.KEYED, keyed.key());
+                    case CustodyHolder.Stack ignored -> throw new IllegalArgumentException(
+                            "stack PDC cannot acknowledge custody.transfer");
+                };
+            } catch (IllegalArgumentException unsupported) {
+                return CompletableFuture.completedFuture(Optional.of(unsupported.getMessage()));
+            }
+            var entry = Tier1.entryAt(source.get().account().account(), slot);
+            if (entry == null) {
+                return CompletableFuture.completedFuture(Optional.of("the source slot is stale or empty"));
+            }
+            sourceEntry = entry.id();
+        }
+        if (sourceHolder == null || sourceEntry == null || sourceEntry.isZero()
+                || transfer.destinationHolder() == null) {
+            return CompletableFuture.completedFuture(Optional.of("transfer source and destination are incomplete"));
+        }
+        Id128 transaction = transfer.transaction();
+        if (transaction == null) {
+            var id = java.util.UUID.randomUUID();
+            transaction = new Id128(id.getMostSignificantBits(), id.getLeastSignificantBits());
+        }
+        if (transaction.isZero()) {
+            return CompletableFuture.completedFuture(Optional.of("transfer id cannot be zero"));
+        }
+        Optional<CompletionStage<CustodyTransfer.Outcome>> started = runtime.transfer(new CustodyTransfer.Request(
+                transaction, sourceHolder, sourceEntry, transfer.destinationHolder(),
+                transfer.destinationSlot(), transfer.reach()));
+        if (started.isEmpty()) {
+            return CompletableFuture.completedFuture(Optional.of("custody transfer is unavailable"));
+        }
+        return started.get().thenApply(result -> switch (result) {
+            case CustodyTransfer.Outcome.Transferred transferred -> Optional.empty();
+            case CustodyTransfer.Outcome.Refused refused -> Optional.of(refused.reason());
+        });
     }
 
     /**
@@ -189,11 +272,24 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
         if (runtime == null || !has(menu)) {
             return;
         }
-        Tier1.Result<ItemStack> result = runtime.tier1().release(runtime.of(player), live(player, menu),
-                menu.guiId().toString(), menu.durableSlots());
-        if (result instanceof Tier1.Done<ItemStack> done) {
-            done.strays().forEach(stray -> InputReturns.giveBack(player, stray));
-            runtime.owed(player, done.owed());
+        var groups = holders.slotsByHolder(player, menu, menu.durableSlots());
+        for (var group : groups.entrySet()) {
+            Optional<CustodyAccount> account = runtime.account(player, group.getKey());
+            if (account.isEmpty() || !account.get().open()) {
+                continue;
+            }
+            if (group.getKey() instanceof CustodyHolder.Player) {
+                Tier1.Result<ItemStack> result = runtime.tier1().release(account.get(), live(player, menu),
+                        menu.guiId().toString(), group.getValue());
+                if (result instanceof Tier1.Done<ItemStack> done) {
+                    done.strays().forEach(stray -> InputReturns.giveBack(player, stray));
+                    runtime.owed(player, done.owed());
+                }
+            } else {
+                for (int slot : group.getValue()) {
+                    menu.getInventory().setItem(slot, null);
+                }
+            }
         }
     }
 
@@ -202,7 +298,8 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
         if (runtime == null || !has(previous)) {
             return List.of();
         }
-        return runtime.tier1().beginCarry(runtime.of(player), live(player, previous), previous.durableSlots());
+        var slots = holders.playerSlots(player, previous);
+        return runtime.tier1().beginCarry(runtime.of(player), live(player, previous), slots);
     }
 
     /** The new window is open: carried stacks go to the same slot when it is still escrowed, else to the player. */
@@ -211,7 +308,8 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             return;
         }
         Tier1.Result<ItemStack> result = runtime.tier1().placeCarried(runtime.of(player), live(player, menu), carried,
-                menu.durableSlots()::contains);
+                slot -> menu.durableSlots().contains(slot)
+                        && holders.holderOf(player, menu, slot) instanceof CustodyHolder.Player);
         if (result instanceof Tier1.Done<ItemStack> done) {
             done.strays().forEach(stray -> InputReturns.giveBack(player, stray));
             runtime.owed(player, done.owed());
@@ -246,6 +344,24 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             return Optional.of(new Open(menu.guiId().toString(), menu.getInventory(), menu.durableSlots()));
         }
         return Optional.empty();
+    }
+
+    /** Restores parked HELD entries of keyed/stack holders into an opened window. */
+    public void restoreParked(Player player, GuiMenu menu) {
+        if (runtime == null) {
+            return;
+        }
+        for (int slot : menu.durableSlots()) {
+            Optional<InputHolders.Resolved> resolved = holders.resolve(player, menu, slot);
+            if (resolved.isEmpty() || resolved.get().holder() instanceof CustodyHolder.Player
+                    || !resolved.get().open()) {
+                continue;
+            }
+            resolved.get().account().account().entries().stream()
+                    .filter(entry -> entry.state() == EntryState.HELD && entry.slotHint() == slot)
+                    .findFirst()
+                    .ifPresent(entry -> menu.getInventory().setItem(slot, ItemStacks.INSTANCE.decode(entry.stack())));
+        }
     }
 
     private static BukkitLive live(Player player, GuiMenu menu) {

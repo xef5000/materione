@@ -9,6 +9,17 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Custody holders and atomic transfer (#334, D12).** Strict input layers can
+  keep the existing player account, name a canonical keyed holder in the player's
+  PDC, or use the opening view's stable stack PDC. Keyed/stack contents outlive the
+  window; stale stack handles and invalid holder combinations fail closed. The
+  registry action `custody.transfer` prepares both accounts, checkpoints both owners,
+  writes one joint durable decision, and recovers or finalizes idempotently. Stack
+  consume/HAND_OFF is deliberately refused because stack PDC has no acknowledged save.
+  The generated SDK, editor schema, golden corpus and Paper crash harness include the
+  holder and transfer paths; benchmark T18 now passes while T02 still fails its
+  keyed-state/view dependencies.
+
 - **Scheduled rule triggers (#332, D12, logic.md section 44).** Host-less rules can fire
   with `every` (whole ticks or a duration of at least one second, once for the server or once
   per online player) or   `schedule` (server-local `HH:MM`, optional days). All timers use

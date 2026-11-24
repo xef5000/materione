@@ -171,9 +171,27 @@ class EscrowGoldenFixturesTest {
 
     @Test
     void ledgerNewerVersionIsOpaque() throws IOException {
-        byte[] bytes = {'M', 'T', 'R', 'L', 0, 2, 9, 9, 9};
-        check("ledger-v1-newer-version", "MTRL, version 2, opaque body: a newer writer's ledger", bytes);
-        assertThat(LedgerCodec.read(bytes)).isEqualTo(new LedgerRead.Newer(2));
+        byte[] bytes = {'M', 'T', 'R', 'L', 0, 3, 9, 9, 9};
+        check("ledger-v2-newer-version", "MTRL, version 3, opaque body: a newer writer's ledger", bytes);
+        assertThat(LedgerCodec.read(bytes)).isEqualTo(new LedgerRead.Newer(3));
+    }
+
+    @Test
+    void ledgerV2TransferIntentAndDoneRoundTripWithTornTailRecovery() throws IOException {
+        TransferHolder source = new TransferHolder(new Id128(1, 2), TransferHolder.Kind.PLAYER, "");
+        TransferHolder destination = new TransferHolder(new Id128(3, 4), TransferHolder.Kind.KEYED, "vault:4");
+        var intent = new LedgerRecord.TransferIntent(
+                new Id128(5, 6), source, new Id128(7, 8), 9,
+                destination, new Id128(10, 11), 12, new Id128(13, 14), 3, 15);
+        var done = new LedgerRecord.TransferDone(intent.txn());
+        Ledger expected = new Ledger(List.of(intent, done));
+        byte[] whole = LedgerCodec.encode(expected);
+        check("ledger-v2-transfer", "one joint transfer decision and its acknowledged DONE", whole);
+        assertThat(LedgerCodec.read(whole)).isEqualTo(new LedgerRead.Valid(expected, whole.length, 0));
+
+        byte[] tail = new byte[] {0, 0, 0, 20, 1};
+        assertThat(LedgerCodec.read(concat(whole, tail)))
+                .isEqualTo(new LedgerRead.Valid(expected, whole.length, tail.length));
     }
 
     @Test

@@ -1,0 +1,31 @@
+transfer:
+  title: "Custody Transfer"
+  container: chest_1
+  layers:
+    - id: source
+      type: slots
+      region: container
+      input: true
+      durable: required
+    - id: transfer
+      type: button
+      x: 152
+      y: 18
+      width: 16
+      height: 16
+  behavior:
+    - on: gui.click
+      layer: transfer
+      do:
+        - run_command: { command: "say MATERIONE-GUITRANSFER-START", as: console }
+        - custody.transfer:
+            source: { slot: 0 }
+            destination:
+              holder:
+                kind: keyed
+                key: "vault:${player.uuid}:1"
+              slot: 0
+            await: saved
+          else:
+            - run_command: { command: "say MATERIONE-GUITRANSFER-REFUSED", as: console }
+        - run_command: { command: "say MATERIONE-GUITRANSFER-DONE", as: console }

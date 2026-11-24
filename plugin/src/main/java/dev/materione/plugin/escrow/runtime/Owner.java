@@ -16,7 +16,12 @@ public interface Owner<T> {
     UUID id();
 
     /** The player's live escrow: the account and the gate. Owner-thread only. */
-    PlayerEscrow escrow();
+    CustodyAccount escrow();
+
+    /** The BukkitValues key of this owner's account, used by the snapshot barrier. */
+    default String accountKey() {
+        return "materione:gui_escrow";
+    }
 
     /** The player's live state for a step: the open window's slots (if any), the cursor and the inventory. */
     Live<T> live();

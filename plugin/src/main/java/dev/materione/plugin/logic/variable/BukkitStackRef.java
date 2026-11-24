@@ -4,17 +4,27 @@ import dev.materione.api.logic.variable.StackRef;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.WeakHashMap;
 import java.util.function.Supplier;
 import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.NamespacedKey;
+import org.bukkit.persistence.PersistentDataType;
 
 /**
  * The platform's {@link StackRef}: a live Bukkit stack, the player whose thread owns it, and the physical and
  * logical identity the stack had when the run was given it (logic.md §38).
  */
 public final class BukkitStackRef implements StackRef {
+
+    /** Stable id of a stack that holds a custody account. */
+    public static final NamespacedKey CUSTODY_ID =
+            new NamespacedKey("materione", "custody-id");
+    /** Versioned, CRC-protected custody account bytes for a stack holder. */
+    public static final NamespacedKey CUSTODY_ACCOUNT =
+            new NamespacedKey("materione", "custody-account");
 
     private static final Map<Object, Subject> PHYSICAL_SUBJECTS =
             Collections.synchronizedMap(new WeakHashMap<>());
@@ -134,6 +144,67 @@ public final class BukkitStackRef implements StackRef {
         return matches(current) && current.view().isPresent();
     }
 
+    @Override
+    public Optional<UUID> custodyId() {
+        StackPdc current = pdc();
+        if (!matches(current)) {
+            return Optional.empty();
+        }
+        return current.view().map(data -> data.get(CUSTODY_ID, PersistentDataType.STRING))
+                .flatMap(value -> {
+                    try {
+                        return Optional.of(UUID.fromString(value));
+                    } catch (RuntimeException malformed) {
+                        return Optional.empty();
+                    }
+                });
+    }
+
+    @Override
+    public boolean assignCustodyId(UUID id) {
+        StackPdc current = pdc();
+        if (!matches(current) || id == null) {
+            return false;
+        }
+        try {
+            boolean written = current.edit(data ->
+                    data.set(CUSTODY_ID, PersistentDataType.STRING, id.toString()));
+            if (written) {
+                rebindAfterEdit();
+            }
+            return written;
+        } catch (RuntimeException failed) {
+            return false;
+        }
+    }
+
+    /** The stack account bytes, or null when absent/stale. */
+    public byte[] custodyAccount() {
+        StackPdc current = pdc();
+        if (!matches(current)) {
+            return null;
+        }
+        return current.view().map(data -> data.get(CUSTODY_ACCOUNT, PersistentDataType.BYTE_ARRAY)).orElse(null);
+    }
+
+    /** Writes stack account bytes on the stack owner's thread, refusing a stale/replaced handle. */
+    public boolean writeCustodyAccount(byte[] bytes) {
+        StackPdc current = pdc();
+        if (!matches(current)) {
+            return false;
+        }
+        try {
+            boolean written = current.edit(data ->
+                    data.set(CUSTODY_ACCOUNT, PersistentDataType.BYTE_ARRAY, bytes));
+            if (written) {
+                rebindAfterEdit();
+            }
+            return written;
+        } catch (RuntimeException failed) {
+            return false;
+        }
+    }
+
     /**
      * The same physical stack reached through two inventory/event mirrors is the same subject. Amount and item
      * variable writes are deliberately absent from the key: they change state, not subject identity.
@@ -178,9 +249,36 @@ public final class BukkitStackRef implements StackRef {
             logical = next;
             return;
         }
+
         synchronized (LOGICAL_SUBJECTS) {
             LOGICAL_SUBJECTS.remove(logical);
             logical = next;
+        }
+    }
+
+    /** A PDC edit may replace Bukkit's mirror/token; the handle intentionally continues on that same slot. */
+    private void rebindAfterEdit() {
+        if (!followsSlot) {
+            return;
+        }
+        StackPdc next = pdc();
+        Object nextPhysical = next.physicalIdentity();
+        Object nextLogical = next.logicalIdentity();
+        synchronized (PHYSICAL_SUBJECTS) {
+            PHYSICAL_SUBJECTS.put(nextPhysical, subject);
+            if (physical != null && physical != nextPhysical) {
+                PHYSICAL_SUBJECTS.remove(physical, subject);
+            }
+            synchronized (LOGICAL_SUBJECTS) {
+                if (logical != null && !Objects.equals(logical, nextLogical)) {
+                    LOGICAL_SUBJECTS.remove(logical, subject);
+                }
+                if (nextLogical != null) {
+                    LOGICAL_SUBJECTS.put(nextLogical, subject);
+                }
+            }
+            physical = nextPhysical;
+            logical = nextLogical;
         }
     }
 

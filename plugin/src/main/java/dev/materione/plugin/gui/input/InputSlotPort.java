@@ -38,4 +38,21 @@ public interface InputSlotPort {
     java.util.concurrent.CompletionStage<java.util.Optional<String>> consume(
             Player player, ViewerRecord session, int slot,
             dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach);
+
+    /** A universal joint transfer, resolved either from a held slot or an exact holder/entry. */
+    default java.util.concurrent.CompletionStage<java.util.Optional<String>> transfer(
+            Player player, ViewerRecord session, Transfer transfer) {
+        return java.util.concurrent.CompletableFuture.completedFuture(
+                java.util.Optional.of("custody transfer is unavailable"));
+    }
+
+    /** Resolved action data; a slot source may fill the holder/entry from the open window. */
+    record Transfer(
+            dev.materione.plugin.escrow.model.TransferHolder sourceHolder,
+            Integer sourceSlot,
+            dev.materione.plugin.escrow.model.Id128 sourceEntry,
+            dev.materione.plugin.escrow.model.TransferHolder destinationHolder,
+            int destinationSlot,
+            dev.materione.plugin.escrow.model.Id128 transaction,
+            dev.materione.plugin.escrow.runtime.CustodyTransfer.Reach reach) {}
 }

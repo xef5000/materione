@@ -67,8 +67,8 @@ and the tests of §10 pin the fix:
 | 3 | The item passes its parameters to the window | `view.open` with `args`, typed `open.args` (logic.md §6.1) | Shipped | P |
 | 4 | Player items may be put in and taken out of the window | `slots` layer with `input: true` (logic.md §6.5, §25) | Shipped | P+ (primitives.md §4.7) |
 | 5 | **The window knows which stack it was opened about**, and keeps knowing it while the stack sits in an inventory slot | **The run's item carried into a view** | **Built by #333 step 1** | **P** |
-| 6 | **The slots load from, and are held by, that stack**, not returned to the player on close | **Custody with a stack holder** | **Missing** (custody has one holder, the player's account) | **G** |
-| 7 | Crash safety for transfers in and out | Custody tier 1 (gui-input-durability.md §5.4) with the stack as the holder | Mechanism shipped for the account holder; Phase B of §6.2 | P (after 6) |
+| 6 | **The slots load from, and are held by, that stack**, not returned to the player on close | **Custody with a stack holder** | **Built by #334**; preset composition still missing | **P** |
+| 7 | Crash safety for transfers in and out | Custody tier 1 (gui-input-durability.md §5.4/§15) with the stack as the holder | Built for a live `StackRef`; stack consume/HAND_OFF intentionally refuse | P |
 | 8 | Refuse nesting a backpack in a backpack by default (Q4: deny, `allow_nested` opts in) | An `accept:` condition that can tell a stack holds custody | **Missing** as an expression property | G (small) |
 | 9 | "This item is a backpack" as one setting | The **preset** layer: a declaration resolved by the pipeline | **Missing**; representation partly open (master §14.7) | — (D12 Layer 2, not a primitive) |
 
@@ -95,27 +95,27 @@ it and the other reuses it.
 | Liveness | The stack store checks physical and Materione identity at every item-variable access. A stale or vanished handle degrades to the default/refuses a write and reports the rate-limited store miss; P-B's pin and H2 close are later custody behavior. |
 | U-tests | U1 names a capability (a view's subject), not a backpack. U2 any item trigger, any GUI. U3 content passes it with `view.open`, no Java. U4 part of the GUI trigger context's self-description. U5 the trigger root is checked offline; an open with no subject fails soft with `MTR-0065` at run time. |
 
-**P-B: custody with a stack holder (need 6).** primitives.md §5.1 step (2), and the second holder #334 schedules ("then stack
-holder (#304)"). The `slots` layer names its holder, defaulting to today's behavior exactly (#334's sketch):
+**P-B: custody with a stack holder (built by #334).** The primitive is available; this
+preset still has to declare and expand it. The `slots` layer names its holder:
 
 ```yaml
 - id: storage
   type: slots
   region: container
   input: true
-  holder: item          # absent: the player's account, exactly as today
-  durable: best_effort  # Phase A; required in Phase B (§6.2)
+  holder: stack         # absent: the player's account, exactly as today
+  durable: required     # stack PDC account; consume/HAND_OFF remain refused
 ```
 
 | | Statement |
 |---|---|
 | At rest | A holder decides where its items live when no window is open. The **account** holder's items rest in the player's inventory (returned on close, owed if full). The **stack** holder's items rest **in the stack**: nothing is returned on close. |
-| Address | The subject stack of P-A. A `holder: item` layer in a GUI opened with no subject accepts nothing (D-1). |
+| Address | The subject stack of P-A. A `holder: stack` layer in a GUI opened with no subject accepts nothing (D-1). |
 | Store | Per stack, one store: the slot list in the stack's PDC (§5.1 for the keys and format). One custody region per stack in v1; a second region on the same stack is additive later (a region key). |
 | Capacity | The store's length, not the view's. A view smaller than the store shows the first slots and **keeps** the rest (fixes B1, §6.4 H6). |
 | Pinning | While a view of a stack holder is open, the holder stack cannot move (§6.4 H1). This is a property of the holder, not of a backpack. |
 | Size bound | The encoded store is capped (256 KiB, the account's cap, gui-input-durability.md §5.4; Q5, measured in row B). A transfer that would exceed it is refused with a diagnostic. Because an inner holder's bytes are inside the outer one's, the cap bounds nesting at any depth (fixes B5). |
-| Exits | `custody.consume` on a stack-held slot is **refused** in v1 ("not supported for this holder"): the backpack needs no exit, and an exit from a stack that can leave the player's snapshot is #334's open ledger question. |
+| Exits | `custody.consume` and `custody.transfer` on a stack-held slot are **refused**: the stack's surrounding save has no acknowledged barrier. The backpack needs no exit. |
 | U-tests | U1 a holder kind (item), not a backpack. U2 any item, any GUI, any slots layer. U3 a key on an existing layer. U4 `holder` joins the `slots` component's schema with its allowed values. U5 load-time checks (§9); Phase B carries the kill-boundary proof (§6.2). |
 
 **Rejected alternatives.**

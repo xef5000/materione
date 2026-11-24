@@ -29,9 +29,10 @@
 > **D8** (no IO on a region thread — §5.6); **D10** (both pins, 1.21.4 and 26.1.2, are read — §3).
 >
 > **D12 reading** (architecture §3.1, [`primitives.md`](primitives.md) §4.8, §5.1): the account and the ledger are the **custody**
-> primitive under a GUI-specific name. Input slots are one place custody can sit, and the reserved `HAND_OFF` kind is the atomic
-> transfer between holders. Nothing in this design changes, and no row is reordered: the generalization of the name, the holders
-> and the entry points waits for rows B and H, so that it never weakens a guarantee that is not yet proven. Row X (#248) ships the exit as a custody-named verb, `custody.consume` (logic.md §36), and the trash slot as a composition over it.
+> primitive under a GUI-specific name. Input slots are one place custody can sit. #334
+> adds player/keyed/stack holder addresses and the atomic `custody.transfer` protocol
+> in §15 only after rows B and H shipped; stack consume/HAND_OFF remains explicitly
+> refused. Row X (#248) ships `custody.consume`, with the trash slot as a composition.
 
 ---
 
@@ -1055,3 +1056,109 @@ The owner answered the eleven questions of the first draft on PR #303. Each answ
 2. **The size of the Folia work in the QA suite** is partly known: Folia has builds for both pins (§11), and row F's gap list (§12) records what a
    first run of the Paper integration tests on Folia found. The QA suite itself has not run there (row F, #314).
 3. ~~The probes P2 to P4 of §11 are not run.~~ **Done (row R, #306):** all verified (§11). P5 to P7 remain, by design.
+
+## 15. Custody holders and joint hand-off (#334)
+
+This section is the holder/`HAND_OFF` extension of §5 and keeps D1, D5, D8 and D12
+unchanged. The account and recovery model already proved for a player is reused; no
+second escrow implementation is introduced.
+
+### 15.1 Addresses and lifetime
+
+A `durable: required` `slots` layer may name `holder:`. Omitting it is exactly the
+player holder of rows M–X: the persisted key, account, close/claim behavior, consume
+action and bytes of every existing file are unchanged.
+
+| Form | Address | State | Close |
+|---|---|---|---|
+| `player` (default) | the run's player UUID | `materione:gui_escrow`, in the player's snapshot | release to inventory/OWED, exactly as today |
+| `keyed` | `(player UUID, canonical key)` | `materione:custody-<sha256(key)>`, in that player's snapshot | park: HELD entries remain in the account |
+| `stack` | the live opening `StackRef` and its stable PDC UUID | `materione:custody-account` in the stack PDC; UUID in `materione:custody-id` | park in the stack account |
+
+The owner is deliberately part of a keyed address. Thus a vault key is reproducible
+(`vault:<player>:<number>`), while two players cannot silently alias one another's
+PDC-backed account. A key is canonical only when its source spelling is already the
+lower-case ASCII grammar `[a-z0-9][a-z0-9._:/-]{0,191}`. Upper-case, traversal,
+whitespace and an empty rendered key are refused; they are never rewritten into a
+different holder. The stack form requires the opening run's live `StackRef`. Its UUID
+is created once in the stack PDC, and every access re-checks the handle's existing
+physical/logical liveness rules from #333. A stale slot replacement never reaches the
+account.
+
+Keyed and stack accounts hold runtime state, not content (D1), and use the existing
+`AccountCodec` (generation, caps and CRC) and `Tier1`/`Recovery`. There is no second
+store. A stack PDC is only as durable as the stack's own save. Consequently
+`custody.consume` and `custody.transfer` are refused for a stack holder: a chunk/item
+save has no equivalent of the player's acknowledged save barrier. Re-open and ordinary
+movement remain supported while the `StackRef` is live.
+
+### 15.2 One joint hand-off protocol
+
+Two per-holder decisions are not a transfer. `custody.transfer` uses one shared
+`LedgerRecord.TransferIntent` in the reserved escrow ledger. Its payload names the same
+transaction id, source holder, source entry, source generation, destination holder,
+destination reservation and destination generation. CRC, append order, torn-tail
+handling and fsync are the shipped `LedgerCodec`/`EscrowLedgerStore`; the new type is an
+additive ledger-v2 record, while v1 consume records remain readable.
+
+The destination is reserved before the decision. The source uses a separate
+`TRANSFERRING` state so consume `EXITING` recovery cannot mistake it for a rollback.
+`RESERVED` is not owned by anyone: it
+is not shown, close does not release it and recovery drops it when no joint intent
+exists. A source entry is frozen `EXITING`.
+
+| Phase | Durable facts | Commit | Crash recovery |
+|---|---|---|---|
+| 1 prepare | source `TRANSFERRING(T)` and destination `RESERVED(T)`, in live PDC | one owner-thread step per holder | no shared INTENT: thaw/return source, discard reservation |
+| 2 checkpoint | `Player.saveData()` plus read-back proves a fresh default-account anchor generation in each owner's compound; that one snapshot contains both PDC preparations for that owner | the existing `SaveBarrier`, one save site/rate limit | still pre-decision: phase 1 |
+| 3 decide | one CRC-valid `TransferIntent(T, source, destination)` | append and fsync once in the shared ledger | INTENT exists: roll forward deterministically |
+| 4 commit | remove source; promote destination reservation to HELD for a keyed holder or OWED for a player holder | one owner-thread step per holder; idempotent by entry/txn id | replay the missing side only |
+| 5 acknowledge | each owner touches the anchor again and its committed compound is read back; then `TransferDone(T)` | barrier and shared append | DONE only permits compaction; it never decides ownership |
+
+**Safety fact.** No joint record is written before both account snapshots containing
+their preparations are acknowledged. Therefore a crash either sees no INTENT and leaves
+the item recoverably at the source, or sees the INTENT and makes the destination the only
+final owner. The item can be temporarily unavailable at the reserved boundary; it is
+never counted as owned twice and is never abandoned. Repeating a transaction id observes
+the existing state and returns that result.
+
+The action supports an exact held `entry` in a named holder, or the slot's held entry
+when invoked from a GUI. A destination is another player/keyed holder; stack is an
+unsupported combination. It never falls back to two `custody.consume` calls. World
+mutations run on the holder owner's thread (D8); IO and read-back stay on the IO
+executor. `custody.transfer` guards what follows like `custody.consume`: `await:
+decided` reaches phase 4 and `await: saved` reaches phase 5.
+
+### 15.3 Recovery, corruption and budgets
+
+Recovery reads the player's account, per-player consume ledger and shared hand-off
+ledger before admitting interaction. For this holder:
+
+* `TRANSFERRING(T)` with no matching transfer INTENT returns to the player/OWED;
+* `TRANSFERRING(T)` with a transfer INTENT removes the source id once;
+* `RESERVED(T)` with no matching transfer INTENT is dropped;
+* `RESERVED(T)` with a transfer INTENT is promoted once;
+* an account where that source/reservation is already absent is committed and is a no-op.
+* keyed `custody.consume` uses the same per-player INTENT: an undecided keyed EXITING
+  entry returns to HELD in the account, and a decided one is removed. It never returns
+  into the player's inventory as player recovery does.
+
+Unreadable/newer account or ledger bytes fail closed exactly like K18. One bad holder
+does not guess or mutate either account. Caps remain 54 entries/256 KiB. Non-DONE
+records are retained; acknowledged records use the existing 30-day rule. A holder lookup
+is one PDC read and the joint ledger is preloaded once. A transfer needs at most one step
+on each owner and the existing IO queue.
+
+### 15.4 Kill boundaries and alternatives
+
+The K1–K23 table remains binding. Transfer tests add boundaries before INTENT, after
+INTENT, after either preparation, after either/both commits and after acknowledgment.
+The pure property runner and named production gates use the existing crash rig.
+
+| Alternative | Rejected because |
+|---|---|
+| consume then add as two exits | two independent durable decisions cannot order or recover one swap |
+| copy one record into both player ledgers | either append can survive alone |
+| plugin-only copy of holder contents | a second authority/unsaved mirror |
+| infer by stack bytes | equality is not identity; guessing loses or duplicates |
+| claim stack PDC supports HAND_OFF | its surrounding save has no comparable acknowledged snapshot |

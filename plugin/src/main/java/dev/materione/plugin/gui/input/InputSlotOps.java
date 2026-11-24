@@ -143,6 +143,14 @@ public final class InputSlotOps implements InputSlotPort {
         return strict.consume(player, menu, slot, reach);
     }
 
+    @Override
+    public CompletionStage<Optional<String>> transfer(Player player, ViewerRecord session, Transfer transfer) {
+        if (!(session.window() instanceof GuiMenu menu) || !session.isOpen()) {
+            return refused("a custody transfer needs an open GUI context");
+        }
+        return strict.transfer(player, menu, transfer);
+    }
+
     private static CompletionStage<Optional<String>> refused(String reason) {
         return CompletableFuture.completedFuture(Optional.of(reason));
     }

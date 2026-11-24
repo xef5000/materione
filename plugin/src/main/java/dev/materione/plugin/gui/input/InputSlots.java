@@ -2,10 +2,13 @@ package dev.materione.plugin.gui.input;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.TemplateText;
+import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.flow.Condition;
 import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.content.gui.CompiledGui;
+import dev.materione.content.gui.SlotsComponent;
 import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.plugin.gui.render.Rendered;
 import java.util.ArrayList;
@@ -37,11 +40,23 @@ public final class InputSlots {
      * @param durable true when the layer is {@code durable: required}: its slots take the escrow path
      *     (gui-input-durability.md, row P of #247), or accept nothing where the platform cannot support it
      */
-    public record Input(int slot, String layer, Condition accept, boolean acceptBroken, boolean durable) {
+    public record Holder(SlotsComponent.Holder.Kind kind, TemplateText key, boolean broken) {
+
+        public static final Holder PLAYER = new Holder(SlotsComponent.Holder.Kind.PLAYER, null, false);
+        public static final Holder STACK = new Holder(SlotsComponent.Holder.Kind.STACK, null, false);
+    }
+
+    public record Input(int slot, String layer, Condition accept, boolean acceptBroken, boolean durable,
+            Holder holder) {
 
         /** A best-effort input slot. */
         public Input(int slot, String layer, Condition accept, boolean acceptBroken) {
-            this(slot, layer, accept, acceptBroken, false);
+            this(slot, layer, accept, acceptBroken, false, Holder.PLAYER);
+        }
+
+        /** A player-holder required or best-effort slot. */
+        public Input(int slot, String layer, Condition accept, boolean acceptBroken, boolean durable) {
+            this(slot, layer, accept, acceptBroken, durable, Holder.PLAYER);
         }
     }
 
@@ -81,17 +96,35 @@ public final class InputSlots {
             Collection<CompiledGui.Input> inputs, NamespacedId owner, LogicLookup lookup, boolean locked) {
         var out = new ArrayList<Input>();
         for (CompiledGui.Input input : inputs) {
+            Holder holder = holder(input.holder(), lookup);
             if (input.accept() == null) {
-                out.add(new Input(input.slot(), input.layer(), null, false, input.durable()));
+                out.add(new Input(input.slot(), input.layer(), null, false, input.durable(), holder));
             } else if (lookup == null) {
-                out.add(new Input(input.slot(), input.layer(), null, true, input.durable()));
+                out.add(new Input(input.slot(), input.layer(), null, true, input.durable(), holder));
             } else {
                 var compiled = FlowCompiler.compileCondition(owner, input.accept(), SLOT_CHANGE, lookup);
                 out.add(new Input(input.slot(), input.layer(), compiled.condition().orElse(null),
-                        compiled.condition().isEmpty(), input.durable()));
+                        compiled.condition().isEmpty(), input.durable(), holder));
             }
         }
         return of(out, locked);
+    }
+
+    private static Holder holder(SlotsComponent.Holder authored, LogicLookup lookup) {
+        if (authored == null || authored.kind() == SlotsComponent.Holder.Kind.PLAYER) {
+            return Holder.PLAYER;
+        }
+        if (authored.kind() == SlotsComponent.Holder.Kind.STACK) {
+            return Holder.STACK;
+        }
+        try {
+            return new Holder(SlotsComponent.Holder.Kind.KEYED,
+                    EngineExpressions.with(lookup == null
+                            ? dev.materione.behavior.expr.FunctionResolver.NONE : lookup.functions()).template(authored.key()),
+                    false);
+        } catch (RuntimeException invalid) {
+            return new Holder(SlotsComponent.Holder.Kind.KEYED, null, true);
+        }
     }
 
     /**

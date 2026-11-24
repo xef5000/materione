@@ -1,0 +1,9 @@
+custody_bag:
+  material: LEATHER
+  display_name: "Custody Bag"
+  behavior:
+    - id: open_bag
+      on: click:right
+      do:
+        - cancel
+        - view.open: { view: "itemvars:custody_bag" }

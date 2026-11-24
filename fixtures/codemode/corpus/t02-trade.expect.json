@@ -6,7 +6,7 @@
   "prompt": "Create /trade <player>: request, accept, shared two-player window, atomic swap, expiry.",
   "registry": "plugin-current",
   "result": "fail",
-  "gaps": ["CUSTODY", "STATE", "VIEW"],
+  "gaps": ["STATE", "VIEW"],
   "diagnostics": [
     {
       "code": 2353,
@@ -21,13 +21,6 @@
       "gap": "VIEW",
       "messageContains": ["viewers", "GuiFields"],
       "missingPrimitive": { "member": "viewers", "catalog": "GuiFields" }
-    },
-    {
-      "code": 2339,
-      "line": 21,
-      "gap": "CUSTODY",
-      "messageContains": ["custodyTransfer", "ActionCatalog"],
-      "missingPrimitive": { "member": "custodyTransfer", "catalog": "ActionCatalog" }
     }
   ]
 }
