@@ -329,6 +329,7 @@ SDK code; the core (#339, §3.9) and the type-check Worker (#342, §3.10) are bu
 | `list` with `nested` | An array of an object type; a list of `referenceKind` `mechanic` is `MechanicEntry[]` and one whose nested `type` references `gui-component` is `GuiLayerEntry[]` |
 | `raw` | `JsonValue`; when `referenceKind` is `list-source`, `JsonValue \| ListSourceSpec` |
 | `valueKind` `steps`, `condition`, `conditions`, `flow`, `arguments` (#355) | `readonly Step[]`, `ConditionValue` (a built condition or an `Expr<boolean>`), `readonly ConditionValue[]`, `string`, a mapping of names to values; the kind replaces the value type |
+| `valueKind` `interval`, `time-of-day` (#332) | a timer interval as `number \| string`, or a server-local time as `string`; the server compiler owns the range and `HH:MM` validation |
 | `expression: true` (#355) | The value type, `\| Expr`: the parameter also takes `m.expr` or an `m.fn` result |
 | `multiple: true` (#355) | The value type, `\| readonly (type)[]`: one value or a list (every trigger filter) |
 | `scope` on a parameter (#355) | A TSDoc line naming the variables the steps it holds can read (`cooldown.remaining` in `on_cooldown`) |

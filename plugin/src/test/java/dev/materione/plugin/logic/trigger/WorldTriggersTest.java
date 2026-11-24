@@ -30,10 +30,10 @@ class WorldTriggersTest {
     }
 
     @Test
-    void theSixTriggersAreNamedByTheConstantsTheFiringSitesUse() {
+    void theWorldAndTimerTriggersAreNamedByTheConstantsTheFiringSitesUse() {
         assertThat(byId.keySet()).containsExactly(
                 EventTypes.ENTITY_HIT, EventTypes.ENTITY_KILL, EventTypes.PLAYER_HURT, EventTypes.PLAYER_JOIN,
-                EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN);
+                EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN, EventTypes.EVERY, EventTypes.SCHEDULE);
     }
 
     @Test
@@ -41,7 +41,9 @@ class WorldTriggersTest {
         for (String id : List.of(EventTypes.ENTITY_HIT, EventTypes.ENTITY_KILL, EventTypes.PLAYER_HURT)) {
             assertThat(byId.get(id).describe().firedBy()).containsExactly("item", "rule");
         }
-        for (String id : List.of(EventTypes.PLAYER_JOIN, EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN)) {
+        for (String id : List.of(
+                EventTypes.PLAYER_JOIN, EventTypes.PLAYER_QUIT, EventTypes.PLAYER_RESPAWN,
+                EventTypes.EVERY, EventTypes.SCHEDULE)) {
             assertThat(byId.get(id).describe().firedBy()).containsExactly("rule");
         }
     }
@@ -75,6 +77,12 @@ class WorldTriggersTest {
         assertThat(byId.get(EventTypes.PLAYER_HURT).describe().filters()).extracting(filter -> filter.id())
                 .containsExactly("cause");
         assertThat(byId.get(EventTypes.PLAYER_JOIN).describe().filters()).isEmpty();
+        assertThat(byId.get(EventTypes.EVERY).describe().filters()).extracting(filter -> filter.id())
+                .containsExactly("interval", "for");
+        assertThat(byId.get(EventTypes.EVERY).describe().filters().get(0).semantics().valueKind())
+                .isEqualTo("interval");
+        assertThat(byId.get(EventTypes.SCHEDULE).describe().filters()).extracting(filter -> filter.id())
+                .containsExactly("at", "days");
     }
 
     @Test
@@ -89,11 +97,16 @@ class WorldTriggersTest {
         assertThat(paths(EventTypes.PLAYER_JOIN)).contains("player.first_join", "player.name", "vars.*");
         assertThat(paths(EventTypes.PLAYER_QUIT)).doesNotContain("player.first_join");
         assertThat(paths(EventTypes.PLAYER_RESPAWN)).doesNotContain("damage.cause");
+        assertThat(paths(EventTypes.EVERY)).contains("player.name", "server.online", "vars.*");
+        assertThat(paths(EventTypes.SCHEDULE)).contains("server.online", "vars.*")
+                .doesNotContain("player.name");
     }
 
     @Test
     void everyTriggerGuaranteesThePlayerThePlaceAndTheServer() {
-        for (TriggerType trigger : byId.values()) {
+        for (TriggerType trigger : byId.values().stream()
+                .filter(trigger -> !trigger.id().equals(EventTypes.EVERY)
+                        && !trigger.id().equals(EventTypes.SCHEDULE)).toList()) {
             assertThat(paths(trigger.id())).as(trigger.id()).contains("player.name", "player.uuid", "location.x",
                     "world.name", "server.online", "vars.*");
             assertThat(paths(trigger.id())).as(trigger.id() + " has no duplicate path").doesNotHaveDuplicates();

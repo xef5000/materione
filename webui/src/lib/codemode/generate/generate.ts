@@ -39,7 +39,9 @@ import {
   KIND_CONDITIONS,
   KIND_FLOW,
   KIND_GUI_COMPONENT,
+  KIND_INTERVAL,
   KIND_STEPS,
+  KIND_TIME_OF_DAY,
 } from './surface';
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from './capabilities';
 import { contextFor, contextTree, type ContextNode } from './context';
@@ -200,6 +202,10 @@ function typeOfKind(kind: string | undefined): string | undefined {
       return 'string';
     case KIND_ARGUMENTS:
       return '{ readonly [name: string]: JsonValue | Expr }';
+    case KIND_INTERVAL:
+      return 'number | string';
+    case KIND_TIME_OF_DAY:
+      return 'string';
     default:
       return undefined;
   }
@@ -215,7 +221,12 @@ function typeOfParam(param: SurfaceParam, owner: string, level: number, ctx: Con
   const kind = typeOfKind(param.valueKind);
   let type = kind ?? baseTypeOfParam(param, owner, level, ctx);
   if (param.expression === true && kind === undefined) type = `${type} | Expr`;
-  if (param.multiple === true && kind === undefined) type = `${type} | readonly (${type})[]`;
+  if (param.multiple === true
+      && (kind === undefined
+        || param.valueKind === KIND_INTERVAL
+        || param.valueKind === KIND_TIME_OF_DAY)) {
+    type = `${type} | readonly (${type})[]`;
+  }
   return type;
 }
 

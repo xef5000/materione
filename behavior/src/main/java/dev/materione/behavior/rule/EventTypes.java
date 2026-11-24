@@ -36,6 +36,8 @@ public final class EventTypes {
     public static final String PLAYER_JOIN = "player.join";
     public static final String PLAYER_QUIT = "player.quit";
     public static final String PLAYER_RESPAWN = "player.respawn";
+    public static final String EVERY = "every";
+    public static final String SCHEDULE = "schedule";
     // the player dying is the existing DEATH trigger: an item fires it per stack, a rule document once
 
     private EventTypes() {}

@@ -1,0 +1,13 @@
+clock:
+  description: "A one-second server timer controlled by a server variable"
+  behavior:
+    - id: increment
+      on: every
+      interval: 1s
+      for: server
+      if:
+        var: { var: "timers:enabled", value: true }
+      do:
+        - set_var: { var: "timers:count", op: add, value: 1 }
+        - run_command: "say MATERIONE-TIMERS-TICK ${vars.server.timers.count}"
+        - broadcast: "<yellow>Timer ${vars.server.timers.count}"

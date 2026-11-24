@@ -75,6 +75,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private PipelineService pipeline;
     private DeliveryService delivery;
     private BehaviorService behavior;
+    private dev.materione.plugin.runtime.behavior.ScheduledTriggerService scheduledTriggers;
     private dev.materione.core.storage.PlacementIndex placements;
     /** The crash-safe input ledger writer (gui-input-durability.md row L); null until storage is up. */
     private dev.materione.plugin.escrow.io.EscrowLedgerStore escrowLedger;
@@ -327,6 +328,9 @@ public final class MaterionePlugin extends JavaPlugin {
             }
             if (delivery != null) {
                 delivery.stop();
+            }
+            if (scheduledTriggers != null) {
+                scheduledTriggers.close();
             }
             if (guiStack != null) {
                 guiStack.openCommands().close();
@@ -885,6 +889,9 @@ public final class MaterionePlugin extends JavaPlugin {
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(logic.engine(), pipeline.runtime(), variables);
+        scheduledTriggers = new dev.materione.plugin.runtime.behavior.ScheduledTriggerService(
+                this, scheduling, behavior, logic.engine(), () -> pipeline.runtime().registries(), diagnostics::publish);
+        pipeline.observeSwaps(scheduledTriggers::refreshAfterSwap);
         // commands as content (logic.md section 40): the command tree and its thread hop are the open path's; the
         // gate and the flow are the command runner's. Installed here, in onEnable, so the COMMANDS lifecycle event
         // (which fires after it) registers the documents' names from the built registries.

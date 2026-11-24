@@ -9,6 +9,18 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Scheduled rule triggers (#332, D12, logic.md section 44).** Host-less rules can fire
+  with `every` (whole ticks or a duration of at least one second, once for the server or once
+  per online player) or   `schedule` (server-local `HH:MM`, optional days). All timers use
+  one Folia-safe platform wheel rebuilt on live swap: it skips missed occurrences, stops when
+  there are no timers, and fans per-player runs through entity schedulers at 32 per global
+  tick. The first 128 registrations per pack run; excess timers are diagnosed once with
+  `MTR-0128`. The registry self-description feeds the editor and code-mode SDK directly, the
+  `timers` fixture drives a one-second server-variable increment in
+  `PaperScheduledTriggersIT`, and QA `timers.server-variable-increments` observes the
+  broadcast. The benchmark's T26 now passes; T20 keeps only VIEW, while while-held item
+  timers remain out of scope.
+
 - **Views V1, a window shows what the state says: the reads index, the write observer and the scheduler (#456, #335, docs/architecture/views.md sections 5 and 17).**
   A container GUI that shows a declared variable now updates on a write with no `refresh:` clock and no `gui.refresh`: a write
   to a `player`, `server` or `session` variable the window reads marks its viewers, and one render at the next tick (never inline in

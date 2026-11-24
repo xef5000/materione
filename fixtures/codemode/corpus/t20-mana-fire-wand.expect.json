@@ -6,15 +6,8 @@
   "prompt": "Create regenerating mana up to 100 shown as a HUD bar, and a Fire Wand that spends 20 mana to shoot a fireball.",
   "registry": "plugin-current",
   "result": "fail",
-  "gaps": ["TIMER", "VIEW"],
+  "gaps": ["VIEW"],
   "diagnostics": [
-    {
-      "code": 2339,
-      "line": 6,
-      "gap": "TIMER",
-      "messageContains": ["every", "TriggerCatalog"],
-      "missingPrimitive": { "member": "every", "catalog": "TriggerCatalog" }
-    },
     {
       "code": 2339,
       "line": 10,

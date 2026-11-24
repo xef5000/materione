@@ -15,7 +15,8 @@ import java.util.List;
  * leaving, dying and respawning. They are descriptions only, like every trigger: the filters a rule may set,
  * the variables it is guaranteed, who fires it and whether it can cancel. Registered through the public logic
  * API, so the compiler checks {@code ${root}} paths against these schemas, the editor autocompletes from them
- * and the code-mode SDK generator reads them (D5). The firing sites are {@code WorldEventListener}.
+ * and the code-mode SDK generator reads them (D5). The firing sites are {@code WorldEventListener}
+ * and {@code ScheduledTriggerService}.
  *
  * <p>{@code entity.hit}, {@code entity.kill} and {@code player.hurt} are fired for an item's rules as well as
  * for rule documents, so they name both hosts; the rest belong to rule documents.
@@ -26,11 +27,13 @@ public final class WorldTriggers {
     public static final String RULE = "rule";
     private static final List<String> ITEM_AND_RULE = List.of("item", RULE);
     private static final List<String> RULE_ONLY = List.of(RULE);
+    private static final List<String> DAYS = List.of(
+            "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday");
 
     private WorldTriggers() {}
 
     /**
-     * The six triggers, in the order the editor lists them.
+     * The world and scheduled triggers, in the order the editor lists them.
      *
      * @param entityTypes the entity types the server knows, for the {@code type} filter; empty accepts any name
      * @param damageCauses the damage causes, for the {@code cause} filter
@@ -59,7 +62,13 @@ public final class WorldTriggers {
                         "A player leaves the server. Steps after a wait do not run: the player is gone",
                         RULE_ONLY, List.of(), false, List.of()),
                 trigger(EventTypes.PLAYER_RESPAWN, "Player respawn", "A player respawns after dying",
-                        RULE_ONLY, List.of(), false, List.of()));
+                        RULE_ONLY, List.of(), false, List.of()),
+                timerTrigger(EventTypes.EVERY, "Every interval",
+                        "A rule runs once per interval. The minimum interval is one second",
+                        RULE_ONLY, List.of(intervalFilter(), forFilter()), false, everyContext()),
+                timerTrigger(EventTypes.SCHEDULE, "At a server time",
+                        "A rule runs at a server-local HH:MM time, optionally on selected days",
+                        RULE_ONLY, List.of(atFilter(), daysFilter()), false, serverContext()));
     }
 
     private static List<ContextVariable> entityHit() {
@@ -155,8 +164,82 @@ public final class WorldTriggers {
                 SelfDescription.of(name, description), List.of(), firedBy, filters, context, cancellable));
     }
 
+    private static TriggerType timerTrigger(String id, String name, String description, List<String> firedBy,
+            List<ParameterSchema> filters, boolean cancellable, List<ContextVariable> context) {
+        return new WorldTrigger(id, new TriggerDescription(
+                SelfDescription.of(name, description), List.of(), firedBy, filters, context, cancellable));
+    }
+
     private static ParameterSchema filter(String id, List<String> allowed, String description) {
         return new ParameterSchema(id, ParameterType.ENUM, false, null, description, allowed, null);
+    }
+
+    private static ParameterSchema intervalFilter() {
+        return new ParameterSchema("interval", ParameterType.RAW, true, null,
+                "Whole server ticks (20 or more), or a duration of at least 1s such as 30s, 5m or 1h30m",
+                List.of(), null)
+                .ofKind(ParameterSchema.KIND_INTERVAL);
+    }
+
+    private static ParameterSchema forFilter() {
+        return new ParameterSchema("for", ParameterType.ENUM, false, "server",
+                "Run once for the server (the default), or once for each online player",
+                List.of("server", "each_player"), null);
+    }
+
+    private static ParameterSchema atFilter() {
+        return new ParameterSchema("at", ParameterType.STRING, true, null,
+                "Server-local 24-hour time, HH:MM", List.of(), null)
+                .ofKind(ParameterSchema.KIND_TIME_OF_DAY);
+    }
+
+    private static ParameterSchema daysFilter() {
+        return new ParameterSchema("days", ParameterType.ENUM, false, null,
+                "Days on which the time fires; omitted means every day", DAYS, null);
+    }
+
+    private static List<ContextVariable> everyContext() {
+        var out = new ArrayList<>(serverContext());
+        out.add(ContextVariable.of("player.name", ParameterType.STRING,
+                "The player's name; present only when for is each_player"));
+        out.add(ContextVariable.of("player.uuid", ParameterType.STRING,
+                "The player's UUID; present only when for is each_player"));
+        out.add(ContextVariable.of("player.gamemode", ParameterType.STRING,
+                "The player's game mode; present only when for is each_player"));
+        out.add(ContextVariable.of("player.sneaking", ParameterType.BOOLEAN,
+                "Whether the player is sneaking; present only when for is each_player"));
+        out.add(ContextVariable.of("player.op", ParameterType.BOOLEAN,
+                "Whether the player is an operator; present only when for is each_player"));
+        out.add(ContextVariable.of("player.health", ParameterType.DECIMAL,
+                "The player's health; present only when for is each_player"));
+        out.add(ContextVariable.of("player.level", ParameterType.INTEGER,
+                "The player's experience level; present only when for is each_player"));
+        out.add(ContextVariable.of("player.x", ParameterType.DECIMAL,
+                "The player's X; present only when for is each_player"));
+        out.add(ContextVariable.of("player.y", ParameterType.DECIMAL,
+                "The player's Y; present only when for is each_player"));
+        out.add(ContextVariable.of("player.z", ParameterType.DECIMAL,
+                "The player's Z; present only when for is each_player"));
+        out.add(ContextVariable.of("location.x", ParameterType.DECIMAL,
+                "The player's X; present only when for is each_player"));
+        out.add(ContextVariable.of("location.y", ParameterType.DECIMAL,
+                "The player's Y; present only when for is each_player"));
+        out.add(ContextVariable.of("location.z", ParameterType.DECIMAL,
+                "The player's Z; present only when for is each_player"));
+        out.add(ContextVariable.of("location.world", ParameterType.STRING,
+                "The player's world; present only when for is each_player"));
+        out.add(ContextVariable.of("world.name", ParameterType.STRING,
+                "The player's world; present only when for is each_player"));
+        out.add(ContextVariable.of("world.time", ParameterType.INTEGER,
+                "The player's world time; present only when for is each_player"));
+        return out;
+    }
+
+    private static List<ContextVariable> serverContext() {
+        return List.of(
+                ContextVariable.of("server.online", ParameterType.INTEGER, "Players online"),
+                ContextVariable.of("server.max", ParameterType.INTEGER, "Player slots"),
+                ContextVariable.of("vars.*", ParameterType.RAW, "Variables read or written by this run"));
     }
 
     /** A trigger that is only its description. */

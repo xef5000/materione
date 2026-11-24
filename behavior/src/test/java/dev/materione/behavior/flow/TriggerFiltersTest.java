@@ -79,6 +79,24 @@ class TriggerFiltersTest {
             }
         };
         triggers.register(NamespacedId.of("materione", "pulse"), pulse, pulse.describe().self(), "test");
+        var clock = new TriggerType() {
+            @Override
+            public String id() {
+                return "clock";
+            }
+
+            @Override
+            public TriggerDescription describe() {
+                return new TriggerDescription(SelfDescription.of("Clock", "A test timer"), List.of(), List.of("rule"),
+                        List.of(
+                                new ParameterSchema("interval", ParameterType.RAW, true, null, "interval",
+                                        null, null).ofKind(ParameterSchema.KIND_INTERVAL),
+                                new ParameterSchema("at", ParameterType.STRING, false, null, "time",
+                                        null, null).ofKind(ParameterSchema.KIND_TIME_OF_DAY)),
+                        List.of(), false);
+            }
+        };
+        triggers.register(NamespacedId.of("materione", "clock"), clock, clock.describe().self(), "test");
     }
 
     @Test
@@ -156,6 +174,25 @@ class TriggerFiltersTest {
                 .contains("must be a whole number");
         assertThat(compile("- on: tap\n  layer: []\n  do:\n    - a: x\n").problems().get(0).message())
                 .contains("is empty");
+    }
+
+    @Test
+    void timerFiltersAcceptTicksDurationsAndLocalTimesAndRefuseUnsafeValuesAtLoad() {
+        Rule ticks = one("- on: clock\n  interval: 20\n  do:\n    - a: x\n");
+        assertThat(ticks.filters().get("interval")).contains(List.of("20"));
+        Rule duration = one("- on: clock\n  interval: 1h30m\n  at: 06:05\n  do:\n    - a: x\n");
+        assertThat(duration.filters().get("interval")).contains(List.of("1h30m"));
+        assertThat(duration.filters().get("at")).contains(List.of("06:05"));
+
+        assertThat(compile("- on: clock\n  interval: 1\n  do:\n    - a: x\n").problems())
+                .singleElement().satisfies(problem -> assertThat(problem.message())
+                        .contains("invalid timer 'interval'").contains("at least 20"));
+        assertThat(compile("- on: clock\n  interval: 1s\n  at: 24:00\n  do:\n    - a: x\n").problems())
+                .singleElement().satisfies(problem -> assertThat(problem.message())
+                        .contains("HH:MM"));
+        assertThat(compile("- on: clock\n  interval: 1s\n  at: \"06:00:30\"\n  do:\n    - a: x\n").problems())
+                .singleElement().satisfies(problem -> assertThat(problem.message())
+                        .contains("server-local HH:MM"));
     }
 
     @Test

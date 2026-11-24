@@ -48,7 +48,7 @@
 |---|---|
 | Content types | `item`, `block`, `furniture`, `glyph`, `sound`, `painting`, `effect`, `recipe`, `gui`, `currency`, `variable`, `rule` (since #327) |
 | Mechanics | `commands`, `food`, `durability`, `soulbound`, `backpack` |
-| Triggers (live) | `click`, `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage` (durability), `death` (the carrier dies); since #327 `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`, `player.death`; `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`, `gui.page` |
+| Triggers (live) | `click`, `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage` (durability), `death` (the carrier dies); since #327 `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`, `player.death`; `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`, `gui.page`; since #332 `every`, `schedule` for rule documents |
 | Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `view.open`, `view.close`, `view.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
 | Conditions | `has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has` |
 | Flow steps | action, `if`, `require`, `wait`, `stop`, `call` (same resource), `choose`; rule options `id`, `cooldown`, `charges`, `per`; action options `chance`, `delay` (there is no rule-level `chance`) |
@@ -80,22 +80,23 @@
 | T17 | **Leaderboard**: `/top` shows the ten players with the most kills | GUI, progression | Fail | QUERY |
 | T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Fail | CUSTODY |
 | T19 | **Vending machine**: a furniture that opens a shop when right-clicked | furniture | Pass | |
-| T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | TIMER, VIEW |
+| T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | VIEW |
 | T21 | **`/pay <player> <amount>`** | command, economy | Pass (#464) | |
 | T22 | **Arena region**: entering `arena` gives the PvP kit, leaving removes it | integration | Fail | PROVIDER |
 | T23 | **Rank-up**: `/rankup` pays 10 000 coins for the next rank and announces it | GUI, economy | Pass | |
 | T24 | **Ruby ore**: a custom block that drops a ruby and 5 XP, 10% chance of a second ruby | block | Pass | |
 | T25 | **Miner's heirloom**: a pickaxe with 2 000 durability that is kept on death | item | Pass | |
-| T26 | **Announcements**: every 5 minutes broadcast the next of four tips | server | Fail | TIMER |
+| T26 | **Announcements**: every 5 minutes broadcast the next of four tips | server | Pass (#332) | |
 | T27 | **`/discord`**: prints the invite link | command | Pass (#330) | |
 | T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**21 pass, 0 partial, 8 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
+**22 pass, 0 partial, 7 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
 `now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41), #330 (commands as
-content, logic.md §40) and #464 (the money amount as an expression, logic.md §42): T04, T05 and T07 flipped to Pass alongside T06, T10
-and T15, T12, T13 and T14 with #329, T27 with #330, and T21 with #464. The count was 10, 2 and 17 when the page was written, 13, 2 and
-14 after #327, 16, 13 before #329 and #330, and 20, 9 before #464. "Fails on" lists what the honest program needs, not everything that
+content, logic.md §40), #464 (the money amount as an expression, logic.md §42) and #332 (scheduled triggers, logic.md §44):
+T04, T05 and T07 flipped to Pass alongside T06, T10 and T15, T12, T13 and T14 with #329, T27 with #330, T21 with #464, and T26 with
+#332. The count was 10, 2 and 17 when the page was written, 13, 2 and 14 after #327, 16, 13 before #329 and #330, 20, 9 before #464,
+and 21, 8 before #332. "Fails on" lists what the honest program needs, not everything that
 would be nice.
 
 **The follow-up set** (#320: "five follow-up change requests succeed without regressions"), applied to T01 after it is built (and
@@ -107,7 +108,7 @@ verified in `fixtures/codemode/corpus/f01-*`–`f05-*`, with `F3` and `F4` pre-s
 | F2 | "Show the level in the sword's lore" | one step that edits the held stack | Pass (#329: `stack.edit`) |
 | F3 | "The upgrade costs 500 times the level" | one `setFields` on the button's rule | Pass once T01 passes |
 | F4 | "Rename the permission to `rpg.bloodfang`" | `findReferences`, then `setFields` on each hit | Pass once T01 passes |
-| F5 | "Level 5 swords emit red particles when held" | one rule on `equip` with a repeating particle | Fail: TIMER (`particle` exists since #329) |
+| F5 | "Level 5 swords emit red particles when held" | one rule on `equip` with a repeating particle | Fail: TIMER (`particle` exists since #329; the generic timer has no item-held context) |
 
 ---
 
@@ -433,12 +434,12 @@ const machine = p.furnitures.create("vending_machine", { model: m.ref.asset("mod
 machine.rules.add({ on: m.triggers.click({ detail: "right" }), do: [ m.actions.viewOpen(shop), m.actions.sound("block.note_block.chime") ] });
 ```
 
-### T20 Mana and a fire wand — Fail (TIMER, VIEW)
+### T20 Mana and a fire wand — Fail (VIEW)
 
 ```ts
 const mana = p.variables.create("mana", { scope: "player", type: "number", default: 100, min: 0, max: 100 });
 p.rules.create("mana_regen", {                                            // a rule document: passes since #327
-  on: m.triggers.every({ seconds: 1, for: "each_player" }),               // ✗ TS2339 'every'                   [TIMER]
+  on: m.triggers.every({ interval: "1s", for: "each_player" }),            // passes since #332
   do: [ m.actions.setVar(mana, { op: "add", value: 2 }) ] });
 p.huds.create("mana_bar", { layers: [ m.hud.bar({ value: m.expr`${mana} / 100`, anchor: "hotbar_right" }) ] });
 //^^^^ ✗ TS2339 'huds' does not exist on type 'PackWriter' (#7)                                                 [VIEW]
@@ -449,7 +450,7 @@ wand.rules.add({ on: m.triggers.click({ detail: "right" }), do: [
   m.actions.launch({ projectile: "small_fireball", speed: 1.5 }) ] });    // passes since #329
 ```
 
-The mana variable, the spend-or-refuse rule and the `launch` pass (the projectile carries the wand's id, so the wand's own `entity.hit` rule answers when it lands).
+The timer, mana variable, spend-or-refuse rule and `launch` pass (the projectile carries the wand's id, so the wand's own `entity.hit` rule answers when it lands).
 An `actionbar` line on every tick would imitate a HUD; it is a
 workaround and it still needs TIMER.
 
@@ -520,13 +521,13 @@ p.items.create("miners_heirloom", { material: "netherite_pickaxe", display_name:
 
 Both are class F mechanics (primitives.md §4.2) and both work. They are the next presets after the backpack.
 
-### T26 Announcements — Fail (TIMER)
+### T26 Announcements — Pass (#332)
 
 ```ts
 const tips = ["Use /kits for a starter kit.", "Vote daily for keys.", "Join our Discord: /discord", "Read /rules."];
 const next = p.variables.create("tip_index", { scope: "server", type: "number", default: 0 });
 p.rules.create("announce", {                                              // a rule document: passes since #327
-  on: m.triggers.every({ minutes: 5 }),                                   // ✗ [TIMER]
+  on: m.triggers.every({ interval: "5m" }),
   do: [ m.steps.choose(tips.map((t, i) => ({ if: m.expr`${next} == ${i}`, then: [ m.actions.broadcast(`<aqua>[Tip] ${t}`) ] }))),
         m.actions.setVar(next, { op: "set", value: m.expr`(${next} + 1) % ${tips.length}` }) ] });
 ```
@@ -589,7 +590,7 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **QTY** | A quantity parameter that takes an expression: the amount of `give_money`, `take_money` and `has_money` reads a literal | new (found by #330) | T21 (1) | **Closed by #464** (`amount` of `give_money`, `take_money` and `has_money` takes an expression, as `give_exp` does; logic.md §42); T21 passes |
 | **VIEW** | Views over state: more than one viewer; the dialog and HUD view kinds | §5.3 | T02 T20 T28 (3) | none alone |
 | **STATE** | Keyed state: a holder other than player or server (a stack, an entity, a key), a TTL, an expiry trigger | §5.2 | T01 T02, F1 (2) | none alone |
-| **TIMER** | A trigger that fires on a schedule | §5.5 | T20 T26, F5 (2) | with RULE: T26 |
+| **TIMER** | A trigger that fires on a schedule | §5.5 | F5 (0 main tasks) | **Closed by #332** (`every` and `schedule`, logic.md §44); with RULE, T26 passes and T20 keeps only VIEW. F5 keeps its item-held context gap |
 | **CUSTODY** | Custody holders beyond the player's own account, and the atomic transfer | §5.1 | T02 T18, T03 by hand (2) | T18 |
 | **QUERY** | A read across the holders of one variable (ranking) | new | T17 (1) | none alone |
 | **PROVIDER** | Open provider kinds (regions) | §5.8 | T22 (1) | none alone |
@@ -607,10 +608,10 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 18 | T04 T05 T07 | Small: expression functions and one rule option |
-| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 21 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
-| 4 | **Commands as content** (#330), **shipped** | CMD | 21 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
-| 5 | **Target addressing** (#331), **shipped** | TARGET | 21 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
-| 6 | **Timers** (rides #327's rule unit) (#332) | TIMER | 22 | T26 | Small once RULE exists; budgets matter |
+| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 22 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
+| 4 | **Commands as content** (#330), **shipped** | CMD | 22 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
+| 5 | **Target addressing** (#331), **shipped** | TARGET | 22 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
+| 6 | **Timers** (rides #327's rule unit) (#332), **shipped** | TIMER | 22 | T26 | Small once RULE exists; one bounded platform wheel, logic.md §44 |
 | 7 | **Keyed state: holders, keys, TTL** (#333) | STATE | 23 | T01 (needs 1 and 5) | Large: the store port, stack and entity holders, migration checks |
 | 8 | **Custody holders and transfer** (#334) | CUSTODY | 24 | T18 | Large, with an open design problem (primitives.md §3) |
 | 9 | **Views over state; dialog and HUD as view kinds** (#335) | VIEW | 27 | T02 (needs 4, 5, 7, 8), T20 (needs 1, 3, 6), T28 (needs 1) | Large: #6 and #7 reshaped |
@@ -707,7 +708,7 @@ milestone **M6.5**.
 ```
  track A, the agent surface (D13)                               track B, the primitives (D12)
  ┌──────────────────────────────────────────────┐               ┌────────────────────────────────────────┐
- │ #337 SDK generator ──► #339 SDK core ─┐      │               │ #327 rules + triggers ─► #332 timers   │
+ │ #337 SDK generator ──► #339 SDK core ─┐      │               │ #327 rules + triggers ─► #332 timers ✓ │
  │ #340 spike ─► #342 type-check Worker ─┤      │               │ #328 clock                             │
  │              #343 sandbox ────────────┼─► #346 proposal     │ #329 verbs        #330 commands        │
  │ #341 transaction + dry run ───────────┤    and grants ─► #347 review UI ─► #348 chatbot              │

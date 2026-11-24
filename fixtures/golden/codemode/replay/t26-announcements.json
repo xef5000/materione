@@ -1,0 +1,53 @@
+{
+  "golden": "t26-announcements",
+  "accepted": true,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [],
+  "documents": [
+    {
+      "path": "variables/tip_index.yml",
+      "kind": "created",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "rules/announce.yml",
+      "kind": "created",
+      "operations": [
+        1,
+        2
+      ]
+    }
+  ]
+}

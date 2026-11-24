@@ -50,6 +50,8 @@ export const KIND_CONDITION = 'condition';
 export const KIND_CONDITIONS = 'conditions';
 export const KIND_FLOW = 'flow';
 export const KIND_ARGUMENTS = 'arguments';
+export const KIND_INTERVAL = 'interval';
+export const KIND_TIME_OF_DAY = 'time-of-day';
 export const KIND_GUI_COMPONENT = 'gui-component';
 
 /** Returns the common properties carried by every GUI layer (outside the component-specific fields). */

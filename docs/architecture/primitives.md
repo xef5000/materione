@@ -160,7 +160,7 @@ Content types registered by `content/` (D5), 12 in total (the audit counted 11; 
 | Missing | Why |
 |---|---|
 | A **command** type | §3 need 1. |
-| ~~A **rule or flow unit** that is not owned by an item, block, furniture or GUI~~ | **Built in #327** as the `rule` content type (`rules/`, logic.md §37): the exact shape of a host's `behavior:` and `flows:`, and the world fires its triggers with no resource in the way. A command and a timer still have no host (§5.4, #332). Was: Rules live in a host resource today (logic.md §2.1, §2.4: named flows are callable only inside one resource). A command, a world-event rule or a timer has no host. §5.5. |
+| ~~A **rule or flow unit** that is not owned by an item, block, furniture or GUI~~ | **Built in #327** as the `rule` content type (`rules/`, logic.md §37): the exact shape of a host's `behavior:` and `flows:`, and the world fires its triggers with no resource in the way. Commands gained their own content host in #330, and scheduled rules gained `every` and `schedule` in #332 (logic.md §44). Was: Rules lived in a host resource (logic.md §2.1, §2.4), and a command, world-event rule or timer had no host. §5.5. |
 | A **preset** type | A preset's definition must be content, or presets become an addon-only Java surface. **Decided** (master §14.7 (ii), PR #450): a user-extensible `preset` content type; design in [`backpack-preset.md`](backpack-preset.md) §4.4. §7. |
 | Other **view kinds**: dialog (#6), HUD (#7) | They are the GUI's siblings (§5.3). |
 
@@ -192,15 +192,16 @@ Item, block and furniture triggers (`behavior/logic/BuiltinTriggers`): 17 regist
 `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage`, `death`) and 6 reserved and unsupported (`inv_click`,
 `tick`, `menu_click`, `hud_threshold`, `dialog_submit`, `custom`). GUI triggers (`plugin/gui/trigger/GuiTriggers`): 9
 (`gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`,
-`gui.page`). **Since #327**, world triggers (`plugin/logic/trigger/WorldTriggers`): 6 (`entity.hit`, `entity.kill`, `player.hurt`,
-`player.join`, `player.quit`, `player.respawn`, plus the existing `death` gaining the `rule` host), fired for rule documents and, for the first three, for an item's
-rules too (logic.md §37).
+`gui.page`). **Since #327**, world event triggers (`plugin/logic/trigger/WorldTriggers`) are `entity.hit`, `entity.kill`,
+`player.hurt`, `player.join`, `player.quit` and `player.respawn`, plus the existing `death` gaining the `rule` host; they are
+fired for rule documents and, for the first three, for an item's rules too (logic.md §37). Since #332 the same registry also
+holds the scheduled triggers `every` and `schedule` for rule documents (logic.md §44).
 
 | Finding | Class | Direction |
 |---|---|---|
 | ~~Every trigger is fired by a *host* (an item, a block, a furniture, a GUI), and a rule has to live in that host.~~ **Built (#327).** The `rule` content type holds rules that no item, block, furniture or GUI owns; the seven world triggers are fired for it. | **P** | None (§5.5 keeps the timer, `custom`/`emit` and command-run triggers proposed). |
 | ~~`damage` is *item durability damage* ("The item takes durability damage"), not combat…~~ **Built (#327).** `damage` stays durability damage. Combat has its own triggers: `entity.hit` (the struck entity and the damage in context), `entity.kill`, `player.hurt`, and the lifecycle `player.join`, `player.quit`, `player.respawn`, `player.death`. A command run and chat sent still have no trigger. | **P** | Command-run and chat triggers stay proposed (§5.5, §5.4). |
-| `custom` is reserved, and so is a generic `tick`. Without a named event content can emit and answer, content cannot compose with other content. | **G** | `custom` with a typed payload and an `emit` action; a timer; an expiry trigger (§5.2). |
+| `custom` is reserved, and so is a generic `tick`. Without a named event content can emit and answer, content cannot compose with other content. **The timer is built by #332** as `every` and `schedule` on rule documents (logic.md §44); `tick` stays unsupported. | **G** | `custom` with a typed payload and an `emit` action; an expiry trigger (§5.2). |
 | The `gui.*` triggers carry the GUI's own context (`gui.*`, `slot.*`, `entry.*`). | P | Stays. Views other than the container GUI add their own sibling triggers (#6, #7). |
 
 ### 4.4 Actions
@@ -388,8 +389,10 @@ accepts a namespaced id in the syntax). This is also what unblocks #320's own ex
 **As built (#327, logic.md §37):** the standalone unit is a new `rule` content type (`rules/`), not a facility of the command type
 (the design choice the paragraph above left open: a rule document's keys are exactly a host's `behavior:` and `flows:`, so every
 tool that edits a host edits it). The shipped triggers are `entity.hit`, `entity.kill`, `player.hurt`, `player.join`,
-`player.quit` and `player.respawn`, and the existing `death` is now also hosted by rule documents. **Still proposed, and no task of the benchmark needed them:** `custom` with
-`emit`, an expiry trigger, command run and chat sent, and cross-resource `call`. The timer is #332.
+`player.quit` and `player.respawn`, and the existing `death` is now also hosted by rule documents. **Built in #332:** the
+rule-document triggers `every` (`interval`, `for: server|each_player`) and `schedule` (`at`, optional `days`) use one bounded global
+wheel (logic.md §44); item and while-held timers are not part of this primitive. **Still proposed, and no task of the benchmark
+needed them:** `custom` with `emit`, an expiry trigger, command run and chat sent, and cross-resource `call`.
 
 ### 5.6 Target addressing
 

@@ -5,15 +5,7 @@
   "area": "server",
   "prompt": "Broadcast the next of four rotating server tips every 5 minutes.",
   "registry": "plugin-current",
-  "result": "fail",
-  "gaps": ["TIMER"],
-  "diagnostics": [
-    {
-      "code": 2339,
-      "line": 11,
-      "gap": "TIMER",
-      "messageContains": ["every", "TriggerCatalog"],
-      "missingPrimitive": { "member": "every", "catalog": "TriggerCatalog" }
-    }
-  ]
+  "result": "pass",
+  "gaps": [],
+  "diagnostics": []
 }
