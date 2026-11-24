@@ -1135,6 +1135,10 @@ public final class EditorContentOps {
             entry.addProperty("type", variable.type().name().toLowerCase(java.util.Locale.ROOT));
             entry.addProperty("description", variable.description());
             entry.add("hosts", strings(variable.hosts()));
+            if (variable.filter() != null) {
+                entry.addProperty("filter", variable.filter());
+                entry.add("filterValues", strings(variable.filterValues()));
+            }
             context.add(entry);
         }
         return context;

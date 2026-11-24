@@ -1,0 +1,10 @@
+enabled:
+  scope: server
+  type: boolean
+  default: false
+  description: "Whether the timer fixture emits"
+count:
+  scope: server
+  type: number
+  default: 0
+  description: "Server timer firings"

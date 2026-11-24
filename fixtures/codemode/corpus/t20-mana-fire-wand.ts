@@ -3,7 +3,7 @@
 const p = m.pack("bench");
 const mana = p.variables.create("mana", { scope: "player", type: "number", default: 100 });
 const regen = p.rules.create("mana_regen", { description: "Regenerate player mana" });
-regen.rules.add(m.triggers.every({ seconds: 1, for: "each_player" }), () => ({
+regen.rules.add(m.triggers.every({ interval: "1s", for: "each_player" }), () => ({
   do: [m.actions.setVar({ var: mana, op: "add", value: "2" })],
 }));
 

@@ -70,7 +70,7 @@ Action         = registry entry + params         // shared across all content ty
 
 - **Event taxonomy** (normalized across types): `click` (left/right/shift, on item/block/
   furniture/air), `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`,
-  `inv_click`, `death`, `consume`, `tick` (timers), `menu.click`, `hud.threshold`,
+  `inv_click`, `death`, `consume`, `every` and `schedule` (rule-document timers), `menu.click`, `hud.threshold`,
   `dialog.submit`, `custom` (addon-defined). A menu button click and an item right-click are
   the same `click` event carrying different context fields. *As built (#327, logic.md §37):*
   the **world events** `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`,
@@ -78,6 +78,10 @@ Action         = registry entry + params         // shared across all content ty
   item, block, furniture or GUI to hold them) and, for the first three, for an item's rules
   (the item in the main hand; worn armor too for `player.hurt`). Their listeners are static
   wiring that cost one set lookup per event when no rule answers the trigger.
+- **Scheduled triggers** (`logic.md` §44) live only on host-less rule documents. One platform
+  wheel runs on the Folia global scheduler and dispatches each-player work on the player
+  schedulers. Timers rebuild after every successful shadow swap; a reload with no timers arms
+  no task. `tick` remains reserved and unsupported, so item-held repetition is not implied.
 - **Condition evaluation**: one universal expression engine (settled decision). Expressions
   parse once at load into an AST; runtime evaluation is tree-walk with typed values;
   compile-to-lambda is a later optimization, not a design change. PlaceholderAPI resolves

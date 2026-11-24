@@ -39,7 +39,9 @@ import {
   KIND_CONDITIONS,
   KIND_FLOW,
   KIND_GUI_COMPONENT,
+  KIND_INTERVAL,
   KIND_STEPS,
+  KIND_TIME_OF_DAY,
 } from './surface';
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from './capabilities';
 import { contextFor, contextTree, type ContextNode } from './context';
@@ -200,6 +202,10 @@ function typeOfKind(kind: string | undefined): string | undefined {
       return 'string';
     case KIND_ARGUMENTS:
       return '{ readonly [name: string]: JsonValue | Expr }';
+    case KIND_INTERVAL:
+      return 'number | string';
+    case KIND_TIME_OF_DAY:
+      return 'string';
     default:
       return undefined;
   }
@@ -215,7 +221,12 @@ function typeOfParam(param: SurfaceParam, owner: string, level: number, ctx: Con
   const kind = typeOfKind(param.valueKind);
   let type = kind ?? baseTypeOfParam(param, owner, level, ctx);
   if (param.expression === true && kind === undefined) type = `${type} | Expr`;
-  if (param.multiple === true && kind === undefined) type = `${type} | readonly (${type})[]`;
+  if (param.multiple === true
+      && (kind === undefined
+        || param.valueKind === KIND_INTERVAL
+        || param.valueKind === KIND_TIME_OF_DAY)) {
+    type = `${type} | readonly (${type})[]`;
+  }
   return type;
 }
 
@@ -398,6 +409,10 @@ function idUnions(ctx: Context): string[] {
   add('ListSourceId', 'The list sources this server registers.', ids(b.listSources));
   add('InputMethodId', 'The input methods a `prompt` can use on this server.', ids(b.inputMethods));
   add('StepKindId', 'The step kinds of the flow model this server supports.', sortedBy(b.steps.filter((step) => step.supported), (step) => step.id).map((step) => step.id));
+  lines.push(
+    ...doc(['The scalar values selected by a trigger filter, whether one value or a list is written.'], 0),
+    'type TriggerFilterValues<F> = F extends readonly (infer V)[] ? V : F;',
+  );
   return lines;
 }
 
@@ -651,7 +666,19 @@ function contextValueType(variable: SurfaceContextVar): string {
   return `ContextValue<${scalarType(variable.type)}>`;
 }
 
-function contextNodeType(node: ContextNode, level: number): string {
+function subtreeConditional(node: ContextNode): boolean {
+  const leaves = node.leaf === undefined ? [] : [node.leaf];
+  for (const child of node.children.values()) leaves.push(...conditionalLeaves(child));
+  return leaves.length > 0 && leaves.every((variable) => variable.filter !== undefined && (variable.filterValues?.length ?? 0) > 0);
+}
+
+function conditionalLeaves(node: ContextNode): SurfaceContextVar[] {
+  const out = node.leaf === undefined ? [] : [node.leaf];
+  for (const child of node.children.values()) out.push(...conditionalLeaves(child));
+  return out;
+}
+
+function contextNodeType(node: ContextNode, level: number, optionalConditionals = false): string {
   const parts: string[] = [];
   if (node.leaf !== undefined) parts.push(contextValueType(node.leaf));
   if (node.wildcard !== undefined) parts.push(`{ readonly [name: string]: ${contextValueType(node.wildcard)} }`);
@@ -659,7 +686,7 @@ function contextNodeType(node: ContextNode, level: number): string {
     const pad = indentOf(level + 1);
     const lines = [...node.children.entries()].flatMap(([name, child]) => [
       ...doc([child.leaf === undefined ? undefined : sentence(child.leaf.description)], level + 1),
-      `${pad}readonly ${key(name)}: ${contextNodeType(child, level + 1)};`,
+      `${pad}readonly ${key(name)}${optionalConditionals && subtreeConditional(child) ? '?' : ''}: ${contextNodeType(child, level + 1, optionalConditionals)};`,
     ]);
     parts.push(`{\n${lines.join('\n')}\n${indentOf(level)}}`);
   }
@@ -667,13 +694,82 @@ function contextNodeType(node: ContextNode, level: number): string {
 }
 
 /** The properties of an interface that holds one context tree, one entry per top-level segment. */
-function contextProperties(vars: readonly SurfaceContextVar[], level: number): string[] {
+function contextProperties(vars: readonly SurfaceContextVar[], level: number, optionalConditionals = false): string[] {
   const root = contextTree(vars);
   const pad = indentOf(level);
   return [...root.children.entries()].flatMap(([name, child]) => [
     ...doc([child.leaf === undefined ? undefined : sentence(child.leaf.description)], level),
-    `${pad}readonly ${key(name)}: ${contextNodeType(child, level)};`,
+    `${pad}readonly ${key(name)}${optionalConditionals && subtreeConditional(child) ? '?' : ''}: ${contextNodeType(child, level, optionalConditionals)};`,
   ]);
+}
+
+interface ContextRequirement {
+  filter: string;
+  values: string[];
+}
+
+function contextRequirement(vars: readonly SurfaceContextVar[]): ContextRequirement | undefined {
+  const conditional = vars.filter(
+    (variable) => variable.filter !== undefined && (variable.filterValues?.length ?? 0) > 0,
+  );
+  if (conditional.length === 0) return undefined;
+  const first = conditional[0]!;
+  const values = [...(first.filterValues ?? [])].sort(compare);
+  if (conditional.every(
+    (variable) =>
+      variable.filter === first.filter
+      && [...(variable.filterValues ?? [])].sort(compare).every((value, index) => value === values[index])
+      && (variable.filterValues?.length ?? 0) === values.length,
+  )) {
+    return { filter: first.filter as string, values };
+  }
+  return undefined;
+}
+
+function contextInterface(
+  name: string,
+  trigger: SurfaceTrigger,
+  mode: 0 | 1 | 2,
+): string[] {
+  const hosts = [...trigger.firedBy].sort(compare);
+  const hostLines = hosts.flatMap((host) => {
+    let vars = contextFor(trigger.context, host);
+    if (mode === 1) vars = vars.filter((variable) => variable.filter === undefined);
+    return [
+      ...doc([`What a rule on the host \`${host}\` receives.`], 1),
+      `  readonly ${key(host)}: {`,
+      ...contextProperties(vars, 2, mode === 2),
+      '  };',
+    ];
+  });
+  return [
+    ...doc([
+      `The context of \`${trigger.id}\` rules, by the host that fires it.`,
+      hosts.length === 0 ? 'No host fires this trigger on this server, so no rule can use it.' : undefined,
+    ], 0),
+    hostLines.length === 0 ? `interface ${name} {}` : `interface ${name} {`,
+    ...(hostLines.length === 0 ? [] : [...hostLines, '}']),
+  ];
+}
+
+function conditionalTriggerSignature(
+  input: BuilderInput,
+  triggerId: string,
+  contextName: string,
+  requirement: ContextRequirement,
+): string[] {
+  const param = input.params.find((candidate) => candidate.id === requirement.filter);
+  const defaultValue = param?.default === undefined || param.default === ''
+    ? 'undefined'
+    : literal(param.default);
+  const constraint = `${input.paramsName}[${literal(requirement.filter)}] | undefined`;
+  const generic = `<F extends ${constraint} = ${defaultValue}>`;
+  const params = `${input.paramsName} & { readonly ${key(requirement.filter)}?: F }`;
+  const optional = input.params.every((candidate) => !candidate.required) ? '?' : '';
+  return [
+    ...doc(input.docLines, 1),
+    `  ${key(input.member)}${generic}(params${optional}: ${params}): TriggerBinding<${literal(triggerId)}, ${contextName}<F>>;`,
+  ];
 }
 
 function triggers(ctx: Context): string[] {
@@ -694,43 +790,61 @@ function triggers(ctx: Context): string[] {
       paramsName: argsName,
       params: [...detail, ...trigger.filters],
       extendsTypes: [],
-      returns: `TriggerBinding<${literal(trigger.id)}, ${contextName}>`,
       docLines: [],
+      returns: `TriggerBinding<${literal(trigger.id)}, ${contextName}>`,
     };
     lines.push('', ...doc([`The detail and the filters of the \`${trigger.id}\` trigger.`], 0), ...paramsInterface(args, ctx));
     const hosts = [...trigger.firedBy].sort(compare);
-    const hostLines = hosts.flatMap((host) => {
-      const vars = contextFor(trigger.context, host);
-      return [
-        ...doc([`What a rule on the host \`${host}\` receives.`], 1),
-        `  readonly ${key(host)}: {`,
-        ...contextProperties(vars, 2),
-        '  };',
-      ];
-    });
-    lines.push(
-      '',
-      ...doc([
-        `The context of \`${trigger.id}\` rules, by the host that fires it.`,
-        hosts.length === 0 ? 'No host fires this trigger on this server, so no rule can use it.' : undefined,
-      ], 0),
-      hostLines.length === 0 ? `interface ${contextName} {}` : `interface ${contextName} {`,
-      ...(hostLines.length === 0 ? [] : [...hostLines, '}']),
-    );
-    signatures.push(
-      builderSignature(
-        {
-          ...args,
-          docLines: [
-            ...entryDoc(trigger, [
-              hosts.length > 0 ? `Fired by: ${hosts.join(', ')}.` : undefined,
-              trigger.cancellable ? 'Cancellable: a rule may cancel the underlying game event.' : undefined,
-            ]),
-          ],
-        },
-        ctx,
-      ),
-    );
+    const requirement = contextRequirement(trigger.context);
+    if (requirement === undefined) {
+      lines.push('', ...contextInterface(contextName, trigger, 0));
+      signatures.push(
+        builderSignature(
+          {
+            ...args,
+            docLines: [
+              ...entryDoc(trigger, [
+                hosts.length > 0 ? `Fired by: ${hosts.join(', ')}.` : undefined,
+                trigger.cancellable ? 'Cancellable: a rule may cancel the underlying game event.' : undefined,
+              ]),
+            ],
+          },
+          ctx,
+        ),
+      );
+    } else {
+      const serverName = `${contextName}Base`;
+      const includedName = `${contextName}Included`;
+      const mixedName = `${contextName}Mixed`;
+      lines.push(
+        '',
+        ...contextInterface(serverName, trigger, 1),
+        '',
+        ...contextInterface(includedName, trigger, 0),
+        '',
+        ...contextInterface(mixedName, trigger, 2),
+        '',
+        `type ${contextName}<F = undefined> =`,
+        `  [Extract<TriggerFilterValues<F>, ${union(requirement.values)}>] extends [never] ? ${serverName} :`,
+        `  [Exclude<TriggerFilterValues<F>, ${union(requirement.values)}>] extends [never] ? ${includedName} : ${mixedName};`,
+      );
+      signatures.push(
+        conditionalTriggerSignature(
+          {
+            ...args,
+            docLines: [
+              ...entryDoc(trigger, [
+                hosts.length > 0 ? `Fired by: ${hosts.join(', ')}.` : undefined,
+                trigger.cancellable ? 'Cancellable: a rule may cancel the underlying game event.' : undefined,
+              ]),
+            ],
+          },
+          trigger.id,
+          contextName,
+          requirement,
+        ),
+      );
+    }
   }
   lines.push('', ...catalogInterface('TriggerCatalog', signatures));
   const ruleOptions = ctx.surface.behavior.ruleOptions;

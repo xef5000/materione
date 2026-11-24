@@ -8,7 +8,7 @@ const tips = [
 ];
 const next = p.variables.create("tip_index", { scope: "server", type: "number", default: 0 });
 const announce = p.rules.create("announce", { description: "Broadcast rotating server tips every 5 minutes" });
-announce.rules.add(m.triggers.every({ minutes: 5 }), () => ({
+announce.rules.add(m.triggers.every({ interval: "5m" }), () => ({
   do: [
     m.steps.choose(
       tips.map((t, i) => ({

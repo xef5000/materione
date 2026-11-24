@@ -40,6 +40,10 @@ public record ParameterSchema(
     public static final String KIND_ARGUMENTS = "arguments";
     /** A value that is a target: {@code self}, {@code event.target}, or a mapping with arg, player or nearby (logic.md section 39). */
     public static final String KIND_TARGET = "target";
+    /** A timer interval: whole server ticks or a duration; the minimum is one second. */
+    public static final String KIND_INTERVAL = "interval";
+    /** A local time of day in server time, written as {@code HH:MM}. */
+    public static final String KIND_TIME_OF_DAY = "time-of-day";
 
     public ParameterSchema {
         Objects.requireNonNull(id, "id");

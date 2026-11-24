@@ -1,0 +1,131 @@
+{
+  "task": "T26",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "tip_index",
+      "edits": [
+        {
+          "field": [
+            "tip_index",
+            "scope"
+          ],
+          "value": "server"
+        },
+        {
+          "field": [
+            "tip_index",
+            "type"
+          ],
+          "value": "number"
+        },
+        {
+          "field": [
+            "tip_index",
+            "default"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "rules",
+      "id": "announce",
+      "edits": [
+        {
+          "field": [
+            "announce",
+            "description"
+          ],
+          "value": "Broadcast rotating server tips every 5 minutes"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "rules/announce.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "every",
+            "interval": "5m",
+            "do": [
+              {
+                "choose": [
+                  {
+                    "if": "${vars.server.bench.tip_index == 0}",
+                    "then": [
+                      {
+                        "broadcast": "<aqua>[Tip] Use /kits for a starter kit."
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.server.bench.tip_index == 1}",
+                    "then": [
+                      {
+                        "broadcast": "<aqua>[Tip] Vote daily for keys."
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.server.bench.tip_index == 2}",
+                    "then": [
+                      {
+                        "broadcast": "<aqua>[Tip] Join our Discord: /discord"
+                      }
+                    ]
+                  },
+                  {
+                    "if": "${vars.server.bench.tip_index == 3}",
+                    "then": [
+                      {
+                        "broadcast": "<aqua>[Tip] Read /rules."
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "set_var": {
+                  "var": "bench:tip_index",
+                  "op": "set",
+                  "value": "${(vars.server.bench.tip_index + 1) % 4}"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 9,
+      "column": 26
+    },
+    {
+      "line": 10,
+      "column": 26
+    },
+    {
+      "line": 11,
+      "column": 16
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 3,
+    "documents": 2
+  }
+}

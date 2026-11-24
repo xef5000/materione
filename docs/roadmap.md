@@ -413,6 +413,10 @@ Worker is unchanged — no new endpoint, no cost-model change.
   (P-A of the backpack design, #304). They are engine primitives (D12), not the assistant, and the views (#335 V0 to V2, #455 to
   #457), dialogs and HUDs build on them.
 
+**Scheduled triggers as built (#332):** a rule document may use `every` with a tick or duration
+interval and `for: server | each_player`, or `schedule` with a server-local time and optional
+days. One bounded platform wheel rebuilds on every live swap; T26 (announcements) passes.
+
 **Exit:** a datapack-free "server GUI" — menus + dialogs + HUDs built entirely in Materione.
 
 **D12 pointer (architecture §3.1, [`architecture/primitives.md`](architecture/primitives.md)).** The milestone definition above is

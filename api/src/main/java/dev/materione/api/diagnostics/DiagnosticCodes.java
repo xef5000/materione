@@ -699,6 +699,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode VIEW_READ_UNPLACED =
             new DiagnosticCode("MTR-0127", Severity.INFO, "A view reads a variable the reads index cannot place");
 
+    /** A pack declared more scheduled triggers than the global timer wheel admits per pack. */
+    public static final DiagnosticCode TIMER_BUDGET_EXCEEDED =
+            new DiagnosticCode("MTR-0128", Severity.WARN, "A pack exceeded its scheduled-trigger budget; excess timers are not scheduled");
+
+    /** Scheduled each-player fan-out was overloaded and whole firing waves were refused. */
+    public static final DiagnosticCode TIMER_FANOUT_OVERLOADED =
+            new DiagnosticCode("MTR-0129", Severity.WARN, "Scheduled each-player fan-out exceeded its bounded queue; firing waves were refused");
+
     /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
@@ -846,7 +854,9 @@ public final class DiagnosticCodes {
             PROTECTION_SETTING_INVALID,
             PROTECTION_PROVIDER_UNUSABLE,
             VIEW_NOT_OPENABLE,
-            VIEW_READ_UNPLACED);
+            VIEW_READ_UNPLACED,
+            TIMER_BUDGET_EXCEEDED,
+            TIMER_FANOUT_OVERLOADED);
 
     private DiagnosticCodes() {}
 

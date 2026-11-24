@@ -264,6 +264,17 @@ public final class BehaviorService {
         return logicContext(root, player, null);
     }
 
+    /** The context of a server timer: server facts and persistent variables, with no player facet. */
+    public MapLogicContext serverContext() {
+        var root = new LinkedHashMap<String, Object>();
+        var serverVars = new LinkedHashMap<String, Object>();
+        serverVars.put("online", Bukkit.getOnlinePlayers().size());
+        serverVars.put("max", Bukkit.getMaxPlayers());
+        root.put("server", serverVars);
+        root.put("vars", new LinkedHashMap<String, Object>());
+        return logicContext(root, null);
+    }
+
     /**
      * As above for a run about an item stack: the stack is what {@code vars.item.*} reads and {@code set_var item.*}
      * writes (logic.md §38), declared by the trigger that fires the run. Null when the run has no stack (a trigger

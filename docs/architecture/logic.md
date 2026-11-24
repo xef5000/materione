@@ -3934,7 +3934,7 @@ health/level/x/y/z`, `location.x/y/z/world`, `world.name/time`, `server.online/m
 | "the Logic tab opens it" | The generic Studio form opens it; the graph tab does not | See decision 12. |
 
 **Not built, on purpose.** `emit`, the `custom` trigger and a cross-resource `call` (no benchmark task needed them, [`agent-benchmark.md`](agent-benchmark.md)
-§4.1); a timer (#332, which rides this unit); a command-run or chat trigger; block and furniture hosts for the combat triggers (a block has no
+§4.1); a command-run or chat trigger; block and furniture hosts for the combat triggers (a block has no
 holder in a fight); the graph Logic tab for non-GUI documents.
 
 **Verification.** `RuleTypeTest` (schema, parse, the lossless round-trip of `fixtures/rules/` byte for byte, the fault fixtures), `RuleDocumentsTest`
@@ -4926,7 +4926,7 @@ at run time is the action's `FAILED` and the reporter's rate-limited warning whe
 [#13](https://github.com/xef5000/materione/issues/13)'s combat and farming entries are **presets over these verbs** (primitives.md §6), not natives, and none is built here: *lunge* is `velocity` with `forward`; *lifeleech* is
 `heal` with an expression of `damage.final`; *knockback strike* is `velocity` on `target: event.target`; *fireball* and *wither skull* are `launch` with a `projectile`; *lightning strike* needs a
 `spawn` verb (not in this issue's nine); *3x3 big-mining* is `break_blocks`; *harvest and replant* is `break_blocks` then `set_block`; *auto-smelt* needs an item transform (a recipe lookup, not a verb here);
-*bedrock-break* is `break_blocks` with `as_player: false` and a rule that opts in. *Bleed* is §39's `potion` on `event.target`, or `damage` on a repeat once TIMER (#332) exists.
+*bedrock-break* is `break_blocks` with `as_player: false` and a rule that opts in. *Bleed* is §39's `potion` on `event.target`, or `damage` on a repeat that also carries a subject key; the generic timers of §44 fire for the server or online players, not for an arbitrary struck entity.
 [#21](https://github.com/xef5000/materione/issues/21) (particles) is covered for its "integration point exposed to ECA actions" bullet by `particle` and for nothing else: its **shapes** (ring, helix, sphere) and its **aura triggers**
 (on hold, ambient) are not built, because a shape is a pattern over many spawns (a loop or a repeating trigger) and the repeating trigger is #332. #21 stays open for them (decision 7).
 
@@ -5252,3 +5252,108 @@ None (protection.md §13).
 
 A cache; per-verb or per-provider overrides; adapters for Lands, Residence and FactionsUUID; condition forms for `canDamage` and `canUse`;
 PlotSquared's per-plot flags; any Folia run (protection.md §14).
+
+---
+
+## 44. Decisions taken in #332 (scheduled triggers)
+
+#332 is the timer primitive ranked sixth by the agent benchmark: a schedule, not an announcement, reset or held-item feature.
+It composes with the host-less `rule` content type of §37 and the ordinary flow engine. The registered triggers `every` and
+`schedule` fire only for rule documents; the reserved, unsupported `tick` trigger and the GUI-specific `gui.tick` keep their
+existing meanings.
+
+**The documents.**
+
+```yaml
+announce:
+  behavior:
+    - on: every
+      interval: 5m
+      for: server
+      do:
+        - broadcast: "<aqua>[Tip] ${vars.server.shop.tip_index}"
+
+mana_regen:
+  behavior:
+    - on: every
+      interval: 1s
+      for: each_player
+      do:
+        - set_var: {var: "rpg:mana", op: add, value: 2}
+
+daily_reset:
+  behavior:
+    - on: schedule
+      at: "06:00"
+      days: [monday, friday]
+      do:
+        - set_var: {var: "shop:daily_claims", op: set, value: 0}
+```
+
+`every.interval` is a positive whole number of server ticks or a duration made from `ms`, `s`, `m`, `h` and `d`
+(compound values such as `1h30m` are valid). The minimum is one second, therefore 20 ticks. `for` is `server` by default, which
+fires once with no player, or `each_player`, which gives every online player their own run and player context. `schedule.at` is a
+quoted 24-hour `HH:MM` value in the Java server zone; omitted `days` means every day, otherwise the values are the lowercase full
+names `monday` through `sunday`. The schedule run is server-scoped. Conditions, options (`cooldown`, `charges`, `per` and
+`on_cooldown`), actions and waits are the normal flow model.
+
+The timer filters are registry schema, including the interval and local-time value kinds. The editor's behavior vocabulary and
+the generated code-mode SDK therefore accept `m.triggers.every({ interval: "5m" })` and
+`m.triggers.schedule({ at: "06:00", days: ["monday"] })` without SDK code. Invalid intervals, local times, filters or missing
+required filters skip only the rule with `MTR-0021`.
+
+**The wheel.** `TimerWheel` in `platform.scheduling` is the one data structure. `GlobalTimerScheduler` is the only platform task:
+on Folia it wakes once per global tick through `SchedulingGateway.executeGlobalLater`; on Paper that task is the main-thread
+scheduler. No timer owns a Bukkit repeating task. A reload constructs a new wheel from the applied `WorldRules` view and cancels
+the old wake-up, so removed or changed timers cannot survive the old shadow. A pack with no `every` or `schedule` rule creates no
+scheduled task.
+
+A tick interval counts global server ticks. A duration measures injected-clock time, so the pure wheel and its drift behaviour are
+fake-clock testable. A wall schedule is recalculated in the server zone and uses Java's zone rules for daylight-saving gaps and
+overlaps. Every registration's first fire is strictly after the wheel is built: a reload never catches up a missed interval and
+does not immediately replay a schedule that already passed today. If the server stalls, a due timer fires once on the next wake;
+its next deadline is advanced past the current time or tick. This prevents a backlog storm and keeps timers anchored to the
+intended cadence.
+
+`each_player` snapshots the online player collection when the timer is due. The wheel enqueues one run per player and admits at
+most 32 player tasks on each global tick; the remaining players are spread over later global ticks and each action hops through
+the entity scheduler. At most 640 admitted runs are waiting in the global queue **or already queued on an entity scheduler**.
+One timer wave is admitted whole or refused whole: when a snapshot would cross the bound, no player from that wave is queued and
+one `MTR-0129` reports the wave and run count. This is fail-soft rather than unbounded catch-up; an admitted run keeps the exact
+single semantics of the timer and player snapshot. A reload cancels the live handles, clears the queue and advances the
+generation, and a player who leaves before their turn is ignored.
+
+A daily timer passes its logical deadline through the dispatch. Therefore a Monday 06:00 occurrence first observed on Tuesday
+still builds Monday's `days` filter fact even if the player run waits in the fan-out queue until later. A `server` run has
+`server.*` and persistent variables but deliberately no `player.*`, `location.*` or `world.*`. The `player`, `location` and
+`world` entries on `every` are conditional context variables in registry self-description: the code-mode SDK guarantees them only
+when `for` includes `each_player`; the compiler applies the same filter-aware root set at load.
+
+**Budgets.** A registration is one interval/subject or one `at` value of one rule. The first 128 registrations in deterministic
+authored rule order are scheduled per pack; duplicate interval/audience pairs and duplicate `at` values collapse to one distinct
+registration. Excess registrations stay in the authored rule and are not scheduled. One `MTR-0128` warning names the pack, its
+total, the first 128 retained and the number omitted. A single global wheel remains responsible for every pack; the 640-run
+fan-out bound and the 32-per-tick admission rate keep dynamic registration and online-player counts from growing a queue without
+limit.
+
+**Traceability.**
+
+| Decision or rule | How this primitive applies it |
+|---|---|
+| D12, master §3.1 | `every` and `schedule` name timing capabilities and work with any rule flow and any online player; they do not implement announcements, mana or resets |
+| D1, D6, master §5.6 | the timer is YAML on a rule document and rebuilds from the normal shadow swap; no timer state is stored as editor-only content |
+| D5 | both are trigger registry entries with typed filters and context |
+| D8 | one Folia global wake-up advances the wheel; player context and player actions cross only through the entity scheduler |
+| D6, fail-soft | a bad timer skips its rule, a wheel callback cannot stop the wheel, and the over-budget tail is diagnosed without losing the live pack |
+| plugin.md §9 | the 128-per-pack registration cap and 32-player fan-out cap are explicit |
+
+**Verification.** `TimerIntervalTest`, `TriggerFiltersTest`, `WorldTriggersTest`, `ScheduledTriggerPlanTest` and
+`TimerWheelTest` pin the schema, budget, a pack with no timers, tick cadence, fake-clock drift, daily days and the one global
+task, including logical-date drift, authored cross-type order, duplicate collapse and bounded whole-wave fan-out overload.
+`PaperScheduledTriggersIT` enables the `timers` fixture's one-second server timer and reads the incremented server variable.
+QA `timers.server-variable-increments` observes the corresponding broadcast in a real client. The benchmark corpus promotes T26
+to pass; T20 keeps only VIEW, while F5 keeps its item-held context gap.
+
+**Not built, on purpose.** Item or while-held timers; they need keyed state and an item subject from another rule host, so
+`equip` and #333 remain their home. A `tick` trigger, per-player wall schedules, cross-time-zone schedules and timer persistence
+across restart/reload are not part of this primitive. Rebuilding from the live clock is intentional.

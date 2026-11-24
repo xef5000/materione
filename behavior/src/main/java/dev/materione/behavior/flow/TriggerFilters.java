@@ -3,6 +3,7 @@ package dev.materione.behavior.flow;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
+import dev.materione.api.scheduling.TimerInterval;
 import dev.materione.behavior.rule.RuleFilters;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -10,6 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 
 /**
  * Reads the filter keys a rule sets on its trigger (logic.md §4.3): exactly the keys the trigger's
@@ -67,6 +70,31 @@ final class TriggerFilters {
     }
 
     private static String value(ParameterSchema schema, Object item, CompileUnit unit, StepPath path) {
+        if (ParameterSchema.KIND_INTERVAL.equals(schema.semantics().valueKind())) {
+            try {
+                return TimerInterval.parse(item).text();
+            } catch (IllegalArgumentException e) {
+                throw unit.structural(path, "invalid timer 'interval': " + e.getMessage(),
+                        "use 20 or more whole ticks, or a duration of at least 1s, e.g. 5m");
+            }
+        }
+        if (ParameterSchema.KIND_TIME_OF_DAY.equals(schema.semantics().valueKind())) {
+            if (!(item instanceof String text) || text.isBlank()) {
+                throw unit.structural(path, "'" + schema.id() + "' must be HH:MM",
+                        "write the server-local time as HH:MM, e.g. 06:00");
+            }
+            String trimmed = text.trim();
+            if (!trimmed.matches("\\d{2}:\\d{2}")) {
+                throw unit.structural(path, "'" + schema.id() + "' must be a server-local HH:MM time",
+                        "write a 24-hour time from 00:00 to 23:59");
+            }
+            try {
+                return LocalTime.parse(trimmed).toString();
+            } catch (DateTimeParseException e) {
+                throw unit.structural(path, "'" + schema.id() + "' must be a server-local HH:MM time",
+                        "write a 24-hour time from 00:00 to 23:59");
+            }
+        }
         if (schema.type() == ParameterType.INTEGER) {
             Long whole = whole(item);
             if (whole == null) {

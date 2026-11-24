@@ -597,11 +597,21 @@ export function createSession(config: SessionConfig): Session {
   }
 
   const contexts = new Map<string, unknown>();
-  function contextOf(trigger: SurfaceTrigger, host: string): unknown {
-    const key = `${trigger.id}\u0000${host}`;
+  function contextOf(trigger: SurfaceTrigger, host: string, filters: [string, JsonValue][]): unknown {
+    const selected = new Map<string, string[]>();
+    for (const filter of trigger.filters) {
+      const raw = filters.find(([name]) => name === filter.id)?.[1] ?? filter.default;
+      if (typeof raw === 'string') selected.set(filter.id, [raw]);
+      else if (Array.isArray(raw)) selected.set(filter.id, raw.filter((value): value is string => typeof value === 'string'));
+    }
+    const variables = contextFor(trigger.context, host).filter(
+      (variable) => variable.filter === undefined
+        || (variable.filterValues ?? []).some((value) => selected.get(variable.filter!)?.includes(value)),
+    );
+    const key = `${trigger.id}\u0000${host}\u0000${JSON.stringify([...selected].sort())}`;
     let context = contexts.get(key);
     if (context === undefined) {
-      context = contextObject(contextTree(contextFor(trigger.context, host)), '');
+      context = contextObject(contextTree(variables), '');
       contexts.set(key, context);
     }
     return context;
@@ -700,7 +710,7 @@ export function createSession(config: SessionConfig): Session {
           return fail('SDK-0012', `${owner}: "${info.id}" is not fired by ${doc.kind}`, { hint: `it is fired by: ${registered.firedBy.join(', ') || 'nothing yet'}` });
         }
         if (typeof build !== 'function') return fail('SDK-0012', `${owner}: the second argument is a function that returns the rule`);
-        const body = (build as (context: unknown) => unknown)(contextOf(registered, doc.kind));
+        const body = (build as (context: unknown) => unknown)(contextOf(registered, doc.kind, info.filters));
         if (!isPlain(body)) return fail('SDK-0012', `${owner}: the function returns a mapping with a "do" list`);
         const given = body as Dict;
         const rule: Record<string, JsonValue> = { on: info.detail === null ? info.id : `${info.id}:${info.detail}` };

@@ -3178,6 +3178,24 @@
           "id": "player.respawn"
         },
         {
+          "description": "A rule runs once per interval. The minimum interval is one second",
+          "details": [],
+          "displayName": "Every interval",
+          "firedBy": [
+            "rule"
+          ],
+          "id": "every"
+        },
+        {
+          "description": "A rule runs at a server-local HH:MM time, optionally on selected days",
+          "details": [],
+          "displayName": "At a server time",
+          "firedBy": [
+            "rule"
+          ],
+          "id": "schedule"
+        },
+        {
           "description": "A sender runs a command a command document declares, after its permission, arguments and requirement are checked",
           "details": [],
           "displayName": "Command run",
@@ -10156,6 +10174,300 @@
             "rule"
           ],
           "id": "player.respawn",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables read or written by this run",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The player's name; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "The player's game mode; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's X; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's world; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "The player's world; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's world time; present only when for is each_player",
+              "filter": "for",
+              "filterValues": [
+                "each_player"
+              ],
+              "hosts": [],
+              "path": "world.time",
+              "type": "integer"
+            }
+          ],
+          "description": "A rule runs once per interval. The minimum interval is one second",
+          "details": [],
+          "displayName": "Every interval",
+          "filters": [
+            {
+              "advanced": true,
+              "description": "Whole server ticks (20 or more), or a duration of at least 1s such as 30s, 5m or 1h30m",
+              "id": "interval",
+              "label": "Interval",
+              "multiple": true,
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced",
+              "valueKind": "interval"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "server",
+                "each_player"
+              ],
+              "default": "server",
+              "description": "Run once for the server (the default), or once for each online player",
+              "id": "for",
+              "label": "For",
+              "multiple": true,
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "rule"
+          ],
+          "id": "every",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables read or written by this run",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "A rule runs at a server-local HH:MM time, optionally on selected days",
+          "details": [],
+          "displayName": "At a server time",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Server-local 24-hour time, HH:MM",
+              "id": "at",
+              "label": "At",
+              "multiple": true,
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text",
+              "valueKind": "time-of-day"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday"
+              ],
+              "description": "Days on which the time fires; omitted means every day",
+              "id": "days",
+              "label": "Days",
+              "multiple": true,
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "rule"
+          ],
+          "id": "schedule",
           "parameters": [],
           "registeredBy": "materione",
           "sinceVersion": "0.1.0"
