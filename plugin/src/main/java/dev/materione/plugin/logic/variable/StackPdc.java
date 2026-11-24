@@ -40,6 +40,19 @@ interface StackPdc {
      */
     String identity();
 
+    /**
+     * A process-local physical token for the stack. Mirrors of one Bukkit stack share the underlying handle;
+     * separate stacks do not. Implementations outside Bukkit may use any stable object token.
+     */
+    default Object physicalIdentity() {
+        return this;
+    }
+
+    /** A value snapshot equal for copies that continue the same logical stack; it excludes amount. */
+    default Object logicalIdentity() {
+        return physicalIdentity();
+    }
+
     /** The expression-visible facts of the live stack, or an empty map when it is gone. */
     default Map<String, Object> itemView() {
         return Map.of();
@@ -79,6 +92,16 @@ interface StackPdc {
             @Override
             public String identity() {
                 return MaterioneStacks.identityOf(stack).map(Object::toString).orElse("");
+            }
+
+            @Override
+            public Object physicalIdentity() {
+                return MaterioneStacks.physicalIdentityOf(stack);
+            }
+
+            @Override
+            public Object logicalIdentity() {
+                return MaterioneStacks.logicalIdentityOf(stack);
             }
 
             @Override

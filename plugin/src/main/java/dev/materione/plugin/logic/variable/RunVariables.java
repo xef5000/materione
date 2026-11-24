@@ -83,10 +83,14 @@ final class RunVariables implements VariableBinding {
     public Optional<Object> stored(VariableDeclaration declaration) {
         if (declaration.scope() == VariableScope.ITEM) {
             if (stack == null || stackStore == null) {
-                onStackMiss.accept(declaration, "read");
+                onStackMiss.accept(declaration, "was read in a run with no item stack");
                 return Optional.empty();
             }
-            return stackStore.read(declaration, stack);
+            Optional<Object> value = stackStore.read(declaration, stack);
+            if (value.isEmpty() && !stack.isLive()) {
+                onStackMiss.accept(declaration, "was read after its item stack vanished or was replaced");
+            }
+            return value;
         }
         VariableStore store = stores.get(declaration.scope());
         return store == null ? Optional.empty() : store.read(declaration, holderOf(declaration));
@@ -96,10 +100,14 @@ final class RunVariables implements VariableBinding {
     public boolean store(VariableDeclaration declaration, Object value) {
         if (declaration.scope() == VariableScope.ITEM) {
             if (stack == null || stackStore == null) {
-                onStackMiss.accept(declaration, "write");
+                onStackMiss.accept(declaration, "was written in a run with no item stack");
                 return false;
             }
-            return stackStore.write(declaration, stack, value);
+            boolean written = stackStore.write(declaration, stack, value);
+            if (!written && !stack.isLive()) {
+                onStackMiss.accept(declaration, "was written after its item stack vanished or was replaced");
+            }
+            return written;
         }
         VariableStore store = stores.get(declaration.scope());
         return store != null && store.write(declaration, holderOf(declaration), value);

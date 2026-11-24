@@ -10,12 +10,12 @@ import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /**
- * Reports an item variable that was read or written in a run with no item stack ({@code MTR-0065}), once per variable
- * per interval, because a hot trigger would otherwise report it on every event.
+ * Reports an item variable that could not name a live stack ({@code MTR-0065}), once per variable per interval,
+ * because a hot trigger would otherwise report it on every event.
  */
 final class StackMissReports {
 
-    /** Minimum milliseconds between two reports for the same variable of a run that has no stack. */
+    /** Minimum milliseconds between two reports for the same variable with a missing live stack. */
     static final long INTERVAL_MS = 10_000;
 
     private final Map<String, Long> last = new ConcurrentHashMap<>();
@@ -28,7 +28,7 @@ final class StackMissReports {
     }
 
     /** Reports the miss unless this variable was reported within the interval. */
-    void report(VariableDeclaration declaration, String what) {
+    void report(VariableDeclaration declaration, String explanation) {
         long now = clock.getAsLong();
         boolean[] emit = {false};
         last.compute(declaration.id().toString(), (id, previous) -> {
@@ -40,10 +40,11 @@ final class StackMissReports {
         });
         if (emit[0]) {
             diagnostics.accept(new Diagnostic(DiagnosticCodes.VARIABLE_STORE_FAILED, Severity.WARN,
-                    "item variable " + declaration.id() + " was " + what + " in a run with no item stack",
+                    "item variable " + declaration.id() + " " + explanation,
                     declaration.id(), null,
-                    "vars.item.* needs a trigger that is about an item stack (click, entity.hit, ...) and a non-empty"
-                            + " hand; the read is the default and the write is dropped. Repeated reports are rate-limited"));
+                    "vars.item.* needs a trigger that is about a live item stack (click, entity.hit, ...) and a subject"
+                            + " that still exists; the read is the default and the write is dropped. Repeated reports"
+                            + " are rate-limited"));
         }
     }
 }

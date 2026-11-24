@@ -90,7 +90,7 @@ public final class ViewChanges implements VariableWriteObserver {
         }
         for (ReadsIndex.Reader reader : readers) {
             views.forEachShowing(reader.view(), record ->
-                    record.stack().filter(stack -> stack == holder).ifPresent(ignored -> mark(record)));
+                    record.stack().filter(holder::equals).ifPresent(ignored -> mark(record)));
         }
     }
 

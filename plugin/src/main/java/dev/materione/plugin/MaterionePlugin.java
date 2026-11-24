@@ -502,7 +502,7 @@ public final class MaterionePlugin extends JavaPlugin {
                     return player == null ? java.util.Optional.<dev.materione.api.logic.variable.StackRef>empty()
                             : java.util.Optional.<dev.materione.api.logic.variable.StackRef>ofNullable(
                                     dev.materione.plugin.logic.variable.BukkitStackRef.of(
-                                    player.getInventory().getItemInMainHand(), uuid));
+                                    player.getInventory().getItemInMainHand(), player));
                 },
                 this::liveDeclarations,
                 diagnostics::publish);
