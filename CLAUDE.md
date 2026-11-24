@@ -100,6 +100,7 @@ Rows marked **review** are judgment calls no check can make; they are where revi
 | Performance budgets | `ContentPerfBudgetTest` and the `*PerfTest` suites |
 | Cloudflare cost guardrails; owner-only merges, pushes to `main`, releases | agent guard (`scripts/agent-guard/`, PR #484) |
 | Diagnostic codes are stable and documented | `DiagnosticCodesTest` (format, uniqueness, count); `scripts/checks/` (every code named in docs is defined or reserved) |
+| Tracked text files are valid UTF-8 | `scripts/checks/` (strict decoding; runs on every PR, including docs-only ones) |
 | Doc links and anchors resolve | `scripts/checks/` (docs links) |
 | Code comments don't track milestones | `scripts/checks/` (ratchet; the baseline only shrinks) |
 | User-visible features ship QA catalog entries | `qa/runner.mjs check` (catalog integrity only); that a PR added an entry is **review** |
