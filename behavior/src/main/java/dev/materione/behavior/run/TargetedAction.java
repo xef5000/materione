@@ -92,6 +92,9 @@ final class TargetedAction {
             }
             return outcome == null ? ActionOutcome.failed("the action reported no outcome") : outcome;
         }).thenCompose(outcome -> {
+            if (outcome instanceof ActionOutcome.Stopped stopped) {
+                return CompletableFuture.completedFuture(stopped);
+            }
             if (outcome instanceof ActionOutcome.Failed failed) {
                 failures.add(targets.size() > 1 ? subject.describe() + ": " + failed.reason() : failed.reason());
                 codes.add(failed.code());

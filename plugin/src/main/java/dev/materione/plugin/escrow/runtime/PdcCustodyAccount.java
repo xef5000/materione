@@ -8,4 +8,9 @@ public final class PdcCustodyAccount extends CustodyAccount {
     public PdcCustodyAccount(Consumer<byte[]> persist) {
         super(persist);
     }
+
+    @Override
+    public boolean parksOnClose() {
+        return true;
+    }
 }

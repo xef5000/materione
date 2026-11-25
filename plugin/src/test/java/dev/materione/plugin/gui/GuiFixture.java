@@ -367,6 +367,16 @@ public final class GuiFixture {
             }
             return java.util.concurrent.CompletableFuture.completedFuture(Optional.ofNullable(refuse));
         }
+
+        public final List<Transfer> transfers = new ArrayList<>();
+        public TransferOutcome transferResult = new TransferOutcome.Transferred();
+
+        @Override
+        public java.util.concurrent.CompletionStage<TransferOutcome> transfer(
+                org.bukkit.entity.Player player, ViewerRecord session, Transfer transfer) {
+            transfers.add(transfer);
+            return java.util.concurrent.CompletableFuture.completedFuture(transferResult);
+        }
     }
 
     /** A clock the ticker schedules against; {@link #advance} runs what has come due. */

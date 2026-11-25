@@ -22,7 +22,7 @@ public abstract class CustodyAccount {
         UNRECOVERABLE
     }
 
-    private final Consumer<byte[]> persist;
+    private volatile Consumer<byte[]> persist;
     private Gate gate = Gate.CLOSED;
     private Account account = Account.EMPTY;
     private String why = "";
@@ -61,6 +61,9 @@ public abstract class CustodyAccount {
 
     /** Commits the bytes and in-memory image together on the holder owner's thread. */
     public boolean commit(Account next, byte[] encoded) {
+        if (gate == Gate.UNRECOVERABLE) {
+            return false;
+        }
         try {
             persist.accept(encoded);
         } catch (RuntimeException failed) {
@@ -76,12 +79,28 @@ public abstract class CustodyAccount {
      * snapshot marker when the source/destination PDC keys are distinct: one saved player compound proves them all.
      */
     public boolean touch() {
+        if (!open()) {
+            return false;
+        }
         Account next = new Account(account.gen() + 1, account.entries());
         return commit(next, AccountCodec.encode(next));
     }
 
     public void persistAgain(byte[] encoded) {
+        if (gate != Gate.OPEN) {
+            return;
+        }
         persist.accept(encoded);
+    }
+
+    /** Keeps a cached stack account on the current live handle without changing the account's durable identity. */
+    public final void rebind(Consumer<byte[]> writer) {
+        persist = Objects.requireNonNull(writer, "writer");
+    }
+
+    /** Whether owner cleanup may adopt visible stacks or return them to the player. */
+    public boolean parksOnClose() {
+        return false;
     }
 
     public Set<Id128> carrying() {

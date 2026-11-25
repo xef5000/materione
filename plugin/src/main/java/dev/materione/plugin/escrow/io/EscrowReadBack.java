@@ -165,7 +165,7 @@ public final class EscrowReadBack implements SnapshotReader {
             }
             file = newest(dirs, player + ".dat_old"); // what the server's own load falls back to (F2)
             if (file == null) {
-                return Outcome.retry("no player file for " + player);
+                return Outcome.retry("no player file for " + player + " in " + dirs);
             }
         }
         BasicFileAttributes before;

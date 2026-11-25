@@ -20,6 +20,7 @@ import dev.materione.plugin.escrow.runtime.CustodyTransfer;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.GuiRun;
 import dev.materione.plugin.gui.input.InputSlotPort;
+import dev.materione.api.custody.CustodyKey;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -64,9 +65,11 @@ public final class CustodyTransferAction implements ActionType<CustodyTransferAc
                         + "Stack holders are refused because stack PDC has no acknowledged save barrier",
                 List.of(
                         new ParameterSchema("source", ParameterType.RAW, true, null,
-                                "A {holder, entry} exact address, or {slot} of the run's open GUI", null, null),
+                                "A {holder, entry} exact address, or {slot} of the run's open GUI", null, null)
+                                .ofKind(dev.materione.api.registry.ParameterSchema.KIND_CUSTODY_TRANSFER_SOURCE),
                         new ParameterSchema("destination", ParameterType.RAW, true, null,
-                                "A {holder, slot}; holder is player or {kind: keyed, key, player?}", null, null),
+                                "A {holder, slot}; holder is player or {kind: keyed, key, player?}", null, null)
+                                .ofKind(dev.materione.api.registry.ParameterSchema.KIND_CUSTODY_TRANSFER_DESTINATION),
                         new ParameterSchema("id", ParameterType.STRING, false, null,
                                 "Optional stable 32-digit transaction id; reuse observes the idempotent result",
                                 null, null).acceptingExpression(),
@@ -103,22 +106,25 @@ public final class CustodyTransferAction implements ActionType<CustodyTransferAc
         }
         Source from = new Source(sourceHolder,
                 slot ? Quantity.requiredCount(source, "slot", 0, 53) : null,
-                entry ? source.template("entry") : null);
+                entry ? staticId(source.template("entry"), "source.entry") : null);
         ParamReader destination = params.section("destination");
         Destination to = new Destination(holder(destination.section("holder"), false),
-                Quantity.integerOr(destination, "slot", 0, 0, 53));
-        TemplateText transaction = params.has("id") ? params.template("id") : null;
+                Quantity.requiredCount(destination, "slot", 0, 53));
+        TemplateText transaction = params.has("id") ? staticId(params.template("id"), "id") : null;
         CustodyTransfer.Reach reach = CustodyTransfer.Reach.valueOf(
                 params.choice("await", "decided", List.of("decided", "saved")).toUpperCase(Locale.ROOT));
         return new Params(from, to, transaction, reach);
     }
 
     private Holder holder(ParamReader params, boolean source) {
-        String kind = params.choice("kind", "player", List.of("player", "keyed", "stack"));
+        if (!params.has("kind")) {
+            throw new IllegalArgumentException("holder.kind is required");
+        }
+        String kind = params.choice("kind", "", List.of("player", "keyed", "stack"));
         if ("stack".equals(kind)) {
             throw new IllegalArgumentException("stack custody cannot acknowledge a transfer");
         }
-        TemplateText player = params.has("player") ? params.template("player") : null;
+        TemplateText player = params.has("player") ? staticPlayer(params.template("player")) : null;
         if ("player".equals(kind)) {
             if (params.has("key") || params.keys().stream().anyMatch(key ->
                     !List.of("kind", "player").contains(key))) {
@@ -129,7 +135,45 @@ public final class CustodyTransferAction implements ActionType<CustodyTransferAc
         if (params.keys().stream().anyMatch(key -> !List.of("kind", "player", "key").contains(key))) {
             throw new IllegalArgumentException("a keyed holder has only kind, player and key");
         }
-        return new Holder(Holder.Kind.KEYED, player, params.template("key"));
+        TemplateText key = params.template("key");
+        if (isLiteral(key)) {
+            CustodyKey.require(key.source());
+        }
+        return new Holder(Holder.Kind.KEYED, player, key);
+    }
+
+    private static TemplateText staticId(TemplateText value, String name) {
+        if (isLiteral(value)) {
+            try {
+                Id128.parse(value.source());
+            } catch (IllegalArgumentException invalid) {
+                throw new IllegalArgumentException(name + " must be a 32-digit id: " + invalid.getMessage());
+            }
+        }
+        return value;
+    }
+
+    private static TemplateText staticPlayer(TemplateText value) {
+        if (isLiteral(value)) {
+            String text = value.source();
+            boolean uuid = false;
+            try {
+                UUID.fromString(text);
+                uuid = true;
+            } catch (IllegalArgumentException ignored) {
+                // Names are validated below.
+            }
+            if (!uuid && !text.matches("[A-Za-z0-9_]{3,16}")) {
+                throw new IllegalArgumentException(
+                        "holder.player must be a UUID or a canonical Minecraft player name: '" + text + "'");
+            }
+        }
+        return value;
+    }
+
+    private static boolean isLiteral(TemplateText value) {
+        String source = value.source();
+        return !source.contains("${") && !source.contains("%");
     }
 
     @Override
@@ -173,12 +217,18 @@ public final class CustodyTransferAction implements ActionType<CustodyTransferAc
             if (destinationSlot.isEmpty()) {
                 return failed("destination slot must render to a whole number");
             }
-            GuiRun run = GuiRun.ofOpenSession(bridge, context);
+            boolean slotSource = params.source().slot() != null;
+            GuiRun run = slotSource ? GuiRun.ofOpenSession(bridge, context) : GuiRun.ofPlayer(bridge, context);
             InputSlotPort.Transfer transfer = new InputSlotPort.Transfer(
                     source, slot.isPresent() ? slot.getAsInt() : null, entry,
                     destination, destinationSlot.getAsInt(), transaction, params.reach());
             return run.services().inputs().transfer(run.viewer().player(), run.record(), transfer)
-                    .thenApply(reason -> reason.<ActionOutcome>map(ActionOutcome::failed).orElse(ActionOutcome.OK));
+                    .thenApply(outcome -> switch (outcome) {
+                        case InputSlotPort.TransferOutcome.Transferred ignored -> ActionOutcome.OK;
+                        case InputSlotPort.TransferOutcome.Refused refused -> ActionOutcome.failed(refused.reason());
+                        case InputSlotPort.TransferOutcome.RecoveryPending pending ->
+                                ActionOutcome.stopped(pending.reason());
+                    });
         } catch (RuntimeException refused) {
             return failed(refused.getMessage());
         }
@@ -201,7 +251,8 @@ public final class CustodyTransferAction implements ActionType<CustodyTransferAc
         Id128 owner = new Id128(player.getMostSignificantBits(), player.getLeastSignificantBits());
         return holder.kind() == Holder.Kind.PLAYER
                 ? new TransferHolder(owner, TransferHolder.Kind.PLAYER, "")
-                : new TransferHolder(owner, TransferHolder.Kind.KEYED, holder.key().render(context));
+                : new TransferHolder(owner, TransferHolder.Kind.KEYED,
+                        CustodyKey.require(holder.key().render(context)));
     }
 
     private static CompletionStage<ActionOutcome> failed(String reason) {

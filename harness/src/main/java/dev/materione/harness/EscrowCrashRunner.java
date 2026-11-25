@@ -931,6 +931,12 @@ public final class EscrowCrashRunner {
             login(destination);
             save(destination);
             crash(gate, "dprobe transfer " + source + " 0 " + destination);
+            if (TRANSFER_CHECKPOINTED.equals(gate)) {
+                problems.expect(disk(source).sole().state() == EscrowFiles.TRANSFERRING,
+                        "the source preparation was not durable before the joint INTENT");
+                problems.expect(disk(destination).sole().state() == EscrowFiles.RESERVED,
+                        "the destination reservation was not durable before the joint INTENT");
+            }
             reboot();
             expectTransferOnce(source, destination, "joint transfer at " + gate);
         }

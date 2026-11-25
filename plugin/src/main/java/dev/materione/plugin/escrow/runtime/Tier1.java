@@ -209,6 +209,10 @@ public final class Tier1<T> {
         if (!escrow.open()) {
             return nothing();
         }
+        if (escrow.parksOnClose()) {
+            clear(live, escrowedSlots);
+            return new Done<>(0, countOwed(escrow.account()), List.of());
+        }
         Work work = new Work(escrow.account());
         List<T> strays = adoptStrays(work, live, gui, escrowedSlots);
         BagInventory<T> bag = new BagInventory<>(live, stacks);
@@ -430,6 +434,10 @@ public final class Tier1<T> {
             Ledger ledger, boolean keepInventory) {
         if (!escrow.open()) {
             return new Death<>(List.of(), 0, 0, 0);
+        }
+        if (escrow.parksOnClose()) {
+            clear(live, escrowedSlots);
+            return new Death<>(List.of(), 0, countOwed(escrow.account()), 0);
         }
         Work work = new Work(escrow.account());
         List<T> strays = adoptStrays(work, live, gui, escrowedSlots);
@@ -657,8 +665,11 @@ public final class Tier1<T> {
         for (int slot : new TreeSet<>(slots)) {
             T content = live.top(slot);
             Entry known = entryAt(work.account, slot);
-            if (stacks.empty(content) || (known != null && known.state() == EntryState.EXITING)) {
-                continue; // a frozen entry's stack stays shown in its slot until its exit completes: not a stray
+            if (stacks.empty(content) || known != null && (
+                    known.state() == EntryState.EXITING
+                            || known.state() == EntryState.TRANSFERRING
+                            || known.state() == EntryState.RESERVED)) {
+                continue; // recovery resolves the protocol state; generic cleanup must not adopt its live stack
             }
             Work attempt = new Work(work.account);
             attempt.bytes = work.bytes;

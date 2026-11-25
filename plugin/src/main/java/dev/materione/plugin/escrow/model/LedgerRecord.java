@@ -70,6 +70,8 @@ public sealed interface LedgerRecord {
             TransferHolder destination,
             Id128 destinationReservation,
             long destinationGen,
+            int destinationSlot,
+            StackBytes stack,
             Id128 stackHash,
             long amount,
             long atMillis)
@@ -88,9 +90,45 @@ public sealed interface LedgerRecord {
             if (amount < 0 || amount > U32_MAX) {
                 throw new IllegalArgumentException("amount out of range: " + amount);
             }
+            if (destinationSlot < 0 || destinationSlot > Entry.MAX_SLOT_HINT) {
+                throw new IllegalArgumentException("destination slot out of range: " + destinationSlot);
+            }
+            if (stack != null && (!stack.hash16().equals(stackHash))) {
+                throw new IllegalArgumentException("transfer stack hash does not match its bytes");
+            }
             if (source.equals(destination) && sourceEntry.equals(destinationReservation)) {
                 throw new IllegalArgumentException("a transfer needs two distinct sides");
             }
+        }
+
+        /** Reads v2 transfer decisions, which did not carry the stack payload needed to rebuild an old destination. */
+        public TransferIntent(Id128 txn, TransferHolder source, Id128 sourceEntry, long sourceGen,
+                TransferHolder destination, Id128 destinationReservation, long destinationGen,
+                Id128 stackHash, long amount, long atMillis) {
+            this(txn, source, sourceEntry, sourceGen, destination, destinationReservation, destinationGen,
+                    0, null, stackHash, amount, atMillis);
+        }
+
+        /** New transfers always carry enough opaque stack bytes to roll a pre-reservation snapshot forward. */
+        public TransferIntent(Id128 txn, TransferHolder source, Id128 sourceEntry, long sourceGen,
+                TransferHolder destination, Id128 destinationReservation, long destinationGen, int destinationSlot,
+                StackBytes stack, long amount, long atMillis) {
+            this(txn, source, sourceEntry, sourceGen, destination, destinationReservation, destinationGen,
+                    destinationSlot, Objects.requireNonNull(stack, "stack"), stack.hash16(), amount, atMillis);
+        }
+
+        /** The durable operation identity. Snapshot generations and the timestamp are not operation identity. */
+        public boolean sameTransfer(TransferIntent other) {
+            return other != null
+                    && txn.equals(other.txn)
+                    && source.equals(other.source)
+                    && sourceEntry.equals(other.sourceEntry)
+                    && destination.equals(other.destination)
+                    && destinationReservation.equals(other.destinationReservation)
+                    && destinationSlot == other.destinationSlot
+                    && stackHash.equals(other.stackHash)
+                    && amount == other.amount
+                    && java.util.Objects.equals(stack, other.stack);
         }
     }
 

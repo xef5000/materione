@@ -1097,30 +1097,36 @@ movement remain supported while the `StackRef` is live.
 Two per-holder decisions are not a transfer. `custody.transfer` uses one shared
 `LedgerRecord.TransferIntent` in the reserved escrow ledger. Its payload names the same
 transaction id, source holder, source entry, source generation, destination holder,
-destination reservation and destination generation. CRC, append order, torn-tail
-handling and fsync are the shipped `LedgerCodec`/`EscrowLedgerStore`; the new type is an
-additive ledger-v2 record, while v1 consume records remain readable.
+destination reservation, destination generation and slot, plus the opaque stack bytes,
+hash and amount. The stack payload lets recovery roll an older destination snapshot
+forward without depending on a second live copy. CRC, append order, torn-tail handling
+and fsync are the shipped `LedgerCodec`/`EscrowLedgerStore`; transfer records use
+ledger v3, v1 consume and v2 transfer records remain readable.
 
 The destination is reserved before the decision. The source uses a separate
 `TRANSFERRING` state so consume `EXITING` recovery cannot mistake it for a rollback.
 `RESERVED` is not owned by anyone: it
 is not shown, close does not release it and recovery drops it when no joint intent
-exists. A source entry is frozen `EXITING`.
+exists. A source entry is frozen `TRANSFERRING`; consume entries remain a distinct
+`EXITING` state.
 
 | Phase | Durable facts | Commit | Crash recovery |
 |---|---|---|---|
 | 1 prepare | source `TRANSFERRING(T)` and destination `RESERVED(T)`, in live PDC | one owner-thread step per holder | no shared INTENT: thaw/return source, discard reservation |
-| 2 checkpoint | `Player.saveData()` plus read-back proves a fresh default-account anchor generation in each owner's compound; that one snapshot contains both PDC preparations for that owner | the existing `SaveBarrier`, one save site/rate limit | still pre-decision: phase 1 |
+| 2 checkpoint | read-back proves the generation of each prepared player/keyed account in its owner's compound | `await: saved` may use the one D8 `Player.saveData()` exception; `await: decided` observes natural snapshots only. Both share the player's barrier save/cooldown | still pre-decision: phase 1 |
 | 3 decide | one CRC-valid `TransferIntent(T, source, destination)` | append and fsync once in the shared ledger | INTENT exists: roll forward deterministically |
 | 4 commit | remove source; promote destination reservation to HELD for a keyed holder or OWED for a player holder | one owner-thread step per holder; idempotent by entry/txn id | replay the missing side only |
-| 5 acknowledge | each owner touches the anchor again and its committed compound is read back; then `TransferDone(T)` | barrier and shared append | DONE only permits compaction; it never decides ownership |
+| 5 acknowledge | each holder account is touched again and its committed PDC generation is read back; then `TransferDone(T)` | barrier and shared append | DONE only permits compaction; it never decides ownership |
 
 **Safety fact.** No joint record is written before both account snapshots containing
 their preparations are acknowledged. Therefore a crash either sees no INTENT and leaves
 the item recoverably at the source, or sees the INTENT and makes the destination the only
 final owner. The item can be temporarily unavailable at the reserved boundary; it is
 never counted as owned twice and is never abandoned. Repeating a transaction id observes
-the existing state and returns that result.
+the existing state and returns that result; an in-use id is accepted only when the full
+durable operation identity matches (addresses, entry and reservation ids, stack bytes,
+hash, amount and destination slot). A mismatch is refused before a second decision is
+written.
 
 The action supports an exact held `entry` in a named holder, or the slot's held entry
 when invoked from a GUI. A destination is another player/keyed holder; stack is an

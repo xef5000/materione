@@ -35,7 +35,7 @@ public final class LedgerCodec {
     public static final byte[] MAGIC = {'M', 'T', 'R', 'L'};
 
     /** The version this code writes. */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     /** The oldest version this code reads. */
     public static final int MIN_READABLE_VERSION = 1;
@@ -44,7 +44,7 @@ public final class LedgerCodec {
     public static final int HEADER_LENGTH = 6;
 
     /** Largest record body (type + payload) a reader accepts. */
-    public static final int MAX_BODY = 1024;
+    public static final int MAX_BODY = AccountCodec.MAX_BYTES + 1024;
 
     static final int TYPE_INTENT = 1;
     static final int TYPE_DONE = 2;
@@ -88,10 +88,11 @@ public final class LedgerCodec {
             case LedgerRecord.TransferIntent intent -> {
                 byte[] sourceKey = intent.source().keyBytes();
                 byte[] destinationKey = intent.destination().keyBytes();
+                byte[] stack = intent.stack() == null ? null : intent.stack().bytes();
                 int size = 1 + 16
                         + holderBytes(sourceKey.length) + 16 + 8
                         + holderBytes(destinationKey.length) + 16 + 8
-                        + 16 + 4 + 8;
+                        + 2 + 4 + (stack == null ? 0 : stack.length) + 16 + 4 + 8;
                 ByteBuffer b = ByteBuffer.allocate(size).put((byte) TYPE_TRANSFER_INTENT);
                 intent.txn().write(b);
                 writeHolder(b, intent.source(), sourceKey);
@@ -100,6 +101,11 @@ public final class LedgerCodec {
                 writeHolder(b, intent.destination(), destinationKey);
                 intent.destinationReservation().write(b);
                 b.putLong(intent.destinationGen());
+                b.putShort((short) intent.destinationSlot());
+                b.putInt(stack == null ? -1 : stack.length);
+                if (stack != null) {
+                    b.put(stack);
+                }
                 intent.stackHash().write(b);
                 b.putInt((int) intent.amount()).putLong(intent.atMillis());
                 yield b;
@@ -239,6 +245,20 @@ public final class LedgerCodec {
                 TransferHolder destination = readHolder(body);
                 Id128 destinationReservation = Id128.read(body);
                 long destinationGen = body.getLong();
+                int destinationSlot = 0;
+                StackBytes stack = null;
+                if (version >= 3) {
+                    destinationSlot = body.getShort() & 0xFFFF;
+                    int stackLength = body.getInt();
+                    if (stackLength >= 0) {
+                        if (stackLength > AccountCodec.MAX_BYTES || stackLength > body.remaining()) {
+                            return null;
+                        }
+                        byte[] bytes = new byte[stackLength];
+                        body.get(bytes);
+                        stack = StackBytes.of(bytes);
+                    }
+                }
                 Id128 hash = Id128.read(body);
                 long amount = body.getInt() & 0xFFFFFFFFL;
                 long at = body.getLong();
@@ -246,7 +266,7 @@ public final class LedgerCodec {
                     return null;
                 }
                 return new LedgerRecord.TransferIntent(txn, source, sourceEntry, sourceGen,
-                        destination, destinationReservation, destinationGen, hash, amount, at);
+                        destination, destinationReservation, destinationGen, destinationSlot, stack, hash, amount, at);
             }
             if (version >= 2 && type == TYPE_TRANSFER_DONE && length == 1 + DONE_PAYLOAD) {
                 return new LedgerRecord.TransferDone(Id128.read(body));

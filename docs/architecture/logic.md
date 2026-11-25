@@ -289,14 +289,16 @@ public interface ActionType<P> {
     String id();                                   // "take_money", "gui.open"
     ActionDescription describe();                  // SelfDescription + category + shorthand + threading
     P parse(ParamReader params);                   // pure, at load; IllegalArgumentException rejects the step
-    ActionOutcome execute(P params, LogicContext ctx);   // OK | FAILED(reason)
+    ActionOutcome execute(P params, LogicContext ctx);   // OK | FAILED(reason) | STOPPED(reason)
 }
 ```
 
 - **Parse once, run many.** Parameters become a typed, immutable `P` at load time. Errors surface
   as diagnostics on apply, not at click time. Today's executors re-read raw maps on every run; that
   code is replaced.
-- **Outcome.** `FAILED` feeds `require` (§2.2) and the trace (§7.6). An exception counts as
+- **Outcome.** `FAILED` feeds `require` (§2.2) and the trace (§7.6). `STOPPED` is the
+  narrow terminal outcome for an action after an irreversible decision: the run ends, but
+  neither the continuation nor a guarding `else:` runs. An exception counts as
   `FAILED` and also emits a rate-limited diagnostic (runtime-systems §2.1).
 - **Threading.** Each action declares `PLAYER_REGION`, `GLOBAL` or `ANY`, and the interpreter
   dispatches through the thread gateway (plugin.md §2). This replaces today's boolean `syncSafe`.
@@ -5407,8 +5409,11 @@ crash-safe setting cannot silently become the journal.
 `source: {holder, entry}` or `source: {slot}`, plus `destination: {holder, slot}`. It
 prepares `TRANSFERRING` + `RESERVED`, checkpoints each owner's compound, appends one
 `TransferIntent`, commits both owners on their threads, checkpoints both commits and
-appends `TransferDone`. `await: decided|saved` gates the following effect at the same
-boundary as `custody.consume`. Reusing an id is idempotent. It never implements transfer
+appends `TransferDone`. `await: decided` does not force `Player.saveData()`; `await:
+saved` is the effect-carrying path that may use the one D8 save barrier. Once the joint
+INTENT exists, a later owner loss or unconfirmed checkpoint ends with `STOPPED` rather
+than running the guard's `else:`. Reusing an id is idempotent only for the same full
+durable identity. It never implements transfer
 as two consumes. Stack sources/destinations are refused explicitly; stack PDC has no
 acknowledged save.
 

@@ -94,6 +94,44 @@ class JointTransferTest {
     }
 
     @Test
+    void recoveryDoesNotResurrectADestinationThatANewerSnapshotAlreadyRemoved() {
+        Prepared prepared = prepared();
+        Ledger decision = new Ledger(List.of(intent(prepared)));
+        Account committed = ((Step.Applied) JointTransfer.commitDestination(
+                prepared.destination(), decision, TXN, RESERVATION, true)).account();
+        committed = new Account(committed.gen() + 1, List.of());
+
+        Account recovered = JointTransfer.recovered(committed, decision, DESTINATION, inventory);
+
+        assertThat(recovered.entries()).isEmpty();
+    }
+
+    @Test
+    void deathDoesNotReleaseEitherTransferPreparation() {
+        Prepared prepared = prepared();
+
+        Step source = EscrowTransfer.death(prepared.source(), Ledger.EMPTY, inventory, false);
+        Step destination = EscrowTransfer.death(prepared.destination(), Ledger.EMPTY, inventory, false);
+
+        assertThat(source).isInstanceOf(Step.NoOp.class);
+        assertThat(destination).isInstanceOf(Step.NoOp.class);
+        assertThat(returned).isEmpty();
+    }
+
+    @Test
+    void aKeyedDestinationCannotReserveAnOccupiedSlot() {
+        Entry occupied = Entry.held(new Id128(70, 80), StackBytes.of(new byte[] {9}),
+                "vault", 4, 999);
+        Account destination = new Account(1, List.of(occupied));
+        Entry source = Entry.held(SOURCE_ENTRY, STACK, "origin", 0, 123);
+
+        Step reserved = JointTransfer.reserve(
+                destination, source, RESERVATION, TXN, "custody.transfer", 4);
+
+        assertThat(reserved).isInstanceOf(Step.Refused.class);
+    }
+
+    @Test
     void keyedConsumeRecoveryKeepsUndecidedEntriesAndDropsOnlyItsDurableIntent() {
         Entry held = Entry.held(SOURCE_ENTRY, STACK, "vault", 0, 1);
         Account frozen = new Account(2, List.of(held.exiting(TXN)));
@@ -119,7 +157,7 @@ class JointTransferTest {
 
     private static LedgerRecord.TransferIntent intent(Prepared prepared) {
         return new LedgerRecord.TransferIntent(TXN, SOURCE, SOURCE_ENTRY, prepared.source().gen(),
-                DESTINATION, RESERVATION, prepared.destination().gen(), STACK.hash16(), 3, 456);
+                DESTINATION, RESERVATION, prepared.destination().gen(), 0, STACK, 3, 456);
     }
 
     private record Prepared(Account source, Account destination) {}

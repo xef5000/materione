@@ -158,9 +158,11 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
     }
 
     /** Resolves a slot into an exact source and starts the one-joint-decision transfer. */
-    public CompletionStage<Optional<String>> transfer(Player player, GuiMenu menu, InputSlotPort.Transfer transfer) {
+    public CompletionStage<InputSlotPort.TransferOutcome> transfer(
+            Player player, GuiMenu menu, InputSlotPort.Transfer transfer) {
         if (runtime == null) {
-            return CompletableFuture.completedFuture(Optional.of("custody transfer is unavailable"));
+            return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                    "custody transfer is unavailable"));
         }
         TransferHolder sourceHolder = transfer.sourceHolder();
         Id128 sourceEntry = transfer.sourceEntry();
@@ -168,7 +170,8 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             int slot = transfer.sourceSlot();
             Optional<InputHolders.Resolved> source = holders.resolve(player, menu, slot);
             if (source.isEmpty() || !source.get().open()) {
-                return CompletableFuture.completedFuture(Optional.of("the source slot is not held in custody"));
+                return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                        "the source slot is not held in custody"));
             }
             try {
                 CustodyHolder held = source.get().holder();
@@ -180,17 +183,20 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
                             "stack PDC cannot acknowledge custody.transfer");
                 };
             } catch (IllegalArgumentException unsupported) {
-                return CompletableFuture.completedFuture(Optional.of(unsupported.getMessage()));
+                return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                        unsupported.getMessage()));
             }
             var entry = Tier1.entryAt(source.get().account().account(), slot);
             if (entry == null) {
-                return CompletableFuture.completedFuture(Optional.of("the source slot is stale or empty"));
+                return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                        "the source slot is stale or empty"));
             }
             sourceEntry = entry.id();
         }
         if (sourceHolder == null || sourceEntry == null || sourceEntry.isZero()
                 || transfer.destinationHolder() == null) {
-            return CompletableFuture.completedFuture(Optional.of("transfer source and destination are incomplete"));
+            return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                    "transfer source and destination are incomplete"));
         }
         Id128 transaction = transfer.transaction();
         if (transaction == null) {
@@ -198,17 +204,22 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
             transaction = new Id128(id.getMostSignificantBits(), id.getLeastSignificantBits());
         }
         if (transaction.isZero()) {
-            return CompletableFuture.completedFuture(Optional.of("transfer id cannot be zero"));
+            return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                    "transfer id cannot be zero"));
         }
         Optional<CompletionStage<CustodyTransfer.Outcome>> started = runtime.transfer(new CustodyTransfer.Request(
                 transaction, sourceHolder, sourceEntry, transfer.destinationHolder(),
                 transfer.destinationSlot(), transfer.reach()));
         if (started.isEmpty()) {
-            return CompletableFuture.completedFuture(Optional.of("custody transfer is unavailable"));
+            return CompletableFuture.completedFuture(new InputSlotPort.TransferOutcome.Refused(
+                    "custody transfer is unavailable"));
         }
         return started.get().thenApply(result -> switch (result) {
-            case CustodyTransfer.Outcome.Transferred transferred -> Optional.empty();
-            case CustodyTransfer.Outcome.Refused refused -> Optional.of(refused.reason());
+            case CustodyTransfer.Outcome.Transferred transferred -> new InputSlotPort.TransferOutcome.Transferred();
+            case CustodyTransfer.Outcome.RecoveryPending pending ->
+                    new InputSlotPort.TransferOutcome.RecoveryPending(pending.reason());
+            case CustodyTransfer.Outcome.Refused refused ->
+                    new InputSlotPort.TransferOutcome.Refused(refused.reason());
         });
     }
 

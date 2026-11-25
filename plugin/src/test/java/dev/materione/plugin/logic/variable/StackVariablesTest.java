@@ -15,6 +15,10 @@ import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableType;
 import dev.materione.core.runtime.RuntimeVariables;
 import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.api.custody.CustodyHolder;
+import dev.materione.plugin.escrow.runtime.CustodyAccount;
+import dev.materione.plugin.escrow.runtime.EscrowMessages;
+import dev.materione.plugin.escrow.runtime.EscrowRuntime;
 import dev.materione.plugin.view.ReadKey;
 import dev.materione.plugin.view.ReadRole;
 import dev.materione.plugin.view.ReadsIndex;
@@ -38,6 +42,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -171,6 +177,32 @@ class StackVariablesTest {
             assertThat(ref.isLive()).isFalse();
             assertThat(ref.writeCustodyAccount(new byte[] {1})).isFalse();
             assertThat(new BukkitStackRef(STEVE, replacement).custodyId()).isEmpty();
+        }
+
+        @Test
+        void aCachedStackCustodyAccountFollowsTheStableStackToANewSlot() {
+            FakeStack stack = new FakeStack("corpus:sword");
+            AtomicReference<StackPdc> oldSlot = new AtomicReference<>(stack);
+            AtomicReference<StackPdc> newSlot = new AtomicReference<>(null);
+            BukkitStackRef first = new BukkitStackRef(STEVE, oldSlot::get, stack.identity);
+            Plugin plugin = proxy(Plugin.class, "Materione");
+            Player player = proxy(Player.class, STEVE);
+            EscrowRuntime runtime = new EscrowRuntime(plugin, null, null, EscrowMessages.defaults(),
+                    diagnostic -> { }, () -> 1_000L, List::of, null, 1_000L);
+            CustodyAccount account = runtime.account(
+                    player, new CustodyHolder.Stack(STEVE, first)).orElseThrow();
+
+            assertThat(account.touch()).isTrue();
+            oldSlot.set(new FakeStack("corpus:sword"));
+            newSlot.set(stack);
+            BukkitStackRef moved = new BukkitStackRef(STEVE, newSlot::get, stack.identity);
+            CustodyAccount reopened = runtime.account(
+                    player, new CustodyHolder.Stack(STEVE, moved)).orElseThrow();
+
+            assertThat(reopened).isSameAs(account);
+            assertThat(reopened.touch()).isTrue();
+            newSlot.set(new FakeStack("corpus:axe"));
+            assertThat(reopened.touch()).as("the cached writer rechecks the fresh handle's live identity").isFalse();
         }
 
         @Test
@@ -315,6 +347,21 @@ class StackVariablesTest {
                 }
             }
             return out;
+        }
+
+        private static <T> T proxy(Class<T> type, Object value) {
+            return type.cast(java.lang.reflect.Proxy.newProxyInstance(
+                    type.getClassLoader(), new Class<?>[] {type}, (self, method, args) -> switch (method.getName()) {
+                        case "getName" -> value;
+                        case "getUniqueId" -> value;
+                        case "toString" -> type.getSimpleName();
+                        case "hashCode" -> System.identityHashCode(self);
+                        case "equals" -> self == args[0];
+                        default -> method.getReturnType().isPrimitive()
+                                ? java.lang.reflect.Array.get(
+                                        java.lang.reflect.Array.newInstance(method.getReturnType(), 1), 0)
+                                : null;
+                    }));
         }
     }
 

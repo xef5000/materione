@@ -40,10 +40,17 @@ public interface InputSlotPort {
             dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach);
 
     /** A universal joint transfer, resolved either from a held slot or an exact holder/entry. */
-    default java.util.concurrent.CompletionStage<java.util.Optional<String>> transfer(
+    default java.util.concurrent.CompletionStage<TransferOutcome> transfer(
             Player player, ViewerRecord session, Transfer transfer) {
         return java.util.concurrent.CompletableFuture.completedFuture(
-                java.util.Optional.of("custody transfer is unavailable"));
+                new TransferOutcome.Refused("custody transfer is unavailable"));
+    }
+
+    sealed interface TransferOutcome permits TransferOutcome.Transferred, TransferOutcome.Refused,
+            TransferOutcome.RecoveryPending {
+        record Transferred() implements TransferOutcome {}
+        record Refused(String reason) implements TransferOutcome {}
+        record RecoveryPending(String reason) implements TransferOutcome {}
     }
 
     /** Resolved action data; a slot source may fill the holder/entry from the open window. */

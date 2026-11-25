@@ -368,7 +368,8 @@
               "required": true,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "custody-transfer-source"
             },
             {
               "advanced": true,
@@ -379,7 +380,8 @@
               "required": true,
               "section": "general",
               "type": "raw",
-              "uiHint": "advanced"
+              "uiHint": "advanced",
+              "valueKind": "custody-transfer-destination"
             },
             {
               "advanced": false,

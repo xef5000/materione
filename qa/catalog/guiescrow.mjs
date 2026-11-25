@@ -23,6 +23,9 @@ const COVERS = [
   'fixtures/packs/guilogic/guis/trash.yml',
   'fixtures/packs/guilogic/guis/consume.yml',
   'fixtures/packs/guilogic/guis/vault.yml',
+  'fixtures/packs/guilogic/guis/vault_pre.yml',
+  'fixtures/packs/guilogic/guis/vault_post_intent.yml',
+  'fixtures/packs/guilogic/guis/vault_post_commit.yml',
   'fixtures/packs/guilogic/guis/transfer.yml',
   'plugin/src/main/java/dev/materione/plugin/logic/action/ConsumeCustodyAction.java',
   'plugin/src/main/java/dev/materione/plugin/logic/action/CustodyTransferAction.java',
@@ -64,8 +67,8 @@ async function openEscrow(ctx) {
 }
 
 /** Opens a guilogic GUI for the probe player and waits for its open marker; the runner reset the baseline at the test's start. */
-async function openGui(ctx, gui, marker) {
-  await ctx.rcon(`materione gui open ${gui} Probe`);
+async function openGui(ctx, gui, marker, args = '') {
+  await ctx.rcon(`materione gui open ${gui} Probe${args ? ` ${args}` : ''}`);
   await ctx.waitForServerLog(marker);
   await ctx.sleep(600); // the client finishes opening the window
 }
@@ -384,37 +387,46 @@ export default [
 
   test({
     id: 'guiescrow.atomic-transfer',
-    title: 'custody.transfer moves a held stack from the player account to a keyed holder with one joint decision; crash replay neither duplicates nor loses it',
+    title: 'custody.transfer recovers without loss or duplication when killed pre-INTENT, post-INTENT/pre-commit and post-commit',
     covers: COVERS,
-    timeoutMs: 600_000,
+    timeoutMs: 1_200_000,
     steps: async (ctx) => {
-      await ctx.reset();
-      await ctx.rcon('materione give corpus:gem_red Probe 3');
-      await openGui(ctx, 'guilogic:transfer', /MATERIONE-GUI-OPENED id=guilogic:transfer/);
-      await click(ctx, 36);
-      await click(ctx, 0);
-      await ctx.sleep(400);
-      await click(ctx, 8);
-      await ctx.waitForServerLog(/MATERIONE-GUITRANSFER-START/, { timeoutMs: 10_000 });
-      // Paper 26.1's player.saveData() seam does not create a file in this local offline probe, but save-all is the
-      // real server snapshot. It lands after both reservations, and once more after the two owner commits.
-      await ctx.sleep(1_500);
-      await ctx.rcon('save-all flush');
-      await ctx.sleep(6_500);
-      await ctx.rcon('save-all flush');
-      await ctx.waitForServerLog(/MATERIONE-GUITRANSFER-DONE/, { timeoutMs: 45_000 });
-      ctx.expect(await slotStack(ctx, 0)).toBe('empty');
-      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
-      await closeWindow(ctx);
-      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
-      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
-      await closeWindow(ctx);
-      await ctx.rcon('save-all flush');
-      await ctx.crashRestart();
-      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
-      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
-      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
-      await closeWindow(ctx);
+      for (const boundary of [
+        { gate: 'transfer-checkpointed', committed: false, vault: 'pre-intent', gui: 'vault_pre' },
+        { gate: 'transfer-intent', committed: true, vault: 'post-intent', gui: 'vault_post_intent' },
+        { gate: 'transfer-destination-committed', committed: true, vault: 'post-commit',
+          gui: 'vault_post_commit' },
+      ]) {
+        await ctx.reset();
+        await ctx.rejoin();
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await openGui(ctx, 'guilogic:transfer', /MATERIONE-GUI-OPENED id=guilogic:transfer/,
+          `vault=${boundary.vault}`);
+        await click(ctx, 36);
+        await click(ctx, 0);
+        await ctx.sleep(400);
+        await ctx.armEscrowGate(boundary.gate);
+        await click(ctx, 8);
+        await ctx.waitForServerLog(/MATERIONE-GUITRANSFER-START/, { timeoutMs: 10_000 });
+        await ctx.waitForServerLog(new RegExp(`MATERIONE-ESCROW-GATE ${boundary.gate}`), { timeoutMs: 90_000 });
+        await ctx.crashRestart();
+
+        await openGui(ctx, `guilogic:${boundary.gui}`,
+          new RegExp(`MATERIONE-GUI-OPENED id=guilogic:${boundary.gui}`));
+        if (boundary.committed) {
+          ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+          ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+          await click(ctx, 0);
+          await click(ctx, 36);
+          await closeWindow(ctx);
+        } else {
+          ctx.expect(await slotStack(ctx, 0)).toBe('empty');
+          ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+          await closeWindow(ctx);
+        }
+        await ctx.rcon('clear Probe');
+        await ctx.rcon('save-all flush');
+      }
     },
   }),
 ];

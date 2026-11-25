@@ -127,6 +127,45 @@ class CustodyConsumeTest {
     }
 
     @Test
+    void aTransferCheckpointDoesNotBypassThePlayersLastConsumeSave() {
+        hold(3, item("gem", 5));
+        var consumeOutcome = running(consume.consume(r.owner, Rig.GUI, 3, Reach.SAVED));
+        r.sim.runAll();
+        assertThat(settled(consumeOutcome)).isPresent();
+
+        r.barrier.checkpoint(r.owner, r.owner.accountKey(), r.rig.escrow.account().gen());
+        r.sim.runAll();
+
+        assertThat(r.owner.saveTimes).as("the shared D8 rate limit covers both paths").hasSize(1);
+    }
+
+    @Test
+    void aDecidedTransferCheckpointOnlyObservesSnapshotsAndNeverForcesAPlayerSave() {
+        r.owner.disk = DiskMode.STUCK;
+
+        var checkpoint = r.barrier.checkpoint(
+                r.owner, r.owner.accountKey(), r.rig.escrow.account().gen(), false);
+        r.sim.advance(31_000);
+
+        assertThat(r.owner.saveTimes).isEmpty();
+        assertThat(checkpoint).isNotDone();
+        r.barrier.close();
+        assertThat(checkpoint.join()).isFalse();
+    }
+
+    @Test
+    void aClosedBarrierTerminallyFailsAnUnconfirmedSavedCheckpoint() {
+        r.owner.disk = DiskMode.STUCK;
+        var checkpoint = r.barrier.checkpoint(
+                r.owner, r.owner.accountKey(), r.rig.escrow.account().gen(), true);
+        r.sim.advance(1_000);
+
+        r.barrier.close();
+
+        assertThat(checkpoint.join()).isFalse();
+    }
+
+    @Test
     void theEffectNeverRunsWhileTheDiskCannotSaveAndGivesUpAfterTheBarrierDoes() {
         r.owner.disk = DiskMode.STUCK;
         hold(3, item("gem", 5));

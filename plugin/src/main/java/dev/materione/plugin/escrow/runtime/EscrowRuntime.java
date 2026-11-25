@@ -233,7 +233,8 @@ public final class EscrowRuntime {
         };
         Optional<CustodyAccount> account = account(player, holder);
         return account.filter(CustodyAccount::open)
-                .map(value -> new TransferSide(player, holder, value, owner(player, value), accountKey(holder)));
+                .map(value -> new TransferSide(player, holder, value,
+                        owner(player, value, accountKey(holder)), accountKey(holder)));
     }
 
     /** The player as the tier-2 and tier-3 runtime needs them: their own thread, live state and save. */
@@ -369,6 +370,11 @@ public final class EscrowRuntime {
                         throw new IllegalStateException("the stack holder is no longer live");
                     }
                 }));
+        account.rebind(bytes -> {
+            if (!ref.writeCustodyAccount(bytes)) {
+                throw new IllegalStateException("the stack holder is no longer live");
+            }
+        });
         if (account.gate() == CustodyAccount.Gate.CLOSED) {
             read(account, ref.custodyAccount(), player, null);
         }

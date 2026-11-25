@@ -163,6 +163,10 @@ public final class EscrowTransfer {
         List<Entry> next = new ArrayList<>();
         boolean changed = false;
         for (Entry entry : account.entries()) {
+            if (entry.state() == EntryState.TRANSFERRING || entry.state() == EntryState.RESERVED) {
+                next.add(entry);
+                continue;
+            }
             if (entry.state() == EntryState.OWED) {
                 next.add(entry);
                 continue;

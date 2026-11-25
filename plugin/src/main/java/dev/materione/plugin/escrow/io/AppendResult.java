@@ -42,6 +42,8 @@ public sealed interface AppendResult {
         UNRECOVERABLE,
         /** The write or the force failed (disk full, permissions): the record may be absent or a torn tail. */
         WRITE_FAILED,
+        /** The durable transaction id already names a different transfer identity. */
+        IDENTITY_MISMATCH,
         /** The store is closed (the plugin is disabling). */
         SHUTDOWN
     }

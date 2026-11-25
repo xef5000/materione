@@ -14,13 +14,12 @@ import dev.materione.plugin.escrow.model.Step;
 import dev.materione.plugin.escrow.model.TransferHolder;
 import dev.materione.plugin.escrow.gate.CrashGate;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.function.Supplier;
 import org.bukkit.inventory.ItemStack;
 
@@ -47,6 +46,7 @@ public final class CustodyTransfer {
 
     public sealed interface Outcome {
         record Transferred(Reach reached) implements Outcome {}
+        record RecoveryPending(Reach reach, String reason) implements Outcome {}
         record Refused(String reason) implements Outcome {}
     }
 
@@ -55,7 +55,9 @@ public final class CustodyTransfer {
     private final SaveBarrier barrier;
     private final Supplier<Id128> ids;
     private final java.util.function.LongSupplier clock;
-    private final ConcurrentMap<Id128, CompletableFuture<Outcome>> running = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Id128, Active> running = new ConcurrentHashMap<>();
+
+    private record Active(Request request, CompletableFuture<Outcome> outcome) {}
 
     public CustodyTransfer(EscrowRuntime runtime, EscrowLedgerStore ledger, SaveBarrier barrier,
             Supplier<Id128> ids, java.util.function.LongSupplier clock) {
@@ -69,18 +71,38 @@ public final class CustodyTransfer {
     /** Starts or joins the idempotent transaction. */
     public CompletionStage<Outcome> transfer(Request request) {
         CompletableFuture<Outcome> outcome = new CompletableFuture<>();
-        CompletableFuture<Outcome> existing = running.putIfAbsent(request.transaction(), outcome);
+        Active existing = running.putIfAbsent(request.transaction(), new Active(request, outcome));
         if (existing != null) {
-            return existing;
+            return sameOperation(existing.request(), request)
+                    ? existing.outcome()
+                    : CompletableFuture.completedFuture(
+                            new Outcome.Refused("the transaction id is already used by another transfer"));
         }
         Ledger decided = sharedImage();
         if (decided.isTransferDecided(request.transaction())) {
-            if (decided.isTransferDone(request.transaction()) || request.reach() == Reach.DECIDED) {
+            LedgerRecord.TransferIntent intent = decided.transfer(request.transaction()).orElseThrow();
+            Optional<EscrowRuntime.TransferSide> source = runtime == null ? Optional.empty()
+                    : runtime.transferSide(request.source());
+            Optional<EscrowRuntime.TransferSide> destination = runtime == null ? Optional.empty()
+                    : runtime.transferSide(request.destination());
+            if (!matchesIntent(request, intent, source, destination)) {
+                finish(request.transaction(), outcome,
+                        new Outcome.Refused("the transaction id already belongs to a different transfer"));
+                return outcome;
+            }
+            if (decided.isTransferDone(request.transaction())) {
                 finish(request.transaction(), outcome, new Outcome.Transferred(request.reach()));
+            } else if (source.isPresent() && destination.isPresent()) {
+                commitBoth(request, source.get(), destination.get(), intent.destinationReservation(),
+                        decided, intent, outcome);
             } else {
                 finish(request.transaction(), outcome,
-                        new Outcome.Refused("the transfer is decided but its saved acknowledgment is still pending"));
+                        new Outcome.RecoveryPending(request.reach(), "a transfer owner is offline; recovery will finish it"));
             }
+            return outcome;
+        }
+        if (runtime == null) {
+            finish(request.transaction(), outcome, new Outcome.Refused("custody transfer is unavailable"));
             return outcome;
         }
         Optional<EscrowRuntime.TransferSide> sourceSide = runtime.transferSide(request.source());
@@ -142,7 +164,7 @@ public final class CustodyTransfer {
     private void checkpointPrepared(Request request, EscrowRuntime.TransferSide source,
             EscrowRuntime.TransferSide destination, Entry sourceEntry, Id128 reservation,
             CompletableFuture<Outcome> outcome) {
-        checkpointOwners(source, destination)
+        checkpointOwners(source, destination, request.reach() == Reach.SAVED)
                 .thenAccept(ok -> {
                     if (ok) {
                         CrashGate.at(CrashGate.Gates.TRANSFER_CHECKPOINTED);
@@ -160,19 +182,25 @@ public final class CustodyTransfer {
         LedgerRecord.TransferIntent intent = new LedgerRecord.TransferIntent(
                 request.transaction(), request.source(), request.sourceEntry(),
                 source.account().account().gen(), request.destination(), reservation,
-                destination.account().account().gen(), bytes.hash16(),
+                destination.account().account().gen(), request.destinationSlot(), bytes,
                 ItemStacks.INSTANCE.decode(bytes).getAmount(), clock.getAsLong());
         ledger.append(SHARED_LEDGER, intent).whenComplete((result, failure) -> {
             AppendResult outcomeNow = failure == null ? result
                     : new AppendResult.Refused(AppendResult.Reason.WRITE_FAILED, String.valueOf(failure));
             Ledger decided = outcomeNow instanceof AppendResult.Durable durable ? durable.ledger()
                     : sharedImage();
-            if (!decided.isTransferDecided(request.transaction())) {
+            Optional<LedgerRecord.TransferIntent> durableIntent = decided.transfer(request.transaction());
+            if (durableIntent.isEmpty()) {
                 rollbackBoth(request, source, destination, outcome, "joint decision could not be recorded");
                 return;
             }
+            if (!durableIntent.get().sameTransfer(intent)) {
+                rollbackBoth(request, source, destination, outcome,
+                        "the transaction id already belongs to a different transfer");
+                return;
+            }
             CrashGate.at(CrashGate.Gates.TRANSFER_INTENT);
-            commitBoth(request, source, destination, reservation, decided, intent, outcome);
+            commitBoth(request, source, destination, reservation, decided, durableIntent.get(), outcome);
         });
     }
 
@@ -182,7 +210,7 @@ public final class CustodyTransfer {
         onOwner(source.owner(), () -> {
             if (!commit(source.account(), JointTransfer.commitSource(
                     source.account().account(), decided, request.transaction(), request.sourceEntry()))) {
-                returnRecoveryWillFinish(source, request.transaction(), result);
+                returnRecoveryWillFinish(source, request.transaction(), request.reach(), result);
                 return;
             }
             CrashGate.at(CrashGate.Gates.TRANSFER_SOURCE_COMMITTED);
@@ -190,7 +218,7 @@ public final class CustodyTransfer {
                 if (!commit(destination.account(), JointTransfer.commitDestination(
                         destination.account().account(), decided, request.transaction(), reservation,
                         request.destination().kind() == TransferHolder.Kind.KEYED))) {
-                    returnRecoveryWillFinish(destination, request.transaction(), result);
+                    returnRecoveryWillFinish(destination, request.transaction(), request.reach(), result);
                     return;
                 }
                 CrashGate.at(CrashGate.Gates.TRANSFER_DESTINATION_COMMITTED);
@@ -198,16 +226,22 @@ public final class CustodyTransfer {
                     finish(request.transaction(), result, new Outcome.Transferred(Reach.DECIDED));
                 }
                 acknowledge(request, source, destination, intent, result);
-            }, () -> returnRecoveryWillFinish(destination, request.transaction(), result));
-        }, () -> returnRecoveryWillFinish(source, request.transaction(), result));
+            }, () -> returnRecoveryWillFinish(destination, request.transaction(), request.reach(), result));
+        }, () -> returnRecoveryWillFinish(source, request.transaction(), request.reach(), result));
     }
 
     private void acknowledge(Request request, EscrowRuntime.TransferSide source,
             EscrowRuntime.TransferSide destination, LedgerRecord.TransferIntent intent,
             CompletableFuture<Outcome> outcome) {
-        checkpointOwners(source, destination)
+        checkpointOwners(source, destination, request.reach() == Reach.SAVED)
                 .thenAccept(ok -> {
                     if (!ok) {
+                        if (request.reach() == Reach.SAVED) {
+                            finish(request.transaction(), outcome,
+                                    new Outcome.RecoveryPending(request.reach(),
+                                            "the transfer is committed but no saved snapshot was confirmed"));
+                        }
+                        running.remove(request.transaction(), new Active(request, outcome));
                         return;
                     }
                     CrashGate.at(CrashGate.Gates.TRANSFER_ACKNOWLEDGED);
@@ -215,7 +249,7 @@ public final class CustodyTransfer {
                     if (request.reach() == Reach.SAVED) {
                         finish(request.transaction(), outcome, new Outcome.Transferred(Reach.SAVED));
                     } else {
-                        running.remove(request.transaction(), outcome);
+                        running.remove(request.transaction(), new Active(request, outcome));
                     }
                 });
     }
@@ -233,15 +267,23 @@ public final class CustodyTransfer {
             CompletableFuture<Outcome> outcome, String reason) {
         onOwner(source.owner(), () -> {
             commit(source.account(), JointTransfer.rollbackSource(
-                    source.account().account(), new BagInventory<>(source.owner().live(), ItemStacks.INSTANCE),
+                    source.account().account(), source.holder().equals(new dev.materione.api.custody.CustodyHolder.Player(
+                            source.player().getUniqueId()))
+                            ? new TransferHolder(TransferIds.of(source.player().getUniqueId()),
+                                    TransferHolder.Kind.PLAYER, "")
+                            : new TransferHolder(TransferIds.of(source.player().getUniqueId()),
+                                    TransferHolder.Kind.KEYED,
+                                    ((dev.materione.api.custody.CustodyHolder.Keyed) source.holder()).key()),
+                    new BagInventory<>(source.owner().live(), ItemStacks.INSTANCE),
                     request.transaction()));
             finish(request.transaction(), outcome, new Outcome.Refused(reason));
         }, () -> finish(request.transaction(), outcome, new Outcome.Refused(reason)));
     }
 
-    private void returnRecoveryWillFinish(EscrowRuntime.TransferSide side, Id128 txn,
+    private void returnRecoveryWillFinish(EscrowRuntime.TransferSide side, Id128 txn, Reach reach,
             CompletableFuture<Outcome> outcome) {
-        finish(txn, outcome, new Outcome.Refused("the owner left; recovery will finish the durable transfer"));
+        finish(txn, outcome, new Outcome.RecoveryPending(reach,
+                "the owner left; recovery will finish the durable transfer"));
     }
 
     private Ledger sharedImage() {
@@ -251,38 +293,62 @@ public final class CustodyTransfer {
                 .orElse(Ledger.EMPTY);
     }
 
-    /**
-     * A player's whole PDC compound is one snapshot. Touch and read back the default account once per owner; this
-     * proves all keyed/player PDC preparations or commits saved in that player's same compound without guessing from
-     * a second PDC key read.
-     */
     private CompletionStage<Boolean> checkpointOwners(
-            EscrowRuntime.TransferSide source, EscrowRuntime.TransferSide destination) {
-        Map<UUID, EscrowRuntime.TransferSide> owners = new LinkedHashMap<>();
-        owners.put(source.player().getUniqueId(), source);
-        owners.put(destination.player().getUniqueId(), destination);
-        CompletionStage<Boolean> result = CompletableFuture.completedFuture(true);
-        for (EscrowRuntime.TransferSide side : owners.values()) {
-            result = result.thenCompose(previous ->
-                    previous ? checkpointOwner(side) : CompletableFuture.completedFuture(false));
+            EscrowRuntime.TransferSide source, EscrowRuntime.TransferSide destination, boolean requestSave) {
+        List<EscrowRuntime.TransferSide> sides = List.of(source, destination);
+        CompletionStage<Boolean> touched = CompletableFuture.completedFuture(true);
+        for (EscrowRuntime.TransferSide side : sides) {
+            touched = touched.thenCompose(previous ->
+                    previous ? touch(side) : CompletableFuture.completedFuture(false));
         }
+        return touched.thenCompose(ok -> {
+            if (!ok) {
+                return CompletableFuture.completedFuture(false);
+            }
+            CompletionStage<Boolean> result = CompletableFuture.completedFuture(true);
+            for (EscrowRuntime.TransferSide side : sides) {
+                result = result.thenCompose(previous -> previous ? barrier.checkpoint(
+                                side.owner(), side.accountKey().toString(), side.account().account().gen(),
+                                requestSave)
+                        : CompletableFuture.completedFuture(false));
+            }
+            return result;
+        });
+    }
+
+    private CompletionStage<Boolean> touch(EscrowRuntime.TransferSide side) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        onOwner(side.owner(), () -> result.complete(side.account().touch()),
+                () -> result.complete(false));
         return result;
     }
 
-    private CompletionStage<Boolean> checkpointOwner(EscrowRuntime.TransferSide side) {
-        PlayerEscrow anchor = runtime.of(side.player());
-        Owner<ItemStack> owner = runtime.owner(side.player(), anchor);
-        CompletableFuture<Boolean> result = new CompletableFuture<>();
-        onOwner(owner, () -> {
-            if (!anchor.touch()) {
-                result.complete(false);
-                return;
+    private static boolean matchesIntent(Request request, LedgerRecord.TransferIntent intent,
+            Optional<EscrowRuntime.TransferSide> source, Optional<EscrowRuntime.TransferSide> destination) {
+        if (!intent.source().equals(request.source())
+                || !intent.sourceEntry().equals(request.sourceEntry())
+                || !intent.destination().equals(request.destination())
+                || intent.destinationSlot() != request.destinationSlot()) {
+            return false;
+        }
+        if (source.isPresent()) {
+            Optional<Entry> entry = source.get().account().account().find(request.sourceEntry());
+            if (entry.isPresent() && (!entry.get().stack().hash16().equals(intent.stackHash())
+                    || ItemStacks.INSTANCE.decode(entry.get().stack()).getAmount() != intent.amount())) {
+                return false;
             }
-            barrier.checkpoint(owner, runtime.accountKey(
-                    new dev.materione.api.custody.CustodyHolder.Player(side.player().getUniqueId())).toString(),
-                    anchor.account().gen()).thenAccept(result::complete);
-        }, () -> result.complete(false));
-        return result;
+        }
+        if (destination.isPresent()) {
+            Optional<Entry> reservation = destination.get().account().account()
+                    .find(intent.destinationReservation());
+            if (reservation.isPresent()
+                    && (reservation.get().slotHint() != request.destinationSlot()
+                    || !reservation.get().stack().hash16().equals(intent.stackHash())
+                    || ItemStacks.INSTANCE.decode(reservation.get().stack()).getAmount() != intent.amount())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean commit(CustodyAccount account, Step step) {
@@ -302,7 +368,17 @@ public final class CustodyTransfer {
     private void finish(Id128 txn, CompletableFuture<Outcome> outcome, Outcome value) {
         outcome.complete(value);
         if (!(value instanceof Outcome.Transferred transferred) || transferred.reached() == Reach.SAVED) {
-            running.remove(txn, outcome);
+            Active current = running.get(txn);
+            if (current != null && current.outcome() == outcome) {
+                running.remove(txn, current);
+            }
         }
+    }
+
+    private static boolean sameOperation(Request left, Request right) {
+        return left.source().equals(right.source())
+                && left.sourceEntry().equals(right.sourceEntry())
+                && left.destination().equals(right.destination())
+                && left.destinationSlot() == right.destinationSlot();
     }
 }

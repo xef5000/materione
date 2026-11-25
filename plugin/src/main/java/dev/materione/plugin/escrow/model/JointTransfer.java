@@ -31,7 +31,9 @@ public final class JointTransfer {
      */
     public static Step reserve(Account destination, Entry source, Id128 reservation, Id128 txn,
             String originGui, int slotHint) {
-        if (destination.find(reservation).isPresent()) {
+        if (slotHint < 0 || slotHint > Entry.MAX_SLOT_HINT
+                || destination.find(reservation).isPresent()
+                || destination.entries().stream().anyMatch(entry -> entry.slotHint() == slotHint)) {
             return new Step.Refused(Refusal.INVALID);
         }
         Entry reserved = new Entry(reservation, EntryState.RESERVED, txn, source.sinceMillis(), originGui,
@@ -78,7 +80,7 @@ public final class JointTransfer {
     }
 
     /** Pre-decision recovery returns the source item through the normal inventory/OWED path. */
-    public static Step rollbackSource(Account account, Inventory inventory, Id128 txn) {
+    public static Step rollbackSource(Account account, TransferHolder holder, Inventory inventory, Id128 txn) {
         Optional<Entry> entry = account.findByTxn(txn);
         if (entry.isEmpty()) {
             return new Step.NoOp(account);
@@ -86,7 +88,10 @@ public final class JointTransfer {
         if (entry.get().state() != EntryState.TRANSFERRING) {
             return new Step.NoOp(account);
         }
-        return EscrowTransfer.returnFrozen(account, inventory, entry.get());
+        return holder.kind() == TransferHolder.Kind.KEYED
+                ? EscrowTransfer.shrunk(account.replaced(entry.get().held()),
+                        List.of(), List.of(), List.of(), List.of())
+                : EscrowTransfer.returnFrozen(account, inventory, entry.get());
     }
 
     /** Pre-decision recovery discards a reservation without making it visible. */
@@ -102,6 +107,37 @@ public final class JointTransfer {
     /** Idempotent recovery of both transactional states when an account is read. */
     public static Account recovered(Account account, Ledger decisions, TransferHolder holder, Inventory inventory) {
         Account next = account;
+        for (LedgerRecord record : decisions.records()) {
+            if (!(record instanceof LedgerRecord.TransferIntent intent)) {
+                continue;
+            }
+            if (intent.source().equals(holder)) {
+                Entry found = next.find(intent.sourceEntry()).orElse(null);
+                if (found != null && (Long.compareUnsigned(next.gen(), intent.sourceGen()) < 0
+                        || found.txn().equals(intent.txn()) && found.state() == EntryState.TRANSFERRING
+                        || found.state() == EntryState.HELD && stackMatches(found, intent))) {
+                    next = new Account(next.gen() + 1, next.entries().stream()
+                            .filter(entry -> !entry.id().equals(intent.sourceEntry())).toList());
+                }
+            }
+            if (intent.destination().equals(holder)) {
+                Entry reservation = next.find(intent.destinationReservation()).orElse(null);
+                if (reservation != null) {
+                    if (reservation.state() == EntryState.RESERVED && reservation.txn().equals(intent.txn())) {
+                        next = new Account(next.gen() + 1, next.entries().stream()
+                                .map(entry -> entry.id().equals(reservation.id())
+                                        ? entry.committed(true) : entry).toList());
+                    }
+                } else if (Long.compareUnsigned(next.gen(), intent.destinationGen()) < 0
+                        && intent.stack() != null
+                        && next.entries().stream().noneMatch(
+                                entry -> entry.slotHint() == intent.destinationSlot())) {
+                    Entry restored = Entry.held(intent.destinationReservation(), intent.stack(),
+                            "custody.transfer", intent.destinationSlot(), intent.atMillis());
+                    next = new Account(next.gen() + 1, appended(next.entries(), restored));
+                }
+            }
+        }
         List<Entry> transactional = account.entries().stream()
                 .filter(entry -> entry.state() == EntryState.TRANSFERRING || entry.state() == EntryState.RESERVED)
                 .toList();
@@ -111,7 +147,7 @@ public final class JointTransfer {
             if (entry.state() == EntryState.TRANSFERRING) {
                 step = intent.filter(value -> value.source().equals(holder)).isPresent()
                         ? commitSource(next, decisions, entry.txn(), entry.id())
-                        : rollbackSource(next, inventory, entry.txn());
+                        : rollbackSource(next, holder, inventory, entry.txn());
             } else {
                 step = intent.filter(value -> value.destination().equals(holder)).isPresent()
                         ? commitDestination(next, decisions, entry.txn(), entry.id(),
@@ -122,6 +158,16 @@ public final class JointTransfer {
                 next = applied.account();
             }
         }
+        return next;
+    }
+
+    private static boolean stackMatches(Entry entry, LedgerRecord.TransferIntent intent) {
+        return entry.stack().hash16().equals(intent.stackHash());
+    }
+
+    private static List<Entry> appended(List<Entry> entries, Entry entry) {
+        var next = new java.util.ArrayList<>(entries);
+        next.add(entry);
         return next;
     }
 }

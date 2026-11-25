@@ -85,6 +85,38 @@ describe('a gap is reported as a missing primitive (codemode.md section 6, 9.2)'
     expect(found?.hint).toContain('missing primitive');
   });
 
+  describe('custody transfer address types', () => {
+    const destination = '{ holder: { kind: "player" }, slot: 2 }';
+
+    it('accepts the discriminated exact and slot forms', () => {
+      expect(check(`m.actions.custodyTransfer({
+        source: { holder: { kind: "keyed", key: "vault:1" }, entry: "00000000000000000000000000000001" },
+        destination: ${destination}
+      });`).diagnostics).toEqual([]);
+      expect(check(`m.actions.custodyTransfer({ source: { slot: 0 }, destination: ${destination} });`)
+          .diagnostics).toEqual([]);
+    });
+
+    it.each([
+      ['slot 99', `m.actions.custodyTransfer({ source: { slot: 99 }, destination: ${destination} });`],
+      ['slot -1', `m.actions.custodyTransfer({ source: { slot: -1 }, destination: ${destination} });`],
+      ['slot and entry', `m.actions.custodyTransfer({
+        source: { slot: 1, holder: { kind: "player" }, entry: "00000000000000000000000000000001" },
+        destination: ${destination}
+      });`],
+      ['invented kind', `m.actions.custodyTransfer({
+        source: { holder: { kind: "chest", key: "vault:1" }, entry: "00000000000000000000000000000001" },
+        destination: ${destination}
+      });`],
+      ['invalid key', `m.actions.custodyTransfer({
+        source: { holder: { kind: "keyed", key: "Vault:1" }, entry: "00000000000000000000000000000001" },
+        destination: ${destination}
+      });`],
+    ])('refuses %s', (_name, program) => {
+      expect(check(program).ok).toBe(false);
+    });
+  });
+
   it('marks a function the server lacks (a member of the function catalog)', () => {
     const found = check('const e = m.fn.sqrt(4);').diagnostics.find((d) => d.code === 'TS2339');
     expect(found?.missingPrimitive?.member).toBe('sqrt');

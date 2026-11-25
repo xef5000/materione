@@ -1,0 +1,12 @@
+vault_post_commit:
+  title: "Player Vault (post-commit)"
+  container: chest_1
+  layers:
+    - id: vault
+      type: slots
+      region: container
+      input: true
+      durable: required
+      holder:
+        kind: keyed
+        key: "vault:${player.uuid}:post-commit"

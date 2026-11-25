@@ -23,7 +23,7 @@ transfer:
             destination:
               holder:
                 kind: keyed
-                key: "vault:${player.uuid}:1"
+                key: "vault:${player.uuid}:${view.args.vault}"
               slot: 0
             await: saved
           else:

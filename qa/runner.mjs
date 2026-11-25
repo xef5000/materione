@@ -234,7 +234,9 @@ export function environmentFingerprint(pins, pluginsDir) {
     files = [];
   }
   const optional = files
-    .filter((name) => name.toLowerCase().endsWith('.jar') && name.toLowerCase() !== 'materione.jar')
+    .filter((name) => name.toLowerCase().endsWith('.jar')
+      && name.toLowerCase() !== 'materione.jar'
+      && name.toLowerCase() !== 'durabilityprobe.jar')
     .sort()
     .filter((name) => fs.statSync(path.join(pluginsDir, name)).isFile())
     .map((name) => ({ name, sha256: sha256(fs.readFileSync(path.join(pluginsDir, name))) }));
@@ -444,7 +446,7 @@ async function cmdRun(argv) {
       await agent.call('quit', {}, 120_000);
     }
     line('booting the probe server (fresh world, all fixture packs) ...');
-    await agent.call('up', { build: !flags.noBuild }, 600_000);
+    await agent.call('up', { build: !flags.noBuild, escrowGates: true }, 600_000);
     if (envKey() !== env) throw new QaError('optional runtime plugin jars or probe pins changed during startup; rerun with a stable environment');
     line('launching the probe client ...');
     await agent.call('client', {}, 360_000);
@@ -758,6 +760,9 @@ function makeCtx({ test, agent, testDir, transcript, logOffset: startOffset }) {
       await agentCall('crash-restart', 'crashRestart', {}, null, 600_000);
       logOffset = 0;
       await ctx.rejoin();
+    },
+    armEscrowGate: async (gate) => {
+      await ctx.rcon(`dprobe arm ${gate}`);
     },
     state: () => agentCall('state', 'state', {}, null, 60_000),
     chat: async (limit = 30) => {

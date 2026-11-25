@@ -21,6 +21,22 @@
 /** Any JSON value: the type of a `raw` field, which the entry validates and the schema does not describe. */
 type JsonValue = string | number | boolean | null | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
+type CustodyTransferSlot = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13
+  | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26
+  | 27 | 28 | 29 | 30 | 31 | 32 | 33 | 34 | 35 | 36 | 37 | 38 | 39
+  | 40 | 41 | 42 | 43 | 44 | 45 | 46 | 47 | 48 | 49 | 50 | 51 | 52 | 53;
+type CustodyKey = Lowercase<string>;
+type CustodyHolderAddress =
+  | { readonly kind: "player"; readonly player?: string | Expr; readonly key?: never }
+  | { readonly kind: "keyed"; readonly player?: string | Expr; readonly key: CustodyKey | Expr };
+type CustodyTransferSource =
+  | { readonly slot: CustodyTransferSlot | Expr; readonly holder?: never; readonly entry?: never }
+  | { readonly holder: CustodyHolderAddress; readonly entry: string | Expr; readonly slot?: never };
+type CustodyTransferDestination = {
+  readonly holder: CustodyHolderAddress;
+  readonly slot: CustodyTransferSlot | Expr;
+};
+
 /** A formatted-text field (master section 5.7): MiniMessage, built with `m.mm` so its tags are checked when staged. */
 type MiniMessage = string & { readonly __brand: "MiniMessage" };
 

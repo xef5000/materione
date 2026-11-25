@@ -171,9 +171,9 @@ class EscrowGoldenFixturesTest {
 
     @Test
     void ledgerNewerVersionIsOpaque() throws IOException {
-        byte[] bytes = {'M', 'T', 'R', 'L', 0, 3, 9, 9, 9};
-        check("ledger-v2-newer-version", "MTRL, version 3, opaque body: a newer writer's ledger", bytes);
-        assertThat(LedgerCodec.read(bytes)).isEqualTo(new LedgerRead.Newer(3));
+        byte[] bytes = {'M', 'T', 'R', 'L', 0, 4, 9, 9, 9};
+        check("ledger-v2-newer-version", "MTRL, version 4, opaque body: a newer writer's ledger", bytes);
+        assertThat(LedgerCodec.read(bytes)).isEqualTo(new LedgerRead.Newer(4));
     }
 
     @Test
@@ -182,7 +182,8 @@ class EscrowGoldenFixturesTest {
         TransferHolder destination = new TransferHolder(new Id128(3, 4), TransferHolder.Kind.KEYED, "vault:4");
         var intent = new LedgerRecord.TransferIntent(
                 new Id128(5, 6), source, new Id128(7, 8), 9,
-                destination, new Id128(10, 11), 12, new Id128(13, 14), 3, 15);
+                destination, new Id128(10, 11), 12, 4,
+                StackBytes.of(new byte[] {13, 14}), 3, 15);
         var done = new LedgerRecord.TransferDone(intent.txn());
         Ledger expected = new Ledger(List.of(intent, done));
         byte[] whole = LedgerCodec.encode(expected);

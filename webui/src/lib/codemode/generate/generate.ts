@@ -42,6 +42,8 @@ import {
   KIND_INTERVAL,
   KIND_STEPS,
   KIND_TIME_OF_DAY,
+  KIND_CUSTODY_TRANSFER_SOURCE,
+  KIND_CUSTODY_TRANSFER_DESTINATION,
 } from './surface';
 import { CAPABILITY_LOGIC, CAPABILITY_TRANSACTION, capabilityOn } from './capabilities';
 import { contextFor, contextTree, type ContextNode } from './context';
@@ -206,6 +208,10 @@ function typeOfKind(kind: string | undefined): string | undefined {
       return 'number | string';
     case KIND_TIME_OF_DAY:
       return 'string';
+    case KIND_CUSTODY_TRANSFER_SOURCE:
+      return 'CustodyTransferSource';
+    case KIND_CUSTODY_TRANSFER_DESTINATION:
+      return 'CustodyTransferDestination';
     default:
       return undefined;
   }

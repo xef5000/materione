@@ -370,6 +370,15 @@ public final class EscrowLedgerStore implements AutoCloseable {
                         unrecoverable.why() + ": " + unrecoverable.detail());
             }
             Ledger current = ((LedgerState.Ready) slot.state).ledger();
+            if (record instanceof LedgerRecord.TransferIntent attempted) {
+                Optional<LedgerRecord.TransferIntent> existing = current.transfer(attempted.txn());
+                if (existing.isPresent()) {
+                    return existing.get().sameTransfer(attempted)
+                            ? new AppendResult.Durable(current)
+                            : new AppendResult.Refused(AppendResult.Reason.IDENTITY_MISMATCH,
+                                    "transaction " + attempted.txn() + " already belongs to another transfer");
+                }
+            }
             try {
                 hooks.beforeAppend.accept(slot.player);
                 CrashGate.at(CrashGate.Gates.LEDGER_BEFORE_APPEND); // test-only, inert in production

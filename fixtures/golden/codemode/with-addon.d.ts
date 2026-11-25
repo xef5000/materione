@@ -3824,9 +3824,9 @@ interface CustodyConsumeActionParams extends ActionOptions, GuardOptions {
 /** Parameters of `custody.transfer`. */
 interface CustodyTransferActionParams extends ActionOptions, GuardOptions {
   /** A {holder, entry} exact address, or {slot} of the run's open GUI. */
-  source: JsonValue;
+  source: CustodyTransferSource;
   /** A {holder, slot}; holder is player or {kind: keyed, key, player?}. */
-  destination: JsonValue;
+  destination: CustodyTransferDestination;
   /**
    * Optional stable 32-digit transaction id; reuse observes the idempotent result.
    * Accepts an expression: `m.expr` or an `m.fn` result.

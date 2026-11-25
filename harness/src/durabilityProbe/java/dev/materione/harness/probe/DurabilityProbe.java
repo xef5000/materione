@@ -453,7 +453,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
         Object transactionId = R.create(idClass, transaction.getMostSignificantBits(), transaction.getLeastSignificantBits());
         Class<?> requestClass = loader.loadClass("dev.materione.plugin.escrow.runtime.CustodyTransfer$Request");
         Class<?> reachClass = loader.loadClass("dev.materione.plugin.escrow.runtime.CustodyTransfer$Reach");
-        Object reach = reachClass.getField("DECIDED").get(null);
+        Object reach = reachClass.getField("SAVED").get(null);
         Object entryId = R.call(sourceEntry, "id");
         Object request = R.create(requestClass, transactionId, sourceHolder, entryId, destinationHolder, 0, reach);
         java.util.Optional<?> started = (java.util.Optional<?>) R.call(runtime, "transfer", request);
