@@ -8,11 +8,21 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.variable.StackRef;
+import dev.materione.api.logic.variable.StackVariableStore;
 import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableType;
 import dev.materione.core.runtime.RuntimeVariables;
+import dev.materione.plugin.gui.session.GuiViewerState;
+import dev.materione.plugin.view.ReadKey;
+import dev.materione.plugin.view.ReadRole;
+import dev.materione.plugin.view.ReadsIndex;
+import dev.materione.plugin.view.ViewChanges;
+import dev.materione.plugin.view.ViewKinds;
+import dev.materione.plugin.view.ViewRef;
+import dev.materione.plugin.view.ViewReads;
+import dev.materione.plugin.view.ViewRegistry;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,8 +30,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.junit.jupiter.api.Nested;
@@ -47,6 +59,7 @@ class StackVariablesTest {
     static final class FakeStack implements StackPdc {
         final PersistentDataContainer data = VariableTestSupport.fakeContainer();
         String identity;
+        int amount = 1;
         boolean gone;
 
         FakeStack(String identity) {
@@ -126,6 +139,99 @@ class StackVariablesTest {
         }
 
         @Test
+        void freshHandlesToTheSameStackCompareEqualEvenWhenItsAmountChanges() {
+            var sword = new FakeStack("rpg:sword");
+            StackRef first = sword.ref(STEVE);
+            sword.amount = 7;
+            StackRef second = sword.ref(STEVE);
+
+            assertThat(second).isEqualTo(first);
+            assertThat(first.isLive()).isTrue();
+        }
+
+        @Test
+        void aHandleFollowsItsStackAcrossSlotsAndRepeatedWrites() {
+            var sword = new FakeStack("rpg:sword");
+            var where = new AtomicReference<StackPdc>(sword);
+            StackRef bound = new BukkitStackRef(STEVE, where::get, sword.identity);
+
+            for (int level = 2; level <= 5; level++) {
+                assertThat(store.write(LEVEL_DECL, bound, (double) level)).isTrue();
+                where.set(sword); // the same physical stack found again, as after a move to another slot
+            }
+
+            assertThat(bound.isLive()).isTrue();
+            assertThat(store.read(LEVEL_DECL, bound)).contains(5.0);
+            assertThat(new BukkitStackRef(STEVE, where::get, sword.identity)).isEqualTo(bound);
+        }
+
+        @Test
+        void anIdenticalStackPutWhereTheSubjectWasIsAnotherSubject() {
+            // equal bytes: both swords are fresh, so every variable is at its default and the PDCs are equal
+            var original = new FakeStack("rpg:sword");
+            var where = new AtomicReference<StackPdc>(original);
+            StackRef stale = new BukkitStackRef(STEVE, where::get, original.identity);
+            var replacement = new FakeStack("rpg:sword");
+            where.set(replacement);
+
+            assertThat(store.write(LEVEL_DECL, stale, 9.0)).isFalse();
+            assertThat(replacement.data.has(PdcVariableStore.keyOf(LEVEL_DECL))).isFalse();
+            assertThat(stale.isLive()).isFalse();
+            assertThat(new BukkitStackRef(STEVE, where::get, replacement.identity)).isNotEqualTo(stale);
+        }
+
+        @Test
+        void twoIdenticalStacksAreTwoSubjects() {
+            var first = new FakeStack("rpg:sword");
+            var second = new FakeStack("rpg:sword");
+            StackRef one = new BukkitStackRef(STEVE, () -> first, first.identity);
+            StackRef two = new BukkitStackRef(STEVE, () -> second, second.identity);
+
+            assertThat(one.isLive()).isTrue();
+            assertThat(two.isLive()).isTrue();
+            assertThat(one).isNotEqualTo(two);
+        }
+
+        @Test
+        void equalityDoesNotChangeWhenTheSubjectVanishes() {
+            var sword = new FakeStack("rpg:sword");
+            StackRef first = sword.ref(STEVE);
+            StackRef second = sword.ref(STEVE);
+            var bound = new java.util.HashSet<StackRef>(Set.of(first));
+            sword.gone = true;
+
+            assertThat(first.isLive()).isFalse();
+            assertThat(second).isEqualTo(first);
+            assertThat(bound.remove(second)).isTrue();
+        }
+
+        @Test
+        void aReusedSlotDoesNotRetargetASameIdReplacement() {
+            var original = new FakeStack("rpg:sword");
+            var slot = new AtomicReference<StackPdc>(original);
+            StackRef stale = new BukkitStackRef(STEVE, slot::get, original.identity);
+            var replacement = new FakeStack("rpg:sword");
+            slot.set(replacement);
+
+            assertThat(store.write(LEVEL_DECL, stale, 9.0)).isFalse();
+            assertThat(replacement.data.has(PdcVariableStore.keyOf(LEVEL_DECL))).isFalse();
+            assertThat(stale.isLive()).isFalse();
+        }
+
+        @Test
+        void aReusedSlotDoesNotRetargetAVanillaReplacement() {
+            var original = new FakeStack("");
+            var slot = new AtomicReference<StackPdc>(original);
+            StackRef stale = new BukkitStackRef(STEVE, slot::get, "");
+            var replacement = new FakeStack("");
+            slot.set(replacement);
+
+            assertThat(store.write(LEVEL_DECL, stale, 9.0)).isFalse();
+            assertThat(replacement.data.has(PdcVariableStore.keyOf(LEVEL_DECL))).isFalse();
+            assertThat(stale.isLive()).isFalse();
+        }
+
+        @Test
         void aStackWithDifferingStateCarriesDifferentDataSoItWillNotStackWithAnother() {
             // Minecraft merges two stacks only when their data components are equal; custom data is the PDC
             var plain = new FakeStack("rpg:coin");
@@ -187,8 +293,8 @@ class StackVariablesTest {
 
         @Test
         void aForeignHandleOrNoHandleHoldsNothing() {
-            assertThat(store.read(LEVEL_DECL, null)).isEmpty();
-            assertThat(store.write(LEVEL_DECL, null, 2.0)).isFalse();
+            assertThat(store.read(LEVEL_DECL, (StackRef) null)).isEmpty();
+            assertThat(store.write(LEVEL_DECL, (StackRef) null, 2.0)).isFalse();
             assertThat(store.read(LEVEL_DECL, () -> STEVE)).isEmpty();
         }
 
@@ -244,6 +350,7 @@ class StackVariablesTest {
             VariableService service = service();
             VariableBinding binding = service.bind(STEVE, mainHand.ref(STEVE));
 
+            assertThat(service.store(VariableScope.ITEM)).isInstanceOf(StackVariableStore.class);
             assertThat(binding.stored(LEVEL_DECL)).isEmpty(); // never written: the caller takes the default
             assertThat(binding.store(LEVEL_DECL, 3.0)).isTrue();
 
@@ -251,6 +358,101 @@ class StackVariablesTest {
             assertThat(mainHand.data.get(PdcVariableStore.keyOf(LEVEL_DECL),
                     org.bukkit.persistence.PersistentDataType.DOUBLE)).isEqualTo(3.0);
             assertThat(diagnostics).isEmpty();
+        }
+
+        @Test
+        void aSuccessfulItemWriteNotifiesTheSubjectStackObserver() {
+            VariableService service = service();
+            StackRef subject = mainHand.ref(STEVE);
+            var notified = new ArrayList<StackRef>();
+            service.writeObserver(new VariableWriteObserver() {
+                @Override
+                public void written(VariableDeclaration declaration, UUID holder) {}
+
+                @Override
+                public void stackWritten(VariableDeclaration declaration, StackRef holder) {
+                    notified.add(holder);
+                }
+            });
+
+            assertThat(service.bind(STEVE, subject).store(LEVEL_DECL, 3.0)).isTrue();
+            assertThat(notified).containsExactly(subject);
+        }
+
+        @Test
+        void anApiWriteThroughAFreshHandleWakesAViewBoundToTheSameStack() {
+            VariableService service = service();
+            NamespacedId definition = NamespacedId.of("rpg", "upgrade");
+            StackRef bound = mainHand.ref(STEVE);
+            var record = GuiViewerState.record(STEVE, "Steve", definition, Map.of(), bound);
+            var registry = new ViewRegistry();
+            registry.begin(record);
+            var reads = ReadsIndex.of(Map.of(
+                    new ViewRef("gui", definition),
+                    new ViewReads(Map.of(
+                            new ReadKey(VariableScope.ITEM, LEVEL), Set.of(ReadRole.CONTENT)), false)));
+            service.writeObserver(new ViewChanges(() -> reads, registry, new ViewKinds(), ignored -> {}));
+
+            var result = service.api().set(
+                    ActorContext.player(STEVE, "Steve", permission -> true), LEVEL, STEVE, 3.0);
+
+            assertThat(result.ok()).isTrue();
+            assertThat(record.isDirty()).isTrue();
+        }
+
+        @Test
+        void anApiWriteThroughAFreshMirrorOfTheBoundStackWakesTheView() {
+            var sword = new FakeStack("rpg:sword");
+            var hand = new AtomicReference<StackPdc>(sword);
+            StackRef bound = new BukkitStackRef(STEVE, hand::get, sword.identity);
+            var record = boundUpgradeView(bound, hand);
+
+            hand.set(sword); // the same physical stack, reached again by the held-item lookup
+            var result = record.service().api().set(
+                    ActorContext.player(STEVE, "Steve", permission -> true), LEVEL, STEVE, 3.0);
+
+            assertThat(result.ok()).isTrue();
+            assertThat(record.view().isDirty()).isTrue();
+        }
+
+        @Test
+        void aWriteToAnIdenticalStackInTheOtherHandDoesNotWakeTheView() {
+            var bladeA = new FakeStack("rpg:sword");
+            var bladeB = new FakeStack("rpg:sword");
+            var hand = new AtomicReference<StackPdc>(bladeA);
+            StackRef bound = new BukkitStackRef(STEVE, hand::get, bladeA.identity);
+            var record = boundUpgradeView(bound, hand);
+
+            hand.set(bladeB); // the player now holds the other, byte-identical sword
+            var result = record.service().api().set(
+                    ActorContext.player(STEVE, "Steve", permission -> true), LEVEL, STEVE, 3.0);
+
+            assertThat(result.ok()).isTrue();
+            var stacks = new PdcStackVariableStore(owner -> PdcVariableStore.Access.OWNED);
+            assertThat(stacks.read(LEVEL_DECL, bladeB.ref(STEVE))).contains(3.0);
+            assertThat(stacks.read(LEVEL_DECL, bound)).isEmpty();
+            assertThat(record.view().isDirty()).isFalse();
+        }
+
+        private record BoundView(VariableService service, dev.materione.plugin.view.ViewerRecord view) {}
+
+        private BoundView boundUpgradeView(StackRef bound, AtomicReference<StackPdc> hand) {
+            var service = new VariableService(
+                    new PdcVariableStore(uuid -> Optional.ofNullable(players.get(uuid))),
+                    new ServerVariableStore(dir.resolve("bound-view.json"), warning -> {}),
+                    new PdcStackVariableStore(owner -> PdcVariableStore.Access.OWNED),
+                    player -> Optional.of(new BukkitStackRef(player, hand::get, "rpg:sword")),
+                    StackVariablesTest::declarations, diagnostics::add, now::get);
+            NamespacedId definition = NamespacedId.of("rpg", "bound_upgrade");
+            var record = GuiViewerState.record(STEVE, "Steve", definition, Map.of(), bound);
+            var registry = new ViewRegistry();
+            registry.begin(record);
+            var reads = ReadsIndex.of(Map.of(
+                    new ViewRef("gui", definition),
+                    new ViewReads(Map.of(
+                            new ReadKey(VariableScope.ITEM, LEVEL), Set.of(ReadRole.CONTENT)), false)));
+            service.writeObserver(new ViewChanges(() -> reads, registry, new ViewKinds(), ignored -> {}));
+            return new BoundView(service, record);
         }
 
         @Test
@@ -285,6 +487,25 @@ class StackVariablesTest {
             binding.stored(LEVEL_DECL);
             assertThat(diagnostics).hasSize(1);
             now.addAndGet(1);
+            binding.stored(LEVEL_DECL);
+            assertThat(diagnostics).hasSize(2);
+        }
+
+        @Test
+        void aVanishedSubjectUsesTheRateLimitedStackMissDiagnostic() {
+            VariableService service = service();
+            StackRef subject = mainHand.ref(STEVE);
+            VariableBinding binding = service.bind(STEVE, subject);
+            mainHand.gone = true;
+
+            assertThat(binding.stored(LEVEL_DECL)).isEmpty();
+            assertThat(binding.store(LEVEL_DECL, 3.0)).isFalse();
+            assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+                assertThat(diagnostic.code().code()).isEqualTo("MTR-0065");
+                assertThat(diagnostic.message()).contains("vanished or was replaced");
+            });
+
+            now.addAndGet(VariableService.MISS_INTERVAL_MS);
             binding.stored(LEVEL_DECL);
             assertThat(diagnostics).hasSize(2);
         }

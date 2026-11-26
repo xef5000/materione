@@ -160,8 +160,9 @@ resolve (hot path): ItemStack → cached PDC tag read → RuntimeItem   (~1 µs 
   contexts (hoppers, anvils, crafting grids) where predicates never run.
 - **Item auto-updater**: on join and on throttled inventory events, stacks with a Materione
   tag are compared against the current definition hash; changed → rebuilt preserving volatile
-  state (durability, in-game enchantments, custom counters). Same updater heals items after
-  pack migration.
+  state (durability, in-game enchantments, custom counters). The refresh edits the slot's own
+  stack in place, so a stack handle bound to it (logic.md §38) stays live. Same updater heals
+  items after pack migration.
 - **Templates/inheritance**: `template` refs resolve at graph build; a template is a partial
   definition with overridable fields; diamond inheritance → validation error. *As built:* one
   resolver, `core.pipeline.TemplateResolver` (single parent, shallow top-level merge, child wins;
@@ -196,6 +197,15 @@ per second, put-before-check gate) in addition to join. `model_tree` stays parse
 (M7). Authored names/lore render non-italic by default — vanilla italicizes `custom_name`
 and lore unless a component opts out; the `ItemText` wrapper opts out at the root while an
 author's `&o` still wins on its own segments.
+
+**As shipped (M6, #333 step 1):** a declared variable with `scope: item` is held in the
+subject stack's own PDC (`materione:var.<pack>.<key>`). Item-triggered runs bind that exact
+stack; an item-triggered `view.open` carries the handle into the view's open, render and
+click contexts and exact-handle writes schedule a rerender. Different variable bytes keep
+stacks apart, while a value equal to the declaration's default clears the key so equal
+effective state still stacks. `/materione var` and `LogicApi.variables()` address the
+named player's main hand. See [`logic.md`](logic.md) §38 for the migration and the later
+key/TTL/entity holder design.
 
 ---
 

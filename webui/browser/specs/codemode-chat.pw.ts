@@ -86,12 +86,12 @@ test('cloud editor without a model connected shows No model connected notice and
   await expect(composer(page)).toHaveCount(0);
 });
 
-test('Bloodfang conversation end-to-end: disclosure, missing primitives, repair and auto-apply, inline approval and revert, refusal, and New conversation', async ({ page }) => {
+test('Bloodfang conversation end-to-end: disclosure, repair and auto-apply, inline approval and revert, refusal, and New conversation', async ({ page }) => {
   await page.goto('/browser/fixture.html?codemode&host=cloud');
   await expect(page.locator('html')).toHaveAttribute('data-fixture-ready', 'true');
 
   const prompts = await page.evaluate(() => window.__materioneCodemode!.connectBloodfangChat(0));
-  expect(prompts).toHaveLength(3);
+  expect(prompts).toHaveLength(2);
 
   await rail(page).click();
   await expect(panel(page)).toBeVisible();
@@ -101,22 +101,13 @@ test('Bloodfang conversation end-to-end: disclosure, missing primitives, repair 
   await expect(composer(page)).toBeVisible();
   await maybeShot(page, 'assistant-disclosure.png');
 
-  // Prompt 1: read-only + failing asAsked -> reports the missing primitive (holder), 0 applies
   await composer(page).fill(prompts[0]!);
   await composer(page).press('Enter');
 
   const transcript = panel(page).getByRole('log', { name: 'Conversation' });
-  await expect(transcript.getByText('Do you want that version, or should I wait until the server can do the rest?')).toBeVisible({ timeout: 30_000 });
+  await expect(transcript.getByText(/Bloodfang is in\./)).toBeVisible({ timeout: 30_000 });
   await expect(transcript.getByText('Read only', { exact: true })).toBeVisible();
   await expect(transcript.getByText('Type error', { exact: true })).toBeVisible();
-  await expect(transcript).toContainText('holder');
-  expect(await applies(page)).toBe(0);
-
-  // Prompt 2: repairs TS error (Type error -> Dry run clean) and auto-applies 4 new documents
-  await composer(page).fill(prompts[1]!);
-  await composer(page).press('Enter');
-
-  await expect(transcript.getByText(/Bloodfang is in\./)).toBeVisible({ timeout: 30_000 });
   await expect(transcript.getByText('Dry run clean', { exact: true })).toBeVisible();
   expect(await applies(page)).toBe(1);
 
@@ -133,9 +124,8 @@ test('Bloodfang conversation end-to-end: disclosure, missing primitives, repair 
   await expect(panel(page).getByRole('article', { name: /^Applied tx-/ })).toHaveCount(1);
   await panel(page).getByRole('tab', { name: 'Conversation' }).click();
 
-  // Prompt 3: modifies existing items/ruby_sword.yml -> pauses in Needs your approval with diff
   const rubyBefore = await documentRaw(page, 'items/ruby_sword.yml');
-  await composer(page).fill(prompts[2]!);
+  await composer(page).fill(prompts[1]!);
   await composer(page).press('Enter');
 
   await expect(transcript.getByText(/I cannot approve it\./)).toBeVisible({ timeout: 30_000 });

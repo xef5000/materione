@@ -27,7 +27,7 @@ import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
- * Owns the persistent variables of the server (logic.md §3): the two stores, the live declarations,
+ * Owns the persistent variables of the server (logic.md §3): the scope stores, the live declarations,
  * the per-run bindings the flows use, and the {@link VariablesApi} the API hands out.
  *
  * <p>The declarations are read through a supplier, so a reload that changes them is seen by the next
@@ -93,13 +93,21 @@ public final class VariableService implements AutoCloseable {
         if (playerStorage.scope() != VariableScope.PLAYER || serverStorage.scope() != VariableScope.SERVER) {
             throw new IllegalArgumentException("each store must hold its own scope");
         }
+        if (stackStorage != null && stackStorage.scope() != VariableScope.ITEM) {
+            throw new IllegalArgumentException("the stack store must hold the item scope");
+        }
         playerSnapshots = new SnapshotVariableStore(playerStorage);
         stores.put(VariableScope.PLAYER, observed(playerSnapshots));
         this.serverStorage = serverStorage;
         stores.put(VariableScope.SERVER, observed(serverStorage));
         this.declarations = declarations;
         this.diagnostics = diagnostics;
-        this.stackStore = stackStorage;
+        this.stackStore = stackStorage == null
+                ? null
+                : new ObservedStackVariableStore(stackStorage, () -> writeObserver);
+        if (this.stackStore != null) {
+            stores.put(VariableScope.ITEM, this.stackStore);
+        }
         this.held = held == null ? HeldStacks.NONE : held;
         this.stackMisses = new StackMissReports(clock, diagnostics);
     }
@@ -167,9 +175,8 @@ public final class VariableService implements AutoCloseable {
     }
 
     /**
-     * Registers who hears every successful write to a player, server or session variable, on both paths of the store
-     * port ({@code write} and {@code mutate}; views.md section 5.3). Replaces the previous observer; the stores
-     * consult the current one on each write. Item variables go through their own port and are not observed.
+     * Registers who hears every successful write to a player, server, session or item variable (views.md §5.3).
+     * Replaces the previous observer; the stores consult the current one on each write.
      */
     public void writeObserver(VariableWriteObserver observer) {
         this.writeObserver = observer == null ? VariableWriteObserver.NONE : observer;
@@ -179,7 +186,7 @@ public final class VariableService implements AutoCloseable {
         return new ObservedVariableStore(store, () -> writeObserver);
     }
 
-    /** The store of {@code scope}; null for the session scope when no view runtime registered its store. */
+    /** The store of {@code scope}; null when that scope did not register a store. */
     public VariableStore store(VariableScope scope) {
         return stores.get(scope);
     }

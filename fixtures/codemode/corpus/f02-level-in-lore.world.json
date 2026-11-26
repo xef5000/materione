@@ -17,7 +17,7 @@
     "bench/variables/bloodfang_level.yml": {
       "rev": 0,
       "parsed": {
-        "bloodfang_level": { "scope": "player", "type": "number", "default": 1 }
+        "bloodfang_level": { "scope": "item", "type": "number", "default": 1 }
       }
     },
     "bench/guis/bloodfang_menu.yml": {
@@ -33,7 +33,7 @@
   },
   "files": {
     "bench/items/bloodfang.yml": "bloodfang:\n  material: NETHERITE_SWORD\n  display_name: \"<red>Bloodfang\"\n",
-    "bench/variables/bloodfang_level.yml": "bloodfang_level:\n  scope: player\n  type: number\n  default: 1\n",
+    "bench/variables/bloodfang_level.yml": "bloodfang_level:\n  scope: item\n  type: number\n  default: 1\n",
     "bench/guis/bloodfang_menu.yml": "bloodfang_menu:\n  title: Bloodfang Upgrade\n  container: chest_3\n  layers:\n    - type: materione:button\n      id: upgrade\n      x: 70\n      y: 30\n      width: 36\n      height: 20\n"
   }
 }

@@ -348,9 +348,11 @@ Needs the checks of master §5.5 (additive schema). The durability class of a ke
 per-declaration choice, not a hidden property.
 
 **Designed and step 1 built ([`logic.md`](logic.md) §38, #333).** Step 1 adds the stack holder as `scope: item` (a fifth reserved
-scope word): `vars.item.<pack>.<key>`, written by `set_var`, held in the stack's own data, with a second store port beside the
-shipped one and the checks of a run that cannot name a stack. Step 2 (`scope: keyed` with an expression key, `ttl:`, an `expire`
+scope word): `vars.item.<pack>.<key>`, written by `set_var`, held in the stack's own data, with a stack-specialized
+`StackVariableStore` behind the shipped store port and the checks of a run that cannot name a stack. Step 2 (`scope: keyed` with an expression key, `ttl:`, an `expire`
 trigger, the entity holder, one generalized port, `player`/`server`/`session` restated as named keys) is designed there and not built.
+An item-triggered `view.open` carries that stack into open requirements, render and click contexts; exact-handle writes
+notify the bound view. This is the subject-stack half of the backpack composition, not stack custody.
 The `durability` mechanic's counters stay where they are; folding it onto the item scope is a follow-up.
 
 ### 5.3 Views over state

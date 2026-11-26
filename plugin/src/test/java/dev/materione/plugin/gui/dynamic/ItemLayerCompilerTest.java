@@ -97,15 +97,12 @@ class ItemLayerCompilerTest {
     }
 
     @Test
-    void aGuiLayerCannotNameAnItemStackSoAnItemVariableReadIsTheUnknownRootWarning() {
-        // logic.md section 38: an item variable is the run's item stack; a GUI layer has none until a GUI is opened
-        // about one (the subject stack of backpack-preset.md P-A)
+    void aGuiLayerMayReadTheItemStackTheViewWasOpenedAbout() {
         var result = compile(item(new ItemSpec.Plain(NamespacedId.parse("minecraft:stone")),
                 "Level ${vars.item.rpg.level}"), null);
 
         assertThat(result.layer()).isPresent();
-        assertThat(codes(result)).containsExactly(DiagnosticCodes.FLOW_UNKNOWN_CONTEXT_ROOT.code());
-        assertThat(result.problems().get(0).message()).contains("'item'");
+        assertThat(result.problems()).isEmpty();
     }
 
     @Test

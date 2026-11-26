@@ -11,6 +11,7 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -129,28 +130,28 @@ public final class OpenViewAction implements ActionType<OpenViewAction.Params> {
         try {
             run = ViewRun.ofPlayer(bridge, context);
         } catch (ViewRun.Refused refused) {
-            return new Prepared(null, null, refused.getMessage());
+            return new Prepared(null, null, null, refused.getMessage());
         }
         NamespacedId near = run.record() == null ? null : run.record().definition();
         String nearKind = run.record() == null ? null : run.record().kind();
         ViewKinds.Resolution resolution = run.services().kinds().resolve(params.view(), near, nearKind, params.kind());
         if (!resolution.ok()) {
-            return new Prepared(run, null, resolution.problem());
+            return new Prepared(run, null, null, resolution.problem());
         }
         ViewKinds.Resolved target = resolution.found();
         if (target.kind().facet().viewerRule() != ViewFacet.ViewerRule.OPENED) {
-            return new Prepared(run, null, "'" + params.view() + "' is a " + target.kind().contentType()
+            return new Prepared(run, null, null, "'" + params.view() + "' is a " + target.kind().contentType()
                     + ", which shows itself to players for whom its condition holds; no verb opens it");
         }
-        return new Prepared(run, target, null);
+        return new Prepared(run, target, context.variables().stack().orElse(null), null);
     }
 
     private static ActionOutcome open(Prepared prepared, Map<String, String> args) {
         OpenResult result = prepared.target().kind().open(OpenRequest.of(
                 prepared.run().viewer(), prepared.target().kind().contentType(), prepared.target().id(), args,
-                OpenRequest.Cause.ACTION));
+                OpenRequest.Cause.ACTION, prepared.stack()));
         return result.ok() ? ActionOutcome.OK : ActionOutcome.failed(result.reason());
     }
 
-    private record Prepared(ViewRun run, ViewKinds.Resolved target, String failure) {}
+    private record Prepared(ViewRun run, ViewKinds.Resolved target, StackRef stack, String failure) {}
 }

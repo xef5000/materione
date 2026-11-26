@@ -70,34 +70,15 @@ describe('the Bloodfang conversation with the scripted provider', () => {
     return result;
   }
 
-  it('first request: looks, tries the sword as asked, and reports the missing primitive instead of working around it', async () => {
+  it('first request: looks, repairs one ordinary type error, and applies the item-scoped sword', async () => {
     const result = await say(BLOODFANG_PROMPTS[0]);
     expect(result.stop).toBe('done');
-    expect(outcomes.map((outcome) => outcome.status)).toEqual(['read', 'type-error']);
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(['read', 'type-error', 'applied']);
     // the read ran in the sandbox against the world and returned what is there
     expect((JSON.parse(outcomes[0]!.content) as { result: { value: unknown } }).result.value).toEqual(['ruby_sword']);
-    // the checker names the gap as a missing primitive of a generated catalog (the bleed's target exists since #331)
-    expect(outcomes[1]!.missingPrimitives.map((gap) => `${gap.catalog}.${gap.member}`).sort()).toEqual(['VariableFields.holder']);
+    expect(outcomes[1]!.missingPrimitives).toEqual([]);
     expect(outcomes[1]!.diagnostics.every((found) => found.phase === 'type-check' && found.line !== undefined)).toBe(true);
-    // nothing reached the server, and the assistant's last word names the gap and asks
-    expect(server.calls).toEqual([]);
-    expect(store.snapshot().proposals).toEqual([]);
-    const last = result.added.at(-1) as { role: string; text: string; toolCalls: unknown[] };
-    expect(last.toolCalls).toEqual([]);
-    expect(last.text).toContain('holder');
-    expect(last.text).toContain('I will not fake it');
-    expect(last.text.trim().endsWith('?')).toBe(true);
-    expect(result.failedCalls).toBe(1);
-  }, 120_000);
-
-  it('second request: a wrong call is repaired, then the program is dry-run and applied on its own (it only creates)', async () => {
-    const result = await say(BLOODFANG_PROMPTS[1]);
-    expect(result.stop).toBe('done');
-    expect(outcomes.slice(2).map((outcome) => outcome.status)).toEqual(['type-error', 'applied']);
-    // an ordinary mistake is not a missing primitive
-    expect(outcomes[2]!.missingPrimitives).toEqual([]);
-    expect(outcomes[2]!.diagnostics[0]).toMatchObject({ code: 'TS2339', phase: 'type-check' });
-    const applied = outcomes[3]!;
+    const applied = outcomes[2]!;
     expect(applied.failed).toBe(false);
     const proposal = store.get(applied.proposalId!)!;
     expect(proposal.state).toBe('applied');
@@ -108,23 +89,24 @@ describe('the Bloodfang conversation with the scripted provider', () => {
       'variables/bloodfang_level.yml',
       'variables/bloodfang_xp.yml',
     ]);
-    // one dry run, then one apply of the same list, asserted as not needing approval, with the program text
     expect(server.calls.map((entry) => entry.call.dryRun)).toEqual([true, false]);
     const apply = server.applies()[0]!.call;
     expect(apply.approval).toBe('not_needed');
     expect(apply.origin).toBe('code-mode');
     expect(apply.program).toContain('p.items.create("bloodfang"');
+    expect(apply.program).toContain('scope: "item"');
     expect(apply.operations).toEqual(server.calls[0]!.call.operations);
     expect(apply.operations.map((operation) => operation.kind)).toEqual(['create', 'create', 'create', 'logicEdit', 'create', 'logicEdit', 'logicEdit', 'logicEdit']);
-    // the server says the economy verb is not available: a warning that goes back to the model
     expect(applied.diagnostics.some((found) => found.code === 'SDK-0016' && found.severity === 'warning')).toBe(true);
     expect(store.snapshot().log).toHaveLength(1);
+    expect((result.added.at(-1) as { text: string }).text).toContain('item-scoped');
+    expect(result.failedCalls).toBe(1);
   }, 120_000);
 
-  it("follow-up: a change to an item that already exists waits, the model is told it cannot approve, and only the owner's click applies it", async () => {
-    const result = await say(BLOODFANG_PROMPTS[2]);
+  it('follow-up: a change to an item that already exists waits for approval', async () => {
+    const result = await say(BLOODFANG_PROMPTS[1]);
     expect(result.stop).toBe('done');
-    const waiting = outcomes[4]!;
+    const waiting = outcomes[3]!;
     expect(waiting.status).toBe('waiting');
     expect(waiting.failed).toBe(false);
     const sent = JSON.parse(waiting.content) as { note: string; proposal: { needsApprovalOf: string[]; state: string } };
@@ -152,12 +134,12 @@ describe('the Bloodfang conversation with the scripted provider', () => {
     const result = await say('And make it glow.');
     expect(result.stop).toBe('refused');
     expect(result.refusal?.code).toBe('script_ended');
-    expect(outcomes).toHaveLength(5);
+    expect(outcomes).toHaveLength(4);
   });
 
   it('every tool result that went back to the model is bounded JSON', () => {
     const results = history.filter((message) => message.role === 'tool');
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(4);
     for (const message of results) {
       expect(message.content.length).toBeLessThanOrEqual(TOOL_RESULT_MAX_CHARS);
       expect(() => JSON.parse(message.content) as unknown).not.toThrow();

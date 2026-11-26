@@ -8,6 +8,8 @@ import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.variable.StackRef;
+import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.gui.GuiFixture;
@@ -80,7 +82,7 @@ class ViewVerbsTest {
         @Override
         public OpenResult open(OpenRequest request) {
             var record = new ViewerRecord(request.viewer().id(), request.viewer().name(), contentType, request.view(),
-                    request.args(), new ViewerPayload() { });
+                    request.args(), request.stack(), new ViewerPayload() { });
             views.admit(record);
             if (request.restore() != null) {
                 record.restore(request.restore());
@@ -124,11 +126,37 @@ class ViewVerbsTest {
 
     private MapLogicContext context(ViewerRecord record) {
         if (record != null && GuiViewerState.KIND.equals(record.kind())) {
-            return GuiContexts.build(f.viewer, record, Map.of());
+            return GuiContexts.build(f.viewer, record, Map.of()).withVariables(binding(
+                    record.stack().orElse(null)));
         }
         // a run of a kind with no context builder here: the player and the record are what a view verb reads
         var bare = new MapLogicContext(Map.of()).with(Facets.PLAYER, f.player);
-        return record == null ? bare : bare.with(ViewerRecord.FACET, record);
+        return record == null ? bare
+                : bare.with(ViewerRecord.FACET, record).withVariables(binding(record.stack().orElse(null)));
+    }
+
+    private static VariableBinding binding(StackRef stack) {
+        return new VariableBinding() {
+            @Override
+            public Optional<dev.materione.api.logic.variable.VariableDeclaration> declaration(NamespacedId id) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Optional<Object> stored(dev.materione.api.logic.variable.VariableDeclaration declaration) {
+                return Optional.empty();
+            }
+
+            @Override
+            public boolean store(dev.materione.api.logic.variable.VariableDeclaration declaration, Object value) {
+                return false;
+            }
+
+            @Override
+            public Optional<StackRef> stack() {
+                return Optional.ofNullable(stack);
+            }
+        };
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -149,6 +177,27 @@ class ViewVerbsTest {
         assertThat(f.sessions.current(f.viewer.id(), "gui")).as("a dialog over a container").containsSame(menu);
         assertThat(f.sessions.current(f.viewer.id())).as("the latest is the player's current").containsSame(opened);
         assertThat(menu.isOpen()).isTrue();
+    }
+
+    @Test
+    void viewOpenCarriesTheRunStackAndBackRestoresIt() {
+        StackRef stack = () -> f.viewer.id();
+        var from = new MapLogicContext(Map.of())
+                .with(Facets.PLAYER, f.player)
+                .withVariables(binding(stack));
+
+        assertThat(run(new OpenViewAction(f.bridge.view()),
+                Map.of("view", "demo:ask"), from)).isEqualTo(ActionOutcome.OK);
+        ViewerRecord opened = f.sessions.current(f.viewer.id(), "dialog").orElseThrow();
+        assertThat(opened.stack()).containsSame(stack);
+
+        assertThat(open(Map.of("view", "menu"), opened)).isEqualTo(ActionOutcome.OK);
+        ViewerRecord replacement = f.sessions.current(f.viewer.id(), "gui").orElseThrow();
+        assertThat(replacement.stack()).containsSame(stack);
+
+        assertThat(run(new BackViewAction(f.bridge.view()), Map.of(), context(replacement)))
+                .isEqualTo(ActionOutcome.OK);
+        assertThat(f.sessions.current(f.viewer.id(), "dialog").orElseThrow().stack()).containsSame(stack);
     }
 
     @Test

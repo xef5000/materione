@@ -42,6 +42,7 @@ class ViewReadsExtractionTest {
         f.variables.declare("demo", "season", VariableScope.SERVER, "spring");
         f.variables.declare("demo", "tab", VariableScope.SESSION, "all");
         f.variables.declare("demo", "search", VariableScope.SESSION, "");
+        f.variables.declare("demo", "level", VariableScope.ITEM, 1d);
     }
 
     private static ReadKey key(VariableScope scope, String variable) {
@@ -84,6 +85,20 @@ class ViewReadsExtractionTest {
                 key(VariableScope.PLAYER, "coins"), key(VariableScope.SERVER, "season"),
                 key(VariableScope.SESSION, "tab"));
         assertThat(reads.keys().get(key(VariableScope.PLAYER, "coins"))).containsExactly(ReadRole.CONTENT);
+        assertThat(reads.polled()).isFalse();
+    }
+
+    @Test
+    void anItemLayersItemVariableIsAPlacedContentRead() {
+        var reads = reads("""
+                    - id: shown
+                      type: item
+                      slot: 0
+                      item: minecraft:stone
+                      name: "Level ${vars.item.demo.level}"
+                """);
+
+        assertThat(reads.keys()).containsOnlyKeys(key(VariableScope.ITEM, "level"));
         assertThat(reads.polled()).isFalse();
     }
 

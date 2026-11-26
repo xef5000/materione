@@ -58,7 +58,8 @@ public final class ItemBehaviorListener implements Listener {
             return;
         }
         try {
-            behavior.fireItemEvent("click", detail, event.getPlayer(), event.getItem(), event);
+            behavior.fireItemEvent("click", detail, event.getPlayer(),
+                    event.getPlayer().getInventory().getItemInMainHand(), event);
         } catch (RuntimeException e) {
             reportBridgeFailure(event.getPlayer(), e);
         }

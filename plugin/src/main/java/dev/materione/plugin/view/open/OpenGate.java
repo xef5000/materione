@@ -1,6 +1,7 @@
 package dev.materione.plugin.view.open;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.logic.variable.StackRef;
 import dev.materione.plugin.commands.OpenPlan;
 import dev.materione.plugin.gui.Viewer;
 import java.util.Map;
@@ -51,6 +52,14 @@ public interface OpenGate {
     }
 
     Admission admit(Viewer viewer, Subject subject, Map<String, String> args);
+
+    /**
+     * Admits an open that may carry the subject stack of the triggering run. Gates that do not inspect a stack
+     * keep the original contract.
+     */
+    default Admission admit(Viewer viewer, Subject subject, Map<String, String> args, StackRef stack) {
+        return admit(viewer, subject, args);
+    }
 
     /**
      * The gate's answer.

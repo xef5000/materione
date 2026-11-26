@@ -1274,9 +1274,9 @@ if (!coins) m.fail("This server has no 'coins' currency; the upgrade button need
 // The model is an asset the owner uploaded in the editor; a typed reference, checked at run time.
 const model = m.ref.asset("models/bloodfang.json");
 
-// State: level and XP live with the sword, not the player.            ★ stack-held state (primitives.md §5.1, §5.2)
-const level = rpg.variables.create("bloodfang_level", { type: "integer", holder: "item", default: 1, min: 1, max: 5 });
-const xp    = rpg.variables.create("bloodfang_xp",    { type: "integer", holder: "item", default: 0 });
+// State: level and XP live with the sword, not the player (logic.md §38).
+const level = rpg.variables.create("bloodfang_level", { scope: "item", type: "number", default: 1 });
+const xp    = rpg.variables.create("bloodfang_xp",    { scope: "item", type: "number", default: 0 });
 
 // The item: appearance (model), metadata (permission), behavior (below).
 const sword = rpg.items.create("bloodfang", {
@@ -1286,14 +1286,16 @@ const sword = rpg.items.create("bloodfang", {
   permission: "rpg.weapons",
 });
 
-// Bleed on hit, scaled by level; XP on kill.                          ★ combat triggers and entity verbs (primitives.md §4.3, §5.5, §5.7; built by #327 and #329: logic.md §37, §41)
+// Bleed on hit, scaled by level; XP on kill (built by #327, #329 and #331).
 sword.rules.add({
   on: m.triggers.entityHit,
-  do: [ m.actions.damageOverTime({ amount: m.expr`1 + ${level} * 0.5`, seconds: 5 }) ],
+  do: [ m.actions.potion({
+    type: "wither", duration: 100, amplifier: m.expr`${level} - 1`, target: "event.target"
+  }) ],
 });
 sword.rules.add({
   on: m.triggers.entityKill,
-  do: [ m.actions.setVar(xp, m.expr`${xp} + 10`) ],
+  do: [ m.actions.setVar({ var: xp, op: "add", value: m.expr`10` }) ],
 });
 
 // The GUI: level, XP progress, an upgrade button that costs 500 coins.
@@ -1304,7 +1306,7 @@ menu.layers.addButton({
   rules: [{ on: m.triggers.guiClick, do: [
     m.actions.require(m.conditions.hasMoney({ currency: coins.id, amount: 500 })),
     m.actions.takeMoney({ currency: coins.id, amount: 500 }),
-    m.actions.setVar(level, m.expr`min(${level} + 1, 5)`),
+    m.actions.setVar({ var: level, op: "set", value: m.expr`min(${level} + 1, 5)` }),
   ]}],
 });
 

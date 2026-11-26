@@ -1,6 +1,9 @@
 package dev.materione.plugin.logic.variable;
 
 import dev.materione.platform.items.MaterioneStacks;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.bukkit.inventory.ItemStack;
@@ -37,8 +40,24 @@ interface StackPdc {
      */
     String identity();
 
+    /**
+     * A process-local physical token for the stack. Mirrors of one Bukkit stack share the underlying handle;
+     * separate stacks do not. Implementations outside Bukkit may use any stable object token.
+     */
+    default Object physicalIdentity() {
+        return this;
+    }
+
+    /** The expression-visible facts of the live stack, or an empty map when it is gone. */
+    default Map<String, Object> itemView() {
+        return Map.of();
+    }
+
     /** The data of a live Bukkit stack. A stack handed out by an event or an inventory is a mirror, so edits land. */
     static StackPdc of(ItemStack stack) {
+        if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) {
+            return EMPTY;
+        }
         return new StackPdc() {
             @Override
             public Optional<PersistentDataContainer> view() {
@@ -69,6 +88,52 @@ interface StackPdc {
             public String identity() {
                 return MaterioneStacks.identityOf(stack).map(Object::toString).orElse("");
             }
+
+            @Override
+            public Object physicalIdentity() {
+                return MaterioneStacks.physicalIdentityOf(stack);
+            }
+
+            @Override
+            public Map<String, Object> itemView() {
+                if (stack.getType().isAir() || stack.getAmount() <= 0) {
+                    return Map.of();
+                }
+                var values = new LinkedHashMap<String, Object>();
+                values.put("id", identity());
+                values.put("material", stack.getType().name().toLowerCase(Locale.ROOT));
+                values.put("amount", stack.getAmount());
+                var meta = stack.getItemMeta();
+                if (meta != null) {
+                    var data = meta.getPersistentDataContainer();
+                    var used = data.get(new org.bukkit.NamespacedKey("materione", "durability-used"),
+                            org.bukkit.persistence.PersistentDataType.INTEGER);
+                    var max = data.get(new org.bukkit.NamespacedKey("materione", "durability-max"),
+                            org.bukkit.persistence.PersistentDataType.INTEGER);
+                    if (used != null && max != null) {
+                        values.put("durability_used", used);
+                        values.put("durability_max", max);
+                    }
+                }
+                return Map.copyOf(values);
+            }
         };
     }
+
+    StackPdc EMPTY = new StackPdc() {
+        @Override
+        public Optional<PersistentDataContainer> view() {
+            return Optional.empty();
+        }
+
+        @Override
+        public boolean edit(Consumer<PersistentDataContainer> edit) {
+            return false;
+        }
+
+        @Override
+        public String identity() {
+            return "";
+        }
+    };
 }

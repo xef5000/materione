@@ -25,7 +25,7 @@ import org.bukkit.persistence.PersistentDataType;
  * <p>A stack is touched on the thread of the player the run belongs to, decided by {@code access} exactly as for the
  * player scope: an offline owner reads absent and refuses writes, an owner on another region throws
  * {@link ReadUnavailableException} for a read and refuses a write. A handle whose stack has since become a
- * different item (its Materione identity changed) or no longer exists reads absent and refuses writes.
+ * different item (its physical or Materione identity changed) or no longer exists reads absent and refuses writes.
  */
 public final class PdcStackVariableStore implements StackVariableStore {
 
@@ -50,10 +50,11 @@ public final class PdcStackVariableStore implements StackVariableStore {
                 throw new ReadUnavailableException("item variable read requires the owner's region");
             }
         }
-        if (!sameItem(ref)) {
+        StackPdc current = ref.pdc();
+        if (!ref.matches(current)) {
             return Optional.empty();
         }
-        Optional<PersistentDataContainer> data = ref.pdc().view();
+        Optional<PersistentDataContainer> data = current.view();
         if (data.isEmpty()) {
             return Optional.empty();
         }
@@ -77,14 +78,15 @@ public final class PdcStackVariableStore implements StackVariableStore {
         if (ref.owner() != null && access.apply(ref.owner()) != PdcVariableStore.Access.OWNED) {
             return false;
         }
-        if (!sameItem(ref)) {
+        StackPdc current = ref.pdc();
+        if (!ref.matches(current)) {
             return false;
         }
         NamespacedKey key = PdcVariableStore.keyOf(declaration);
         // the default is the absence of the key, so equal states are equal bytes
         Object stored = value != null && value.equals(declaration.defaultValue()) ? null : value;
         try {
-            return ref.pdc().edit(data -> {
+            return current.edit(data -> {
                 if (stored == null) {
                     data.remove(key);
                     return;
@@ -100,7 +102,4 @@ public final class PdcStackVariableStore implements StackVariableStore {
         }
     }
 
-    private static boolean sameItem(BukkitStackRef ref) {
-        return ref.identity().equals(ref.pdc().identity());
-    }
 }

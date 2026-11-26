@@ -1,0 +1,332 @@
+{
+  "task": "T01",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "bloodfang_level",
+      "edits": [
+        {
+          "field": [
+            "bloodfang_level",
+            "scope"
+          ],
+          "value": "item"
+        },
+        {
+          "field": [
+            "bloodfang_level",
+            "type"
+          ],
+          "value": "number"
+        },
+        {
+          "field": [
+            "bloodfang_level",
+            "default"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "variables",
+      "id": "bloodfang_xp",
+      "edits": [
+        {
+          "field": [
+            "bloodfang_xp",
+            "scope"
+          ],
+          "value": "item"
+        },
+        {
+          "field": [
+            "bloodfang_xp",
+            "type"
+          ],
+          "value": "number"
+        },
+        {
+          "field": [
+            "bloodfang_xp",
+            "default"
+          ],
+          "value": 0
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "items",
+      "id": "bloodfang",
+      "edits": [
+        {
+          "field": [
+            "bloodfang",
+            "material"
+          ],
+          "value": "DIAMOND_SWORD"
+        },
+        {
+          "field": [
+            "bloodfang",
+            "display_name"
+          ],
+          "value": "<dark_red>Bloodfang"
+        },
+        {
+          "field": [
+            "bloodfang",
+            "model"
+          ],
+          "value": "bloodfang"
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/bloodfang.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "entity.hit",
+            "if": {
+              "has_permission": "rpg.weapons"
+            },
+            "do": [
+              {
+                "potion": {
+                  "type": "wither",
+                  "duration": 100,
+                  "amplifier": "${vars.item.bench.bloodfang_level - 1}",
+                  "target": "event.target"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/bloodfang.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 1,
+          "rule": {
+            "on": "entity.kill",
+            "if": {
+              "has_permission": "rpg.weapons"
+            },
+            "do": [
+              {
+                "set_var": {
+                  "var": "bench:bloodfang_xp",
+                  "op": "add",
+                  "value": "${10}"
+                }
+              },
+              {
+                "if": "${vars.item.bench.bloodfang_xp >= 100 && vars.item.bench.bloodfang_level < 5}",
+                "then": [
+                  {
+                    "set_var": {
+                      "var": "bench:bloodfang_level",
+                      "op": "add",
+                      "value": "${1}"
+                    }
+                  },
+                  {
+                    "set_var": {
+                      "var": "bench:bloodfang_xp",
+                      "op": "set",
+                      "value": "${0}"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "bloodfang_upgrade",
+      "edits": [
+        {
+          "field": [
+            "bloodfang_upgrade",
+            "container"
+          ],
+          "value": "chest_3"
+        },
+        {
+          "field": [
+            "bloodfang_upgrade",
+            "title"
+          ],
+          "value": "Bloodfang Upgrade"
+        },
+        {
+          "field": [
+            "bloodfang_upgrade",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:text",
+              "id": "stats",
+              "x": 8,
+              "y": 6,
+              "text": "Level ${vars.item.bench.bloodfang_level} XP ${vars.item.bench.bloodfang_xp}"
+            },
+            {
+              "type": "materione:button",
+              "id": "upgrade",
+              "x": 70,
+              "y": 30,
+              "width": 36,
+              "height": 20
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "guis/bloodfang_upgrade.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 0,
+          "rule": {
+            "on": "gui.click",
+            "layer": "upgrade",
+            "if": {
+              "has_permission": "rpg.weapons"
+            },
+            "do": [
+              {
+                "if": "${vars.item.bench.bloodfang_level < 5}",
+                "else": [
+                  {
+                    "message": "<gold>Already max level."
+                  },
+                  "stop"
+                ]
+              },
+              {
+                "require": [
+                  {
+                    "take_money": 500
+                  }
+                ],
+                "else": [
+                  {
+                    "message": "<red>You need 500 coins."
+                  }
+                ]
+              },
+              {
+                "set_var": {
+                  "var": "bench:bloodfang_level",
+                  "op": "add",
+                  "value": "${1}"
+                }
+              },
+              "gui.refresh"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "logicEdit",
+      "path": "items/bloodfang.yml",
+      "edits": [
+        {
+          "op": "addRule",
+          "index": 2,
+          "rule": {
+            "on": "click:right",
+            "if": {
+              "all": [
+                {
+                  "has_permission": "rpg.weapons"
+                },
+                "${player.sneaking}"
+              ]
+            },
+            "do": [
+              {
+                "view.open": "bench:bloodfang_upgrade"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 4,
+      "column": 27
+    },
+    {
+      "line": 9,
+      "column": 24
+    },
+    {
+      "line": 10,
+      "column": 23
+    },
+    {
+      "line": 16,
+      "column": 13
+    },
+    {
+      "line": 28,
+      "column": 13
+    },
+    {
+      "line": 41,
+      "column": 21
+    },
+    {
+      "line": 55,
+      "column": 12
+    },
+    {
+      "line": 69,
+      "column": 13
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "SDK-0016",
+      "severity": "warning",
+      "message": "m.actions.takeMoney is not available on the connected server: the vault integration is not installed, so materione:money cannot be used",
+      "source": {
+        "line": 61,
+        "column": 32
+      }
+    }
+  ],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 8,
+    "documents": 4
+  }
+}

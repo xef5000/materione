@@ -2,6 +2,7 @@ package dev.materione.platform.items;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.mechanics.ItemModifier;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -140,6 +141,33 @@ public final class MaterioneStacks {
             return Optional.empty(); // foreign/corrupt tag: treat as vanilla
         }
     }
+
+    /**
+     * A process-local identity for a physical stack. Paper inventories return distinct Bukkit mirror objects
+     * around one server ItemStack, so plain Java object identity would make a fresh mirror look like a replacement.
+     * The server-specific field is isolated here (D10); unsupported generations fall back to the API object.
+     */
+    public static Object physicalIdentityOf(ItemStack stack) {
+        if (stack != null && stack.getClass().getName().equals(CRAFT_ITEM_STACK)) {
+            try {
+                Field handle = craftHandle;
+                if (handle == null || handle.getDeclaringClass() != stack.getClass()) {
+                    handle = stack.getClass().getField("handle");
+                    craftHandle = handle;
+                }
+                Object physical = handle.get(stack);
+                if (physical != null) {
+                    return physical;
+                }
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                // A different server generation is still safe: it gets reference-based liveness.
+            }
+        }
+        return stack;
+    }
+
+    private static final String CRAFT_ITEM_STACK = "org.bukkit.craftbukkit.inventory.CraftItemStack";
+    private static volatile Field craftHandle;
 
     static org.bukkit.NamespacedKey key() {
         return new org.bukkit.NamespacedKey("materione", ID_KEY);

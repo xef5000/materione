@@ -7849,9 +7849,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -7967,9 +7973,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -8085,9 +8097,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -8228,9 +8246,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -8426,9 +8450,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -8573,9 +8603,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -8705,9 +8741,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -8848,9 +8890,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
@@ -9003,9 +9051,15 @@
               "type": "raw"
             },
             {
-              "description": "The item the view was opened about; empty until a subject stack binds (views.md section 3.7)",
+              "description": "The item the view was opened about; empty when the open had no subject stack",
               "hosts": [],
               "path": "view.item",
+              "type": "raw"
+            },
+            {
+              "description": "Facts of the item stack the view was opened about, the same item root an item-host run provides",
+              "hosts": [],
+              "path": "item.*",
               "type": "raw"
             },
             {
