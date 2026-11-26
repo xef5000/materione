@@ -152,7 +152,7 @@ export default [
 
   test({
     id: 'itemvars.gui-open-is-about-the-sword',
-    title: 'itemvars:view_sword right-click opens itemvars:level_gui about that exact stack: the rendered upgrade item says Level 1, its click writes the sword to level 2, and the held-item API reads level 2 while another sword is unchanged',
+    title: 'itemvars:view_sword right-click opens itemvars:level_gui about that exact stack while a byte-identical second sword sits in the next slot: the rendered upgrade item says Level 1, two clicks write the subject sword to level 2 then 3 and re-render, and afterwards the subject sword reads level 3 while the identical sword still reads level 1',
     mode: 'auto',
     covers: COVERS,
     dependsOn: ['commands.give-basic'],
@@ -164,6 +164,9 @@ export default [
         await ctx.rcon('clear Probe');
         await ctx.rcon('materione give itemvars:view_sword Probe');
         await ctx.waitForChat(/Given itemvars:view_sword/);
+        // a second fresh sword: equal bytes to the first, so only physical identity tells them apart
+        await ctx.rcon('materione give itemvars:view_sword Probe');
+        await ctx.sleep(500);
         await ctx.exec('player.getInventory().selected = 0');
 
         await useHeldItem(ctx);
@@ -176,14 +179,22 @@ export default [
         await clickContainer(ctx, 11);
         await ctx.waitForChat(/CHECK gui level=2/);
         await ctx.waitForServerLog(/MATERIONE-ITEMVARS-GUI Probe level=2/);
-        ctx.expect(await heldLevel(ctx)).toContain('itemvars:level = 2');
         await ctx.sleep(1500);
         const rerendered = String(await ctx.exec(`return player.containerMenu.slots.get(11)
   .getItem().getHoverName().getString()`));
         ctx.expect(rerendered).toBe('Level 2');
 
+        // a second write through the same bound handle: the subject must still be live
+        await clickContainer(ctx, 11);
+        await ctx.waitForChat(/CHECK gui level=3/);
+        await ctx.waitForServerLog(/MATERIONE-ITEMVARS-GUI Probe level=3/);
+        await ctx.sleep(1500);
+        const again = String(await ctx.exec(`return player.containerMenu.slots.get(11)
+  .getItem().getHoverName().getString()`));
+        ctx.expect(again).toBe('Level 3');
+
         await closeWindow(ctx);
-        await ctx.rcon('materione give itemvars:view_sword Probe');
+        ctx.expect(await heldLevel(ctx)).toContain('itemvars:level = 3');
         await ctx.exec('player.getInventory().selected = 1');
         await ctx.sleep(500);
         ctx.expect(await heldLevel(ctx)).toContain('itemvars:level = 1');

@@ -114,7 +114,12 @@ public final class ItemAutoUpdater implements Listener {
                 continue; // unknown id: vanilla render, flagged for admin via doctor
             }
             MaterioneStacks.refresh(stack, MaterioneStacks.specOf(item));
-            inventory.setItem(slot, stack);
+            // Paper's getContents() hands out mirrors, so the refresh already landed on the slot's own stack. Writing
+            // it back would put a copy in the slot and leave every handle to the stack (logic.md §38) stale.
+            if (MaterioneStacks.physicalIdentityOf(inventory.getItem(slot))
+                    != MaterioneStacks.physicalIdentityOf(stack)) {
+                inventory.setItem(slot, stack);
+            }
         }
     }
 
