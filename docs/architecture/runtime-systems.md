@@ -160,8 +160,9 @@ resolve (hot path): ItemStack → cached PDC tag read → RuntimeItem   (~1 µs 
   contexts (hoppers, anvils, crafting grids) where predicates never run.
 - **Item auto-updater**: on join and on throttled inventory events, stacks with a Materione
   tag are compared against the current definition hash; changed → rebuilt preserving volatile
-  state (durability, in-game enchantments, custom counters). Same updater heals items after
-  pack migration.
+  state (durability, in-game enchantments, custom counters). The refresh edits the slot's own
+  stack in place, so a stack handle bound to it (logic.md §38) stays live. Same updater heals
+  items after pack migration.
 - **Templates/inheritance**: `template` refs resolve at graph build; a template is a partial
   definition with overridable fields; diamond inheritance → validation error. *As built:* one
   resolver, `core.pipeline.TemplateResolver` (single parent, shallow top-level merge, child wins;

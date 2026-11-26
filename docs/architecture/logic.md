@@ -4016,14 +4016,16 @@ SDK is generated from the same description). Each decision is reversible by the 
    requirement, rules, layers and renders bind to it. The stack is **a handle, not a copy**: a read sees the stack's current
    data, a write lands on the stack. An empty hand is no stack. A trigger is "about an item" for the compiler
    exactly when its context schema provides the `item` root, so one declaration (the trigger's, §2.6) serves the runtime, the check and the editor's autocomplete.
-5. **A handle belongs to one run or the view that run bound, and is checked at every access.** A carried
-   stack is addressed by its fixed inventory slot, so opening a window does not leave the run on a pre-open
-   item mirror. A handle also captures the physical stack token (Paper inventory/event mirrors to the same stack
-   share it) and its Materione identity. A run parked by `wait` or `delay` resumes against that same subject:
-   a reused slot with another stack, including another stack of the same id or a vanilla stack, reads absent and
-   refuses a write. Amount is mutable state and not part of the subject key; a similar stack with another physical
-   token is never substituted. A vanished or replaced subject takes the rate-limited `MTR-0065` miss path. A view
-   retains the handle only for its record's lifetime.
+5. **A handle belongs to one run or the view that run bound, and is checked at every access.** The subject is
+   the physical stack: a handle captures its physical token (the server stack that every Paper inventory or event
+   mirror of it wraps) and its Materione identity, and a carried stack is found by that token in the owner's
+   inventory at each access, so the handle follows it between slots. Paper edits a stack's data in place, so
+   amount changes and variable writes keep the token; amount is state, not part of the subject. A run parked by
+   `wait` or `delay` resumes against that same subject. Any other stack is another subject, even one with equal
+   bytes: two fresh swords of one id are two subjects, and a stack put where the subject was, including another
+   stack of the same id or a vanilla stack, reads absent and refuses a write. Handle equality is the same
+   physical stack and owner, and does not change when the stack vanishes. A vanished or replaced subject takes
+   the rate-limited `MTR-0065` miss path. A view retains the handle only for its record's lifetime.
 
 **The store**
 
