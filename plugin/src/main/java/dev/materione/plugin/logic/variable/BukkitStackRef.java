@@ -1,87 +1,103 @@
 package dev.materione.plugin.logic.variable;
 
 import dev.materione.api.logic.variable.StackRef;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
-import java.util.WeakHashMap;
-import java.util.function.Supplier;
 import java.util.UUID;
+import java.util.function.Supplier;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 
 /**
- * The platform's {@link StackRef}: a live Bukkit stack, the player whose thread owns it, and the physical and
- * logical identity the stack had when the run was given it (logic.md §38).
+ * The platform's {@link StackRef}: one physical stack, the player whose thread owns it, and the Materione identity
+ * the stack had when the run was given it (logic.md §38).
+ *
+ * <p>The subject is the physical stack itself, never its bytes. Paper hands out distinct Bukkit mirrors around one
+ * server stack and edits its data in place, so every mirror of that stack names the same subject, through any amount
+ * change or variable write. Another stack is another subject even when its bytes are equal: two identical swords are
+ * two subjects, and an identical stack put where the subject was does not inherit its handles.
  */
 public final class BukkitStackRef implements StackRef {
 
-    private static final Map<Object, Subject> PHYSICAL_SUBJECTS =
-            Collections.synchronizedMap(new WeakHashMap<>());
-    private static final Map<Object, Subject> LOGICAL_SUBJECTS =
-            Collections.synchronizedMap(new WeakHashMap<>());
-
     private final UUID owner;
-    private final Supplier<StackPdc> pdc;
+    private final Supplier<StackPdc> locate;
     private final String identity;
-    private final boolean followsSlot;
-    private final Subject subject;
-    private Object physical;
-    private Object logical;
+    private final Object physical;
 
+    /** A handle fixed to this data (tests and stacks that are not in a player's inventory). */
     BukkitStackRef(UUID owner, StackPdc pdc) {
-        this(owner, () -> pdc, pdc.identity(), false);
-    }
-
-    BukkitStackRef(UUID owner, Supplier<StackPdc> pdc, String identity) {
-        this(owner, pdc, identity, true);
-    }
-
-    private BukkitStackRef(UUID owner, Supplier<StackPdc> pdc, String identity, boolean followsSlot) {
-        this.owner = owner;
-        this.pdc = pdc;
-        this.identity = identity;
-        this.followsSlot = followsSlot;
-        StackPdc initial = pdc.get();
-        this.physical = initial == null ? null : initial.physicalIdentity();
-        this.logical = initial == null ? null : initial.logicalIdentity();
-        this.subject = subjectOf(owner, identity, physical, logical, followsSlot);
+        this(owner, () -> pdc, pdc.identity());
     }
 
     /**
-     * The handle of {@code stack} for a run that belongs to {@code owner}, or null when there is no stack to hold
-     * state (null or air): a run with no stack reads an item variable as its default.
+     * A handle to the subject {@code locate} currently yields: the stack it yields now is the subject, and a later
+     * call that yields another physical stack yields a stale handle.
+     */
+    BukkitStackRef(UUID owner, Supplier<StackPdc> locate, String identity) {
+        this.owner = owner;
+        this.locate = locate;
+        this.identity = identity;
+        StackPdc initial = locate.get();
+        this.physical = initial == null || initial == StackPdc.EMPTY ? null : initial.physicalIdentity();
+    }
+
+    /**
+     * A handle on {@code stack} as given, or null when it is no stack (air or an empty hand). Use
+     * {@link #of(ItemStack, Player)} for a stack the player carries.
      */
     public static BukkitStackRef of(ItemStack stack, UUID owner) {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0) {
             return null;
         }
-        return new BukkitStackRef(owner, () -> StackPdc.of(stack), StackPdc.of(stack).identity(), false);
+        StackPdc pdc = StackPdc.of(stack);
+        return new BukkitStackRef(owner, () -> pdc, pdc.identity());
     }
 
     /**
-     * A handle to the matching live inventory slot when the event's stack is one the player carries. The slot is
-     * fixed for the handle's lifetime, so opening a view does not leave it pointing at the pre-open item mirror.
+     * A handle on a stack the player carries. The handle finds that physical stack in the player's inventory at each
+     * access, so it follows the stack when it moves between slots and goes stale when the stack leaves the inventory.
+     * A stack the player does not carry gets the fixed handle of {@link #of(ItemStack, UUID)}.
      */
     public static BukkitStackRef of(ItemStack stack, Player owner) {
         if (stack == null || stack.getType().isAir() || stack.getAmount() <= 0 || owner == null) {
             return null;
         }
-        var inventory = owner.getInventory();
-        for (int slot = 0; slot < inventory.getSize(); slot++) {
-            ItemStack live = inventory.getItem(slot);
-            if (StackPdc.of(live).physicalIdentity() == StackPdc.of(stack).physicalIdentity()) {
-                return at(owner, slot);
-            }
+        Object physical = StackPdc.of(stack).physicalIdentity();
+        int slot = slotOf(owner.getInventory(), physical, 0);
+        if (slot < 0) {
+            return of(stack, owner.getUniqueId());
         }
-        return of(stack, owner.getUniqueId());
+        UUID id = owner.getUniqueId();
+        int[] hint = {slot};
+        return new BukkitStackRef(id, () -> {
+            Player online = Bukkit.getPlayer(id);
+            if (online == null) {
+                return StackPdc.EMPTY;
+            }
+            PlayerInventory inventory = online.getInventory();
+            int found = slotOf(inventory, physical, hint[0]);
+            if (found < 0) {
+                return StackPdc.EMPTY;
+            }
+            hint[0] = found;
+            return StackPdc.of(inventory.getItem(found));
+        }, StackPdc.of(stack).identity());
     }
 
-    private static BukkitStackRef at(Player owner, int slot) {
-        ItemStack initial = owner.getInventory().getItem(slot);
-        return new BukkitStackRef(owner.getUniqueId(),
-                () -> StackPdc.of(owner.getInventory().getItem(slot)),
-                StackPdc.of(initial).identity());
+    /** The slot holding {@code physical}, trying {@code hint} first; -1 when the inventory does not hold it. */
+    private static int slotOf(PlayerInventory inventory, Object physical, int hint) {
+        int size = inventory.getSize();
+        if (hint >= 0 && hint < size && StackPdc.of(inventory.getItem(hint)).physicalIdentity() == physical) {
+            return hint;
+        }
+        for (int slot = 0; slot < size; slot++) {
+            if (StackPdc.of(inventory.getItem(slot)).physicalIdentity() == physical) {
+                return slot;
+            }
+        }
+        return -1;
     }
 
     @Override
@@ -89,38 +105,17 @@ public final class BukkitStackRef implements StackRef {
         return owner;
     }
 
+    /** The subject's current data, or {@link StackPdc#EMPTY} when the locator yields nothing. */
     StackPdc pdc() {
-        StackPdc current = pdc.get();
+        StackPdc current = locate.get();
         return current == null ? StackPdc.EMPTY : current;
     }
 
+    /** Whether {@code current} is this handle's subject: the same physical stack, still holding the same item. */
     boolean matches(StackPdc current) {
-        if (!identity.equals(current.identity())) {
-            return false;
-        }
-        Object nowPhysical = current.physicalIdentity();
-        Object nowLogical = current.logicalIdentity();
-        synchronized (PHYSICAL_SUBJECTS) {
-            Subject currentSubject = PHYSICAL_SUBJECTS.get(nowPhysical);
-            if (currentSubject == subject) {
-                rememberLogical(nowLogical);
-                physical = nowPhysical;
-                return true;
-            }
-            if (followsSlot) {
-                synchronized (LOGICAL_SUBJECTS) {
-                    currentSubject = LOGICAL_SUBJECTS.get(nowLogical);
-                    if (currentSubject == subject) {
-                        LOGICAL_SUBJECTS.remove(logical);
-                        PHYSICAL_SUBJECTS.put(nowPhysical, subject);
-                        physical = nowPhysical;
-                        logical = nowLogical;
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        return physical != null
+                && current.physicalIdentity() == physical
+                && identity.equals(current.identity());
     }
 
     /** The identity the stack had when this handle was made; blank for a vanilla item. */
@@ -135,8 +130,8 @@ public final class BukkitStackRef implements StackRef {
     }
 
     /**
-     * The same physical stack reached through two inventory/event mirrors is the same subject. Amount and item
-     * variable writes are deliberately absent from the key: they change state, not subject identity.
+     * Two handles are equal when they name the same physical stack of the same owner. Equality does not depend on
+     * liveness, so a handle keeps its place in a hash map after its stack is gone.
      */
     @Override
     public boolean equals(Object other) {
@@ -144,16 +139,15 @@ public final class BukkitStackRef implements StackRef {
             return true;
         }
         return other instanceof BukkitStackRef that
+                && physical != null
+                && physical == that.physical
                 && Objects.equals(owner, that.owner)
-                && identity.equals(that.identity)
-                && subject == that.subject
-                && isLive()
-                && that.isLive();
+                && identity.equals(that.identity);
     }
 
     @Override
     public int hashCode() {
-        return System.identityHashCode(subject);
+        return physical == null ? System.identityHashCode(this) : System.identityHashCode(physical);
     }
 
     @Override
@@ -171,59 +165,5 @@ public final class BukkitStackRef implements StackRef {
     public boolean editMeta(java.util.function.Consumer<org.bukkit.inventory.meta.ItemMeta> edit) {
         StackPdc current = pdc();
         return matches(current) && current.editMeta(edit);
-    }
-
-    private void rememberLogical(Object next) {
-        if (!followsSlot || Objects.equals(logical, next)) {
-            logical = next;
-            return;
-        }
-        synchronized (LOGICAL_SUBJECTS) {
-            LOGICAL_SUBJECTS.remove(logical);
-            logical = next;
-        }
-    }
-
-    private static Subject subjectOf(
-            UUID owner, String identity, Object physical, Object logical, boolean followsSlot) {
-        if (physical == null) {
-            return new Subject(owner, identity);
-        }
-        synchronized (PHYSICAL_SUBJECTS) {
-            Subject subject = matching(PHYSICAL_SUBJECTS.get(physical), owner, identity);
-            boolean matchedLogical = false;
-            if (subject == null && followsSlot) {
-                synchronized (LOGICAL_SUBJECTS) {
-                    subject = matching(LOGICAL_SUBJECTS.get(logical), owner, identity);
-                    if (subject != null) {
-                        LOGICAL_SUBJECTS.remove(logical);
-                        matchedLogical = true;
-                    }
-                }
-            }
-            if (subject == null) {
-                subject = new Subject(owner, identity);
-            }
-            PHYSICAL_SUBJECTS.put(physical, subject);
-            if (followsSlot && logical != null && !matchedLogical) {
-                LOGICAL_SUBJECTS.put(logical, subject);
-            }
-            return subject;
-        }
-    }
-
-    private static Subject matching(Subject subject, UUID owner, String identity) {
-        return subject != null && Objects.equals(subject.owner, owner) && subject.identity.equals(identity)
-                ? subject : null;
-    }
-
-    private static final class Subject {
-        final UUID owner;
-        final String identity;
-
-        Subject(UUID owner, String identity) {
-            this.owner = owner;
-            this.identity = identity;
-        }
     }
 }

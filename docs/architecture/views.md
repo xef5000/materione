@@ -380,7 +380,7 @@ A hit narrows to viewers by the written holder:
 | `player` | the player P | viewers of the reading definitions **whose viewer is P** (a view reads its own viewer's player variables); for a `predicate` kind, **P's candidate record** whether or not it is attached to that definition |
 | `server` | — | every viewer of every reading definition; for a `predicate` kind whose **visibility** reads it, every candidate record (every online player) |
 | `session` | the window instance | that window's viewer record only |
-| `item` (#333 step 1) | the stack handle's stable subject key | viewers whose binding is the same physical/logical stack written by `view.open` or a run inside that view; reference identity is not required |
+| `item` (#333 step 1) | the stack handle's stable subject key | viewers whose binding is the same physical stack written by `view.open` or a run inside that view; reference identity is not required |
 | `keyed` (#333 step 2) | the key value K | viewers whose binding key is K, plus viewers whose **last render resolved K** (a HUD or a layer that computes its key) |
 | `local` | — | never (a run's locals are not state) |
 

@@ -48,11 +48,6 @@ interface StackPdc {
         return this;
     }
 
-    /** A value snapshot equal for copies that continue the same logical stack; it excludes amount. */
-    default Object logicalIdentity() {
-        return physicalIdentity();
-    }
-
     /** The expression-visible facts of the live stack, or an empty map when it is gone. */
     default Map<String, Object> itemView() {
         return Map.of();
@@ -97,11 +92,6 @@ interface StackPdc {
             @Override
             public Object physicalIdentity() {
                 return MaterioneStacks.physicalIdentityOf(stack);
-            }
-
-            @Override
-            public Object logicalIdentity() {
-                return MaterioneStacks.logicalIdentityOf(stack);
             }
 
             @Override
