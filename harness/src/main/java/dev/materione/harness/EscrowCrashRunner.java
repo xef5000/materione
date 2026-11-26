@@ -178,6 +178,8 @@ public final class EscrowCrashRunner {
         rows.put("H2 after the joint INTENT, before owner commits", Session::transferAfterIntent);
         rows.put("H3 after destination commit, before acknowledgment", Session::transferAfterCommit);
         rows.put("H4 player-to-keyed transfer at the same joint INTENT", Session::transferToKeyed);
+        rows.put("H5 await: decided reaches the joint decision without waiting for a natural save",
+                Session::transferDecided);
         return run(options, "custody-transfer-crash", null, FAST_BARRIER, rows);
     }
 
@@ -939,6 +941,36 @@ public final class EscrowCrashRunner {
             }
             reboot();
             expectTransferOnce(source, destination, "joint transfer at " + gate);
+        }
+
+        /**
+         * {@code await: decided} (the action's default) must reach its decision promptly: its pre-decision checkpoint
+         * may not depend on Paper's next autosave. The barrier polls a natural save no sooner than every 30 s, so an
+         * outcome within 20 s proves the checkpoint saved itself.
+         */
+        void transferDecided() throws Exception {
+            String source = "H5s";
+            String destination = "H5d";
+            heldAndSaved(source);
+            login(destination);
+            save(destination);
+            String started = rig.probe("transfer", source + " 0 " + destination + " decided");
+            problems.expect(started.contains("ok=true"), "the decided transfer started: " + started);
+            Matcher id = Pattern.compile("transaction=(\\S+)").matcher(started);
+            String outcome = !id.find() ? "no transaction in: " + started
+                    : rig.log().awaitLine("transfer-outcome transaction=" + id.group(1), Duration.ofSeconds(20));
+            problems.expect(outcome != null && outcome.contains("await=decided") && outcome.contains("Transferred"),
+                    "await: decided did not reach its decision within 20 s: " + outcome);
+            // the source window was open through the transfer; closing it must not hand the moved stack back
+            close(source);
+            Snap afterClose = inv(source);
+            problems.expect(afterClose.count("DIAMOND") == 0,
+                    "closing the source window returned the transferred stack: " + afterClose);
+            if (rig.alive()) {
+                problems.expect(rig.stop() == 0, "the stop after the decided transfer failed");
+            }
+            reboot();
+            expectTransferOnce(source, destination, "await: decided transfer");
         }
 
         void transferToKeyed() throws Exception {

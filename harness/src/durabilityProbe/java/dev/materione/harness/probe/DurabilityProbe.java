@@ -282,9 +282,10 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "getbytes" -> getBytes(player(args[1]), args[2]);
                 case "putbytes" -> putBytes(player(args[1]), args[2], args[3]);
                 case "adopt" -> adopt(player(args[1]), args[2]);
-                case "transfer" -> transfer(player(args[1]), Integer.parseInt(args[2]), player(args[3]));
+                case "transfer" -> transfer(player(args[1]), Integer.parseInt(args[2]), player(args[3]), null,
+                        args.length > 4 ? args[4] : "saved");
                 case "keytransfer" -> transfer(player(args[1]), Integer.parseInt(args[2]), player(args[1]),
-                        "vault:" + player(args[1]).getUniqueId() + ":1");
+                        "vault:" + player(args[1]).getUniqueId() + ":1", "saved");
                 case "fill" -> fill(player(args[1]), args[2], Integer.parseInt(args[3]));
                 case "cmd" -> command(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
                 case "tab" -> tab(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
@@ -415,11 +416,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     }
 
     /** Starts the production joint decision path from one online player's held entry to another online player. */
-    private void transfer(Player source, int slot, Player destination) throws Exception {
-        transfer(source, slot, destination, null);
-    }
-
-    private void transfer(Player source, int slot, Player destination, String keyed) throws Exception {
+    private void transfer(Player source, int slot, Player destination, String keyed, String await) throws Exception {
         org.bukkit.plugin.Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
         if (product == null) {
             throw new IllegalStateException("Materione is not loaded");
@@ -453,13 +450,18 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
         Object transactionId = R.create(idClass, transaction.getMostSignificantBits(), transaction.getLeastSignificantBits());
         Class<?> requestClass = loader.loadClass("dev.materione.plugin.escrow.runtime.CustodyTransfer$Request");
         Class<?> reachClass = loader.loadClass("dev.materione.plugin.escrow.runtime.CustodyTransfer$Reach");
-        Object reach = reachClass.getField("SAVED").get(null);
+        Object reach = reachClass.getField(await.toUpperCase(java.util.Locale.ROOT)).get(null);
         Object entryId = R.call(sourceEntry, "id");
         Object request = R.create(requestClass, transactionId, sourceHolder, entryId, destinationHolder, 0, reach);
         java.util.Optional<?> started = (java.util.Optional<?>) R.call(runtime, "transfer", request);
         if (started.isEmpty()) {
             throw new IllegalStateException("transfer runtime unavailable");
         }
+        long startedAt = System.nanoTime();
+        ((java.util.concurrent.CompletionStage<?>) started.get()).whenComplete((outcome, failure) ->
+                log("transfer-outcome transaction=" + transactionId + " await=" + await
+                        + " millis=" + (System.nanoTime() - startedAt) / 1_000_000
+                        + " result=" + (failure == null ? outcome : "threw " + failure)));
         log("transfer ok=true source=" + source.getName() + " destination=" + destination.getName()
                 + " key=" + String.valueOf(keyed) + " transaction=" + transactionId);
     }

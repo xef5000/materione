@@ -1112,11 +1112,11 @@ exists. A source entry is frozen `TRANSFERRING`; consume entries remain a distin
 
 | Phase | Durable facts | Commit | Crash recovery |
 |---|---|---|---|
-| 1 prepare | source `TRANSFERRING(T)` and destination `RESERVED(T)`, in live PDC | one owner-thread step per holder | no shared INTENT: thaw/return source, discard reservation |
-| 2 checkpoint | read-back proves the generation of each prepared player/keyed account in its owner's compound | `await: saved` may use the one D8 `Player.saveData()` exception; `await: decided` observes natural snapshots only. Both share the player's barrier save/cooldown | still pre-decision: phase 1 |
+| 1 prepare | source `TRANSFERRING(T)` and destination `RESERVED(T)`, in live PDC | one owner-thread step per holder | no shared INTENT: thaw/return source, discard reservation. A player source returned to the inventory or OWED has its window slot cleared |
+| 2 checkpoint | read-back proves the generation of each prepared player/keyed account in its owner's compound | every transfer, whatever its `await:`, may use the one D8 `Player.saveData()` exception here: no decision exists before this proof (safety fact below) and the run waits on the decision. Both owners share the player's barrier save/cooldown | still pre-decision: phase 1 |
 | 3 decide | one CRC-valid `TransferIntent(T, source, destination)` | append and fsync once in the shared ledger | INTENT exists: roll forward deterministically |
-| 4 commit | remove source; promote destination reservation to HELD for a keyed holder or OWED for a player holder | one owner-thread step per holder; idempotent by entry/txn id | replay the missing side only |
-| 5 acknowledge | each holder account is touched again and its committed PDC generation is read back; then `TransferDone(T)` | barrier and shared append | DONE only permits compaction; it never decides ownership |
+| 4 commit | remove source; promote destination reservation to HELD for a keyed holder or OWED for a player holder | one owner-thread step per holder; idempotent by entry/txn id. A source window slot that still shows the moved stack is cleared in the same step, as a consume's completion does, so a close cannot return it as a stray | replay the missing side only |
+| 5 acknowledge | each holder account is touched again and its committed PDC generation is read back; then `TransferDone(T)` | barrier and shared append. `await: saved` waits here and may force the save; `await: decided` has already returned and observes natural snapshots only | DONE only permits compaction; it never decides ownership |
 
 **Safety fact.** No joint record is written before both account snapshots containing
 their preparations are acknowledged. Therefore a crash either sees no INTENT and leaves

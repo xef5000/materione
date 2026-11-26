@@ -415,6 +415,15 @@ public final class Tier1<T> {
         return new Finished(true, work.returned, countOwed(work.account));
     }
 
+    /**
+     * Clears the window slot of an entry that left its account by another path (a transfer's source commit or its
+     * return before the decision), only while the slot still shows that very stack. A copy left there would come back
+     * as a stray on close.
+     */
+    public void clearShown(Live<T> live, Entry entry) {
+        clearIfShown(live, entry);
+    }
+
     private void clearIfShown(Live<T> live, Entry entry) {
         T shown = entry == null ? null : live.top(entry.slotHint());
         if (entry != null && !stacks.empty(shown) && matches(entry, shown)) {

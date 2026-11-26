@@ -5409,8 +5409,10 @@ crash-safe setting cannot silently become the journal.
 `source: {holder, entry}` or `source: {slot}`, plus `destination: {holder, slot}`. It
 prepares `TRANSFERRING` + `RESERVED`, checkpoints each owner's compound, appends one
 `TransferIntent`, commits both owners on their threads, checkpoints both commits and
-appends `TransferDone`. `await: decided` does not force `Player.saveData()`; `await:
-saved` is the effect-carrying path that may use the one D8 save barrier. Once the joint
+appends `TransferDone`. The pre-decision checkpoint may use the one D8 save barrier for
+either `await:`, because no decision may be written before it and the run waits on that
+decision. `await: decided` returns once both owners commit and never forces the
+post-commit save; `await: saved` waits for it and may force it. Once the joint
 INTENT exists, a later owner loss or unconfirmed checkpoint ends with `STOPPED` rather
 than running the guard's `else:`. Reusing an id is idempotent only for the same full
 durable identity. It never implements transfer

@@ -164,7 +164,9 @@ public final class CustodyTransfer {
     private void checkpointPrepared(Request request, EscrowRuntime.TransferSide source,
             EscrowRuntime.TransferSide destination, Entry sourceEntry, Id128 reservation,
             CompletableFuture<Outcome> outcome) {
-        checkpointOwners(source, destination, request.reach() == Reach.SAVED)
+        // Every reach needs this proof before the decision, and the run waits on that decision, so both reaches may
+        // ask the barrier for a save here. Waiting for a natural save would stall the default reach for minutes.
+        checkpointOwners(source, destination, true)
                 .thenAccept(ok -> {
                     if (ok) {
                         CrashGate.at(CrashGate.Gates.TRANSFER_CHECKPOINTED);
@@ -208,11 +210,13 @@ public final class CustodyTransfer {
             EscrowRuntime.TransferSide destination, Id128 reservation, Ledger decided,
             LedgerRecord.TransferIntent intent, CompletableFuture<Outcome> result) {
         onOwner(source.owner(), () -> {
+            Entry leaving = source.account().account().find(request.sourceEntry()).orElse(null);
             if (!commit(source.account(), JointTransfer.commitSource(
                     source.account().account(), decided, request.transaction(), request.sourceEntry()))) {
                 returnRecoveryWillFinish(source, request.transaction(), request.reach(), result);
                 return;
             }
+            clearShown(source, leaving);
             CrashGate.at(CrashGate.Gates.TRANSFER_SOURCE_COMMITTED);
             onOwner(destination.owner(), () -> {
                 if (!commit(destination.account(), JointTransfer.commitDestination(
@@ -266,7 +270,8 @@ public final class CustodyTransfer {
     private void rollbackSource(Request request, EscrowRuntime.TransferSide source,
             CompletableFuture<Outcome> outcome, String reason) {
         onOwner(source.owner(), () -> {
-            commit(source.account(), JointTransfer.rollbackSource(
+            Entry frozen = source.account().account().findByTxn(request.transaction()).orElse(null);
+            boolean rolledBack = commit(source.account(), JointTransfer.rollbackSource(
                     source.account().account(), source.holder().equals(new dev.materione.api.custody.CustodyHolder.Player(
                             source.player().getUniqueId()))
                             ? new TransferHolder(TransferIds.of(source.player().getUniqueId()),
@@ -276,8 +281,19 @@ public final class CustodyTransfer {
                                     ((dev.materione.api.custody.CustodyHolder.Keyed) source.holder()).key()),
                     new BagInventory<>(source.owner().live(), ItemStacks.INSTANCE),
                     request.transaction()));
+            if (rolledBack && frozen != null && frozen.state() == dev.materione.plugin.escrow.model.EntryState.TRANSFERRING
+                    && source.holder() instanceof dev.materione.api.custody.CustodyHolder.Player) {
+                clearShown(source, frozen); // a player source went back to the inventory or OWED, not the window
+            }
             finish(request.transaction(), outcome, new Outcome.Refused(reason));
         }, () -> finish(request.transaction(), outcome, new Outcome.Refused(reason)));
+    }
+
+    /** The source entry left its account; its window copy must not come back on close as a stray. */
+    private void clearShown(EscrowRuntime.TransferSide source, Entry entry) {
+        if (runtime != null && entry != null) {
+            runtime.tier1().clearShown(source.owner().live(), entry);
+        }
     }
 
     private void returnRecoveryWillFinish(EscrowRuntime.TransferSide side, Id128 txn, Reach reach,
