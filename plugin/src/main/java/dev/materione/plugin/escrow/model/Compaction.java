@@ -35,12 +35,18 @@ public final class Compaction {
             switch (record) {
                 case LedgerRecord.Intent intent -> intentTxns.add(intent.txn());
                 case LedgerRecord.Done done -> doneTxns.add(done.txn());
+                case LedgerRecord.TransferIntent intent -> intentTxns.add(intent.txn());
+                case LedgerRecord.TransferDone done -> doneTxns.add(done.txn());
             }
         }
         long cutoff = nowMillis - retentionMillis;
         Set<Id128> expired = new HashSet<>();
         for (LedgerRecord record : ledger.records()) {
             if (record instanceof LedgerRecord.Intent intent
+                    && doneTxns.contains(intent.txn())
+                    && intent.atMillis() <= cutoff) {
+                expired.add(intent.txn());
+            } else if (record instanceof LedgerRecord.TransferIntent intent
                     && doneTxns.contains(intent.txn())
                     && intent.atMillis() <= cutoff) {
                 expired.add(intent.txn());
@@ -52,6 +58,8 @@ public final class Compaction {
                 case LedgerRecord.Intent intent -> expired.contains(intent.txn());
                 // a DONE goes with its INTENT; a DONE whose INTENT is not in the file is inert
                 case LedgerRecord.Done done -> expired.contains(done.txn()) || !intentTxns.contains(done.txn());
+                case LedgerRecord.TransferIntent intent -> expired.contains(intent.txn());
+                case LedgerRecord.TransferDone done -> expired.contains(done.txn()) || !intentTxns.contains(done.txn());
             };
             if (!drop) {
                 kept.add(record);

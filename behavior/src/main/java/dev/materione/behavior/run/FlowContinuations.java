@@ -113,6 +113,10 @@ abstract class FlowContinuations extends ControlSteps {
             return failure(run, action.path(), "action '" + action.id() + "' failed: " + failed.reason()
                     + (note.isEmpty() ? "" : " (" + note + ")"), thrown, failed.code());
         }
+        if (outcome instanceof ActionOutcome.Stopped stopped) {
+            abort(run, action.path(), "action '" + action.id() + "' stopped: " + stopped.reason());
+            return false;
+        }
         emit(run, action.path(), TraceEvent.Type.STEP_OK, note);
         return true;
     }

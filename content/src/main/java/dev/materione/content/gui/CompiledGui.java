@@ -108,11 +108,16 @@ public record CompiledGui(
      * @param durable whether the layer is {@code durable: required} (gui-input-durability.md, row P of #247): its
      *     slots take the crash-safe escrow path, or are refused where the platform cannot support it
      */
-    public record Input(int slot, String layer, Object accept, boolean durable) {
+    public record Input(int slot, String layer, Object accept, boolean durable, SlotsComponent.Holder holder) {
 
         /** A best-effort input slot (the default). */
         public Input(int slot, String layer, Object accept) {
-            this(slot, layer, accept, false);
+            this(slot, layer, accept, false, SlotsComponent.Holder.PLAYER);
+        }
+
+        /** A player-holder input slot. */
+        public Input(int slot, String layer, Object accept, boolean durable) {
+            this(slot, layer, accept, durable, SlotsComponent.Holder.PLAYER);
         }
     }
 

@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -69,6 +70,9 @@ public final class SaveBarrier {
     private final long giveUpMillis;
     private final Consumer<String> log;
     private final ConcurrentMap<UUID, Slot> slots = new ConcurrentHashMap<>();
+    private final ConcurrentMap<UUID, Long> checkpoints = new ConcurrentHashMap<>();
+    private final java.util.Set<CompletableFuture<Boolean>> checkpointWaiters =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
     private volatile boolean closed;
 
     /**
@@ -103,6 +107,7 @@ public final class SaveBarrier {
             callbacks.abandoned(ExitCallbacks.Abandoned.SHUTDOWN);
             return;
         }
+
         Slot slot = slots.computeIfAbsent(owner.id(), id -> new Slot(owner, new BarrierBook(cooldownMillis, giveUpMillis)));
         synchronized (slot) {
             slot.owner = owner;
@@ -113,14 +118,121 @@ public final class SaveBarrier {
     }
 
     /**
+     * Proves a prepared or committed account key in a player's saved snapshot. This is the same D8 exception and
+     * rate limit as an exit barrier; transfer cannot call {@link Owner#save()} itself.
+     */
+    public CompletableFuture<Boolean> checkpoint(Owner<?> owner, String accountKey, long minGen) {
+        return checkpoint(owner, accountKey, minGen, true);
+    }
+
+    /**
+     * Checks one account generation in the owner's durable snapshot. A caller without an effect waiting may only
+     * observe natural saves; it never reaches the D8 platform-save exception.
+     */
+    public CompletableFuture<Boolean> checkpoint(Owner<?> owner, String accountKey, long minGen,
+            boolean requestSave) {
+        CompletableFuture<Boolean> result = new CompletableFuture<>();
+        checkpointWaiters.add(result);
+        result.whenComplete((ignored, failure) -> checkpointWaiters.remove(result));
+        checkpointCycle(owner, accountKey, minGen, 0, requestSave, result);
+        return result;
+    }
+
+    private void checkpointCycle(Owner<?> owner, String accountKey, long minGen, int attempt,
+            boolean requestSave, CompletableFuture<Boolean> result) {
+        if (closed || result.isDone()) {
+            result.complete(false);
+            return;
+        }
+        snapshots.read(owner.id(), accountKey).whenComplete((initial, failure) -> owner.run(() -> {
+            boolean alreadySaved = failure == null && initial instanceof ReadBack.Saved saved
+                    && Long.compareUnsigned(saved.gen(), minGen) >= 0;
+            if (alreadySaved) {
+                result.complete(true);
+            } else {
+                checkpointUnconfirmed(owner, accountKey, minGen, attempt, requestSave, result, initial);
+            }
+        }, () -> result.complete(false)));
+    }
+
+    private void checkpointUnconfirmed(Owner<?> owner, String accountKey, long minGen, int attempt,
+            boolean requestSave, CompletableFuture<Boolean> result, ReadBack foundBefore) {
+        if (closed || result.isDone()) {
+            result.complete(false);
+            return;
+        }
+        if (attempt >= 6) {
+            log.accept("MATERIONE-ESCROW checkpoint " + owner.id() + " did not confirm account "
+                    + accountKey + " at gen " + Long.toUnsignedString(minGen) + " (" + foundBefore + ")");
+            result.complete(false);
+            return;
+        }
+        if (!requestSave) {
+            owner.runAfter(BarrierBook.POLL_INTERVAL_MILLIS,
+                    () -> checkpointCycle(owner, accountKey, minGen, attempt + 1, false, result),
+                    () -> result.complete(false));
+            return;
+        }
+        long now = clock.getAsLong();
+        long previous = checkpoints.getOrDefault(owner.id(), Long.MIN_VALUE);
+        long currentCooldown = Math.min(BarrierBook.MAX_COOLDOWN_MILLIS,
+                cooldownMillis << Math.min(attempt, 10));
+        Slot active = slots.get(owner.id());
+        if (active != null) {
+            synchronized (active) {
+                currentCooldown = Math.max(currentCooldown, active.book.currentCooldown());
+            }
+        }
+        final long effectiveCooldown = currentCooldown;
+        long wait = previous == Long.MIN_VALUE ? 0
+                : Math.max(0, effectiveCooldown - (now - previous));
+        Runnable attemptNow = () -> {
+            if (closed) {
+                result.complete(false);
+                return;
+            }
+            checkpoints.put(owner.id(), clock.getAsLong());
+            try {
+                save(owner);
+            } catch (RuntimeException failed) {
+                log.accept("MATERIONE-ESCROW checkpoint save failed for " + owner.id() + ": " + failed);
+            }
+            snapshots.read(owner.id(), accountKey).whenComplete((found, failure) -> owner.run(() -> {
+                boolean reached = failure == null && found instanceof ReadBack.Saved saved
+                        && Long.compareUnsigned(saved.gen(), minGen) >= 0;
+                if (reached) {
+                    result.complete(true);
+                } else if (attempt >= 6) {
+                    log.accept("MATERIONE-ESCROW checkpoint " + owner.id() + " did not confirm account "
+                            + accountKey + " at gen " + Long.toUnsignedString(minGen) + " (" + found + ")");
+                    result.complete(false);
+                } else {
+                    owner.runAfter(effectiveCooldown, () ->
+                            checkpointCycle(owner, accountKey, minGen, attempt + 1, true, result),
+                            () -> result.complete(false));
+                }
+            }, () -> result.complete(false)));
+        };
+        if (wait > 0) {
+            owner.runAfter(wait, attemptNow, () -> result.complete(false));
+        } else {
+            owner.run(attemptNow, () -> result.complete(false));
+        }
+    }
+
+    /**
      * A decided exit whose player is already gone (they left before step 3 could run): there is nothing to wait for on
      * a thread, but the quit save may still land, so the file is polled and DONE is appended when it does.
      */
     public void orphan(UUID player, LedgerRecord.Intent intent, long exitGen) {
+        orphan(player, "materione:" + EscrowRuntime.ACCOUNT_KEY, intent, exitGen);
+    }
+
+    public void orphan(UUID player, String accountKey, LedgerRecord.Intent intent, long exitGen) {
         if (closed) {
             return;
         }
-        snapshots.awaitAtLeast(player, exitGen).thenAccept(reached -> {
+        snapshots.awaitAtLeast(player, accountKey, exitGen).thenAccept(reached -> {
             if (reached.isPresent()) {
                 Exits.acknowledge(new Ledger(List.of(intent)), intent.txn(), exitGen, reached.getAsLong())
                         .ifPresent(done -> appendDone(player, done));
@@ -146,13 +258,16 @@ public final class SaveBarrier {
         }
         for (BarrierBook.Pending exit : gone) {
             callAbandoned(callbacks.get(exit.txn()), ExitCallbacks.Abandoned.PLAYER_LEFT);
-            orphan(player, exit.intent(), exit.exitGen());
+            orphan(player, slot.owner.accountKey(), exit.intent(), exit.exitGen());
         }
     }
 
     /** Plugin disable: every waiting exit is abandoned; nothing more is accepted. Idempotent. */
     public void close() {
         closed = true;
+        for (CompletableFuture<Boolean> waiter : List.copyOf(checkpointWaiters)) {
+            waiter.complete(false);
+        }
         for (UUID player : List.copyOf(slots.keySet())) {
             Slot slot = slots.remove(player);
             if (slot == null) {
@@ -244,14 +359,35 @@ public final class SaveBarrier {
         Owner<?> owner;
         synchronized (slot) {
             owner = slot.owner;
+            long previous = checkpoints.getOrDefault(owner.id(), Long.MIN_VALUE);
+            long now = clock.getAsLong();
+            long wait = previous == Long.MIN_VALUE ? 0
+                    : Math.max(0, slot.book.currentCooldown() - (now - previous));
+            if (wait > 0) {
+                if (!slot.timer) {
+                    slot.timer = true;
+                    owner.runAfter(wait, () -> {
+                        synchronized (slot) {
+                            slot.timer = false;
+                        }
+                        pump(slot);
+                    }, () -> {
+                        synchronized (slot) {
+                            slot.timer = false;
+                        }
+                    });
+                }
+                return;
+            }
             try {
-                slot.book.saved(clock.getAsLong(), owner.escrow().account().gen());
+                slot.book.saved(now, owner.escrow().account().gen());
             } catch (IllegalStateException rateLimited) {
                 return; // another cycle began between the decision and here: its read-back will pump again
             }
         }
         try {
-            owner.save();
+            save(owner);
+            checkpoints.put(owner.id(), clock.getAsLong());
         } catch (RuntimeException failed) {
             log.accept("MATERIONE-ESCROW saving " + owner.id() + " for the barrier failed: " + failed
                     + " (not acknowledged; it will be retried)");
@@ -278,7 +414,7 @@ public final class SaveBarrier {
     }
 
     private void readBack(Slot slot, Owner<?> owner, boolean afterSave) {
-        snapshots.read(owner.id()).whenComplete((found, failure) -> {
+        snapshots.read(owner.id(), owner.accountKey()).whenComplete((found, failure) -> {
             ReadBack result = failure != null ? new ReadBack.Unavailable("read-back failed: " + failure) : found;
             owner.run(() -> afterReadBack(slot, result, afterSave), null);
         });
@@ -334,6 +470,11 @@ public final class SaveBarrier {
                         + "); harmless: the exit stays in the ledger until a later compaction can drop it");
             }
         });
+    }
+
+    /** The single call site of the D8 exception, shared by consume and transfer checkpoints. */
+    private static void save(Owner<?> owner) {
+        owner.save();
     }
 
     private void callAbandoned(ExitCallbacks callbacks, ExitCallbacks.Abandoned why) {

@@ -66,6 +66,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe getbytes &lt;name&gt; &lt;key&gt;               the player's byte[] value of Materione's key, as hex ("none" when absent)
  *   dprobe putbytes &lt;name&gt; &lt;key&gt; &lt;hex&gt;        write that value (used to craft a state the product cannot make yet: EXITING)
  *   dprobe adopt &lt;name&gt; &lt;hex&gt;             commit an account into the product's live PlayerEscrow (memory and data together)
+ *   dprobe transfer &lt;name&gt; &lt;slot&gt; &lt;other&gt;   atomically hand the held source entry to the other player
  *   dprobe fill &lt;name&gt; &lt;MATERIAL&gt; &lt;n&gt;          put n of a material in all 36 storage slots (an inventory with no room)
  *   dprobe cmd &lt;name&gt; &lt;command...&gt;             Player#performCommand, as the player typed it
  *   dprobe tab &lt;name&gt; &lt;buffer...&gt;              the completions the command tree gives the player for what they typed so far
@@ -281,6 +282,10 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "getbytes" -> getBytes(player(args[1]), args[2]);
                 case "putbytes" -> putBytes(player(args[1]), args[2], args[3]);
                 case "adopt" -> adopt(player(args[1]), args[2]);
+                case "transfer" -> transfer(player(args[1]), Integer.parseInt(args[2]), player(args[3]), null,
+                        args.length > 4 ? args[4] : "saved");
+                case "keytransfer" -> transfer(player(args[1]), Integer.parseInt(args[2]), player(args[1]),
+                        "vault:" + player(args[1]).getUniqueId() + ":1", "saved");
                 case "fill" -> fill(player(args[1]), args[2], Integer.parseInt(args[3]));
                 case "cmd" -> command(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
                 case "tab" -> tab(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
@@ -408,6 +413,57 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     private void setSlot(Player player, int slot, String material, int amount) {
         player.getInventory().setItem(slot, amount <= 0 ? null : new ItemStack(Material.valueOf(material), amount));
         log("set ok=true player=" + player.getName() + " slot=" + slot);
+    }
+
+    /** Starts the production joint decision path from one online player's held entry to another online player. */
+    private void transfer(Player source, int slot, Player destination, String keyed, String await) throws Exception {
+        org.bukkit.plugin.Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
+        if (product == null) {
+            throw new IllegalStateException("Materione is not loaded");
+        }
+        Object runtime = R.call(product, "escrowRuntime");
+        Object sourceAccount = R.call(R.call(runtime, "of", source), "account");
+        Object sourceEntry = null;
+        for (Object entry : (Iterable<?>) R.call(sourceAccount, "entries")) {
+            if (((Number) R.call(entry, "slotHint")).intValue() == slot) {
+                sourceEntry = entry;
+                break;
+            }
+        }
+        if (sourceEntry == null) {
+            throw new IllegalStateException("source slot " + slot + " has no custody entry");
+        }
+        ClassLoader loader = product.getClass().getClassLoader();
+        Class<?> idClass = loader.loadClass("dev.materione.plugin.escrow.model.Id128");
+        Class<?> holderClass = loader.loadClass("dev.materione.plugin.escrow.model.TransferHolder");
+        Class<?> holderKind = loader.loadClass("dev.materione.plugin.escrow.model.TransferHolder$Kind");
+        Object sourceKind = holderKind.getField("PLAYER").get(null);
+        Object destinationKind = holderKind.getField(keyed == null ? "PLAYER" : "KEYED").get(null);
+        Object sourceOwner = R.create(idClass,
+                source.getUniqueId().getMostSignificantBits(), source.getUniqueId().getLeastSignificantBits());
+        Object destinationOwner = R.create(idClass,
+                destination.getUniqueId().getMostSignificantBits(),
+                destination.getUniqueId().getLeastSignificantBits());
+        Object sourceHolder = R.create(holderClass, sourceOwner, sourceKind, "");
+        Object destinationHolder = R.create(holderClass, destinationOwner, destinationKind, keyed == null ? "" : keyed);
+        UUID transaction = UUID.randomUUID();
+        Object transactionId = R.create(idClass, transaction.getMostSignificantBits(), transaction.getLeastSignificantBits());
+        Class<?> requestClass = loader.loadClass("dev.materione.plugin.escrow.runtime.CustodyTransfer$Request");
+        Class<?> reachClass = loader.loadClass("dev.materione.plugin.escrow.runtime.CustodyTransfer$Reach");
+        Object reach = reachClass.getField(await.toUpperCase(java.util.Locale.ROOT)).get(null);
+        Object entryId = R.call(sourceEntry, "id");
+        Object request = R.create(requestClass, transactionId, sourceHolder, entryId, destinationHolder, 0, reach);
+        java.util.Optional<?> started = (java.util.Optional<?>) R.call(runtime, "transfer", request);
+        if (started.isEmpty()) {
+            throw new IllegalStateException("transfer runtime unavailable");
+        }
+        long startedAt = System.nanoTime();
+        ((java.util.concurrent.CompletionStage<?>) started.get()).whenComplete((outcome, failure) ->
+                log("transfer-outcome transaction=" + transactionId + " await=" + await
+                        + " millis=" + (System.nanoTime() - startedAt) / 1_000_000
+                        + " result=" + (failure == null ? outcome : "threw " + failure)));
+        log("transfer ok=true source=" + source.getName() + " destination=" + destination.getName()
+                + " key=" + String.valueOf(keyed) + " transaction=" + transactionId);
     }
 
     private void inv(Player player) {

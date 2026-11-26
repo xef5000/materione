@@ -32,6 +32,8 @@ public final class EscrowFiles {
     public static final int HELD = 1;
     public static final int OWED = 2;
     public static final int EXITING = 3;
+    public static final int RESERVED = 4;
+    public static final int TRANSFERRING = 5;
 
     private EscrowFiles() {}
 

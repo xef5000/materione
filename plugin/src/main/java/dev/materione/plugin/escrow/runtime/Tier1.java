@@ -3,6 +3,7 @@ package dev.materione.plugin.escrow.runtime;
 import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.io.LedgerState;
 import dev.materione.plugin.escrow.model.Account;
+import dev.materione.plugin.escrow.model.AccountCodec;
 import dev.materione.plugin.escrow.model.AccountRead;
 import dev.materione.plugin.escrow.model.Entry;
 import dev.materione.plugin.escrow.model.EntryState;
@@ -16,6 +17,8 @@ import dev.materione.plugin.escrow.model.Recovery;
 import dev.materione.plugin.escrow.model.Refusal;
 import dev.materione.plugin.escrow.model.StackBytes;
 import dev.materione.plugin.escrow.model.Step;
+import dev.materione.plugin.escrow.model.JointTransfer;
+import dev.materione.plugin.escrow.model.TransferHolder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -27,10 +30,10 @@ import java.util.function.Supplier;
 
 /**
  * The one tier-1 API (gui-input-durability.md §5.4, §5.5, invariant I1): every change of who owns a stack that sits in
- * a window's escrowed slots is one call here, taking <em>both</em> sides, the {@link PlayerEscrow account} and the
+ * a window's escrowed slots is one call here, taking <em>both</em> sides, the {@link CustodyAccount account} and the
  * {@link Live live state}, and performing them in one owner-thread step (no scheduler hop, no event, no IO between the
  * two). The account is encoded eagerly inside the step and written into the player's persistent data by
- * {@link PlayerEscrow#commit}, so the live persistent value always matches the live inventory and no save can see one
+ * {@link CustodyAccount#commit}, so the live persistent value always matches the live inventory and no save can see one
  * without the other (F3, F5, F6).
  *
  * <p>Every method follows one order: <em>plan</em> on the account alone (a refusal leaves both sides untouched, I7),
@@ -134,7 +137,7 @@ public final class Tier1<T> {
      * written window slot that is escrowed ({@code escrowed}) has its entry brought to what it ends holding, in the
      * same step. A refusal leaves everything as it was.
      */
-    public Result<T> apply(PlayerEscrow escrow, Live<T> live, String gui, IntPredicate escrowed, Delta<T> delta) {
+    public Result<T> apply(CustodyAccount escrow, Live<T> live, String gui, IntPredicate escrowed, Delta<T> delta) {
         boolean strict = delta.tops().keySet().stream().anyMatch(escrowed::test);
         if (strict) {
             if (!escrow.open()) {
@@ -148,7 +151,9 @@ public final class Tier1<T> {
                 }
             }
             if (work.bytes != null) {
-                escrow.commit(work.account, work.bytes);
+                if (!escrow.commit(work.account, work.bytes)) {
+                    return new Denied<>(Reason.UNRECORDABLE, null);
+                }
             }
         }
         write(live, delta);
@@ -200,9 +205,13 @@ public final class Tier1<T> {
      * escrowed slots physically hold is cleared; a stack there the account does not know is adopted first, and if it
      * cannot be adopted it is handed back in {@link Done#strays()}.
      */
-    public Result<T> release(PlayerEscrow escrow, Live<T> live, String gui, Collection<Integer> escrowedSlots) {
+    public Result<T> release(CustodyAccount escrow, Live<T> live, String gui, Collection<Integer> escrowedSlots) {
         if (!escrow.open()) {
             return nothing();
+        }
+        if (escrow.parksOnClose()) {
+            clear(live, escrowedSlots);
+            return new Done<>(0, countOwed(escrow.account()), List.of());
         }
         Work work = new Work(escrow.account());
         List<T> strays = adoptStrays(work, live, gui, escrowedSlots);
@@ -228,7 +237,7 @@ public final class Tier1<T> {
      * {@code gui.slot_item take}: the slot's stack goes to the inventory, or is OWED when it does not fit (never a
      * world drop, G4), and the slot empties.
      */
-    public Result<T> take(PlayerEscrow escrow, Live<T> live, String gui, int slot) {
+    public Result<T> take(CustodyAccount escrow, Live<T> live, String gui, int slot) {
         if (!escrow.open()) {
             return new Denied<>(Reason.UNAVAILABLE, null);
         }
@@ -249,7 +258,7 @@ public final class Tier1<T> {
     }
 
     /** {@code gui.slot_item set_amount / repair / enchant}: the slot's entry becomes {@code edited}, which the slot then holds. */
-    public Result<T> edit(PlayerEscrow escrow, Live<T> live, String gui, int slot, T edited) {
+    public Result<T> edit(CustodyAccount escrow, Live<T> live, String gui, int slot, T edited) {
         if (!escrow.open()) {
             return new Denied<>(Reason.UNAVAILABLE, null);
         }
@@ -258,7 +267,7 @@ public final class Tier1<T> {
     }
 
     /** {@code /materione claim}: OWED entries try the inventory again (§5.5). */
-    public Result<T> claim(PlayerEscrow escrow, Live<T> live) {
+    public Result<T> claim(CustodyAccount escrow, Live<T> live) {
         if (!escrow.open()) {
             return new Denied<>(Reason.UNAVAILABLE, null);
         }
@@ -303,7 +312,7 @@ public final class Tier1<T> {
      * is removed from the source unless every check passed: that is the caller's validation before this call; this call
      * is the removal. A refusal changes neither side. The stack is the whole amount that will be consumed.
      */
-    public Begin beginExit(PlayerEscrow escrow, Live<T> live, String gui, int slot, T incoming, ExitKind kind,
+    public Begin beginExit(CustodyAccount escrow, Live<T> live, String gui, int slot, T incoming, ExitKind kind,
             Delta<T> source) {
         if (!escrow.open()) {
             return new Declined(Reason.UNAVAILABLE, null);
@@ -323,7 +332,9 @@ public final class Tier1<T> {
         if (!work.run(Exits.begin(work.account, entry))) {
             return new Declined(work.denied.reason(), work.denied.cause());
         }
-        escrow.commit(work.account, work.bytes);
+        if (!escrow.commit(work.account, work.bytes)) {
+            return new Declined(Reason.UNRECORDABLE, null);
+        }
         write(live, source);
         live.top(slot, incoming);
         return new Begun(txn, entry.id(), work.account.gen(), slot,
@@ -335,7 +346,7 @@ public final class Tier1<T> {
      * new transaction and stays shown there until step 3. A slot with no entry, or an entry already exiting or owed, is
      * refused ({@link Reason#BUSY} for a frozen one).
      */
-    public Begin freezeSlot(PlayerEscrow escrow, Live<T> live, String gui, int slot, ExitKind kind) {
+    public Begin freezeSlot(CustodyAccount escrow, Live<T> live, String gui, int slot, ExitKind kind) {
         if (!escrow.open()) {
             return new Declined(Reason.UNAVAILABLE, null);
         }
@@ -351,7 +362,9 @@ public final class Tier1<T> {
         if (!work.run(Exits.freeze(work.account, held.id(), txn))) {
             return new Declined(work.denied.reason(), work.denied.cause());
         }
-        escrow.commit(work.account, work.bytes);
+        if (!escrow.commit(work.account, work.bytes)) {
+            return new Declined(Reason.UNRECORDABLE, null);
+        }
         Entry frozen = work.account.findByTxn(txn).orElseThrow();
         return new Begun(txn, frozen.id(), work.account.gen(), slot,
                 Exits.intent(frozen, kind, stacks.amount(stacks.decode(frozen.stack())), clock.getAsLong()));
@@ -363,7 +376,7 @@ public final class Tier1<T> {
      * Nothing happens when the entry is gone already; a ledger that does not hold the INTENT is refused
      * ({@link Refusal#UNDECIDED}): the live path never skips the decision.
      */
-    public Finish completeExit(PlayerEscrow escrow, Live<T> live, Ledger decided, Id128 txn) {
+    public Finish completeExit(CustodyAccount escrow, Live<T> live, Ledger decided, Id128 txn) {
         if (!escrow.open()) {
             return new Declined(Reason.UNAVAILABLE, null);
         }
@@ -385,7 +398,7 @@ public final class Tier1<T> {
      * the inventory or OWED, and its slot is cleared. Refused once the INTENT is durable ({@link Refusal#DECIDED}): there
      * is no abort after the decision.
      */
-    public Finish abortExit(PlayerEscrow escrow, Live<T> live, Ledger decided, Id128 txn) {
+    public Finish abortExit(CustodyAccount escrow, Live<T> live, Ledger decided, Id128 txn) {
         if (!escrow.open()) {
             return new Declined(Reason.UNAVAILABLE, null);
         }
@@ -400,6 +413,15 @@ public final class Tier1<T> {
         finish(escrow, work);
         clearIfShown(live, entry);
         return new Finished(true, work.returned, countOwed(work.account));
+    }
+
+    /**
+     * Clears the window slot of an entry that left its account by another path (a transfer's source commit or its
+     * return before the decision), only while the slot still shows that very stack. A copy left there would come back
+     * as a stray on close.
+     */
+    public void clearShown(Live<T> live, Entry entry) {
+        clearIfShown(live, entry);
     }
 
     private void clearIfShown(Live<T> live, Entry entry) {
@@ -417,10 +439,14 @@ public final class Tier1<T> {
      * stacks are in {@link Death#drops()} for the caller to append to the event's list. The escrowed slots are cleared,
      * so the close the server does right after finds nothing to return a second time.
      */
-    public Death<T> death(PlayerEscrow escrow, Live<T> live, String gui, Collection<Integer> escrowedSlots,
+    public Death<T> death(CustodyAccount escrow, Live<T> live, String gui, Collection<Integer> escrowedSlots,
             Ledger ledger, boolean keepInventory) {
         if (!escrow.open()) {
             return new Death<>(List.of(), 0, 0, 0);
+        }
+        if (escrow.parksOnClose()) {
+            clear(live, escrowedSlots);
+            return new Death<>(List.of(), 0, countOwed(escrow.account()), 0);
         }
         Work work = new Work(escrow.account());
         List<T> strays = adoptStrays(work, live, gui, escrowedSlots);
@@ -456,7 +482,7 @@ public final class Tier1<T> {
      * #placeCarried} or {@link #restoreCarried} ends the carry in the same step. A slot whose stack the account does
      * not hold is left where it is: the old window's close returns it.
      */
-    public List<Carried<T>> beginCarry(PlayerEscrow escrow, Live<T> live, Collection<Integer> escrowedSlots) {
+    public List<Carried<T>> beginCarry(CustodyAccount escrow, Live<T> live, Collection<Integer> escrowedSlots) {
         List<Carried<T>> carried = new ArrayList<>();
         if (!escrow.open()) {
             return carried;
@@ -479,7 +505,7 @@ public final class Tier1<T> {
      * The new window is open: each carried stack goes to the same slot when it is still an escrowed slot, otherwise
      * back to the player (the inventory, or OWED), never dropped.
      */
-    public Result<T> placeCarried(PlayerEscrow escrow, Live<T> live, List<Carried<T>> carried, IntPredicate escrowed) {
+    public Result<T> placeCarried(CustodyAccount escrow, Live<T> live, List<Carried<T>> carried, IntPredicate escrowed) {
         Work work = new Work(escrow.account());
         BagInventory<T> bag = new BagInventory<>(live, stacks);
         List<T> strays = new ArrayList<>();
@@ -496,7 +522,7 @@ public final class Tier1<T> {
     }
 
     /** The new window did not open: the carried stacks go back to the old window's slots, which are still its. */
-    public void restoreCarried(PlayerEscrow escrow, Live<T> oldWindow, List<Carried<T>> carried) {
+    public void restoreCarried(CustodyAccount escrow, Live<T> oldWindow, List<Carried<T>> carried) {
         for (Carried<T> item : carried) {
             escrow.carrying().remove(item.entry());
             oldWindow.top(item.slot(), item.stack());
@@ -509,19 +535,34 @@ public final class Tier1<T> {
      * Recovery on join (§5.7), before any interaction and with no IO: a pure function of the saved account, the
      * preloaded ledger and the inventory (I6). The legacy {@code gui_inputs} stacks (§10) are adopted as OWED entries
      * in the same pass, then everything owed tries the inventory. An unreadable account or ledger leaves the gate
-     * {@link PlayerEscrow.Gate#UNRECOVERABLE} and touches nothing (K18).
+     * {@link CustodyAccount.Gate#UNRECOVERABLE} and touches nothing (K18).
      */
-    public Recovered recover(PlayerEscrow escrow, Live<T> live, AccountRead saved, LedgerState ledger,
+    public Recovered recover(CustodyAccount escrow, Live<T> live, AccountRead saved, LedgerState ledger,
             List<T> legacy) {
+        return recover(escrow, live, saved, ledger, legacy, Ledger.EMPTY, null);
+    }
+
+    /** Recovery with the shared joint-transfer ledger for one holder. */
+    public Recovered recover(CustodyAccount escrow, Live<T> live, AccountRead saved, LedgerState ledger,
+            List<T> legacy, Ledger transfers, TransferHolder holder) {
         BagInventory<T> bag = new BagInventory<>(live, stacks);
-        Recovery.Result result = ledger.recover(saved, bag);
+        AccountRead transferRecovered = saved;
+        Account beforeTransfers = saved instanceof AccountRead.Readable readable
+                ? readable.account() : Account.EMPTY;
+        Account afterTransfers = holder == null ? beforeTransfers
+                : JointTransfer.recovered(beforeTransfers, transfers, holder, bag);
+        if (!afterTransfers.equals(beforeTransfers)) {
+            transferRecovered = new AccountRead.Readable(afterTransfers);
+        }
+        Recovery.Result result = ledger.recover(transferRecovered, bag);
         if (result instanceof Recovery.Result.Unrecoverable blocked) {
             escrow.unrecoverable(blocked.cause() + ": " + blocked.detail());
             return new Blocked(blocked.cause(), blocked.detail());
         }
         Recovery.Result.Recovered recovered = (Recovery.Result.Recovered) result;
         Work work = new Work(recovered.account());
-        work.bytes = recovered.encoded().orElse(null);
+        work.bytes = recovered.encoded().orElseGet(() ->
+                !afterTransfers.equals(beforeTransfers) ? AccountCodec.encode(afterTransfers) : null);
         int returned = recovered.returned().size();
         int adopted = 0;
         boolean legacyKept = false;
@@ -545,7 +586,10 @@ public final class Tier1<T> {
         }
         CrashGate.at(CrashGate.Gates.RECOVERY_BEFORE_COMMIT); // test-only, inert in production
         if (work.bytes != null) {
-            escrow.commit(work.account, work.bytes);
+            if (!escrow.commit(work.account, work.bytes)) {
+                escrow.unrecoverable("the account could not be written");
+                return new Blocked(Recovery.Cause.ACCOUNT, "WRITE_FAILED");
+            }
         }
         escrow.open(work.account);
         CrashGate.at(CrashGate.Gates.RECOVERY_DONE); // test-only, inert in production
@@ -630,8 +674,11 @@ public final class Tier1<T> {
         for (int slot : new TreeSet<>(slots)) {
             T content = live.top(slot);
             Entry known = entryAt(work.account, slot);
-            if (stacks.empty(content) || (known != null && known.state() == EntryState.EXITING)) {
-                continue; // a frozen entry's stack stays shown in its slot until its exit completes: not a stray
+            if (stacks.empty(content) || known != null && (
+                    known.state() == EntryState.EXITING
+                            || known.state() == EntryState.TRANSFERRING
+                            || known.state() == EntryState.RESERVED)) {
+                continue; // recovery resolves the protocol state; generic cleanup must not adopt its live stack
             }
             Work attempt = new Work(work.account);
             attempt.bytes = work.bytes;
@@ -653,9 +700,11 @@ public final class Tier1<T> {
         }
     }
 
-    private void finish(PlayerEscrow escrow, Work work) {
+    private void finish(CustodyAccount escrow, Work work) {
         if (work.bytes != null) {
-            escrow.commit(work.account, work.bytes);
+            if (!escrow.commit(work.account, work.bytes)) {
+                return;
+            }
         }
     }
 

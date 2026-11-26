@@ -71,7 +71,8 @@ class VocabularySourcesTest {
         BehaviorVocabulary vocabulary = service.vocabulary();
 
         assertThat(vocabulary.actions()).filteredOn(BehaviorVocabulary.Action::takesElse)
-                .extracting(BehaviorVocabulary.Action::id).containsExactly("custody.consume", "example:ask");
+                .extracting(BehaviorVocabulary.Action::id)
+                .containsExactly("custody.consume", "custody.transfer", "example:ask");
         assertThat(vocabulary.actions()).filteredOn(action -> action.id().equals("message"))
                 .singleElement().satisfies(message -> assertThat(message.takesElse()).isFalse());
     }

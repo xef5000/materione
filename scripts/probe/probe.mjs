@@ -272,7 +272,7 @@ async function cmdUp() {
   await doUp({ build: !args.includes('--no-build'), keepWorld: args.includes('--keep-world') });
 }
 
-async function doUp({ build = true, keepWorld = false, freshLog = false } = {}) {
+async function doUp({ build = true, keepWorld = false, freshLog = false, escrowGates = false } = {}) {
   const pins = readPins();
   if (pidAlive(readPid('server'))) fail('probe server already running — use: probe restart (or down)');
 
@@ -312,6 +312,15 @@ async function doUp({ build = true, keepWorld = false, freshLog = false } = {}) 
   const plugins = path.join(SERVER_DIR, 'plugins');
   fs.mkdirSync(plugins, { recursive: true });
   fs.copyFileSync(jar, path.join(plugins, 'Materione.jar'));
+  if (escrowGates) {
+    await runGradle([':harness:durabilityProbeJar']);
+    const libs = path.join(ROOT, 'harness', 'build', 'libs');
+    const probeJar = fs.readdirSync(libs).find((name) => name.endsWith('durability-probe.jar'));
+    if (!probeJar) fail('durability probe jar was not produced for escrow gate QA');
+    fs.copyFileSync(path.join(libs, probeJar), path.join(plugins, 'DurabilityProbe.jar'));
+  } else {
+    fs.rmSync(path.join(plugins, 'DurabilityProbe.jar'), { force: true });
+  }
   // bStats usage metrics are opt-out per server: probe boots never report.
   fs.mkdirSync(path.join(plugins, 'bStats'), { recursive: true });
   fs.writeFileSync(path.join(plugins, 'bStats', 'config.yml'), 'enabled: false\n');
@@ -326,7 +335,9 @@ async function doUp({ build = true, keepWorld = false, freshLog = false } = {}) 
     ? `booting local server ${override.jar} sha256=${override.sha256} with ${java} ...`
     : `booting Paper ${pins['paper-probe-version']}-${pins['paper-probe-build']} with ${java} ...`);
   const stdout = fs.openSync(path.join(SERVER_DIR, 'stdout.log'), 'a');
-  const child = spawn(java, ['-Xmx2G', '-DIReallyKnowWhatIAmDoingISwear', '-jar', serverJar, '--nogui'], {
+  const javaArgs = ['-Xmx2G', '-DIReallyKnowWhatIAmDoingISwear'];
+  if (escrowGates) javaArgs.push('-Dmaterione.escrow.gate=off');
+  const child = spawn(java, [...javaArgs, '-jar', serverJar, '--nogui'], {
     cwd: SERVER_DIR, stdio: ['ignore', stdout, stdout], detached: true,
   });
   child.unref();
@@ -422,7 +433,12 @@ async function cmdKill() {
 
 async function crashRestart({ build = false } = {}) {
   await cmdKill();
-  await doUp({ build, keepWorld: true, freshLog: true });
+  await doUp({
+    build,
+    keepWorld: true,
+    freshLog: true,
+    escrowGates: fs.existsSync(path.join(SERVER_DIR, 'plugins', 'DurabilityProbe.jar')),
+  });
 }
 
 // ---------------------------------------------------------------- rcon ----
@@ -841,7 +857,11 @@ async function cmdAgent() {
       bridge: await bridgePort(),
       player: PROBE_PLAYER,
     }),
-    up: (a) => doUp({ build: a?.build !== false, keepWorld: Boolean(a?.keepWorld) }),
+    up: (a) => doUp({
+      build: a?.build !== false,
+      keepWorld: Boolean(a?.keepWorld),
+      escrowGates: Boolean(a?.escrowGates),
+    }),
     down: () => cmdDown(),
     crashRestart: (a) => crashRestart({ build: Boolean(a?.build) }),
     client: () => cmdClient(),

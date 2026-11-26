@@ -22,7 +22,13 @@ const COVERS = [
   'fixtures/packs/guilogic/guis/escrow.yml',
   'fixtures/packs/guilogic/guis/trash.yml',
   'fixtures/packs/guilogic/guis/consume.yml',
+  'fixtures/packs/guilogic/guis/vault.yml',
+  'fixtures/packs/guilogic/guis/vault_pre.yml',
+  'fixtures/packs/guilogic/guis/vault_post_intent.yml',
+  'fixtures/packs/guilogic/guis/vault_post_commit.yml',
+  'fixtures/packs/guilogic/guis/transfer.yml',
   'plugin/src/main/java/dev/materione/plugin/logic/action/ConsumeCustodyAction.java',
+  'plugin/src/main/java/dev/materione/plugin/logic/action/CustodyTransferAction.java',
   'plugin/src/main/resources/recipes/trash_slot.yml',
   'qa/catalog/guiescrow.mjs',
   'scripts/probe/probe.mjs',
@@ -61,8 +67,8 @@ async function openEscrow(ctx) {
 }
 
 /** Opens a guilogic GUI for the probe player and waits for its open marker; the runner reset the baseline at the test's start. */
-async function openGui(ctx, gui, marker) {
-  await ctx.rcon(`materione gui open ${gui} Probe`);
+async function openGui(ctx, gui, marker, args = '') {
+  await ctx.rcon(`materione gui open ${gui} Probe${args ? ` ${args}` : ''}`);
   await ctx.waitForServerLog(marker);
   await ctx.sleep(600); // the client finishes opening the window
 }
@@ -349,6 +355,78 @@ export default [
       await ctx.rejoin();
       await ctx.sleep(1500);
       ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+    },
+  }),
+
+  test({
+    id: 'guiescrow.keyed-holder-persists',
+    title: 'a durable keyed holder keeps its items on close/reopen and after a server restart; no items return to the player account',
+    covers: COVERS,
+    timeoutMs: 600_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give corpus:gem_red Probe 3');
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      await click(ctx, 36);
+      await click(ctx, 0);
+      await ctx.sleep(400);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      await closeWindow(ctx);
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      await closeWindow(ctx);
+      await ctx.rcon('save-all flush');
+      await ctx.crashRestart();
+      await openGui(ctx, 'guilogic:vault', /MATERIONE-GUI-OPENED id=guilogic:vault/);
+      ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+      ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+      await closeWindow(ctx);
+    },
+  }),
+
+  test({
+    id: 'guiescrow.atomic-transfer',
+    title: 'custody.transfer recovers without loss or duplication when killed pre-INTENT, post-INTENT/pre-commit and post-commit',
+    covers: COVERS,
+    timeoutMs: 1_200_000,
+    steps: async (ctx) => {
+      for (const boundary of [
+        { gate: 'transfer-checkpointed', committed: false, vault: 'pre-intent', gui: 'vault_pre' },
+        { gate: 'transfer-intent', committed: true, vault: 'post-intent', gui: 'vault_post_intent' },
+        { gate: 'transfer-destination-committed', committed: true, vault: 'post-commit',
+          gui: 'vault_post_commit' },
+      ]) {
+        await ctx.reset();
+        await ctx.rejoin();
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await openGui(ctx, 'guilogic:transfer', /MATERIONE-GUI-OPENED id=guilogic:transfer/,
+          `vault=${boundary.vault}`);
+        await click(ctx, 36);
+        await click(ctx, 0);
+        await ctx.sleep(400);
+        await ctx.armEscrowGate(boundary.gate);
+        await click(ctx, 8);
+        await ctx.waitForServerLog(/MATERIONE-GUITRANSFER-START/, { timeoutMs: 10_000 });
+        await ctx.waitForServerLog(new RegExp(`MATERIONE-ESCROW-GATE ${boundary.gate}`), { timeoutMs: 90_000 });
+        await ctx.crashRestart();
+
+        await openGui(ctx, `guilogic:${boundary.gui}`,
+          new RegExp(`MATERIONE-GUI-OPENED id=guilogic:${boundary.gui}`));
+        if (boundary.committed) {
+          ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+          ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+          await click(ctx, 0);
+          await click(ctx, 36);
+          await closeWindow(ctx);
+        } else {
+          ctx.expect(await slotStack(ctx, 0)).toBe('empty');
+          ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+          await closeWindow(ctx);
+        }
+        await ctx.rcon('clear Probe');
+        await ctx.rcon('save-all flush');
+      }
     },
   }),
 ];

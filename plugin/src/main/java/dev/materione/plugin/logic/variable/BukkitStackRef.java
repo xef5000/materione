@@ -3,12 +3,15 @@ package dev.materione.plugin.logic.variable;
 import dev.materione.api.logic.variable.StackRef;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataType;
 
 /**
  * The platform's {@link StackRef}: one physical stack, the player whose thread owns it, and the Materione identity
@@ -20,6 +23,13 @@ import org.bukkit.inventory.PlayerInventory;
  * two subjects, and an identical stack put where the subject was does not inherit its handles.
  */
 public final class BukkitStackRef implements StackRef {
+
+    /** Stable id of a stack that holds a custody account. */
+    public static final NamespacedKey CUSTODY_ID =
+            new NamespacedKey("materione", "custody-id");
+    /** Versioned, CRC-protected custody account bytes for a stack holder. */
+    public static final NamespacedKey CUSTODY_ACCOUNT =
+            new NamespacedKey("materione", "custody-account");
 
     private final UUID owner;
     private final Supplier<StackPdc> locate;
@@ -127,6 +137,57 @@ public final class BukkitStackRef implements StackRef {
     public boolean isLive() {
         StackPdc current = pdc();
         return matches(current) && current.view().isPresent();
+    }
+
+    @Override
+    public Optional<UUID> custodyId() {
+        StackPdc current = pdc();
+        if (!matches(current)) {
+            return Optional.empty();
+        }
+        return current.view().map(data -> data.get(CUSTODY_ID, PersistentDataType.STRING))
+                .flatMap(value -> {
+                    try {
+                        return Optional.of(UUID.fromString(value));
+                    } catch (RuntimeException malformed) {
+                        return Optional.empty();
+                    }
+                });
+    }
+
+    @Override
+    public boolean assignCustodyId(UUID id) {
+        StackPdc current = pdc();
+        if (!matches(current) || id == null) {
+            return false;
+        }
+        try {
+            return current.edit(data -> data.set(CUSTODY_ID, PersistentDataType.STRING, id.toString()));
+        } catch (RuntimeException failed) {
+            return false;
+        }
+    }
+
+    /** The stack account bytes, or null when absent/stale. */
+    public byte[] custodyAccount() {
+        StackPdc current = pdc();
+        if (!matches(current)) {
+            return null;
+        }
+        return current.view().map(data -> data.get(CUSTODY_ACCOUNT, PersistentDataType.BYTE_ARRAY)).orElse(null);
+    }
+
+    /** Writes stack account bytes on the stack owner's thread, refusing a stale/replaced handle. */
+    public boolean writeCustodyAccount(byte[] bytes) {
+        StackPdc current = pdc();
+        if (!matches(current)) {
+            return false;
+        }
+        try {
+            return current.edit(data -> data.set(CUSTODY_ACCOUNT, PersistentDataType.BYTE_ARRAY, bytes));
+        } catch (RuntimeException failed) {
+            return false;
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 package dev.materione.api.logic.variable;
 
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -28,6 +29,19 @@ public interface StackRef {
      */
     default boolean isLive() {
         return true;
+    }
+
+    /** Stable custody identity stored with the stack, when this platform has assigned one. */
+    default Optional<UUID> custodyId() {
+        return Optional.empty();
+    }
+
+    /**
+     * Assigns the stable custody identity on the stack owner's thread, returning false for a stale, missing or
+     * otherwise unwritable stack.
+     */
+    default boolean assignCustodyId(UUID id) {
+        return false;
     }
 
     /**

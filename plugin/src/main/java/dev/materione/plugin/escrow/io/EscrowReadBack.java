@@ -87,10 +87,15 @@ public final class EscrowReadBack implements SnapshotReader {
 
     @Override
     public CompletableFuture<ReadBack> read(UUID player) {
+        return read(player, key);
+    }
+
+    @Override
+    public CompletableFuture<ReadBack> read(UUID player, String accountKey) {
         List<Path> dirs = List.copyOf(directories.get());
         CompletableFuture<ReadBack> result = new CompletableFuture<>();
         try {
-            io.execute(() -> attempt(player, dirs, 0, result));
+            io.execute(() -> attempt(player, dirs, accountKey, 0, result));
         } catch (RuntimeException rejected) {
             result.complete(new ReadBack.Unavailable("the IO executor refused the read: " + rejected));
         }
@@ -99,22 +104,27 @@ public final class EscrowReadBack implements SnapshotReader {
 
     @Override
     public CompletableFuture<OptionalLong> awaitAtLeast(UUID player, long minGen) {
+        return awaitAtLeast(player, key, minGen);
+    }
+
+    @Override
+    public CompletableFuture<OptionalLong> awaitAtLeast(UUID player, String accountKey, long minGen) {
         CompletableFuture<OptionalLong> result = new CompletableFuture<>();
-        poll(player, minGen, 0, result);
+        poll(player, accountKey, minGen, 0, result);
         return result;
     }
 
-    private void poll(UUID player, long minGen, int round, CompletableFuture<OptionalLong> result) {
+    private void poll(UUID player, String accountKey, long minGen, int round, CompletableFuture<OptionalLong> result) {
         if (round >= POLL_MILLIS.length) {
             result.complete(OptionalLong.empty());
             return;
         }
         try {
-            delayer.after(POLL_MILLIS[round], () -> read(player).whenComplete((found, failed) -> {
+            delayer.after(POLL_MILLIS[round], () -> read(player, accountKey).whenComplete((found, failed) -> {
                 if (found instanceof ReadBack.Saved saved && Long.compareUnsigned(saved.gen(), minGen) >= 0) {
                     result.complete(OptionalLong.of(saved.gen()));
                 } else {
-                    poll(player, minGen, round + 1, result);
+                    poll(player, accountKey, minGen, round + 1, result);
                 }
             }));
         } catch (RuntimeException rejected) {
@@ -124,11 +134,11 @@ public final class EscrowReadBack implements SnapshotReader {
 
     // ---- one read, on an IO thread ------------------------------------------------------------------------------
 
-    private void attempt(UUID player, List<Path> dirs, int attempt, CompletableFuture<ReadBack> result) {
+    private void attempt(UUID player, List<Path> dirs, String accountKey, int attempt, CompletableFuture<ReadBack> result) {
         boolean last = attempt >= RETRY_MILLIS.length;
         Outcome outcome;
         try {
-            outcome = readOnce(player, dirs, last);
+            outcome = readOnce(player, dirs, accountKey, last);
         } catch (RuntimeException unexpected) {
             outcome = Outcome.retry("unexpected: " + unexpected);
         }
@@ -137,17 +147,17 @@ public final class EscrowReadBack implements SnapshotReader {
         } else if (last) {
             result.complete(new ReadBack.Unavailable(outcome.why));
         } else if (outcome.immediate) {
-            attempt(player, dirs, attempt + 1, result);
+            attempt(player, dirs, accountKey, attempt + 1, result);
         } else {
             try {
-                delayer.after(RETRY_MILLIS[attempt], () -> attempt(player, dirs, attempt + 1, result));
+                delayer.after(RETRY_MILLIS[attempt], () -> attempt(player, dirs, accountKey, attempt + 1, result));
             } catch (RuntimeException rejected) {
                 result.complete(new ReadBack.Unavailable(outcome.why));
             }
         }
     }
 
-    private Outcome readOnce(UUID player, List<Path> dirs, boolean last) {
+    private Outcome readOnce(UUID player, List<Path> dirs, String accountKey, boolean last) {
         Path file = newest(dirs, player + ".dat");
         if (file == null) {
             if (!last) {
@@ -155,14 +165,14 @@ public final class EscrowReadBack implements SnapshotReader {
             }
             file = newest(dirs, player + ".dat_old"); // what the server's own load falls back to (F2)
             if (file == null) {
-                return Outcome.retry("no player file for " + player);
+                return Outcome.retry("no player file for " + player + " in " + dirs);
             }
         }
         BasicFileAttributes before;
         Optional<byte[]> value;
         try {
             before = Files.readAttributes(file, BasicFileAttributes.class);
-            value = PlayerDatReader.readValue(file, key);
+            value = PlayerDatReader.readValue(file, accountKey);
         } catch (NoSuchFileException vanished) {
             return Outcome.retry(file.getFileName() + " vanished while it was read (replaced)");
         } catch (IOException unreadable) {
@@ -172,7 +182,7 @@ public final class EscrowReadBack implements SnapshotReader {
             return Outcome.again(); // replaced during the read: read the newer one
         }
         if (value.isEmpty()) {
-            return Outcome.done(new ReadBack.NoAccount(file.getFileName() + " holds no " + key));
+            return Outcome.done(new ReadBack.NoAccount(file.getFileName() + " holds no " + accountKey));
         }
         return switch (AccountCodec.read(value.get())) {
             case AccountRead.Readable readable -> Outcome.done(new ReadBack.Saved(readable.account().gen(), file));

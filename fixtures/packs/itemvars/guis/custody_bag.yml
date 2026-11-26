@@ -1,0 +1,10 @@
+custody_bag:
+  title: "Stack-held Store"
+  container: chest_1
+  layers:
+    - id: bag
+      type: slots
+      region: container
+      input: true
+      durable: required
+      holder: stack

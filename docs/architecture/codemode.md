@@ -1339,7 +1339,7 @@ What happens:
 The same feature as an agent working from raw YAML would have written ~100 lines of text across four files, found out about a
 mistyped action id from a server diagnostic after a round trip, and had no revision guard on any of them.
 
-### 9.2 `/trade`: a missing primitive is a type error
+### 9.2 `/trade`: the custody step is typed; state and views remain type errors
 
 D12's benchmark: build `/trade <player>` from content alone. Written as the agent would, against today's surface
 ([`primitives.md`](primitives.md) §3 lists what is missing):
@@ -1359,11 +1359,15 @@ rpg.guis.get("trade").views.forEachViewer(offers, (v) => /* ... */ );
 m.actions.message({ text: "Trade request sent", target: { arg: "other" } });
 //   passes since #331 (logic.md §39): `target` is on every action whose description says `targetable`
 
-m.actions.transfer({ from: m.holder.player("a"), to: m.holder.player("b"), items: offers });
-//        ^^^^^^^^ error TS2339: Property 'transfer' does not exist on type 'ActionCatalog'.
+m.actions.custodyTransfer({
+  source: { slot: 0 },
+  destination: { holder: { kind: "player", player: "${args.other}" }, slot: 0 },
+  await: "saved",
+});
+// passes since #334: one joint decision, generated from ActionType self-description
 ```
 
-Each error is a row of the audit table (commands as content, keyed state, views over state, atomic transfer: four of the nine
+Each remaining error is a row of the audit table (keyed state and views: two of the nine
 needs; target addressing shipped with #331 and commands as content with #330, whose `p.commands.create("trade", { names: ["trade"], args: [{ name: "other", type: "player" }], do: [...] })` now type-checks), reported by the checker without a server round trip, and each says what the agent must **not** do:
 fake it with a global variable and a session map. The agent's reply to the owner is the gap list, with what it *can* build today
 (the request flow without the shared window, say) offered as a separate proposal. When the primitives land, the **same program

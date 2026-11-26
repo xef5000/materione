@@ -44,6 +44,10 @@ public record ParameterSchema(
     public static final String KIND_INTERVAL = "interval";
     /** A local time of day in server time, written as {@code HH:MM}. */
     public static final String KIND_TIME_OF_DAY = "time-of-day";
+    /** A custody.transfer source: an exact holder/entry or a GUI slot, never both. */
+    public static final String KIND_CUSTODY_TRANSFER_SOURCE = "custody-transfer-source";
+    /** A custody.transfer destination holder and slot. */
+    public static final String KIND_CUSTODY_TRANSFER_DESTINATION = "custody-transfer-destination";
 
     public ParameterSchema {
         Objects.requireNonNull(id, "id");

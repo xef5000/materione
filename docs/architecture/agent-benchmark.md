@@ -49,7 +49,7 @@
 | Content types | `item`, `block`, `furniture`, `glyph`, `sound`, `painting`, `effect`, `recipe`, `gui`, `currency`, `variable`, `rule` (since #327) |
 | Mechanics | `commands`, `food`, `durability`, `soulbound`, `backpack` |
 | Triggers (live) | `click`, `break`, `place`, `interact`, `equip`, `unequip`, `drop`, `pickup`, `consume`, `damage` (durability), `death` (the carrier dies); since #327 `entity.hit`, `entity.kill`, `player.hurt`, `player.join`, `player.quit`, `player.respawn`, `player.death`; `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside`, `gui.click_inventory`, `gui.slot_change`, `gui.tick`, `gui.page`; since #332 `every`, `schedule` for rule documents |
-| Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `view.open`, `view.close`, `view.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
+| Actions | `run_command`, `message`, `broadcast`, `actionbar`, `title`, `chat`, `sound`, `stop_sound`, `potion`, `teleport`, `cancel`, `give_item`, `take_item`, `give_exp`, `take_exp`, `set_var`, `prompt`, `custody.consume`, `custody.transfer`, `give_money`, `take_money`, `give_permission`, `take_permission`, `connect`, `view.open`, `view.close`, `view.back`, `gui.refresh`, `gui.page`, `gui.slot_item` |
 | Conditions | `has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has` |
 | Flow steps | action, `if`, `require`, `wait`, `stop`, `call` (same resource), `choose`; rule options `id`, `cooldown`, `charges`, `per`; action options `chance`, `delay` (there is no rule-level `chance`) |
 | Variables | scopes `local`, `session`, `player`, `server`, `item`; types `number`, `string`, `boolean` |
@@ -62,7 +62,7 @@
 | # | Task (the prompt, shortened) | Area | Verdict | Fails on |
 |---|---|---|---|---|
 | T01 | **Bloodfang sword** (#320): custom model, bleed on hit scaled by level, XP from kills to level 5, sneak-right-click GUI with a 500-coin upgrade, `rpg.weapons` only | weapon, progression, GUI | Pass (#327, #329, #331, #333) | |
-| T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | STATE, VIEW, CUSTODY |
+| T02 | **`/trade <player>`** (D12): request, accept, shared two-player window, atomic swap, expiry | command, GUI, custody | Fail | STATE, VIEW |
 | T03 | **Backpack**: a 3-row backpack item that keeps its contents | item | Pass (preset route) | by-hand route: CUSTODY |
 | T04 | **Kits**: `/kits` menu with Starter (once) and Daily (every 24 h) | GUI, items | Pass (#328) | |
 | T05 | **Healing wand**: right-click heals 4 hearts, 30 s cooldown, tells the time left | ability | Pass (#328) | |
@@ -78,7 +78,7 @@
 | T15 | **Mob drop**: zombies have a 5% chance to drop a Rotten Heart | mobs | Pass (#327) | |
 | T16 | **Crate**: a placed crate opened with a key gives one of five weighted rewards and announces rare ones | furniture | Pass | |
 | T17 | **Leaderboard**: `/top` shows the ten players with the most kills | GUI, progression | Fail | QUERY |
-| T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Fail | CUSTODY |
+| T18 | **Player vaults**: `/pv <1-3>` opens private storage that persists | GUI, custody | Pass (#334) | |
 | T19 | **Vending machine**: a furniture that opens a shop when right-clicked | furniture | Pass | |
 | T20 | **Mana and a fire wand**: mana regenerates to 100, shows as a HUD bar, the wand spends 20 to shoot a fireball | ability, HUD | Fail | VIEW |
 | T21 | **`/pay <player> <amount>`** | command, economy | Pass (#464) | |
@@ -91,7 +91,7 @@
 | T28 | **Rules on first join**: a dialog with the rules and an Accept button; no accept, no play | dialog | Fail | VIEW |
 | T29 | **Forge**: put a ruby sword and 3 rubies in, pay 200 coins, get the refined sword | GUI, custody | Pass | |
 
-**23 pass, 0 partial, 6 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
+**24 pass, 0 partial, 5 fail** after #327 (rules without a host and entity/player triggers, logic.md §37), #328 (the clock:
 `now()`, `today()`, and `on_cooldown` with `${cooldown.remaining}`), #329 (the entity and world verbs, logic.md §41), #330 (commands as
 content, logic.md §40), #464 (the money amount as an expression, logic.md §42), #332 (scheduled triggers, logic.md §44) and #333
 step 1 (item-held state, logic.md §38): T04, T05 and T07 flipped to Pass alongside T06, T10 and T15, T12, T13 and T14 with #329,
@@ -139,13 +139,16 @@ needs no new damage verb. `scope: "item"` makes level and XP stack-local; `entit
 `view.open` carries it into the GUI so `vars.item.bench.*` is the same value in render and click rules. The mock corpus accepts the
 task first turn with both the in-memory and JVM oracles, and the fixture's live Paper path opens the GUI and writes the held stack.
 
-### T02 `/trade <player>` — Fail (STATE, VIEW, CUSTODY)
+### T02 `/trade <player>` — Fail (STATE, VIEW; CUSTODY transfer now passes)
 
 The program is codemode.md §9.2: five errors when it was written (three since #330), one per need of primitives.md §3 (`p.commands`, keyed state with a TTL, a view
 for two viewers, `message` to the other player, `transfer` between holders). Since #331 `message` to the other player is
 `target: { arg: "target" }` and passes, and since #330 the command itself (`p.commands.create("trade", { names, args, do })`, with the typed
 `player` argument) passes; nothing else of the two-player core does.
-What an agent can offer instead: nothing honest. A single-player "offer window" is not a trade.
+Since #334 the source/destination shape of `custody.transfer` type-checks and the
+joint decision is implemented; this task still fails on keyed state/TTL and the
+multi-viewer shared window. What an agent can offer instead: nothing honest. A
+single-player "offer window" is not a trade.
 
 ### T03 Backpack — Pass by the preset route; the by-hand route fails (CUSTODY)
 
@@ -405,19 +408,18 @@ top.layers.addList({ slots: [10, 11, 12, 13, 14, 15, 16, 19, 20, 21],
 The `variable` list source reads one list-valued variable; nothing queries one variable *across holders*, offline players
 included.
 
-### T18 Player vaults — Fail (CUSTODY)
+### T18 Player vaults — Pass (#334)
 
 ```ts
 const vault = p.guis.create("vault", { container: "chest_6", title: m.expr`"Vault #" + view.args.n`,
   open: { commands: ["pv"], args: { n: { type: "integer", min: 1, max: 3 } }, permission: "vaults.use" } });
 vault.layers.addSlots({ slots: m.range(0, 53), input: true, durable: "required",
-  keep: { holder: m.holder.key(m.expr`"vault:" + player.uuid + ":" + view.args.n`) } });
-//^^^^ ✗ TS2353 'keep' does not exist in type 'SlotsLayer': a required input layer returns its items on close;
-//                the only exit that keeps them from the player is custody.consume                              [CUSTODY]
+  holder: { kind: "keyed", key: "vault:${player.uuid}:${view.args.n}" } });
 ```
 
-The command, its typed argument and the durable slots exist. What is missing is a **holder that outlives the window**
-(primitives.md §5.1, holder generalization): the escrow account is the player's own and is paid back on close.
+The command, typed argument, durable slots and keyed holder exist. Closing parks the
+entries in the keyed account in the player's saved PDC; close/reopen/restart are covered
+by the product's Paper harness and QA catalog.
 
 ### T19 Vending machine — Pass
 
@@ -584,7 +586,7 @@ Each is a capability, named for what it does (U1). The third column is where the
 | **VIEW** | Views over state: more than one viewer; the dialog and HUD view kinds | §5.3 | T02 T20 T28 (3) | none alone |
 | **STATE** | Keyed state: a holder other than player or server (a stack, an entity, a key), a TTL, an expiry trigger | §5.2 | T02, F1 (2) | **Stack half closed by #333 step 1** (logic.md §38): T01 passes. T02 and F1 still need keyed/entity holders and TTL; the latter remains step 2 |
 | **TIMER** | A trigger that fires on a schedule | §5.5 | F5 (0 main tasks) | **Closed by #332** (`every` and `schedule`, logic.md §44); with RULE, T26 passes and T20 keeps only VIEW. F5 keeps its item-held context gap |
-| **CUSTODY** | Custody holders beyond the player's own account, and the atomic transfer | §5.1 | T02 T18, T03 by hand (2) | T18 |
+| **CUSTODY** | Custody holders beyond the player's own account, and the atomic transfer | §5.1 | T02 T18, T03 by hand (2) | **Closed by #334**; T18 passes |
 | **QUERY** | A read across the holders of one variable (ranking) | new | T17 (1) | none alone |
 | **PROVIDER** | Open provider kinds (regions) | §5.8 | T22 (1) | none alone |
 
@@ -601,12 +603,12 @@ the cost class as the tie-breaker. An issue may bundle gaps that have no use apa
 | 0 | (today) | | 10 of 29 | | |
 | 1 | **Rules without a host, with the entity and player triggers** (#327), **shipped** | RULE, TRIG-ENTITY, TRIG-PLAYER | 13 | T06 T10 T15 | Medium: one content type, seven trigger registrations, firing sites behind the thread gateway (as built: logic.md §37) |
 | 2 | **A clock: time in expressions, persistent cooldowns** (#328), **shipped** | TIME | 18 | T04 T05 T07 | Small: expression functions and one rule option |
-| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 23 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
-| 4 | **Commands as content** (#330), **shipped** | CMD | 23 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
-| 5 | **Target addressing** (#331), **shipped** | TARGET | 23 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
-| 6 | **Timers** (rides #327's rule unit) (#332), **shipped** | TIMER | 23 | T26 | Small once RULE exists; one bounded platform wheel, logic.md §44 |
-| 7 | **Keyed state: stack holder now; open key/TTL later** (#333), **step 1 shipped** | STATE | 23 | T01 (stack half; needs ranks 1 and 5) | Medium for step 1; the entity/open-key/TTL half remains later |
-| 8 | **Custody holders and transfer** (#334) | CUSTODY | 24 | T18 | Large, with an open design problem (primitives.md §3) |
+| 3 | **Entity and world verbs** (#329), **shipped** | VERB | 24 | T12 T13 T14 | Medium: nine actions, each small; protection checks (as built: logic.md §41) |
+| 4 | **Commands as content** (#330), **shipped** | CMD | 24 | none: T27 passes at ship; T21 then kept QTY, closed at rank 12 by #464 | Small to medium: lift the `open:` block (as built: logic.md §40) |
+| 5 | **Target addressing** (#331), **shipped** | TARGET | 24 | none: T21 then needed QTY as well, closed at rank 12 by #464 | Medium: a cross-cutting parameter on the actions that admit it (as built: logic.md §39) |
+| 6 | **Timers** (rides #327's rule unit) (#332), **shipped** | TIMER | 24 | T26 | Small once RULE exists; one bounded platform wheel, logic.md §44 |
+| 7 | **Keyed state: stack holder now; open key/TTL later** (#333), **step 1 shipped** | STATE | 24 | T01 (stack half; needs ranks 1 and 5) | Medium for step 1; the entity/open-key/TTL half remains later |
+| 8 | **Custody holders and transfer** (#334), **shipped** | CUSTODY | 24 | T18 | Large: holder PDC accounts + one joint INTENT |
 | 9 | **Views over state; dialog and HUD as view kinds** (#335) | VIEW | 27 | T02 (needs 4, 5, 7, 8), T20 (needs 1, 3, 6), T28 (needs 1) | Large: #6 and #7 reshaped |
 | 10 | **A ranking read across holders** (#336) | QUERY | 28 | T17 | Medium; touches offline player data |
 | 11 | **Open provider kinds** (primitives.md §5.8, no issue) | PROVIDER | 29 | T22 | Deferred until a second kind forces the shape |
@@ -617,13 +619,13 @@ why ranks 2 to 11 each read one higher than when this table was first written, a
 
 **What the ranking says.**
 
-1. **The shipped baseline is 23 of 29.** Ranks 1 to 7 are already passing in the corpus, including T21 after #464, T26 after #332 and T01 after
+1. **The shipped baseline is 24 of 29.** Ranks 1 to 8 are passing in the corpus, including T21 after #464, T26 after #332, T01 after
    #333 step 1. None of that closes the `/trade` path. The audit's worked example remains the *hardest* task in the set (five
    gaps, three of them large), not a typical one.
 2. **`#320`'s own example, Bloodfang, needs ranks 1, 5 and 7.** The slice's exit criterion (#320's acceptance) therefore fixes the
    minimum: **rules and triggers, target addressing, and stack-held state**. Rank 2 to 4 are cheap and broad and belong with them.
-3. **`/trade` is not in the slice.** It needs custody transfer and multi-viewer views, both large and one with an unsolved
-   design problem. It stays D12's benchmark and keeps failing visibly until those land, which is what the count is for.
+3. **`/trade` is not fully closed.** Custody transfer now passes, but keyed state/TTL
+   and multi-viewer views keep it failing honestly until #333 step 2 and #335/V5.
 4. **Proposed scope of M6.5's primitive work: ranks 1 to 7.** Ranks 8 to 11 keep their issues, in M7 or later.
 
 Issue numbers are those filed with this document; each issue carries its design sketch, its U1 to U5 statement and its exit

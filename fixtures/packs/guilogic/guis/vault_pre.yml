@@ -1,0 +1,12 @@
+vault_pre:
+  title: "Player Vault (pre-INTENT)"
+  container: chest_1
+  layers:
+    - id: vault
+      type: slots
+      region: container
+      input: true
+      durable: required
+      holder:
+        kind: keyed
+        key: "vault:${player.uuid}:pre-intent"

@@ -11,9 +11,12 @@ import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.api.custody.CustodyKey;
 import dev.materione.content.gui.raster.Bevels;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * {@code slots}: the inset slot wells of the container, the player inventory, or both
@@ -39,8 +42,8 @@ public final class SlotsComponent implements GuiComponent {
      * <p>The runtime reads it (row P of #247): a {@code required} layer takes the escrow path (every click on its
      * slots is applied by the plugin in one step with the player's escrow account, overflow is owed and never
      * dropped), and is refused, its slots accepting nothing, where the platform cannot support it
-     * ({@code MTR-0100}). It is <strong>not yet verified by the kill-boundary tests</strong> (rows B and H of #247),
-     * so nothing here calls it crash-safe.
+     * ({@code MTR-0100}). The player path is covered by the kill-boundary rows; holder-specific limits are in
+     * gui-input-durability.md §15.
      */
     public enum Durability {
         BEST_EFFORT("best_effort"),
@@ -65,6 +68,62 @@ public final class SlotsComponent implements GuiComponent {
                 }
             }
             return null;
+        }
+    }
+
+    /** The authored holder address: unresolved keyed text is rendered once for each viewer. */
+    public record Holder(Kind kind, String key) {
+
+        public enum Kind {
+            PLAYER,
+            KEYED,
+            STACK
+        }
+
+        public static final Holder PLAYER = new Holder(Kind.PLAYER, null);
+
+        public static Holder parse(Object raw, String layer) {
+            if (raw == null || "player".equals(raw)) {
+                return PLAYER;
+            }
+            if ("stack".equals(raw)) {
+                return new Holder(Kind.STACK, null);
+            }
+            if (!(raw instanceof Map<?, ?> map)) {
+                throw new IllegalArgumentException("layer " + layer
+                        + ": holder must be player, stack, or an object with kind");
+            }
+            Object kindValue = map.get("kind");
+            String kind = kindValue == null ? "" : String.valueOf(kindValue).toLowerCase(Locale.ROOT);
+            return switch (kind) {
+                case "player" -> {
+                    if (map.size() != 1) {
+                        throw badHolder(layer, "player has no other fields");
+                    }
+                    yield PLAYER;
+                }
+                case "stack" -> {
+                    if (map.size() != 1) {
+                        throw badHolder(layer, "stack has no other fields");
+                    }
+                    yield new Holder(Kind.STACK, null);
+                }
+                case "keyed" -> {
+                    Object keyValue = map.get("key");
+                    if (!(keyValue instanceof String key) || key.isBlank() || map.size() != 2) {
+                        throw badHolder(layer, "keyed requires only kind and a non-blank string key");
+                    }
+                    if (!key.contains("${") && !key.contains("%")) {
+                        CustodyKey.require(key);
+                    }
+                    yield new Holder(Kind.KEYED, key);
+                }
+                default -> throw badHolder(layer, "kind must be player, keyed or stack");
+            };
+        }
+
+        private static IllegalArgumentException badHolder(String layer, String why) {
+            return new IllegalArgumentException("layer " + layer + ": " + why);
         }
     }
 
@@ -109,6 +168,13 @@ public final class SlotsComponent implements GuiComponent {
                                         + "(an expression or a predicate, logic.md §2.3)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Accept", "behavior", 40, true, "advanced", "", "")),
+                        new ParameterSchema("holder", ParameterType.RAW, false, null,
+                                "Input slots only: custody holder. Omit or use player for the existing player account; "
+                                        + "stack uses the opening view's live StackRef; {kind: keyed, key: <template>} "
+                                        + "uses a canonical keyed account in the player's durable snapshot",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Holder", "behavior", 36, true, "advanced", "", "")),
                         new ParameterSchema("durable", ParameterType.ENUM, false, "best_effort",
                                 "Input slots only: how the player's items are protected while they sit in these slots. "
                                         + "required puts the items in the player's escrow account in the same step as every "
@@ -126,9 +192,9 @@ public final class SlotsComponent implements GuiComponent {
                                                         "Items in these slots are tracked in the player's saved data in the "
                                                                 + "same step as every click and are never dropped in the world; "
                                                                 + "what does not fit is owed (/materione claim). The slots accept "
-                                                                + "nothing on a server that cannot support it. Not yet verified "
-                                                                + "by the crash tests."))))),
-                "1.3.0");
+                                                                + "nothing on a server that cannot support it. Holder persistence "
+                                                                + "and transfer limits are in the custody design."))))),
+                "1.4.0");
     }
 
     @Override
@@ -158,8 +224,17 @@ public final class SlotsComponent implements GuiComponent {
             throw new IllegalArgumentException("layer " + configuration.layerId()
                     + ": durable must be required or best_effort, not '" + durableKey + "'");
         }
+        Holder holder = Holder.parse(configuration.parameters().get("holder"), configuration.layerId());
+        if (!input && configuration.parameters().containsKey("holder")) {
+            throw new IllegalArgumentException(
+                    "layer " + configuration.layerId() + ": holder is meaningful only on an input layer");
+        }
+        if (durable != Durability.REQUIRED && configuration.parameters().containsKey("holder")) {
+            throw new IllegalArgumentException(
+                    "layer " + configuration.layerId() + ": holder needs durable: required");
+        }
         return new Layer(region, GuiBevel.read(configuration, GuiBevel.SLOT_WELL), configuration.container(),
-                input, configuration.parameters().get("accept"), durable);
+                input, configuration.parameters().get("accept"), durable, holder);
     }
 
     /**
@@ -205,7 +280,7 @@ public final class SlotsComponent implements GuiComponent {
      *     when {@code input} is true; the runtime reads it (row P of #247)
      */
     public record Layer(Region region, GuiBevel bevel, GuiContainer container, boolean input, Object accept,
-                        Durability durable)
+                        Durability durable, Holder holder)
             implements CompiledGuiLayer {
 
         @Override

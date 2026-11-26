@@ -29,6 +29,7 @@ import dev.materione.plugin.logic.action.BroadcastAction;
 import dev.materione.plugin.logic.action.CancelAction;
 import dev.materione.plugin.logic.action.ConnectAction;
 import dev.materione.plugin.logic.action.ConsumeCustodyAction;
+import dev.materione.plugin.logic.action.CustodyTransferAction;
 import dev.materione.plugin.logic.action.GiveMoneyAction;
 import dev.materione.plugin.logic.action.GivePermissionAction;
 import dev.materione.plugin.logic.action.ChatAction;
@@ -200,6 +201,7 @@ public final class BuiltinLogic {
                 new RefreshGuiAction(bridge),
                 new GuiSlotItemAction(bridge),
                 new ConsumeCustodyAction(bridge),
+                new CustodyTransferAction(bridge),
                 new PageGuiAction(bridge));
     }
 

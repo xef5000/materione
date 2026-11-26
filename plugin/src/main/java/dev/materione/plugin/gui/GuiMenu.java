@@ -4,7 +4,9 @@ import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.NamespacedId;
 import dev.materione.platform.text.MaterioneText;
 import dev.materione.plugin.gui.input.GuiInput;
+import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.view.ViewerRecord;
+import java.util.Map;
 import java.util.Set;
 import org.bukkit.event.inventory.InventoryClickEvent;
 
@@ -27,6 +29,7 @@ public final class GuiMenu extends PluginGui {
     private volatile Set<Integer> inputSlots = Set.of();
     /** The subset of {@link #inputSlots} that belong to {@code durable: required} layers (the escrow path). */
     private volatile Set<Integer> durableSlots = Set.of();
+    private volatile Map<Integer, InputSlots.Holder> inputHolders = Map.of();
 
     public GuiMenu(ViewerRecord session, GuiContainer container, String title, GuiInput input) {
         this(session, container, title, title, input);
@@ -58,11 +61,24 @@ public final class GuiMenu extends PluginGui {
     public void inputSlots(Set<Integer> slots, Set<Integer> durable) {
         this.inputSlots = Set.copyOf(slots);
         this.durableSlots = Set.copyOf(durable);
+        this.inputHolders = slots.stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                slot -> slot, ignored -> InputSlots.Holder.PLAYER));
+    }
+
+    /** Records the resolved policy holders alongside the displayed input slots. */
+    public void inputSlots(Set<Integer> slots, Set<Integer> durable, Map<Integer, InputSlots.Holder> holders) {
+        inputSlots(slots, durable);
+        inputHolders = Map.copyOf(holders);
     }
 
     /** The input slots of {@code durable: required} layers; always a subset of {@link #inputSlots()}. */
     public Set<Integer> durableSlots() {
         return durableSlots;
+    }
+
+    /** The authored custody holder policy of each displayed input slot. */
+    public Map<Integer, InputSlots.Holder> inputHolders() {
+        return inputHolders;
     }
 
     /** The input slots the recovery journal covers: the best-effort ones. */

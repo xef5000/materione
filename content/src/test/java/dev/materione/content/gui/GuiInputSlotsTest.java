@@ -131,6 +131,42 @@ class GuiInputSlotsTest {
     }
 
     @Test
+    void anOmittedHolderIsTheExistingPlayerAccountAndKeyedAndStackCompile() {
+        assertThat(wells(GuiTestSupport.definition(1, GuiTestSupport.layer(
+                "plain", "slots", "input", true, "durable", "required"))).holder())
+                .isEqualTo(SlotsComponent.Holder.PLAYER);
+        assertThat(wells(GuiTestSupport.definition(1, GuiTestSupport.layer(
+                "keyed", "slots", "input", true, "durable", "required",
+                "holder", Map.of("kind", "keyed", "key", "vault:${view.args.n}")))).holder())
+                .isEqualTo(new SlotsComponent.Holder(SlotsComponent.Holder.Kind.KEYED, "vault:${view.args.n}"));
+        assertThat(wells(GuiTestSupport.definition(1, GuiTestSupport.layer(
+                "stack", "slots", "input", true, "durable", "required", "holder", "stack"))).holder())
+                .isEqualTo(new SlotsComponent.Holder(SlotsComponent.Holder.Kind.STACK, null));
+    }
+
+    @Test
+    void invalidHolderFormsAreSkippedInsteadOfWeakeningOrGuessing() {
+        List<Object> invalid = List.of(
+                "KEYED",
+                Map.of("kind", "unknown"),
+                Map.of("kind", "keyed", "key", "Bad"),
+                Map.of("kind", "keyed", "key", "vault:../x"),
+                Map.of("kind", "player", "key", "x"),
+                Map.of("kind", "stack", "key", "x"));
+        for (Object holder : invalid) {
+            var parsed = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1,
+                    GuiTestSupport.layer("w", "slots", "input", true, "durable", "required", "holder", holder)));
+            assertThat(parsed.layers()).as("holder %s", holder).isEmpty();
+            assertThat(parsed.skipped()).as("holder %s", holder).hasSize(1);
+        }
+        var loose = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1,
+                GuiTestSupport.layer("w", "slots", "input", true, "durable", "best_effort",
+                        "holder", Map.of("kind", "keyed", "key", "vault:1"))));
+        assertThat(loose.layers()).isEmpty();
+        assertThat(loose.skipped().get(0).reason()).contains("durable: required");
+    }
+
+    @Test
     void anUnreadableDurableSkipsTheLayerInsteadOfGuessingBestEffort() {
         for (Object bad : new Object[] {"strict", "Required", "", true, 1}) {
             var parsed = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1,
@@ -186,7 +222,12 @@ class GuiInputSlotsTest {
         assertThat(durable.get(0).required()).isFalse();
         assertThat(durable.get(0).editor().options()).extracting(o -> o.value())
                 .containsExactly("best_effort", "required");
-        assertThat(durable.get(0).editor().options().get(1).description()).contains("never dropped in the world").contains("Not yet verified");
+        assertThat(durable.get(0).editor().options().get(1).description())
+                .contains("never dropped in the world").contains("custody design");
+        var holder = new SlotsComponent().describe().parameters().stream()
+                .filter(p -> p.id().equals("holder")).toList();
+        assertThat(holder).hasSize(1);
+        assertThat(holder.get(0).required()).isFalse();
     }
 
     @Test

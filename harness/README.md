@@ -214,6 +214,8 @@ node --test harness\protocol\floor-bot.test.mjs
   | `cursorAndFileStateRows` | K21a/b, K22a/b, K3, K4 | 7 | opt-in |
   | `k19AnAutosaveNeverSeesHalfAClick` | K19, Paper autosave on every tick | 2 | opt-in |
   | `k23TheBarrier` | K23a (kill between `saveData()` and the read-back), K23b (older snapshot), K23c (effect after the proof), K23d (disk recovers) | 5 | opt-in |
+  | `keyedAndStackHolderPersistence` | keyed T18 and stack-PDC close/reopen/restart | 3 per row | opt-in |
+  | `jointTransferBeforeAndAfterItsOnlyDecision` | kill at checkpointed preparation, durable joint INTENT, and destination commit | 4 | opt-in |
 
   ```bash
   ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT                                  # the core rows

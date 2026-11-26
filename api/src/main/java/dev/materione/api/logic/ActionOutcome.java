@@ -4,13 +4,13 @@ import dev.materione.api.diagnostics.DiagnosticCode;
 import java.util.Objects;
 
 /**
- * What an {@link ActionType#execute} reports (logic.md §4.1): it worked, or it failed with a
- * reason. A failure feeds the {@code require} step and the run trace; it never aborts a flow on
+ * What an {@link ActionType#execute} reports (logic.md §4.1): it worked, it failed with a
+ * reason, or it stopped after a durable decision. A failure feeds the {@code require} step and the run trace; it never aborts a flow on
  * its own. An exception thrown out of {@code execute} is treated as a failure too, and also emits
  * a rate-limited diagnostic, so an action should return {@link #failed} for an expected refusal
  * ("not enough money", "no open gui") and reserve exceptions for bugs.
  */
-public sealed interface ActionOutcome permits ActionOutcome.Ok, ActionOutcome.Failed {
+public sealed interface ActionOutcome permits ActionOutcome.Ok, ActionOutcome.Failed, ActionOutcome.Stopped {
 
     /** The action did what it was asked. */
     ActionOutcome OK = new Ok();
@@ -26,6 +26,11 @@ public sealed interface ActionOutcome permits ActionOutcome.Ok, ActionOutcome.Fa
      */
     static ActionOutcome refused(DiagnosticCode code, String reason) {
         return new Failed(reason, Objects.requireNonNull(code, "code"));
+    }
+
+    /** The action reached a durable state but this run must stop without treating it as a failure/else branch. */
+    static ActionOutcome stopped(String reason) {
+        return new Stopped(reason);
     }
 
     /** True for {@link #OK}. */
@@ -53,6 +58,16 @@ public sealed interface ActionOutcome permits ActionOutcome.Ok, ActionOutcome.Fa
         /** An ordinary failure, with no diagnostic code. */
         public Failed(String reason) {
             this(reason, null);
+        }
+    }
+
+    /** A terminal abandonment after an irreversible decision; guards must not run an alternate side effect. */
+    record Stopped(String reason) implements ActionOutcome {
+        public Stopped {
+            Objects.requireNonNull(reason, "reason");
+            if (reason.isBlank()) {
+                throw new IllegalArgumentException("a stopped outcome must say why");
+            }
         }
     }
 }

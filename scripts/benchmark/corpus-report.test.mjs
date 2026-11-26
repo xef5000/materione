@@ -4,12 +4,12 @@ import { readFileSync } from 'node:fs';
 import { BENCHMARK_DOC, checkBenchmarkDoc, computeReport, loadCorpus } from './corpus-report.mjs';
 
 describe('corpus-report', () => {
-  it('computes 23/29 passing tasks and 3/5 passing follow-ups from the committed corpus', () => {
+  it('computes 24/29 passing tasks and 3/5 passing follow-ups from the committed corpus', () => {
     const entries = loadCorpus();
     const report = computeReport(entries);
     assert.equal(report.tasks.total, 29);
-    assert.equal(report.tasks.pass, 23);
-    assert.equal(report.tasks.fail, 6);
+    assert.equal(report.tasks.pass, 24);
+    assert.equal(report.tasks.fail, 5);
     assert.equal(report.followups.total, 5);
     assert.equal(report.followups.pass, 3);
     assert.equal(report.followups.fail, 2);
@@ -28,8 +28,8 @@ describe('corpus-report', () => {
 
   it('detects drift when a task verdict or summary count disagrees with the doc', () => {
     const report = computeReport(loadCorpus());
-    const docText = readFileSync(BENCHMARK_DOC, 'utf8').replace('**23 pass, 0 partial, 6 fail**', '**22 pass, 0 partial, 7 fail**');
+    const docText = readFileSync(BENCHMARK_DOC, 'utf8').replace('**24 pass, 0 partial, 5 fail**', '**23 pass, 0 partial, 6 fail**');
     const errors = checkBenchmarkDoc(report, docText);
-    assert.ok(errors.some((e) => e.includes('§2 summary says 22 pass')));
+    assert.ok(errors.some((e) => e.includes('§2 summary says 23 pass')));
   });
 });

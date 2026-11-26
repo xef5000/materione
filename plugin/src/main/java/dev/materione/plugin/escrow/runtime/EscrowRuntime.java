@@ -2,6 +2,7 @@ package dev.materione.plugin.escrow.runtime;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.custody.CustodyHolder;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.escrow.gate.CrashGate;
@@ -14,12 +15,19 @@ import dev.materione.plugin.escrow.model.AccountRead;
 import dev.materione.plugin.escrow.model.Id128;
 import dev.materione.plugin.escrow.model.Ledger;
 import dev.materione.plugin.escrow.model.Recovery;
+import dev.materione.plugin.escrow.model.TransferHolder;
+import dev.materione.plugin.escrow.model.JointTransfer;
+import dev.materione.plugin.escrow.model.HolderRecovery;
+import dev.materione.plugin.logic.variable.BukkitStackRef;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
@@ -98,7 +106,10 @@ public final class EscrowRuntime {
     private final SaveBarrier barrier;
     private final ExitRunner<ItemStack> exits;
     private final CustodyConsume<ItemStack> custody;
+    private final CustodyTransfer transfers;
     private final ConcurrentMap<UUID, PlayerEscrow> players = new ConcurrentHashMap<>();
+    private final ConcurrentMap<KeyedId, PdcCustodyAccount> keyed = new ConcurrentHashMap<>();
+    private final ConcurrentMap<StackId, PdcCustodyAccount> stacks = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Long> reported = new ConcurrentHashMap<>();
     private volatile WindowView windows = WindowView.NONE;
     private volatile boolean platformKnown;
@@ -132,10 +143,13 @@ public final class EscrowRuntime {
                     BarrierBook.DEFAULT_GIVE_UP_MILLIS, plugin.getLogger()::warning);
             this.exits = new ExitRunner<>(tier1, ledger, barrier);
             this.custody = new CustodyConsume<>(tier1, exits);
+            this.transfers = new CustodyTransfer(this, ledger, barrier, EscrowRuntime::randomId,
+                    clock);
         } else {
             this.barrier = null;
             this.exits = null;
             this.custody = null;
+            this.transfers = null;
         }
     }
 
@@ -167,10 +181,25 @@ public final class EscrowRuntime {
      */
     public Optional<CustodyConsume.Started<ItemStack>> consume(Player player, String gui, int slot,
             CustodyConsume.Reach reach) {
+        return consume(player, new CustodyHolder.Player(player.getUniqueId()), gui, slot, reach);
+    }
+
+    /** Consumes from a player or keyed holder; stack PDC has no acknowledged exit. */
+    public Optional<CustodyConsume.Started<ItemStack>> consume(Player player, CustodyHolder holder, String gui, int slot,
+            CustodyConsume.Reach reach) {
         if (custody == null) {
             return Optional.empty();
         }
-        CustodyConsume.Started<ItemStack> started = custody.consume(owner(player), gui, slot, reach);
+        if (holder instanceof CustodyHolder.Stack) {
+            return Optional.of(new CustodyConsume.Declined<>(
+                    Tier1.Reason.UNAVAILABLE, "this holder cannot acknowledge the requested consume reach"));
+        }
+        Optional<CustodyAccount> account = account(player, holder);
+        if (account.isEmpty()) {
+            return Optional.empty();
+        }
+        CustodyConsume.Started<ItemStack> started = custody.consume(
+                owner(player, account.get(), accountKey(holder)), gui, slot, reach);
         if (started instanceof CustodyConsume.Declined<ItemStack> declined) {
             refuse(player, declined.reason());
         } else if (started instanceof CustodyConsume.Running<ItemStack> running) {
@@ -183,9 +212,44 @@ public final class EscrowRuntime {
         return Optional.of(started);
     }
 
+    /** Starts the universal joint custody hand-off. */
+    public Optional<java.util.concurrent.CompletionStage<CustodyTransfer.Outcome>> transfer(CustodyTransfer.Request request) {
+        return Optional.ofNullable(transfers).map(service -> service.transfer(request));
+    }
+
+    /** One online holder side, with the owner thread and PDC key needed by the joint barrier. */
+    record TransferSide(Player player, CustodyHolder holder, CustodyAccount account, Owner<ItemStack> owner,
+            NamespacedKey accountKey) {}
+
+    Optional<TransferSide> transferSide(TransferHolder address) {
+        UUID owner = TransferIds.uuid(address.owner());
+        Player player = plugin.getServer().getPlayer(owner);
+        if (player == null || !player.isOnline()) {
+            return Optional.empty();
+        }
+        CustodyHolder holder = switch (address.kind()) {
+            case PLAYER -> new CustodyHolder.Player(owner);
+            case KEYED -> new CustodyHolder.Keyed(owner, address.key());
+        };
+        Optional<CustodyAccount> account = account(player, holder);
+        return account.filter(CustodyAccount::open)
+                .map(value -> new TransferSide(player, holder, value,
+                        owner(player, value, accountKey(holder)), accountKey(holder)));
+    }
+
     /** The player as the tier-2 and tier-3 runtime needs them: their own thread, live state and save. */
     public Owner<ItemStack> owner(Player player) {
-        return new PlayerOwner(plugin, scheduling, player, of(player),
+        return owner(player, of(player));
+    }
+
+    /** Owner adapter over one particular player/keyed account. */
+    public Owner<ItemStack> owner(Player player, CustodyAccount account) {
+        return owner(player, account, accountKey);
+    }
+
+    public Owner<ItemStack> owner(Player player, CustodyAccount account, NamespacedKey dataKey) {
+        return new PlayerOwner(plugin, scheduling, player, account,
+                dataKey.toString(),
                 () -> windows.open(player).map(WindowView.Open::top).orElse(null));
     }
 
@@ -222,6 +286,9 @@ public final class EscrowRuntime {
             this.probeFinished = true;
             onChecked.run();
         });
+        if (ledger != null) {
+            ledger.preload(CustodyTransfer.SHARED_LEDGER);
+        }
     }
 
     /** What to do when the off-thread directory probe finishes (the plugin publishes {@code MTR-0100} then). */
@@ -265,6 +332,126 @@ public final class EscrowRuntime {
         return players.computeIfAbsent(player.getUniqueId(), id -> create(player));
     }
 
+    /** The live account for a resolved player/keyed/stack holder. */
+    public Optional<CustodyAccount> account(Player player, CustodyHolder holder) {
+        if (holder == null || !holder.owner().equals(player.getUniqueId())) {
+            return Optional.empty();
+        }
+        if (holder instanceof CustodyHolder.Player) {
+            return Optional.of(of(player));
+        }
+        if (holder instanceof CustodyHolder.Keyed keyedHolder) {
+            KeyedId id = new KeyedId(keyedHolder.owner(), keyedHolder.key());
+            PdcCustodyAccount account = keyed.computeIfAbsent(id, ignored ->
+                    new PdcCustodyAccount(bytes -> player.getPersistentDataContainer().set(
+                            keyedKey(keyedHolder.key()), PersistentDataType.BYTE_ARRAY, bytes)));
+            if (account.gate() == CustodyAccount.Gate.CLOSED) {
+                read(account, player.getPersistentDataContainer().get(
+                        keyedKey(keyedHolder.key()), PersistentDataType.BYTE_ARRAY),
+                        player, new TransferHolder(TransferIds.of(player.getUniqueId()),
+                                TransferHolder.Kind.KEYED, keyedHolder.key()));
+            }
+            return Optional.of(account);
+        }
+        CustodyHolder.Stack stackHolder = (CustodyHolder.Stack) holder;
+        if (!(stackHolder.stack() instanceof BukkitStackRef ref) || !ref.isLive()) {
+            return Optional.empty();
+        }
+        UUID id = ref.custodyId().orElseGet(() -> {
+            UUID next = UUID.randomUUID();
+            return ref.assignCustodyId(next) ? next : null;
+        });
+        if (id == null) {
+            return Optional.empty();
+        }
+        PdcCustodyAccount account = stacks.computeIfAbsent(new StackId(player.getUniqueId(), id),
+                ignored -> new PdcCustodyAccount(bytes -> {
+                    if (!ref.writeCustodyAccount(bytes)) {
+                        throw new IllegalStateException("the stack holder is no longer live");
+                    }
+                }));
+        account.rebind(bytes -> {
+            if (!ref.writeCustodyAccount(bytes)) {
+                throw new IllegalStateException("the stack holder is no longer live");
+            }
+        });
+        if (account.gate() == CustodyAccount.Gate.CLOSED) {
+            read(account, ref.custodyAccount(), player, null);
+        }
+        return Optional.of(account);
+    }
+
+    /** The PDC key whose account generation a barrier reads back. */
+    public NamespacedKey accountKey(CustodyHolder holder) {
+        return switch (holder) {
+            case CustodyHolder.Player ignored -> accountKey;
+            case CustodyHolder.Keyed keyed -> keyedKey(keyed.key());
+            case CustodyHolder.Stack ignored -> BukkitStackRef.CUSTODY_ACCOUNT;
+        };
+    }
+
+    private void read(CustodyAccount target, byte[] bytes, Player player, TransferHolder holder) {
+        if (holder != null) {
+            Optional<LedgerState> state = ledger == null
+                    ? Optional.empty() : ledger.preloaded(CustodyTransfer.SHARED_LEDGER);
+            if (state.isEmpty()) {
+                if (ledger != null) {
+                    ledger.preload(CustodyTransfer.SHARED_LEDGER);
+                }
+                return;
+            }
+            if (!(state.get() instanceof LedgerState.Ready)) {
+                target.unrecoverable("the shared custody transfer ledger is unreadable");
+                return;
+            }
+        }
+        switch (AccountCodec.read(bytes)) {
+            case AccountRead.Absent absent -> target.open(dev.materione.plugin.escrow.model.Account.EMPTY);
+            case AccountRead.Readable readable -> {
+                var account = readable.account();
+                if (holder != null) {
+                    Ledger transfers = transferLedger();
+                    var recovered = JointTransfer.recovered(account, transfers, holder,
+                            new BagInventory<>(new BukkitLive(player, null), ItemStacks.INSTANCE));
+                    Optional<LedgerState> consume = ledger == null
+                            ? Optional.empty() : ledger.preloaded(player.getUniqueId());
+                    if (consume.isEmpty()) {
+                        if (ledger != null) {
+                            ledger.preload(player.getUniqueId());
+                        }
+                        return;
+                    }
+                    if (!(consume.get() instanceof LedgerState.Ready ready)) {
+                        target.unrecoverable("the player's custody consume ledger is unreadable");
+                        return;
+                    }
+                    recovered = HolderRecovery.recoverConsumes(recovered, ready.ledger());
+                    if (!recovered.equals(account) && !target.commit(recovered, AccountCodec.encode(recovered))) {
+                        target.unrecoverable("the recovered account could not be written");
+                        return;
+                    }
+                    account = recovered;
+                }
+                target.open(account);
+            }
+            case AccountRead.Unreadable unreadable -> target.unrecoverable(unreadable.reason().name());
+        }
+    }
+
+    /** Stable PDC spelling for a canonical keyed holder. */
+    public static NamespacedKey keyedKey(String key) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return new NamespacedKey("materione", "custody-" + HexFormat.of().formatHex(digest));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private record KeyedId(UUID owner, String key) {}
+    private record StackId(UUID owner, UUID stack) {}
+
     private PlayerEscrow create(Player player) {
         return new PlayerEscrow(bytes -> player.getPersistentDataContainer().set(accountKey,
                 PersistentDataType.BYTE_ARRAY, bytes));
@@ -299,6 +486,8 @@ public final class EscrowRuntime {
             barrier.left(player.getUniqueId()); // effects waiting on the barrier are abandoned; the quit save is polled
         }
         players.remove(player.getUniqueId());
+        keyed.keySet().removeIf(key -> key.owner().equals(player.getUniqueId()));
+        stacks.keySet().removeIf(key -> key.owner().equals(player.getUniqueId()));
     }
 
     /** A player already online when the plugin enables or reloads: the same recovery, on their own thread. */
@@ -321,22 +510,42 @@ public final class EscrowRuntime {
         if (state.isEmpty()) {
             tell(player, messages.loading());
             ledger.preload(id).thenAccept(ready -> scheduling.executeEntity(plugin, player, () -> {
-                if (player.isOnline() && players.get(id) == escrow && escrow.gate() == PlayerEscrow.Gate.CLOSED) {
+                if (player.isOnline() && players.get(id) == escrow && escrow.gate() == CustodyAccount.Gate.CLOSED) {
                     recover(player, escrow);
                 }
             }));
+            return;
+        }
+        Optional<LedgerState> joint = ledger.preloaded(CustodyTransfer.SHARED_LEDGER);
+        if (joint.isEmpty()) {
+            tell(player, messages.loading());
+            ledger.preload(CustodyTransfer.SHARED_LEDGER).thenAccept(ready ->
+                    scheduling.executeEntity(plugin, player, () -> {
+                        if (player.isOnline() && players.get(id) == escrow
+                                && escrow.gate() == CustodyAccount.Gate.CLOSED) {
+                            recover(player, escrow);
+                        }
+                    }));
+            return;
+        }
+        if (!(joint.get() instanceof LedgerState.Ready)) {
+            escrow.unrecoverable("the shared custody transfer ledger is unreadable");
+            tell(player, messages.blocked());
             return;
         }
         PersistentDataContainer data = player.getPersistentDataContainer();
         AccountRead saved = AccountCodec.read(data.get(accountKey, PersistentDataType.BYTE_ARRAY));
         byte[] legacyBytes = data.get(legacyKey, PersistentDataType.BYTE_ARRAY);
         List<ItemStack> legacy = legacyBytes == null ? List.of() : decodeLegacy(legacyBytes);
-        Tier1.Recovered result = tier1.recover(escrow, new BukkitLive(player, null), saved, state.get(), legacy);
+        Ledger transfers = transferLedger();
+        Tier1.Recovered result = tier1.recover(escrow, new BukkitLive(player, null), saved, state.get(), legacy,
+                transfers, new TransferHolder(TransferIds.of(player.getUniqueId()), TransferHolder.Kind.PLAYER, ""));
         switch (result) {
             case Tier1.Opened opened -> {
                 if (legacyBytes != null && !legacy.isEmpty() && !opened.legacyKept()) {
                     data.remove(legacyKey); // adopted as OWED entries: the old journal lets go (§10)
                 }
+
                 announce(player, opened);
             }
             case Tier1.Blocked blocked -> {
@@ -349,6 +558,16 @@ public final class EscrowRuntime {
                 tell(player, messages.blocked());
             }
         }
+    }
+
+    private Ledger transferLedger() {
+        if (ledger == null) {
+            return Ledger.EMPTY;
+        }
+        return ledger.preloaded(CustodyTransfer.SHARED_LEDGER)
+                .filter(LedgerState.Ready.class::isInstance)
+                .map(state -> ((LedgerState.Ready) state).ledger())
+                .orElse(Ledger.EMPTY);
     }
 
     private List<ItemStack> decodeLegacy(byte[] bytes) {

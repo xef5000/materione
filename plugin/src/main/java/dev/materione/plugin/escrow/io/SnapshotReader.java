@@ -17,10 +17,19 @@ public interface SnapshotReader {
      */
     CompletableFuture<ReadBack> read(UUID player);
 
+    /** Reads another custody account key in the same player snapshot. */
+    default CompletableFuture<ReadBack> read(UUID player, String accountKey) {
+        return read(player);
+    }
+
     /**
      * Polls the player's file until it holds an account whose {@code gen} is at least {@code minGen} (unsigned), for a
      * player who left before the barrier acknowledged their exit (the quit save is still landing): the {@code gen}
      * reached, or empty when it never was within the polling window. Never fails.
      */
     CompletableFuture<OptionalLong> awaitAtLeast(UUID player, long minGen);
+
+    default CompletableFuture<OptionalLong> awaitAtLeast(UUID player, String accountKey, long minGen) {
+        return awaitAtLeast(player, minGen);
+    }
 }

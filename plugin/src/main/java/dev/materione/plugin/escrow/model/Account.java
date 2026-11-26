@@ -42,10 +42,12 @@ public record Account(long gen, List<Entry> entries) {
         return Optional.empty();
     }
 
-    /** The EXITING entry of this transaction. */
+    /** The EXITING or RESERVED entry of this transaction. */
     public Optional<Entry> findByTxn(Id128 txn) {
         for (Entry entry : entries) {
-            if (entry.state() == EntryState.EXITING && entry.txn().equals(txn)) {
+            if ((entry.state() == EntryState.EXITING || entry.state() == EntryState.RESERVED
+                    || entry.state() == EntryState.TRANSFERRING)
+                    && entry.txn().equals(txn)) {
                 return Optional.of(entry);
             }
         }

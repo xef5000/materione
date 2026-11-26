@@ -33,8 +33,10 @@ public record Entry(
         if (id.isZero()) {
             throw new IllegalArgumentException("an entry id cannot be zero");
         }
-        if ((state == EntryState.EXITING) == txn.isZero()) {
-            throw new IllegalArgumentException("txn is set exactly when the entry is EXITING");
+        boolean transactional = state == EntryState.EXITING || state == EntryState.RESERVED
+                || state == EntryState.TRANSFERRING;
+        if (transactional == txn.isZero()) {
+            throw new IllegalArgumentException("txn is set exactly for transactional entries");
         }
         if (slotHint < 0 || slotHint > MAX_SLOT_HINT) {
             throw new IllegalArgumentException("slotHint out of range: " + slotHint);
@@ -57,6 +59,28 @@ public record Entry(
     /** This entry frozen as EXITING for {@code transaction}. */
     public Entry exiting(Id128 transaction) {
         return new Entry(id, EntryState.EXITING, transaction, sinceMillis, originGui, slotHint, stack);
+    }
+
+    /** This entry as a destination reservation (not active ownership yet). */
+    public Entry reserved(Id128 transaction) {
+        return new Entry(id, EntryState.RESERVED, transaction, sinceMillis, originGui, slotHint, stack);
+    }
+
+    /** This entry as the frozen source of a joint hand-off. */
+    public Entry transferring(Id128 transaction) {
+        return new Entry(id, EntryState.TRANSFERRING, transaction, sinceMillis, originGui, slotHint, stack);
+    }
+
+    /** Restores an undecided held exit to a keyed holder. */
+    public Entry held() {
+        return new Entry(id, EntryState.HELD, Id128.ZERO, sinceMillis, originGui, slotHint, stack);
+    }
+
+    /** Promotes a destination reservation after the joint decision. */
+    public Entry committed(boolean held) {
+        return held
+                ? new Entry(id, EntryState.HELD, Id128.ZERO, sinceMillis, originGui, slotHint, stack)
+                : owed();
     }
 
     /** This entry with another stack (an in-place edit). */

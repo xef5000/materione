@@ -186,10 +186,12 @@ public final class GuiCompiler {
     static List<CompiledGui.Input> inputsOf(GuiDefinition gui, ClickMap clicks) {
         var accepts = new LinkedHashMap<String, Object>();
         var durables = new java.util.HashSet<String>();
+        var holders = new LinkedHashMap<String, SlotsComponent.Holder>();
         var variable = new java.util.HashSet<String>();
         for (GuiLayer layer : gui.layers()) {
             if (layer.visible() && layer.compiled() instanceof SlotsComponent.Layer wells && wells.input()) {
                 accepts.put(layer.id(), wells.accept());
+                holders.put(layer.id(), wells.holder());
                 if (wells.durable() == SlotsComponent.Durability.REQUIRED) {
                     durables.add(layer.id());
                 }
@@ -205,7 +207,8 @@ public final class GuiCompiler {
             List<String> top = clicks.layersAt(slot);
             for (String layer : top) {
                 if (accepts.containsKey(layer)) {
-                    inputs.add(new CompiledGui.Input(slot, layer, accepts.get(layer), durables.contains(layer)));
+                    inputs.add(new CompiledGui.Input(slot, layer, accepts.get(layer), durables.contains(layer),
+                            holders.get(layer)));
                     break;
                 }
                 if (!variable.contains(layer)) {

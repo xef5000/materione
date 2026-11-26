@@ -184,8 +184,9 @@ public final class MaterionePlugin extends JavaPlugin {
 
     /**
      * The tier-3 read-back (gui-input-durability.md §5.4, row B): the player's saved file, read on the IO executor. The
-     * server keeps player files in {@code <world>/playerdata} (Paper 1.21.4) or {@code <world>/players/data} (26.x); the
-     * folders are asked at each read, because the overworld exists only after the plugin enables. Null when the
+     * server keeps player files in {@code <world>/playerdata} (Paper 1.21.4) or {@code <world>/players/data} (26.x);
+     * 26.x reports each dimension folder under that world root, so each ancestor is considered. The folders are asked
+     * at each read, because the overworld exists only after the plugin enables. Null when the
      * ledger did not start (nothing can exit then).
      */
     private dev.materione.plugin.escrow.io.SnapshotReader escrowSnapshots() {
@@ -197,8 +198,15 @@ public final class MaterionePlugin extends JavaPlugin {
             if (worlds.isEmpty()) {
                 return java.util.List.of();
             }
-            java.nio.file.Path folder = worlds.get(0).getWorldFolder().toPath();
-            return java.util.List.of(folder.resolve("playerdata"), folder.resolve("players").resolve("data"));
+            java.util.Set<java.nio.file.Path> folders = new java.util.LinkedHashSet<>();
+            for (org.bukkit.World world : worlds) {
+                java.nio.file.Path folder = world.getWorldFolder().toPath();
+                for (int depth = 0; folder != null && depth < 5; depth++, folder = folder.getParent()) {
+                    folders.add(folder.resolve("playerdata"));
+                    folders.add(folder.resolve("players").resolve("data"));
+                }
+            }
+            return List.copyOf(folders);
         }, task -> scheduling.executeAsync(this, task),
                 new org.bukkit.NamespacedKey(this, dev.materione.plugin.escrow.runtime.EscrowRuntime.ACCOUNT_KEY)
                         .toString());

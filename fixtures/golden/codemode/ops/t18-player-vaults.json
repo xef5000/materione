@@ -1,0 +1,82 @@
+{
+  "task": "T18",
+  "registry": "plugin-current",
+  "ok": true,
+  "pack": "bench",
+  "summary": null,
+  "operations": [
+    {
+      "kind": "create",
+      "type": "guis",
+      "id": "vault",
+      "edits": [
+        {
+          "field": [
+            "vault",
+            "container"
+          ],
+          "value": "chest_6"
+        },
+        {
+          "field": [
+            "vault",
+            "title"
+          ],
+          "value": "Vault"
+        },
+        {
+          "field": [
+            "vault",
+            "open"
+          ],
+          "value": {
+            "commands": [
+              "pv"
+            ],
+            "args": [
+              {
+                "name": "n",
+                "type": "int",
+                "min": 1,
+                "max": 3
+              }
+            ],
+            "permission": "vaults.use"
+          }
+        },
+        {
+          "field": [
+            "vault",
+            "layers"
+          ],
+          "value": [
+            {
+              "type": "materione:slots",
+              "id": "vault_slots",
+              "region": "container",
+              "input": true,
+              "durable": "required",
+              "holder": {
+                "kind": "keyed",
+                "key": "vault:${player.uuid}:${view.args.n}"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "line": 3,
+      "column": 8
+    }
+  ],
+  "diagnostics": [],
+  "stats": {
+    "reads": 0,
+    "readBytes": 0,
+    "staged": 1,
+    "documents": 1
+  }
+}
